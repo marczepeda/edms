@@ -29,7 +29,7 @@ setup(
                       'requests',
                       'scipy',
                       'statsmodels',
-                      'sklearn',
+                      'scikit-learn',
                       'Levenshtein',
                       'ViennaRNA'],
     python_requires='>=3.11'
