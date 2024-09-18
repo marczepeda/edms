@@ -100,7 +100,7 @@ def get_fastqs(dir: str,suf='.fastq.gz',quality=0,compressed=True):
         quality: phred quality score threshold within flanks
     Dependencies: get_fastqs(), pandas, Bio.Seq.Seq
 '''
-def filter_fastqs(fastqs: dict, flank5='TCTCTCCGTCCCAGGA',flank3='GGTAGGTCCCCTGGA',quality=0):
+def filter_fastqs(fastqs: dict, flank5: str,flank3: str,quality=0):
 
     # Remove fastq records that do not have flanks
     fastqs_1=dict()
@@ -132,9 +132,7 @@ def filter_fastqs(fastqs: dict, flank5='TCTCTCCGTCCCAGGA',flank3='GGTAGGTCCCCTGG
         res: First AA number
     Dependencies: get_fastqs(),filter_fastqs(), pandas, Bio.Seq.Seq
 '''
-def genotype(fastqs: dict,
-             wt='GAACGGCCCTTCCAGTGCAATCAGTGCGGGGCCTCATTCACCCAGAAGGGCAACCTGCTCCGGCACATCAAGCTGCATTCCGGGGAGAAGCCCTTCAAATGCCACCTCTGCAACTACGCCTGCCGCCGGAGGGACGCCCTCACTGGCCACCTGAGGACGCACTCC',
-             res=142):
+def genotype(fastqs: dict, wt: str, res: int):
     for file,fastq in fastqs.items():
         edit=[]
         for i in range(len(fastq['prot'])):
