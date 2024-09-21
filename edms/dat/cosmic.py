@@ -43,7 +43,37 @@ def prevalence(gene: pd.DataFrame):
     return list(gene['AA_mut'].value_counts().keys())
 
 # Prime editing methods
-''' priority_edits: Returns dataframe of the most clinically-relevant prime edits to prioritize from shared sequences library
+''' priority_muts: Returns the shared sequences library dataframe with priority mutations
+        pegRNAs: pegRNAs library dataframe
+        pegRNAs_shared: pegRNAs shared sequences library dataframe
+        gene: COSMIC mutations dataframe for the gene from mutations()
+    Dependencies: pandas,ast,prevalence()
+'''
+def priority_muts(pegRNAs: pd.DataFrame, pegRNAs_shared: pd.DataFrame, gene: pd.DataFrame):
+    
+    # Get list of priority mutants from prevalence()
+    mut_priority_ls = prevalence(gene=gene)
+
+    # Determine priority mutations for pegRNAs shared sequences library
+    priority_muts = []
+    mutants_used = []
+    for e,edits in enumerate(pegRNAs_shared['Edits']): # Search available edits for shared spacer & PBS sequence
+        for m,mutant in enumerate(mut_priority_ls): # Iterate through most clinically-relevant mutations
+            if (mutant in set(ast.literal_eval(edits)))&(mutant not in mutants_used): # Select a clinically-relevant mutation that has not been used
+                priority_muts.append(mutant)
+                mutants_used.append(mutant)
+                break
+        if len(priority_muts)!=e+1: # All clinically-relevant mutations have been used
+            for edit in ast.literal_eval(edits): # Find edit that has not been used
+                if edit not in mutants_used:
+                    priority_muts.append(edit)
+                    mutants_used.append(edit)
+                    break
+    pegRNAs_shared['Priority_mut']=priority_muts
+
+    return pegRNAs_shared
+
+''' priority_edits: Returns a dataframe with the most clinically-relevant prime edits to prioritize from the shared sequences library
         pegRNAs: pegRNAs library dataframe
         pegRNAs_shared: pegRNAs shared sequences library dataframe
         gene: COSMIC mutations dataframe for the gene from mutations()
@@ -51,18 +81,6 @@ def prevalence(gene: pd.DataFrame):
 '''
 def priority_edits(pegRNAs: pd.DataFrame, pegRNAs_shared: pd.DataFrame, gene: pd.DataFrame):
     
-    # Get list of priority mutants from prevalence()
-    mut_priority_ls = prevalence(gene=gene)
-
-    # Determine priority mutations for pegRNAs shared sequences library
-    priority_muts = []
-    for edits in mut_priority_ls['Edits']:
-        for mutant in mut_priority_ls:
-            if mutant in set(ast.literal_eval(edits)):
-                priority_muts.append(mutant)
-                break
-    pegRNAs_shared['Priority_mut']=priority_muts
-
     # Determine priority pegRNAs based on priority mutations from pegRNAs shared sequences library
     pegRNAs_priority = pd.DataFrame()
     for p,priority in enumerate(pegRNAs_shared['Priority_mut']):
@@ -70,6 +88,6 @@ def priority_edits(pegRNAs: pd.DataFrame, pegRNAs_shared: pd.DataFrame, gene: pd
         pegRNAs_temp = pegRNAs_temp[(pegRNAs_temp['Spacer_sequence']==pegRNAs_shared.iloc[p]['Spacer_sequence'])&(pegRNAs_temp['PBS_sequence']==pegRNAs_shared.iloc[p]['PBS_sequence'])] # Confirm spacer & PBS matches
         pegRNAs_temp.drop_duplicates(subset=['Spacer_sequence'],inplace=True) # Drop redundant pegRNAs (not sure if this is needed)
         pegRNAs_priority = pd.concat([pegRNAs_priority,pegRNAs_temp]).reset_index(drop=True)
-    pegRNAs_priority['COSMIC_count'] = [gene['AA_mut'].value_counts()[edit] for edit in pegRNAs_priority['Edit']]
+    pegRNAs_priority['COSMIC_count'] = [gene['AA_mut'].value_counts()[edit] if edit in gene['AA_mut'].to_list() else 0 for edit in pegRNAs_priority['Edit']]
 
     return pegRNAs_priority

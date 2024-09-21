@@ -100,7 +100,7 @@ def get_fastqs(dir: str,suf='.fastq.gz',quality=0,compressed=True):
         quality: phred quality score threshold within flanks
     Dependencies: get_fastqs(), pandas, Bio.Seq.Seq
 '''
-def filter_fastqs(fastqs: dict, flank5: str,flank3: str,quality=0):
+def filter_fastqs(fastqs: dict, flank5: str, flank3: str, quality=0):
 
     # Remove fastq records that do not have flanks
     fastqs_1=dict()
@@ -211,9 +211,7 @@ def edit_1(df: pd.DataFrame,col='edit'):
         res: First AA number
     Dependencies: Bio.Seq.Seq,pandas,numpy,tidy,get_fastqs(),filter_fastqs(),genotype(),edit_1(),aa_props
 '''
-def dms_tidy(df: pd.DataFrame(),cond: str(),
-             wt='GAACGGCCCTTCCAGTGCAATCAGTGCGGGGCCTCATTCACCCAGAAGGGCAACCTGCTCCGGCACATCAAGCTGCATTCCGGGGAGAAGCCCTTCAAATGCCACCTCTGCAACTACGCCTGCCGCCGGAGGGACGCCCTCACTGGCCACCTGAGGACGCACTCC',
-             res=142):
+def dms_tidy(df: pd.DataFrame, cond: str, wt:str, res: str):
     
     wt_prot = Seq(wt).translate(table=1) # Obtain WT protein sequence
     wt_nums = np.arange(res,res+len(wt_prot))

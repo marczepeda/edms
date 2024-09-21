@@ -231,7 +231,8 @@ def shared_sequences(pegRNAs: pd.DataFrame, hist_plot:bool=True, hist_dir: str=N
     shared_pegRNAs_lib['AA_numbers_min']=aa_numbers_min_ls
     shared_pegRNAs_lib['AA_numbers_max']=aa_numbers_max_ls
     shared_pegRNAs_lib['AA_numbers_continuous']=continous_ls
-    
+    shared_pegRNAs_lib = shared_pegRNAs_lib.sort_values(by=['AA_numbers_min','AA_numbers_max']).reset_index(drop=True)
+
     if hist_plot: # Generate histogram
         shared_hist = pd.DataFrame()
         for i,aa_numbers in enumerate(shared_pegRNAs_lib['AA_numbers']):
@@ -242,7 +243,6 @@ def shared_sequences(pegRNAs: pd.DataFrame, hist_plot:bool=True, hist_dir: str=N
                legend_loc='upper center',legend_bbox_to_anchor=(0.5, -0.1),dir=hist_dir,file=hist_file,legend_ncol=2,**kwargs)
 
     return shared_pegRNAs_lib
-
 
 ''' get_codons: Returns all codons within a specified frame for a nucleotide sequence
         sequence: nucletide sequence
@@ -949,3 +949,36 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame, file: str, aa_index: int=1):
     pegRNAs['AAs_after']=prot_afters
     pegRNAs['Edit_matches_explain']=edit_matches_explain
     return pegRNAs
+
+# Comparing pegRNA libraries methods
+''' print_shared_sequences: Prints spacer and PBS sequences from dictionary of shared_sequences libraries
+        dc: dictionary of shared_sequences() libraries
+'''
+def print_shared_sequences(dc: dict):
+    keys_a = sorted(dc.keys())
+
+    text = f""
+    for key in keys_a: 
+        text += f"\t{key}_spacer\t{key}_PBS"
+
+    for v in range(len(dc[keys_a[0]])):
+        text += f"\n{v}:\t"
+        for key in keys_a:
+            text += f"{dc[key].iloc[v]['Spacer_sequence']}\t{dc[key].iloc[v]['PBS_sequence']}\t\t"
+    print(text)
+
+''' print_shared_sequences_mutant: Prints spacer and PBS sequences as well as priority mutant from dictionary of shared_sequences libraries
+        dc: dictionary of shared_sequences() libraries with priority mutant
+'''
+def print_shared_sequences_mutant(dc: dict):
+    keys_a = sorted(dc.keys())
+
+    text = f""
+    for key in keys_a: 
+        text += f"\t{key}_spacer\t{key}_PBS\t{key}_mutant"
+
+    for v in range(len(dc[keys_a[0]])):
+        text += f"\n{v}:\t"
+        for key in keys_a:
+            text += f"{dc[key].iloc[v]['Spacer_sequence']}\t{dc[key].iloc[v]['PBS_sequence']}\t\t{dc[key].iloc[v]['Priority_mut']}\t\t\t"
+    print(text)
