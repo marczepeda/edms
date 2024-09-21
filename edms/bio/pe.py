@@ -110,7 +110,7 @@ def PrimeDesign(file: str,pbs_length_list: list = [],rtt_length_list: list = [],
     if homology_downstream!=10: cmd += f' -homology_downstream {homology_downstream}'
     if pbs_length_pooled!=14: cmd += f' -pbs_pooled {pbs_length_pooled}'
     if rtt_max_length_pooled!=50: cmd += f' -rtt_pooled {rtt_max_length_pooled}'
-    if out_dir!='./DATETIMESTAMP_PrimeDesign': cmd+= f' -out ./DATETIMESTAMP_PrimeDesign'
+    if out_dir!='./DATETIMESTAMP_PrimeDesign': cmd+= f' -out {out_dir}'
     print(cmd)
 
     os.system(cmd) # Execute PrimeDesign Command Line
@@ -272,7 +272,7 @@ def is_sublist_in_order(main_list, sub_list):
         RTT_length: Reverse transcriptase template length (bp)
     Dependencies: io,Bio.Seq.Seq,shared_sequences(),get_codons(),get_codon_frames(),is_sublist_in_order(),aa_dna_codon_table
 '''
-def RTT_designer(pegRNAs: pd.DataFrame, file: str, rtt_length: int=21, aa_index: int=1):
+def RTT_designer(pegRNAs: pd.DataFrame, file: str, aa_index: int=1, rtt_length: int=21):
     
     # Get reference sequence & codons (+ reverse complement)
     target_sequence = io.get(file).iloc[0]['target_sequence']
@@ -657,8 +657,11 @@ def compare_RTTs(rtt_prot,rtt_prot_indexes: list,rtt_wt_prot, rtt_wt_prot_indexe
     Common errors for calling edits...
         deletions:
             (1) single deletion of repeated AA results in wrong AA #
-            (2) N-terminus AA deletion results in wildtype
-            (3) AA deletion outside of target sequence boundary results in wrong AA #
+            (2) AA deletion outside of target sequence boundary results in wrong AA #
+        insertions:
+            (1) single insertion of repeated AA results in wrong AA #
+            (2) inserted AA matches the next (+ strand) or previous (- strand) AA, so compare_RTTs() shifts mutation by 1 AA
+            (3) single insertion of final AA in RTT, which matches next AA and returns wildtype sequence
 '''
 def pegRNAs_tester(pegRNAs: pd.DataFrame, file: str, aa_index: int=1):
     
