@@ -9,6 +9,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+from matplotlib.ticker import MaxNLocator
 import numpy as np
 
 # Supporting methods
@@ -388,6 +389,7 @@ def dist(typ: str,df: pd.DataFrame,x: str,cols=None,cols_ord=None,cols_exclude=N
         sns.histplot(data=df, x=x, kde=False, bins=bins, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, ax=ax, **kwargs)
         y=''
         y_axis='Count'
+        ax.yaxis.set_major_locator(MaxNLocator(integer=True))
         formatter(typ,ax,df,x,y,cols,file,dir,palette_or_cmap,
                   title,title_size,title_weight,
                   x_axis,x_axis_size,x_axis_weight,x_axis_scale,x_axis_dims,x_ticks_rot,xticks,
@@ -420,6 +422,7 @@ def dist(typ: str,df: pd.DataFrame,x: str,cols=None,cols_ord=None,cols_exclude=N
         else: sns.histplot(data=df, x=x, kde=True, bins=bins, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, ax=ax, **kwargs)
         y=''
         y_axis='Count'
+        ax.yaxis.set_major_locator(MaxNLocator(integer=True))
         formatter(typ,ax,df,x,y,cols,file,dir,palette_or_cmap,
                   title,title_size,title_weight,
                   x_axis,x_axis_size,x_axis_weight,x_axis_scale,x_axis_dims,x_ticks_rot,xticks,
