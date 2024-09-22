@@ -10,6 +10,7 @@ import re
 from Bio.Seq import Seq
 from ..bio import pegLIT as pegLIT
 from ..gen import io as io
+from ..gen import tidy as t
 from ..gen import plot as p
 
 # Biological Dictionaries
@@ -137,10 +138,12 @@ def PrimeDesignOutput(pt: str, aa_index: int=1,
     pegRNAs['Scaffold_sequence']=[scaffold_sequence]*len(pegRNAs)
     pegRNAs['RTT_sequence']=[pegRNAs.iloc[i]['Extension_sequence'][0:int(pegRNAs.iloc[i]['RTT_length'])] for i in range(len(pegRNAs))]
     pegRNAs['PBS_sequence']=[pegRNAs.iloc[i]['Extension_sequence'][int(pegRNAs.iloc[i]['RTT_length']):]  for i in range(len(pegRNAs))]
-    pegRNAs=pegRNAs[['pegRNA_number','gRNA_type','Strand','Edit', # Important metadata
-                     'Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence', # Sequence information
-                     'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','ngRNA-to-pegRNA_distance','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide']] # Less important metadata
-
+    pegRNAs = t.reorder_cols(df=pegRNAs,
+                             cols=['pegRNA_number','gRNA_type','Strand','Edit', # Important metadata
+                                   'Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence',  # Sequence information
+                                   'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','ngRNA-to-pegRNA_distance','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide'], # Less important metadata
+                             keep=False) 
+    
     # Generate ngRNAs
     ngRNAs['Edit']=[str(target_name.split('_')[-1].split('to')[0]) + # AA Before
                     str(int(target_name.split('_')[-2]) + aa_index-1) + # AA Index
@@ -148,10 +151,12 @@ def PrimeDesignOutput(pt: str, aa_index: int=1,
                     for target_name in ngRNAs['Target_name']]
     ngRNAs['Scaffold_sequence']=[scaffold_sequence]*len(ngRNAs)
     ngRNAs['ngRNA_number']=list(np.arange(len(ngRNAs)))
-    ngRNAs=ngRNAs[['pegRNA_number','ngRNA_number','gRNA_type','Strand','Edit', # Important metadata
-                   'Spacer_sequence','Scaffold_sequence', # Sequence information
-                   'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','ngRNA-to-pegRNA_distance','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide']] # Less important metadata
-
+    ngRNAs = t.reorder_cols(df=ngRNAs,
+                            cols=['pegRNA_number','ngRNA_number','gRNA_type','Strand','Edit', # Important metadata
+                                  'Spacer_sequence','Scaffold_sequence',  # Sequence information
+                                  'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','ngRNA-to-pegRNA_distance','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide'], # Less important metadata
+                            keep=False) 
+    
     return pegRNAs,ngRNAs
 
 # pegRNA Methods
@@ -187,9 +192,9 @@ def epegRNA_linkers(pegRNAs: pd.DataFrame, epegRNA_motif_sequence: str='CGCGGTTC
     # Generate epegRNAs
     pegRNAs['Linker_sequence'] = linkers
     pegRNAs['Motif_sequence'] = [epegRNA_motif_sequence]*len(pegRNAs)
-    epegRNAs = pegRNAs[['pegRNA_number','gRNA_type','Strand','Edit', # Important metadata
-                        'Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence','Linker_sequence','Motif_sequence', # Sequence information
-                        'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','ngRNA-to-pegRNA_distance','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide']] # Less important metadata
+    epegRNAs = t.reorder_cols(df=pegRNAs,
+                              cols=['pegRNA_number','gRNA_type','Strand','Edit', # Important metadata
+                                    'Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence','Linker_sequence','Motif_sequence']) # Sequence information
     return epegRNAs
 
 ''' shared_sequences: Reduce PE library into shared spacers and PBS sequences.
@@ -239,8 +244,8 @@ def shared_sequences(pegRNAs: pd.DataFrame, hist_plot:bool=True, hist_dir: str=N
             shared_hist = pd.concat([shared_hist,pd.DataFrame({'Group_Spacer_PBS': [f'{str(i)}_{shared_pegRNAs_lib.iloc[i]["Spacer_sequence"]}_{shared_pegRNAs_lib.iloc[i]["PBS_sequence"]}']*len(aa_numbers),
                                                                'AA_number': aa_numbers})]).reset_index(drop=True)
         p.dist(typ='hist',df=shared_hist,x='AA_number',cols='Group_Spacer_PBS',x_axis='AA number',title='Shared Spacers & PBS Sequences in the PE Library',
-               x_axis_dims=(min(shared_hist['AA_number']),max(shared_hist['AA_number'])),y_axis_dims=(0,5),
-               legend_loc='upper center',legend_bbox_to_anchor=(0.5, -0.1),dir=hist_dir,file=hist_file,legend_ncol=2,**kwargs)
+               x_axis_dims=(min(shared_hist['AA_number']),max(shared_hist['AA_number'])),figsize=(10,2),
+               legend_loc='upper center',legend_bbox_to_anchor=(0.5, -.3),dir=hist_dir,file=hist_file,legend_ncol=2,**kwargs)
 
     return shared_pegRNAs_lib
 

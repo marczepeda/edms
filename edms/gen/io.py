@@ -109,6 +109,7 @@ def dc_txt_to_df(dc_txt: str, transpose=True):
     if transpose==True: return pd.DataFrame(ast.literal_eval(dc_txt)).T
     else: return pd.DataFrame(ast.literal_eval(dc_txt))
 
+# Directory Methods
 ''' print_relative paths: Prints relative paths for all files in a directory including subfolders
         root_dir: root directory path or relative path
 '''

@@ -159,3 +159,13 @@ def ls_to_dc(ls: list, sep='.'):
         d[parts[-1]] = value.strip()  # Assign the value, strip any leading/trailing whitespace
 
     return dc
+
+# Dataframe methods
+''' reorder_cols: Returns dataframe with columns reorganized 
+        df: Dataframe
+        cols: list of column names prioritized in order
+        keep: keep columns not listed (Default: True)
+'''
+def reorder_cols(df: pd.DataFrame, cols: list, keep=True):
+    if keep==True: cols.extend([c for c in list(df.columns) if c not in cols]) # Append remaining columns
+    return df[cols]
