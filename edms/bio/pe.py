@@ -215,7 +215,8 @@ def shared_sequences(pegRNAs: pd.DataFrame, hist_plot:bool=True, hist_dir: str=N
                                                         'Strand': [shared_pegRNAs.iloc[0]['Strand']],
                                                         'Edits': [shared_pegRNAs['Edit'].to_list()],
                                                         'Spacer_sequence': [spacer],
-                                                        'PBS_sequence': [pbs]})]).reset_index(drop=True)
+                                                        'PBS_sequence': [pbs],
+                                                        'RTT_lengths': [sorted(int(rtt) for rtt in set(shared_pegRNAs['RTT_length'].to_list()))]})]).reset_index(drop=True)
     
     # Find shared AAs within the reduced PE library
     aa_numbers_ls=[]

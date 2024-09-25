@@ -59,17 +59,31 @@ def priority_muts(pegRNAs: pd.DataFrame, pegRNAs_shared: pd.DataFrame, pt: str):
     priority_muts = []
     mutants_used = []
     for e,edits in enumerate(pegRNAs_shared['Edits']): # Search available edits for shared spacer & PBS sequence
-        for m,mutant in enumerate(mut_priority_ls): # Iterate through most clinically-relevant mutations
-            if (mutant in set(ast.literal_eval(edits)))&(mutant not in mutants_used): # Select a clinically-relevant mutation that has not been used
-                priority_muts.append(mutant)
-                mutants_used.append(mutant)
-                break
-        if len(priority_muts)!=e+1: # All clinically-relevant mutations have been used
-            for edit in ast.literal_eval(edits): # Find edit that has not been used
-                if edit not in mutants_used:
-                    priority_muts.append(edit)
-                    mutants_used.append(edit)
+        if type(edits)==str:
+            for m,mutant in enumerate(mut_priority_ls): # Iterate through most clinically-relevant mutations
+                if (mutant in set(ast.literal_eval(edits)))&(mutant not in mutants_used): # Select a clinically-relevant mutation that has not been used
+                    priority_muts.append(mutant)
+                    mutants_used.append(mutant)
                     break
+            if len(priority_muts)!=e+1: # All clinically-relevant mutations have been used
+                for edit in ast.literal_eval(edits): # Find edit that has not been used
+                    if edit not in mutants_used:
+                        priority_muts.append(edit)
+                        mutants_used.append(edit)
+                        break
+        elif type(edits)==list:
+            for m,mutant in enumerate(mut_priority_ls): # Iterate through most clinically-relevant mutations
+                if (mutant in set(edits))&(mutant not in mutants_used): # Select a clinically-relevant mutation that has not been used
+                    priority_muts.append(mutant)
+                    mutants_used.append(mutant)
+                    break
+            if len(priority_muts)!=e+1: # All clinically-relevant mutations have been used
+                for edit in edits: # Find edit that has not been used
+                    if edit not in mutants_used:
+                        priority_muts.append(edit)
+                        mutants_used.append(edit)
+                        break
+        else: print('Error: pegRNAs_shared["Edits"] is not type string nor list')
     pegRNAs_shared['Priority_mut']=priority_muts
 
     return pegRNAs_shared
