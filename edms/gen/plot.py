@@ -535,7 +535,7 @@ def stack(df: pd.DataFrame,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord=[],
           legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_ncol=1,**kwargs):
     
     # Make pivot table
-    df_cut=df[df[y]>cutoff]
+    df_cut=df[df[y]>=cutoff]
     df_pivot=pd.pivot_table(df_cut, index=x, columns=cols, values=y, aggfunc=np.mean)
     df_pivot_err=pd.pivot_table(df_cut, index=x, columns=cols, values=y, aggfunc=np.std)
     if cols_ord!=[]: df_pivot=df_pivot[cols_ord]
