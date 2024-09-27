@@ -20,17 +20,14 @@
     - See /examples/analyze_fastq/src/ikzf1_zf2_3.ipynb
 
 ## Instructions
-### Install (Option 1)
-1. Open Terminal.
-2. Write the following commands:
-    - conda create --name emds_env
-        - When conda asks you to proceed, type "y" 
-    - conda activate edms_env
-    - pip install git+https://github.com/marczepeda/edms.git
-
-### Clone (Option 2)
-1. Open Terminal.
-2. Write the following commands:
+### Clone (Option 1)
+1. Download Anaconda.
+    - Mac: https://docs.anaconda.com/anaconda/install/mac-os/
+    - Windows: https://docs.anaconda.com/anaconda/install/windows/
+    - Linux: https://docs.anaconda.com/anaconda/install/linux/
+2. Download Git: https://github.com/git-guides/install-git
+3. Open command line terminal.
+4. Write the following commands:
     - cd
     - conda create --name emds_env
         - When conda asks you to proceed, type "y" 
@@ -38,7 +35,24 @@
     - mkdir edms_git
     - cd edms_git
     - git clone https://github.com/marczepeda/edms.git
-    - pip -e .
+    - pip install -e .
+
+### Install (Option 2; Does not work at the moment)
+1. Download Anaconda.
+    - Mac: https://docs.anaconda.com/anaconda/install/mac-os/
+    - Windows: https://docs.anaconda.com/anaconda/install/windows/
+    - Linux: https://docs.anaconda.com/anaconda/install/linux/
+2. Download Git: https://github.com/git-guides/install-git
+3. Open command line terminal.
+4. Write the following commands:
+    - conda create --name edms_env
+        - When conda asks you to proceed, type "y" 
+    - conda activate edms_env
+    - pip install git+https://github.com/marczepeda/edms.git
+        - Sign into github when asked.
+        - Wait at least a minute for the authentication to process.
+    - conda list
+        - check for edms package
 
 ## PE Strategies
 | Strategy | Description | Reference |
