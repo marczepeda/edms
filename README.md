@@ -27,25 +27,24 @@
     - Linux: https://docs.anaconda.com/anaconda/install/linux/
 2. Download Git: https://github.com/git-guides/install-git
     - Check using command line terminal: git version
-3. Open command line terminal.
-4. Write the following commands:
-    - cd
+3. Write the following in a command line terminal:
+    - cd ~
     - conda create --name emds_env python=3.11.5
         - When conda asks you to proceed, type "y" 
     - conda activate edms_env
-    - mkdir edms_git
-    - cd edms_git
+    - mkdir git_edms
+    - cd git_edms
     - git clone https://github.com/marczepeda/edms.git
     - pip install -e .
 
-### Install (Option 2; Does not work at the moment)
+### Install (Option 2)
 1. Download Anaconda.
     - Mac: https://docs.anaconda.com/anaconda/install/mac-os/
     - Windows: https://docs.anaconda.com/anaconda/install/windows/
     - Linux: https://docs.anaconda.com/anaconda/install/linux/
 2. Download Git: https://github.com/git-guides/install-git
-3. Open command line terminal.
-4. Write the following commands:
+    - Check using command line terminal: git version
+3. Write the following in a command line terminal:
     - conda create --name edms_env python=3.11.5
         - When conda asks you to proceed, type "y" 
     - conda activate edms_env
