@@ -278,7 +278,7 @@ def is_sublist_in_order(main_list, sub_list):
         RTT_length: Reverse transcriptase template length (bp)
     Dependencies: io,Bio.Seq.Seq,shared_sequences(),get_codons(),get_codon_frames(),is_sublist_in_order(),aa_dna_codon_table
 '''
-def RTT_designer(pegRNAs: pd.DataFrame, file: str, aa_index: int=1, rtt_length: int=21):
+def RTT_designer(pegRNAs: pd.DataFrame, file: str, aa_index: int=1, rtt_length: int=39):
     
     # Get reference sequence & codons (+ reverse complement)
     target_sequence = io.get(file).iloc[0]['target_sequence']
