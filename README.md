@@ -9,6 +9,7 @@
     - import edms.bio.fastq as f
     - import edms.bio.clone as cl
     - import edms.bio.pe as pe
+    - import edms.bio.pegLIT as pegLIT
 - dat: interacting with databases
     - import edms.dat.cosmic as co
     - import edms.dat.cvar as cv
@@ -27,7 +28,8 @@
     - Linux: https://docs.anaconda.com/anaconda/install/linux/
 2. Download Git: https://github.com/git-guides/install-git
     - Check using command line terminal: git version
-3. Write the following in a command line terminal:
+3. Download Docker. https://www.docker.com/
+4. Write the following in a command line terminal:
     - cd ~
     - conda create --name emds_env python=3.11.5
         - When conda asks you to proceed, type "y" 
@@ -36,6 +38,8 @@
     - cd git_edms
     - git clone https://github.com/marczepeda/edms.git
     - pip install -e .
+    - docker pull pinellolab/primedesign
+        - Docker desktop app needs to be open
 
 ### Install (Option 2)
 1. Download Anaconda.
@@ -44,7 +48,8 @@
     - Linux: https://docs.anaconda.com/anaconda/install/linux/
 2. Download Git: https://github.com/git-guides/install-git
     - Check using command line terminal: git version
-3. Write the following in a command line terminal:
+3. Download Docker: https://www.docker.com/
+4. Write the following in a command line terminal:
     - conda create --name edms_env python=3.11.5
         - When conda asks you to proceed, type "y" 
     - conda activate edms_env
@@ -53,6 +58,8 @@
         - Wait at least a minute for the authentication to process.
     - conda list
         - check for edms package
+    - docker pull pinellolab/primedesign
+        - Docker desktop app needs to be open
 
 ## PE Strategies
 | Strategy | Description | Reference |

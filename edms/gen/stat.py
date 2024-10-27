@@ -11,14 +11,17 @@ from statsmodels.stats.anova import AnovaRM
 from statsmodels.stats.multitest import multipletests
 
 # Statistics methods
-''' describe: Returns descriptive statistics for numerical columns in a DataFrame
-        df: DataFrame
-        cols: list of numerical columns to compute statistics (optional)
-        group: column name to split tidy dataframes (optional)
-    Dependencies: pandas, numpy, scipy.stats
-'''
 def describe(df: pd.DataFrame, cols=[], group=''):
-
+    ''' 
+    describe(): returns descriptive statistics for numerical columns in a DataFrame
+    
+    Parameters:
+    df (dataframe): pandas dataframe
+    cols (list, optional): list of numerical columns to compute statistics
+    group (str, optional): column name to split tidy dataframes
+    
+    Dependencies: pandas, numpy, & scipy.stats
+    '''
     if group!='': df = df.pivot(columns=group) # Splits tidy dataframe
     if len(cols)>0: df = df[cols] # Isolate specified columns
 
@@ -41,21 +44,24 @@ def describe(df: pd.DataFrame, cols=[], group=''):
 
     return descriptive
 
-''' difference: Computes the appropriate statistical test(s) and returns the p-value(s).
-        df: tidy DataFrame
-        data_col: data column name
-        compare_col: comparisons column name
-        compare: list of comparisons
-        same: same (True) or different (False) subjects
-        compare: list of comparisons
-        para: parameteric (True) or nonparametric (False)
-        alpha: significance level for the test (Default: 0.05)
-        within_cols: list of column names corresponding to different conditions or time points with the same subject (optional; para=True, same=True)
-        method: multiple hypothesis testing correction method (Default: holm)
-    Dependencies: pandas,scipy.stats,statsmodels.stats
-'''
 def difference(df: pd.DataFrame,data_col: str,compare_col: str,compare: list,same=False,para=True,alpha=0.05,within_cols=[],method='holm'):
+    ''' 
+    difference(): computes the appropriate statistical test(s) and returns the p-value(s).
     
+    Parameters:
+    df: tidy DataFrame
+    data_col: data column name
+    compare_col: comparisons column name
+    compare: list of comparisons
+    same: same (True) or different (False) subjects
+    compare: list of comparisons
+    para: parameteric (True) or nonparametric (False)
+    alpha: significance level for the test (Default: 0.05)
+    within_cols: list of column names corresponding to different conditions or time points with the same subject (optional; para=True, same=True)
+    method: multiple hypothesis testing correction method (Default: holm)
+
+    Dependencies: pandas, scipy.stats, & statsmodels.stats
+    '''
     if not same: # Different samples
 
         if para==True: # Data that follows a normal distribution
@@ -210,15 +216,19 @@ def difference(df: pd.DataFrame,data_col: str,compare_col: str,compare: list,sam
             
             return inference
 
-''' correlation: Returns a correlation matrix
-        df: DataFrame
-        var_cols: list of 2 variable column names for tidy dataframe (optional; pivot table index & column)
-        value_cols: list of numerical column names to compute statistics; single column name for tidy dataframe (optional)
-        method: pearson, spearman, or kendall (Default: pearson)
-        numeric_only: only calculates correlations for numeric columns (Default: True)
-    Depedencies: pandas
-'''
 def correlation(df: pd.DataFrame, var_cols=[], value_cols=[], method='pearson',numeric_only=True):
+    ''' 
+    correlation(): returns a correlation matrix
+    
+    Parameters:
+    df (dataframe): pandas dataframe
+    var_cols (list, optional): list of 2 variable column names for tidy dataframe (optional; pivot table index & column)
+    value_cols (list, optional): list of numerical column names to compute statistics; single column name for tidy dataframe (optional)
+    method (str, optional): pearson, spearman, or kendall (Default: pearson)
+    numeric_only (bool, optional): only calculates correlations for numeric columns (Default: True)
+    
+    Depedencies: pandas
+    '''
     if (len(var_cols)==2)&(len(value_cols)==1): df = df.pivot(index=var_cols[0],columns=var_cols[1],values=value_cols[0]) # Splits tidy dataframe
     elif len(value_cols)>=1: df = df[value_cols] # Isolate specified columns for non-tidy dataframe
     return df.corr(method=method,numeric_only=numeric_only) # Correlation matrix with specified method

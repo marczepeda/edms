@@ -58,42 +58,50 @@ aa_dna_codon_table = {
 }
 
 # PrimeDesign Methods
-''' PrimeDesignInput: Creates PrimeDesign input file.
-        target_name: name of target
-        target_sequence: in-frame nucleotide sequence with (saturation mutagensis region)
-        dir: name of the output directory 
-        file: name of the output file
-    Dependencies: pandas,io
-    Reference: https://github.com/pinellolab/PrimeDesign/tree/master/PrimeDesign
-'''
 def PrimeDesignInput(target_name: str, target_sequence: str, dir: str='.', file: str='PrimeDesignInput.csv'):
+    ''' 
+    PrimeDesignInput(): creates PrimeDesign input file.
+    
+    Parameters:
+    target_name (str): name of target
+    target_sequence (str): in-frame nucleotide sequence with flank5(saturation mutagensis region)flank3
+    dir (str, optional): name of the output directory 
+    file (str, optional): name of the output file
+    
+    Dependencies: pandas & io
+    
+    Reference: https://github.com/pinellolab/PrimeDesign/tree/master/PrimeDesign
+    '''
     io.save(dir=dir,file=file,obj=pd.DataFrame({'target_name': [target_name],'target_sequence': [target_sequence]}))
 
-''' PrimeDesign: Run PrimeDesign using Docker (NEED TO BE RUNNING DESKTOP APP)
-        file (str): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)
-        pbs_length_list (list): List of primer binding site (PBS) lengths for the pegRNA extension. Example: 12 13 14 15
-        rtt_length_list (list): List of reverse transcription (RT) template lengths for the pegRNA extension. Example: 10 15 20
-        nicking_distance_minimum (int): Minimum nicking distance for designing ngRNAs. (Default: 0 bp)
-        nicking_distance_maximum (int): Maximum nicking distance for designing ngRNAs. (Default: 100 bp)
-        filter_c1_extension (bool): Filter against pegRNA extensions that start with a C base. (Default: False)
-        silent_mutation (bool): Introduce silent mutation into PAM assuming sequence is in-frame. Currently only available with SpCas9. (Default: False)
-        genome_wide_design (bool): Whether this is a genome-wide pooled design. This option designs a set of pegRNAs per input without ranging PBS and RTT parameters.
-        saturation_mutagenesis (str): Saturation mutagenesis design with prime editing (Options: 'aa', 'base').
-        number_of_pegrnas (int): Maximum number of pegRNAs to design for each input sequence. The pegRNAs are ranked by 1) PAM disrupted > PAM intact then 2) distance to edit. (Default: 3)
-        number_of_ngrnas (int): Maximum number of ngRNAs to design for each input sequence. The ngRNAs are ranked by 1) PE3b-seed > PE3b-nonseed > PE3 then 2) deviation from nicking_distance_pooled. (Default: 3)
-        nicking_distance_pooled (int): The nicking distance between pegRNAs and ngRNAs for pooled designs. PE3b annotation is priority (PE3b seed -> PE3b non-seed), followed by nicking distance closest to this parameter. (Default: 75 bp)
-        homology_downstream (int): For pooled designs (genome_wide or saturation_mutagenesis needs to be indicated), this parameter determines the RT extension length downstream of an edit for pegRNA designs. (Default: 10)
-        pbs_length_pooled (int): The PBS length to design pegRNAs for pooled design applications. (Default: 14 nt)
-        rtt_max_length_pooled (int): Maximum RTT length to design pegRNAs for pooled design applications. (Default: 50 nt)
-        out_dir (str): Name of output directory. (Default: ./DATETIMESTAMP_PrimeDesign)
-    Dependencies: os,numpy,https://github.com/pinellolab/PrimeDesign
-'''
 def PrimeDesign(file: str,pbs_length_list: list = [],rtt_length_list: list = [],nicking_distance_minimum: int = 0,
                 nicking_distance_maximum: int = 100,filter_c1_extension: bool = False,silent_mutation: bool = False,
                 genome_wide_design: bool = False,saturation_mutagenesis: str = None,number_of_pegrnas: int = 3,number_of_ngrnas: int = 3,
                 nicking_distance_pooled: int = 75,homology_downstream: int = 10,pbs_length_pooled: int = 14,rtt_max_length_pooled: int = 50,
                 out_dir: str = './DATETIMESTAMP_PrimeDesign'):
+    ''' 
+    PrimeDesign(): run PrimeDesign using Docker (NEED TO BE RUNNING DESKTOP APP)
     
+    Parameters:
+    file (str): input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)
+    pbs_length_list (list, optional): list of primer binding site (PBS) lengths for the pegRNA extension. Example: 12 13 14 15
+    rtt_length_list (list, optional): list of reverse transcription (RT) template lengths for the pegRNA extension. Example: 10 15 20
+    nicking_distance_minimum (int, optional): minimum nicking distance for designing ngRNAs. (Default: 0 bp)
+    nicking_distance_maximum (int, optional): maximum nicking distance for designing ngRNAs. (Default: 100 bp)
+    filter_c1_extension (bool, optional): filter against pegRNA extensions that start with a C base. (Default: False)
+    silent_mutation (bool, optional): introduce silent mutation into PAM assuming sequence is in-frame. Currently only available with SpCas9. (Default: False)
+    genome_wide_design (bool, optional): whether this is a genome-wide pooled design. This option designs a set of pegRNAs per input without ranging PBS and RTT parameters.
+    saturation_mutagenesis (str, optional): saturation mutagenesis design with prime editing (Options: 'aa', 'base').
+    number_of_pegrnas (int, optional): maximum number of pegRNAs to design for each input sequence. The pegRNAs are ranked by 1) PAM disrupted > PAM intact then 2) distance to edit. (Default: 3)
+    number_of_ngrnas (int, optional): maximum number of ngRNAs to design for each input sequence. The ngRNAs are ranked by 1) PE3b-seed > PE3b-nonseed > PE3 then 2) deviation from nicking_distance_pooled. (Default: 3)
+    nicking_distance_pooled (int, optional): the nicking distance between pegRNAs and ngRNAs for pooled designs. PE3b annotation is priority (PE3b seed -> PE3b non-seed), followed by nicking distance closest to this parameter. (Default: 75 bp)
+    homology_downstream (int, optional): for pooled designs (genome_wide or saturation_mutagenesis needs to be indicated), this parameter determines the RT extension length downstream of an edit for pegRNA designs. (Default: 10)
+    pbs_length_pooled (int, optional): the PBS length to design pegRNAs for pooled design applications. (Default: 14 nt)
+    rtt_max_length_pooled (int, optional): maximum RTT length to design pegRNAs for pooled design applications. (Default: 50 nt)
+    out_dir (str, optional): name of output directory (Default: ./DATETIMESTAMP_PrimeDesign)
+    
+    Dependencies: os, numpy, & https://github.com/pinellolab/PrimeDesign
+    '''
     # Write PrimeDesign Command Line
     cmd = 'docker run -v ${PWD}/:/DATA -w /DATA pinellolab/primedesign primedesign_cli' # prefix
     cmd += f' -f {file}' # Append required parameters
@@ -116,15 +124,18 @@ def PrimeDesign(file: str,pbs_length_list: list = [],rtt_length_list: list = [],
 
     os.system(cmd) # Execute PrimeDesign Command Line
 
-''' PrimeDesignOutput: Splits peg/ngRNAs from PrimeDesign output & finishes annotations
-        pt: path to primeDesign output
-        aa_index: 1st amino acid in target sequence index (Optional, Default: start codon = 1)
-        scaffold_sequence: sgRNA scaffold sequence (Optional, Default: SpCas9)
-    Dependencies: io,numpy
-'''
 def PrimeDesignOutput(pt: str, aa_index: int=1, 
                       scaffold_sequence: str='GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC'):
+    ''' 
+    PrimeDesignOutput(): splits peg/ngRNAs from PrimeDesign output & finishes annotations
     
+    Parameters:
+    pt (str): path to primeDesign output
+    aa_index (int, optional): 1st amino acid in target sequence index (Optional, Default: start codon = 1)
+    scaffold_sequence (str, optional): sgRNA scaffold sequence (Optional, Default: SpCas9)
+    
+    Dependencies: io & numpy
+    '''
     # Get PrimeDesign output & seperate pegRNAs and ngRNAs
     primeDesign_output = io.get(pt)
     pegRNAs = primeDesign_output[primeDesign_output['gRNA_type']=='pegRNA'].reset_index(drop=True)
@@ -160,17 +171,20 @@ def PrimeDesignOutput(pt: str, aa_index: int=1,
     return pegRNAs,ngRNAs
 
 # pegRNA Methods
-''' epegRNA_linkers: Generate epegRNA linkers between PBS and 3' hairpin motif & finish annotations
-        pegRNAs: pegRNAs DataFrame
-        epegRNA_motif_sequence: epegRNA motif sequence (Optional, Default: tevopreQ1)
-        checkpoint_dir: Checkpoint directory (Optional)
-        checkpoint_file: Checkpoint file name (Optional)
-        checkpoint_pt: Previous checkpoint path (Optional)
-    Dependencies: pandas,pegLIT,io
-'''
 def epegRNA_linkers(pegRNAs: pd.DataFrame, epegRNA_motif_sequence: str='CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA',
                     checkpoint_dir: str=None, checkpoint_file=None, checkpoint_pt: str=''):
+    ''' 
+    epegRNA_linkers(): generate epegRNA linkers between PBS and 3' hairpin motif & finish annotations
     
+    Parameters:
+    pegRNAs (dataframe): pegRNAs DataFrame
+    epegRNA_motif_sequence (str, optional): epegRNA motif sequence (Optional, Default: tevopreQ1)
+    checkpoint_dir (str, optional): Checkpoint directory
+    checkpoint_file (str, optional): Checkpoint file name
+    checkpoint_pt (str, optional): Previous checkpoint path
+    
+    Dependencies: pandas, pegLIT, & io
+    '''
     # Get or make checkpoint DataFrame
     if checkpoint_dir is not None and checkpoint_file is not None: # Save checkpoints
         if checkpoint_pt=='': checkpoint = pd.DataFrame(columns=['pegRNA_number','Linker_sequence'])
@@ -197,15 +211,18 @@ def epegRNA_linkers(pegRNAs: pd.DataFrame, epegRNA_motif_sequence: str='CGCGGTTC
                                     'Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence','Linker_sequence','Motif_sequence']) # Sequence information
     return epegRNAs
 
-''' shared_sequences: Reduce PE library into shared spacers and PBS sequences.
-        pegRNAs: pegRNAs DataFrame
-        hist_plot: display histogram of reduced PE library (Optional, False)
-        hist_dir: directory to save histogram
-        hist_file: file name to save histogram
-    Dependencies: pandas,plot
-'''
-def shared_sequences(pegRNAs: pd.DataFrame, hist_plot:bool=True, hist_dir: str=None, hist_file=None, **kwargs):
+def shared_sequences(pegRNAs: pd.DataFrame, hist_plot:bool=True, hist_dir: str=None, hist_file: str=None, **kwargs):
+    ''' 
+    shared_sequences(): Reduce PE library into shared spacers and PBS sequences.
     
+    Parameters:
+    pegRNAs (dataframe): pegRNAs DataFrame
+    hist_plot (bool, optional): display histogram of reduced PE library (Default: True)
+    hist_dir (str, optional): directory to save histogram
+    hist_file (str, optional): file name to save histogram
+
+    Dependencies: pandas & plot
+    '''
     # Reduce PE library to the set shared of spacers and PBS motifs
     shared = {(pegRNAs.iloc[i]['Spacer_sequence'],pegRNAs.iloc[i]['PBS_sequence']) for i in range(len(pegRNAs))}
     shared_pegRNAs_lib = pd.DataFrame(columns=['pegRNA_numbers','Strand','Edits','Spacer_sequence','PBS_sequence'])
@@ -250,36 +267,54 @@ def shared_sequences(pegRNAs: pd.DataFrame, hist_plot:bool=True, hist_dir: str=N
 
     return shared_pegRNAs_lib
 
-''' get_codons: Returns all codons within a specified frame for a nucleotide sequence
-        sequence: nucletide sequence
-        frame: codon frame (0, 1, or 2)
-'''
 def get_codons(sequence,frame:int=0):
+    ''' 
+    get_codons(): returns all codons within a specified frame for a nucleotide sequence
+    
+    Parameters:
+    sequence: nucletide sequence
+    frame (int, optional): codon frame (0, 1, or 2)
+
+    Dependencies:
+    '''
     return [sequence[i:i+3] for i in range(frame, len(sequence) - 2, 3)]
 
-''' get_codon_frames: Returns all codon frames for a nucleotide sequence
-        seqeuence: nucleotide sequence
-'''
 def get_codon_frames(sequence):
+    ''' 
+    get_codon_frames(): returns all codon frames for a nucleotide sequence
+    
+    Parameters:
+    seqeuence: nucleotide sequence
+
+    Dependencies:
+    ''' 
     return [get_codons(sequence,frame) for frame in range(3)]
 
-''' is_sublist_in_order: Returns if each element in the sub list appears in the correct order in the main list
-        main_list: search for it here
-        sub_list: find this list
-'''
 def is_sublist_in_order(main_list, sub_list):
+    ''' 
+    is_sublist_in_order(): returns if each element in the sub list appears in the correct order in the main list
+    
+    Parameters:
+    main_list: search for it here
+    sub_list: find this list
+
+    Dependencies:
+    '''
     it = iter(main_list) # Initialize an iterator for the sub_list
     return all(item in it for item in sub_list) # Check if each element in sub_list appears in the correct order in main_list
 
-''' RTT_designer: Design all possible RTT for given spacer & PBS (WT, single insertions, & single deletions)
-        pegRNAs: pegRNAs DataFrame
-        file (str): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)
-        aa_index: 1st amino acid in target sequence index (Optional, Default: start codon = 1)
-        RTT_length: Reverse transcriptase template length (bp)
-    Dependencies: io,Bio.Seq.Seq,shared_sequences(),get_codons(),get_codon_frames(),is_sublist_in_order(),aa_dna_codon_table
-'''
 def RTT_designer(pegRNAs: pd.DataFrame, file: str, aa_index: int=1, rtt_length: int=39):
+    ''' 
+    RTT_designer(): design all possible RTT for given spacer & PBS (WT, single insertions, & single deletions)
     
+    Parameters:
+    pegRNAs (dataframe): pegRNAs DataFrame
+    file (str): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)
+    aa_index (int, optional): 1st amino acid in target sequence index (Default: start codon = 1)
+    RTT_length (int, optional): Reverse transcriptase template length (bp)
+
+    Dependencies: io, pandas, Bio.Seq.Seq, shared_sequences(), get_codons(), get_codon_frames(), is_sublist_in_order(), & aa_dna_codon_table
+    '''
     # Get reference sequence & codons (+ reverse complement)
     target_sequence = io.get(file).iloc[0]['target_sequence']
     seq = Seq(target_sequence.split('(')[1].split(')')[0]) # Break apart target sequences
@@ -590,16 +625,20 @@ def RTT_designer(pegRNAs: pd.DataFrame, file: str, aa_index: int=1, rtt_length: 
     # Combine wildtype, substitution, insertion, deletion libraries
     return pd.concat([pegRNAs,wildtypes,insertions,deletions]).reset_index(drop=True)
 
-''' compare_RTTs: Compares RTT outcome to WT RTT outcome and returns observed it.
-        rtt_prot: RTT outcome, which is AA sequence
-        rtt_prot_indexes: RTT outcome indexes, which is AA sequence indexes
-        rtt_wt_prot_indexes: RTT WT outcome, which is WT AA sequence
-        rtt_wt_prot_indexes: RTT WT outcome indexes, which is WT AA sequence indexes
-        annotation: PrimeDesign output, insertion, deletion, or wildtype
-        strand: Prime Design output (i.e., "+" or "-")
-'''
 def compare_RTTs(rtt_prot,rtt_prot_indexes: list,rtt_wt_prot, rtt_wt_prot_indexes: list,annotation: str,strand: str):
+    ''' 
+    compare_RTTs(): compares RTT outcome to WT RTT outcome and returns observed it.
     
+    Parameters:
+    rtt_prot: RTT outcome, which is AA sequence
+    rtt_prot_indexes (list): RTT outcome indexes, which is AA sequence indexes
+    rtt_wt_prot: RTT WT outcome, which is WT AA sequence
+    rtt_wt_prot_indexes (list): RTT WT outcome indexes, which is WT AA sequence indexes
+    annotation (str): PrimeDesign output, insertion, deletion, or wildtype
+    strand (str): Prime Design output (i.e., "+" or "-")
+
+    Dependencies:
+    '''
     # Determine edit category
     if (rtt_prot==rtt_wt_prot)&(rtt_prot_indexes==rtt_wt_prot_indexes): # Wildtype
         print('WT')
@@ -655,22 +694,26 @@ def compare_RTTs(rtt_prot,rtt_prot_indexes: list,rtt_wt_prot, rtt_wt_prot_indexe
         return edit
         
 
-''' pegRNAs_tester: Confirm that pegRNAs should create the predicted edit
-        pegRNAs: pegRNAs DataFrame
-        file (str): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)
-        aa_index: 1st amino acid in target sequence index (Optional, Default: start codon = 1)
-    Dependencies: Bio.Seq.Seq,numpy,pandas,is_sublist_in_order(),get_codons(),get_codon_frames(),compare_RTTs()
-    Common errors for calling edits...
-        deletions:
-            (1) single deletion of repeated AA results in wrong AA #
-            (2) AA deletion outside of target sequence boundary results in wrong AA #
-        insertions:
-            (1) single insertion of repeated AA results in wrong AA #
-            (2) inserted AA matches the next (+ strand) or previous (- strand) AA, so compare_RTTs() shifts mutation by 1 AA
-            (3) single insertion of final AA in RTT, which matches next AA and returns wildtype sequence
-'''
 def pegRNAs_tester(pegRNAs: pd.DataFrame, file: str, aa_index: int=1):
+    ''' 
+    pegRNAs_tester(): confirm that pegRNAs should create the predicted edit
     
+    Parameters:
+    pegRNAs (dataframe): pegRNAs DataFrame
+    file (str): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)
+    aa_index (int, optional): 1st amino acid in target sequence index (Optional, Default: start codon = 1)
+    
+    Dependencies: Bio.Seq.Seq, numpy, pandas, is_sublist_in_order(), get_codons(), get_codon_frames(), & compare_RTTs()
+    
+    Common errors for calling edits...
+    1. deletions:
+        (1) single deletion of repeated AA results in wrong AA #
+        (2) AA deletion outside of target sequence boundary results in wrong AA #
+    2. insertions:
+        (1) single insertion of repeated AA results in wrong AA #
+        (2) inserted AA matches the next (+ strand) or previous (- strand) AA, so compare_RTTs() shifts mutation by 1 AA
+        (3) single insertion of final AA in RTT, which matches next AA and returns wildtype sequence
+    '''
     # Catch all stop codons that are written as "X" instead of "*"
     pegRNAs['Edit'] = pegRNAs['Edit'].replace('X', '*', regex=True)
 
@@ -960,10 +1003,15 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame, file: str, aa_index: int=1):
     return pegRNAs
 
 # Comparing pegRNA libraries methods
-''' print_shared_sequences: Prints spacer and PBS sequences from dictionary of shared_sequences libraries
-        dc: dictionary of shared_sequences() libraries
-'''
 def print_shared_sequences(dc: dict):
+    ''' 
+    print_shared_sequences(): prints spacer and PBS sequences from dictionary of shared_sequences libraries
+    
+    Parameters:
+    dc (dict): dictionary of shared_sequences() libraries
+
+    Dependencies: pandas
+    '''
     keys_a = sorted(dc.keys())
 
     text = f""
@@ -976,10 +1024,15 @@ def print_shared_sequences(dc: dict):
             text += f"{dc[key].iloc[v]['Spacer_sequence']}\t{dc[key].iloc[v]['PBS_sequence']}\t\t"
     print(text)
 
-''' print_shared_sequences_mutant: Prints spacer and PBS sequences as well as priority mutant from dictionary of shared_sequences libraries
-        dc: dictionary of shared_sequences() libraries with priority mutant
-'''
 def print_shared_sequences_mutant(dc: dict):
+    ''' 
+    print_shared_sequences_mutant(): prints spacer and PBS sequences as well as priority mutant from dictionary of shared_sequences libraries
+    
+    Parameters:
+    dc (dict): dictionary of shared_sequences() libraries with priority mutant
+
+    Depedencies: pandas
+    '''
     keys_a = sorted(dc.keys())
 
     text = f""

@@ -9,13 +9,16 @@ import ast
 from ..gen import io
 
 # ClinVar database methods
-''' mutations: Returns ClinVar mutations dataframe for a given gene.
-        gene_name: gene name
-        pt: path to ClinVar tsv file
-    Dependencies: re,pyMUZ.gen.io
-'''
 def mutations(gene_name:str,pt:str,typ:str='tsv'):
+    ''' 
+    mutations: returns ClinVar mutations dataframe for a given gene.
+    
+    Parameters:
+    gene_name: gene name
+    pt: path to ClinVar tsv file
 
+    Dependencies: re, io
+    '''
     # Isolate mutations corresponding to gene
     gene = io.get(pt,typ=typ)
     gene = gene[gene['Gene(s)']==gene_name].reset_index(drop=True)
@@ -37,22 +40,31 @@ def mutations(gene_name:str,pt:str,typ:str='tsv'):
 
     return gene
 
-''' prevalence: Returns list of mutations sorted by prevalence on ClinVar
-        gene: ClinVar mutations dataframe
+def prevalence(gene: pd.DataFrame):
+    ''' 
+    prevalence(): returns list of mutations sorted by prevalence on ClinVar
+    
+    Parameters:
+    gene (dataframe): ClinVar mutations dataframe
+    
     Dependencies: pandas
 '''
-def prevalence(gene: pd.DataFrame):
     return list(gene['Protein change'].value_counts().keys())
 
 # Prime editing methods
-''' priority_edits: Returns dataframe of the most clinically-relevant prime edits to prioritize from shared sequences library
-        pegRNAs: pegRNAs library dataframe
-        pegRNAs_shared: pegRNAs shared sequences library dataframe
-        gene: ClinVar mutations dataframe for the gene from mutations()
-    Dependencies: pandas,ast,prevalence()
-'''
 def priority_edits(pegRNAs: pd.DataFrame, pegRNAs_shared: pd.DataFrame, gene: pd.DataFrame):
+    ''' 
+    priority_edits(): returns dataframe of the most clinically-relevant prime edits to prioritize from shared sequences library
     
+    Note: I might want to update to resemble cosmic.py (priority_edits & priority_muts)
+
+    Parameters:
+    pegRNAs (dataframe): pegRNAs library dataframe
+    pegRNAs_shared (dataframe): pegRNAs shared sequences library dataframe
+    gene (dataframe): ClinVar mutations dataframe for the gene from mutations()
+    
+    Dependencies: pandas, ast, & prevalence()
+'''
     # Get list of priority mutants from prevalence()
     mut_priority_ls = prevalence(gene=gene)
 

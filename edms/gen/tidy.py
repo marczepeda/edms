@@ -7,24 +7,34 @@ import pandas as pd
 import re
 
 # Methods for dictionary containing dataframes.
-''' split_by: Splits elements of list, set, or series by specified seperator
-        series: list, set or series
-        by: seperator
-'''
 def split_by(series, by=', '):
+    ''' 
+    split_by(): splits elements of list, set, or series by specified seperator
+    
+    Parameters
+    series: list, set or series
+    by (str, optional): seperator
+    '''
     split_elements = []
     for element in series: 
         if isinstance(element, str): split_elements.extend(element.split(by))
     return split_elements
 
-''' isolate: Isolate rows in dataframes based specified value(s)
-        dc: dictionary
-        col: df column name
-        get: value, set, list, dictionary of dataframes
-        want: do you want the value
-    Dependencies: re, pandas, split_by()
-'''
-def isolate(dc: dict(), col: str(), get, get_col='', get_col_split_by='', want=True, exact=True):
+def isolate(dc: dict, col: str, get, get_col='', get_col_split_by='', want=True, exact=True):
+    ''' 
+    isolate(): isolate rows in dataframes based specified value(s)
+    
+    Parameters:
+    dc (dict): dictionary
+    col (str): df column name
+    get: value, set, list, dictionary of dataframes
+    get_col (str, optional): dataframe column name with get value
+    get_col_split_by (str, optional): get value seperator
+    want (bool, optional): do you want the value(s)?
+    exact (bool, optional): exact value or contains (Default: exact)
+    
+    Dependencies: re, pandas, & split_by()
+    '''
     if want==True: 
         if get is None: return {key:df[df[col].isnull()==True].reset_index(drop=True) for key,df in dc.items()}
         elif type(get)==set or type(get)==list or type(get)==pd.Series: 
@@ -60,15 +70,18 @@ def isolate(dc: dict(), col: str(), get, get_col='', get_col_split_by='', want=T
                 else: return {key:df[df[col].str.contains('|'.join(re.escape(sub) for sub in split_by(get[key][get_col],by=get_col_split_by)),case=False, na=False)==False].reset_index(drop=True) for key,df in dc.items()}
         else: return {key:df[df[col]!=get].reset_index(drop=True) for key,df in dc.items()}
 
-''' modify: Returns dictionary containing dataframes new or updated column with specified value(s) or function
-        dc: dictionary
-        col: new/old column name
-        val: column value, list, or function.
-            e.g., new_val=lambda df: df['AA Mutation'].split('.')[1]
-        axis: function is applied to column (1) or row (0)
+def modify(dc: dict, col: str, val, axis=1, **kwargs):
+    ''' 
+    modify(): Returns dictionary containing dataframes new or updated column with specified value(s) or function
+    
+    Parameters:
+    dc (dict): dictionary
+    col (str): new/old column name
+    val: column value, list, or function (e.g., new_val=lambda df: df['AA Mutation'].split('.')[1])
+    axis (int, optional): function is applied to column (1) or row (0)
+    
     Dependencies: pandas
 '''
-def modify(dc: dict(), col: str(), val, axis=1, **kwargs):
     dc2=dict()
     for key,df in dc.items():
         if callable(val): df2 = df.assign(**{col: df.apply(val, axis=axis, **kwargs)})
@@ -76,43 +89,60 @@ def modify(dc: dict(), col: str(), val, axis=1, **kwargs):
         dc2[key]=df2
     return dc2
 
-''' melt: Returns dictionary containing tidy dataframes
-        dc: dictionary of dataframes
-        id_vars: metadata columns
+def melt(dc: dict,id_vars,**kwargs):
+    ''' 
+    melt(): returns dictionary containing tidy dataframes
+    
+    Parameters:
+    dc: dictionary of dataframes
+    id_vars: metadata columns
+    
     Dependencies: pandas
-'''
-def melt(dc: dict(),id_vars,**kwargs):
+    '''
     dc2=dict()
     for key,df in dc.items(): dc2[key]=pd.melt(frame=df,id_vars=id_vars,**kwargs)
     return dc2
 
-''' join: Returns a single dataframe from a dictionary of dataframes
-        dc: dictionary of dataframes
-        col: name for keys column
+def join(dc: dict, col='key'):
+    ''' 
+    join(): returns a single dataframe from a dictionary of dataframes
+    
+    Parameters:
+    dc (dict): dictionary of dataframes
+    col (str, optional): name for keys column
+    
     Dependencies: pandas
 '''
-def join(dc: dict, col='key'):
     df = pd.DataFrame()
     for key,val in dc.items():
         val[col]=key
         df=pd.concat([df,val]).reset_index(drop=True)
     return df
 
-''' split: Returns from a dictionary of dataframes from a single dataframe
-        df: dataframe
-        key: column for spliting dataframe
+def split(df: pd.DataFrame, key: str):
+    ''' 
+    split(): returns from a dictionary of dataframes from a single dataframe
+    
+    Parameters:
+    df: dataframe
+    key: column for spliting dataframe
+    
     Dependencies: pandas
 '''
-def split(df: pd.DataFrame, key: str):
     return {k:df[df[key]==k] for k in list(df[key].value_counts().keys())} 
 
-''' merge: Adds metadata columns to data dataframe using metadata dataframe
-        data: data dataframe
-        meta: metadata dataframe
-        id: id(s) column name(s) [str: both, list: data & meta]
-        cols: list of column names in metadata dataframe
-'''
-def merge(data: pd.DataFrame, meta: pd.DataFrame, id, cols):
+def merge(data: pd.DataFrame, meta: pd.DataFrame, id, cols: list):
+    ''' 
+    merge(): adds metadata columns to data dataframe using metadata dataframe
+    
+    Parameters:
+    data (dataframe): data dataframe
+    meta (dataframe): metadata dataframe
+    id: id(s) column name(s) [str: both, list: data & meta]
+    cols (list): list of column names in metadata dataframe
+    
+    Dependencies: pandas
+    '''
     if type(id)==str:
         for c in cols: 
             id_c = dict(zip(meta[id],meta[c]))
@@ -125,12 +155,16 @@ def merge(data: pd.DataFrame, meta: pd.DataFrame, id, cols):
     return data
 
 # Methods for interconverting dictionaries and lists
-''' dc_to_ls: Convert a dictionary containing several subdictionaries into a list with all the key value relationships stored as individual values
-        dc: dictionary
-        sep: seperator for subdictionaries for values in the list
-'''
-def dc_to_ls(dc: dict(),sep='.'):
+def dc_to_ls(dc: dict,sep='.'):
+    ''' 
+    dc_to_ls(): convert a dictionary containing several subdictionaries into a list with all the key value relationships stored as individual values
     
+    Parameters:
+    dc (dict): dictionary
+    sep (str, optional): seperator for subdictionaries for values in the list
+    
+    Dependencies: 
+    '''
     ls = [] # Initialize final list
     
     def recursive_items(dc, sep='', parent_key=''): # Recursive processing submethod
@@ -142,11 +176,16 @@ def dc_to_ls(dc: dict(),sep='.'):
     recursive_items(dc,sep) # Initialized recursive processing
     return ls
 
-''' ls_to_dc: Convert a dictionary containing several subdictionaries into a list with all the key value relationships stored as individual values
-        ls: list
-        sep: seperator for subdictionaries for values in the list
-'''
 def ls_to_dc(ls: list, sep='.'):
+    ''' 
+    ls_to_dc(): convert a dictionary containing several subdictionaries into a list with all the key value relationships stored as individual values
+    
+    Parameters:
+    ls (list): list
+    sep (str, optional): seperator for subdictionaries for values in the list
+    
+    Dependencies:
+    '''
 
     dc = {} # Initialize final dict
 
@@ -161,11 +200,16 @@ def ls_to_dc(ls: list, sep='.'):
     return dc
 
 # Dataframe methods
-''' reorder_cols: Returns dataframe with columns reorganized 
-        df: Dataframe
-        cols: list of column names prioritized in order
-        keep: keep columns not listed (Default: True)
-'''
 def reorder_cols(df: pd.DataFrame, cols: list, keep=True):
+    ''' 
+    reorder_cols(): returns dataframe with columns reorganized 
+    
+    Parameters:
+    df (dataframe): pandas dataframe
+    cols (list): list of column names prioritized in order
+    keep (bool, optional): keep columns not listed (Default: True)
+
+    Dependencies: pandas
+    '''
     if keep==True: cols.extend([c for c in list(df.columns) if c not in cols]) # Append remaining columns
     return df[cols]

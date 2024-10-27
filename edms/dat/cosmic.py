@@ -9,12 +9,15 @@ import ast
 from ..gen import io
 
 # COSMIC database methods
-''' mutations: Returns COSMIC mutations dataframe for a given gene.
-        pt: path to COSMIC csv file
-    Dependencies: re,io
-'''
 def mutations(pt:str):
-
+    ''' 
+    mutations(): returns COSMIC mutations dataframe for a given gene.
+    
+    Parameters:
+    pt (str): path to COSMIC csv file
+    
+    Dependencies: re & io
+    '''
     gene = io.get(pt)
     gene = gene[gene['Type']!='Unknown']
 
@@ -36,22 +39,29 @@ def mutations(pt:str):
 
     return gene
 
-''' prevalence: Returns list of mutations sorted by prevalence on COSMIC
-        gene: COSMIC mutations dataframe
-    Dependencies: pandas
-'''
 def prevalence(gene: pd.DataFrame):
+    ''' 
+    prevalence(): returns list of mutations sorted by prevalence on COSMIC
+    
+    Parameters:
+    gene (dataframe): COSMIC mutations dataframe
+    
+    Dependencies: pandas
+    '''
     return list(gene['AA_mut'].value_counts().keys())
 
 # Prime editing methods
-''' priority_muts: Returns the shared sequences library dataframe with priority mutations
-        pegRNAs: pegRNAs library dataframe
-        pegRNAs_shared: pegRNAs shared sequences library dataframe
-        pt: path to COSMIC csv file
-    Dependencies: pandas,ast,prevalence(),mutations()
-'''
 def priority_muts(pegRNAs: pd.DataFrame, pegRNAs_shared: pd.DataFrame, pt: str):
+    ''' 
+    priority_muts: returns the shared sequences library dataframe with priority mutations
     
+    Parameters:
+    pegRNAs (dataframe): pegRNAs library dataframe
+    pegRNAs_shared (dataframe): pegRNAs shared sequences library dataframe
+    pt (str): path to COSMIC csv file
+    
+    Dependencies: pandas, ast, prevalence(), & mutations()
+    '''
     # Get list of priority mutants from prevalence() & mutations()
     mut_priority_ls = prevalence(gene=mutations(pt=pt))
 
@@ -88,15 +98,18 @@ def priority_muts(pegRNAs: pd.DataFrame, pegRNAs_shared: pd.DataFrame, pt: str):
 
     return pegRNAs_shared
 
-''' priority_edits: Returns a dataframe with the most clinically-relevant prime edits to prioritize from the shared sequences library
-        pegRNAs: pegRNAs library dataframe
-        pegRNAs_shared: pegRNAs shared sequences library dataframe
-        pt: path to COSMIC csv file
-        gene: COSMIC mutations dataframe for the gene from mutations()
-    Dependencies: pandas,ast,prevalence()
-'''
 def priority_edits(pegRNAs: pd.DataFrame, pegRNAs_shared: pd.DataFrame, pt: str):
+    ''' 
+    priority_edits(): returns a dataframe with the most clinically-relevant prime edits to prioritize from the shared sequences library
     
+    Parameters:
+    pegRNAs (dataframe): pegRNAs library dataframe
+    pegRNAs_shared (dataframe): pegRNAs shared sequences library dataframe
+    pt (dataframe): path to COSMIC csv file
+    gene (dataframe): COSMIC mutations dataframe for the gene from mutations()
+    
+    Dependencies: pandas, ast, & prevalence()
+    '''
     # Get COSMIC mutations dataframe from mutations()
     gene=mutations(pt=pt)
     
