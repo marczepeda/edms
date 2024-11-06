@@ -98,11 +98,11 @@ def difference(df: pd.DataFrame,data_col: str,compare_col: str,compare: list,sam
                 tukey_result = pairwise_tukeyhsd(df2[data_col], df2[compare_col], alpha=alpha)
                 tukey_df = pd.DataFrame(data=tukey_result._results_table.data[1:], columns=tukey_result._results_table.data[0])
                 inference = pd.concat([inference,
-                                        pd.DataFrame({'test':['Tukey\'s HSD Test']*len(compare),
-                                                        'comparison': [','.join([tukey_df.iloc[i]['group1'],tukey_df.iloc[i]['group2']]) for i in range(len(tukey_df))], 
-                                                        'p_value': tukey_df['p-adj'],
-                                                        'null_hypothesis': ['reject' if p_adj<alpha else 'fail to reject' for p_adj in tukey_df['p-adj']]})]).reset_index(drop=True)
-
+                                       pd.DataFrame({'test':['Tukey\'s HSD Test']*len(tukey_df['group1']),
+                                                     'comparison': [','.join([tukey_df.iloc[i]['group1'],tukey_df.iloc[i]['group2']]) for i in range(len(tukey_df))], 
+                                                     'p_value': tukey_df['p-adj'],
+                                                     'null_hypothesis': ['reject' if p_adj<alpha else 'fail to reject' for p_adj in tukey_df['p-adj']]})]).reset_index(drop=True)
+                
                 # Multiple Hypothesis Correction for Student's T Test
                 print(f'Statistical Test: Student\'s Paired T-test ({method} correction) \n - To control for Type-I error, adjust the significance threshold (α) to account for the number of tests.\n - Use with unequal group sizes.')
                 tests = list(itertools.combinations(df2[compare_col].unique(), 2)) # Generate all comparisons from unique conditions

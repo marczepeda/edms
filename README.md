@@ -10,7 +10,7 @@
     - import edms.bio.clone as cl
     - import edms.bio.pe as pe
     - import edms.bio.pegLIT as pegLIT
-- dat: interacting with databases
+- dat: interacting with databases.
     - import edms.dat.cosmic as co
     - import edms.dat.cvar as cv
 

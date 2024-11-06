@@ -31,6 +31,7 @@ setup(
                       'statsmodels',
                       'scikit-learn',
                       'Levenshtein',
-                      'ViennaRNA'],
+                      'ViennaRNA',
+                      'adjustText'],
     python_requires='>=3.11'
 )
