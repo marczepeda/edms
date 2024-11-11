@@ -14,6 +14,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from adjustText import adjust_text
+from collections import Counter
+from pathlib import Path
+
 from ..gen import io
 from ..gen import tidy as t
 from ..gen import plot as p
@@ -121,6 +124,766 @@ def comb_fastqs(in_dir: str, out_dir: str, out_file: str):
 
     else: print('out_file needs .fastq or .fastq.gz suffix')
 
+# Quantify epegRNA abundance methods
+def count_spacers(sample_sheet: str, annotated_lib: str, fastq_dir: str, KEY_INTERVAL=(10,80), 
+                  KEY_FLANK5='CGAAACACC', KEY_FLANK3='GTTTAAGA', spacer_col='Spacer_sequence', 
+                  dont_trim_G=False, out_dir='', out_file='library_count_spacers.csv', save=True, 
+                  return_df=True, save_files=True, plot_out_type='pdf'):
+    
+    """[Summary]
+    Given a set of epegRNA sequences and a FASTQ file, count the reads in the
+    FASTQ, assign the reads to epegRNAs, and export the counts to a csv file `out_counts`. All
+    sgRNA sequences not found in the reference file (non-perfect matches) are
+    written to a separate csv file `out_nc`. 
+    count_reads works by reading through a .fastq file and searching for the guide in between
+    the subsequences for KEY_FLANK5 and KEY_FLANK3 within the KEY_INTERVAL. These counts are then recorded.
+
+    Parameters
+    ----------
+    sample_sheet : str or path
+        REQUIRED COLS: 'fastq_file', 'counts_file', 'noncounts_file', 'stats_file'
+        a sheet with information on sequence id, 
+        fastq_R1_file, fastq_R2_file (string or path to the FASTQ file to be processed), 
+        out_counts (string or path for the output csv file with perfect sgRNA matches ex: 'counts.csv'),
+        out_nc (string or path for the output csv file with non-perfect sgRNA matches ex: 'noncounts.csv'), 
+        out_stats (string or path for the output txt file with the read counting statistics ex: 'stats.txt'), 
+        condition names, and condition categories
+    annotated_lib : str or path
+        String or path to the reference file. annotated_lib must have column headers,
+        with 'sgRNA_seq' as the header for the column with the sgRNA sequences.
+    fastq_dir : str or path, defaults to ''
+        String or path to the directory where all fastq files are found. 
+    KEY_INTERVAL : tuple, default (10,80)
+        Tuple of (KEY_START, KEY_END) that defines the KEY_REGION. Denotes the
+        substring within the read to search for the KEY.
+    KEY_FLANK5 : str, default 'CGAAACACC'
+        Sequence that is expected upstream of the spacer sequence. The default
+        is the end of the hU6 promoter.
+    KEY_FLANK3 : str, default 'GTTTGAGA'
+        Sequence that is expected downstream of the spacer sequence. The
+        default is the start of the sgRNA scaffold sequence.
+    spacer_col : str, default 'Spacer_sequence'
+        Spacer sequence column name in annotated library
+    dont_trim_G : bool, default False
+        Whether to trim the first G from 21-nt sgRNA sequences to make them 20-nt.
+    out_dir : str or path, defaults to ''
+        String or path to the directory where all files are found. 
+    out_file : str or path, defaults to 'counts_library.csv'
+        Name of output dataframe with guides and counts. 
+    return_df : bool, default True
+        Whether or not to return the resulting dataframe
+    save : bool, default True
+        Whether or not to save the resulting dataframe
+    save_files : bool, default True
+        Whether or not to save individual counts, noncounts, and stats files
+    plot_out_type : str, optional, defaults to 'pdf'
+        file type of figure output
+    
+    Dependencies: os,pandas,Path,gzip,matplolib,Counter,numpy,io
+    """
+    io.mkdir(out_dir) # Make output directory if it does not exist
+
+    sample_filepath = Path(sample_sheet)
+    sample_df = pd.read_csv(sample_filepath)
+    for colname in ['fastq_file', 'counts_file', 'noncounts_file', 'stats_file', 'condition']: 
+        if colname not in sample_df.columns.tolist():
+            raise Exception(f"annotated_lib is missing column: {colname}")
+    samples = [list(a) for a in zip(sample_df.fastq_file, sample_df.counts_file, 
+                                    sample_df.noncounts_file, sample_df.stats_file, 
+                                    sample_df.condition)]
+
+    # STEP 1A: OPEN INPUT FILES FOR PROCESSING, CHECK FOR REQUIRED FORMATTING
+    # look for 'sgRNA_seq' column, raise Exception if missing
+    annotated_lib = Path(annotated_lib)
+    df_ref = pd.read_csv(annotated_lib, header=0) # explicit header = first row
+    if spacer_col not in df_ref.columns.tolist():
+        raise Exception(f'annotated_lib is missing column: {spacer_col}')
+    df_ref[spacer_col] = df_ref[spacer_col].str.upper() 
+    path = Path.cwd()
+
+    for fastq, counts, nc, stats, cond in samples: 
+        # fastq file of reads and paths to all output files, imported from sample_sheet
+        in_fastq = Path(fastq_dir) / fastq
+        out_counts, out_nc, out_stats = Path(out_dir) / counts, Path(out_dir) / nc, Path(out_dir) / stats        
+        # try opening input FASTQ, raise Exception if not possible
+        handle = gzip.open(in_fastq, 'rt') if str(in_fastq).endswith('.gz') else open(in_fastq, 'r')
+
+        # STEP 1B: SET UP VARIABLES FOR SCRIPT
+        # make dictionary to hold sgRNA counts - sgRNA_seq, count as k,v
+        dict_p = {sgRNA:0 for sgRNA in df_ref[spacer_col]}
+        list_np = [] # placeholder list for non-perfect matches
+        # reads count of: total, perfect match, non perfect match, no key found, not 20bps
+        num_reads, num_p_matches, num_np_matches, num_nokey, num_badlength = 0, 0, 0, 0, 0
+        KEY_START, KEY_END = KEY_INTERVAL[0], KEY_INTERVAL[1] # set the key interval
+
+        # STEP 2: PROCESS FASTQ FILE READS AND ADD COUNTS TO DICT
+        while True: # contains the seq and Qscore etc.
+            read = handle.readline()
+            if not read: # end of file
+                break
+            elif read.startswith("@"): # if line is a read header
+                read = handle.readline() # next line is the actual sequence
+            else:
+                continue
+            num_reads += 1
+            read_sequence = str.upper(str(read))
+            key_region = read_sequence[KEY_START:KEY_END]
+            key_index = key_region.find(KEY_FLANK5)
+            key_rev_index = key_region.rfind(KEY_FLANK3)
+            if key_index < 0 or key_rev_index <= key_index: # if keys not found
+                num_nokey += 1
+                continue
+            start_index = key_index + KEY_START + len(KEY_FLANK5)
+            end_index = key_rev_index + KEY_START
+            guide = read_sequence[start_index:end_index]
+            if not dont_trim_G:
+                if guide.startswith('G') and len(guide) == 21:
+                    guide = guide[1:]
+            if len(guide) != 20:
+                num_badlength += 1
+                continue
+            if guide in dict_p:
+                dict_p[guide] += 1
+                num_p_matches += 1
+            else:
+                num_np_matches += 1
+                list_np.append(guide)
+        handle.close()
+
+        # STEP 3: SORT DICTIONARIES AND GENERATE OUTPUT FILES
+        # sort perf matches (A-Z) with guides, counts as k,v and output to csv
+        df_perfects = pd.DataFrame(data=dict_p.items(), columns=[spacer_col, cond])
+        if save_files:
+            df_perfects.sort_values(by=cond, ascending=False, inplace=True)
+            df_perfects.to_csv(out_counts, index=False)
+
+            weights = np.ones_like(df_perfects[cond]) / len(df_perfects[cond])
+            # histogram for df_ref[cond] column
+            plt.hist(df_perfects[cond], weights=weights, bins=(len(df_perfects[cond])//5)+1)
+            outpath = path / out_dir
+            out = stats.split('.')[0] + '_histogram.' + plot_out_type
+            plt.title(f"Distributions of sgRNA in {fastq}")
+            plt.xlabel('Count of sgRNA')
+            plt.ylabel('Proportion of sgRNA')
+            plt.savefig(outpath / out, format=plot_out_type)
+            plt.clf()
+
+        # add matching counts to dataframe
+        df_ref = pd.merge(df_ref, df_perfects, on=spacer_col, how='outer')
+        df_ref[cond] = df_ref[cond].fillna(0)
+
+        # now sort non-perfect matches by frequency and output to csv
+        dict_np = Counter(list_np) # use Counter to tally up np matches
+        nc_name = nc.split("/")[-1]
+        df_ncmatches = pd.DataFrame(data=dict_np.items(), columns=[spacer_col, nc_name])
+        if save_files:
+            df_ncmatches.sort_values(by=nc_name, ascending=False, inplace=True)
+            df_ncmatches.to_csv(out_nc, index=False)
+        # calculate the read coverage (reads processed / sgRNAs in library)
+        num_guides = df_ref[spacer_col].shape[0]
+    
+        # STEP 4: CALCULATE STATS AND GENERATE STAT OUTPUT FILE
+        # percentage of guides that matched perfectly
+        pct_p_match = round(num_p_matches/float(num_p_matches + num_np_matches) * 100, 1)
+        # percentage of undetected guides (no read counts)
+        vals_p = np.fromiter(dict_p.values(), dtype=int)
+        guides_no_reads = np.count_nonzero(vals_p==0)
+        pct_no_reads = round(guides_no_reads/float(len(dict_p.values())) * 100, 1)
+        # skew ratio of top 10% to bottom 10% of guide counts
+        top_10 = np.percentile(list(dict_p.values()), 90)
+        bottom_10 = np.percentile(list(dict_p.values()), 10)
+        if top_10 != 0 and bottom_10 != 0:
+            skew_ratio = top_10/bottom_10
+        else:
+            skew_ratio = 'Not enough perfect matches to determine skew ratio'
+        # calculate the read coverage (reads processed / sgRNAs in library)
+        coverage = round(num_reads / num_guides, 1)
+        # calculate the number of unmapped reads (num_nokey / total_reads)
+        pct_unmapped = round((num_nokey / num_reads) * 100, 2)
+        # write analysis statistics to statfile
+        if save_files:
+            with open(out_stats, 'w') as statfile:
+                statfile.write('Number of reads processed: ' + str(num_reads) + '\n')
+                statfile.write('Number of reads where key was not found: ' + str(num_nokey) + '\n')
+                statfile.write('Number of reads where length was not 20bp: ' + str(num_badlength) + '\n')
+                statfile.write('Number of perfect guide matches: ' + str(num_p_matches) + '\n')
+                statfile.write('Number of nonperfect guide matches: ' + str(num_np_matches) + '\n')
+                statfile.write('Number of undetected guides: ' + str(guides_no_reads) + '\n')
+                statfile.write('Percentage of unmapped reads (key not found): ' + str(pct_unmapped) + '\n') #
+                statfile.write('Percentage of guides that matched perfectly: ' + str(pct_p_match) + '\n') #
+                statfile.write('Percentage of undetected guides: ' + str(pct_no_reads) + '\n') #
+                statfile.write('Skew ratio of top 10% to bottom 10%: ' + str(skew_ratio) + '\n') #
+                statfile.write('Read coverage: ' + str(coverage))
+                statfile.close()
+                print(str(in_fastq), 'processed')
+
+    plt.close()
+    # export files and return dataframes if necessary
+    if save: 
+        outpath = path / out_dir
+        Path.mkdir(outpath, exist_ok=True)
+        df_ref.to_csv(outpath / out_file, index=False)
+        print('count_reads outputed to', str(outpath / out_file))
+    print('Count reads completed')
+    if return_df:
+        return df_ref
+
+def count_spacers_pbs(sample_sheet: str, annotated_lib: str, fastq_R1_dir: str, fastq_R2_dir: str,
+                             KEY_INTERVAL=(10,80), KEY_FLANK5='CGAAACACC', KEY_FLANK3='GTTTAAGA', 
+                             spacer_col='Spacer_sequence', dont_trim_G=False, KEY_FLANK5_REV='AACCGCG', 
+                             pbs_col='PBS_sequence', pbs_len_col='PBS_length', linker_col='Linker_sequence', out_dir='', 
+                             out_file='library_count_spacers_pbs.csv', save=True, return_df=True, 
+                             save_files=True, plot_out_type='pdf'):
+    
+    """[Summary]
+    Given a set of epegRNA sequences and a FASTQ file, count the reads in the
+    FASTQ, assign the reads to epegRNAs, and export the counts to a csv file `out_counts`. All
+    sgRNA sequences not found in the reference file (non-perfect matches) are
+    written to a separate csv file `out_nc`. 
+    count_reads works by reading through a .fastq file and searching for the guide in between
+    the subsequences for KEY_FLANK5 and KEY_FLANK3 within the KEY_INTERVAL. These counts are then recorded.
+
+    Parameters
+    ----------
+    sample_sheet : str or path
+        REQUIRED COLS: 'fastq_R1_file', 'fastq_R2_file', 'counts_file', 'noncounts_file', 'stats_file'
+        a sheet with information on sequence id, 
+        fastq_R1_file, fastq_R2_file (string or path to the FASTQ file to be processed), 
+        out_counts (string or path for the output csv file with perfect sgRNA matches ex: 'counts.csv'),
+        out_nc (string or path for the output csv file with non-perfect sgRNA matches ex: 'noncounts.csv'), 
+        out_stats (string or path for the output txt file with the read counting statistics ex: 'stats.txt'), 
+        condition names, and condition categories
+    annotated_lib : str or path
+        String or path to the reference file. annotated_lib must have column headers,
+        with 'sgRNA_seq' as the header for the column with the sgRNA sequences.
+    fastq_R1_dir : str or path, defaults to ''
+        String or path to the directory where all fastq R1 files are found. 
+    fastq_R2_dir : str or path, defaults to ''
+        String or path to the directory where all fastq R2 files are found. 
+    KEY_INTERVAL : tuple, default (10,80)
+        Tuple of (KEY_START, KEY_END) that defines the KEY_REGION. Denotes the
+        substring within the read to search for the KEY.
+    KEY_FLANK5 : str, default 'CGAAACACC'
+        Sequence that is expected upstream of the spacer sequence. The default
+        is the end of the hU6 promoter.
+    KEY_FLANK3 : str, default 'GTTTGAGA'
+        Sequence that is expected downstream of the spacer sequence. The
+        default is the start of the sgRNA scaffold sequence.
+    spacer_col : str, default 'Spacer_sequence'
+        Spacer sequence column name in annotated library
+    dont_trim_G : bool, default False
+        Whether to trim the first G from 21-nt sgRNA sequences to make them 20-nt.
+    KEY_FLANK5_REV : str, default 'AACCGCG'
+        Sequence that is expected downstream of the extebsuib sequence. The default
+        is the start of the tevoPreQ1 motif.
+    pbs_col : str, default 'PBS_sequence'
+        PBS sequence column name in annotated library
+    pbs_len_col : str, default 'PBS_length'
+        PBS length column name in annotated library
+    linker_col : str, default 'Linker_sequence'
+        Linker sequence column name in annotated library
+    out_dir : str or path, defaults to ''
+        String or path to the directory where all files are found. 
+    out_file : str or path, defaults to 'counts_library.csv'
+        Name of output dataframe with guides and counts. 
+    return_df : bool, default True
+        Whether or not to return the resulting dataframe
+    save : bool, default True
+        Whether or not to save the resulting dataframe
+    save_files : bool, default True
+        Whether or not to save individual counts, noncounts, and stats files
+    plot_out_type : str, optional, defaults to 'pdf'
+        file type of figure output
+    
+    Dependencies: os,pandas,Path,gzip,matplolib,Counter,numpy,io
+    """
+    io.mkdir(out_dir) # Make output directory if it does not exist
+
+    sample_filepath = Path(sample_sheet)
+    sample_df = pd.read_csv(sample_filepath)
+    for colname in ['fastq_R1_file', 'fastq_R2_file', 'counts_file', 'noncounts_file', 'stats_file', 'condition']: 
+        if colname not in sample_df.columns.tolist():
+            raise Exception(f"annotated_lib is missing column: {colname}")
+    samples = [list(a) for a in zip(sample_df.fastq_R1_file, sample_df.fastq_R2_file,
+                                    sample_df.counts_file, sample_df.noncounts_file, 
+                                    sample_df.stats_file, sample_df.condition)]
+
+    # STEP 1A: OPEN INPUT FILES FOR PROCESSING, CHECK FOR REQUIRED FORMATTING
+    # look for 'Spacer_squence', 'PBS_squence', & 'Linker_squence' columns, raise Exception if missing
+    annotated_lib = Path(annotated_lib)
+    df_ref = pd.read_csv(annotated_lib, header=0) # explicit header = first row
+    if spacer_col not in df_ref.columns.tolist():
+        raise Exception(f'annotated_lib is missing column: {spacer_col}')
+    if pbs_col not in df_ref.columns.tolist():
+        raise Exception(f'annotated_lib is missing column: {pbs_col}')
+    if linker_col not in df_ref.columns.tolist():
+        raise Exception(f'annotated_lib is missing column: {linker_col}')
+    df_ref[spacer_col] = df_ref[spacer_col].str.upper()
+    spacers = set(df_ref[spacer_col])
+    df_ref[pbs_col] = df_ref[pbs_col].str.upper() 
+    df_ref[linker_col] = df_ref[linker_col].str.upper() 
+    path = Path.cwd()
+
+    for fastq_R1, fastq_R2, counts, nc, stats, cond in samples: 
+        # fastq file of reads and paths to all output files, imported from sample_sheet
+        in_fastq_R1 = Path(fastq_R1_dir) / fastq_R1
+        in_fastq_R2 = Path(fastq_R2_dir) / fastq_R2
+        out_counts, out_nc, out_stats = Path(out_dir) / counts, Path(out_dir) / nc, Path(out_dir) / stats        
+        # try opening input FASTQ, raise Exception if not possible
+        reader1 = gzip.open(in_fastq_R1, 'rt') if str(in_fastq_R1).endswith('.gz') else open(in_fastq_R1, 'r')
+        reader2 = gzip.open(in_fastq_R2, 'rt') if str(in_fastq_R2).endswith('.gz') else open(in_fastq_R2, 'r')
+
+        # STEP 1B: SET UP VARIABLES FOR SCRIPT
+        # make dictionary to hold epegRNA counts - spacer_pbs_linker, count as k,v
+        dict_p = {f'{spacer}_{pbs}':0 for (spacer,pbs) in zip(df_ref[spacer_col],df_ref[pbs_col])}
+        list_np = [] # placeholder list for non-perfect matches
+        # reads count of: total, perfect match, non perfect match, no key found, not 20bps
+        num_reads_R1, num_p_matches_R1, num_np_matches_R1, num_nokey_R1, num_badlength_R1 = 0, 0, 0, 0, 0
+        num_reads_R2, num_p_matches_R2, num_np_matches_R2, num_nokey_R2, num_badlength_R2 = 0, 0, 0, 0, 0
+        KEY_START, KEY_END = KEY_INTERVAL[0], KEY_INTERVAL[1] # set the key interval
+
+        # STEP 2A: PROCESS FASTQ R1 FILE READS AND ADD COUNTS TO DICT
+        while True: # contains the seq and Qscore etc.
+            read1 = reader1.readline()
+            read2 = reader2.readline()
+            if not read1: # end of file
+                break
+            elif read1.startswith("@"): # if line is a read header
+                read1 = reader1.readline() # next line is the actual sequence
+                read2 = reader2.readline() # next line is the actual sequence
+            else:
+                continue
+            num_reads_R1 += 1
+            read_sequence = str.upper(str(read1))
+            key_region = read_sequence[KEY_START:KEY_END]
+            key_index = key_region.find(KEY_FLANK5)
+            key_rev_index = key_region.rfind(KEY_FLANK3)
+            if key_index < 0 or key_rev_index <= key_index: # if keys not found
+                num_nokey_R1 += 1
+                continue
+            start_index = key_index + KEY_START + len(KEY_FLANK5)
+            end_index = key_rev_index + KEY_START
+            guide = read_sequence[start_index:end_index]
+            if not dont_trim_G:
+                if guide.startswith('G') and len(guide) == 21:
+                    guide = guide[1:]
+            if len(guide) != 20:
+                num_badlength_R1 += 1
+                continue
+            if guide in spacers:
+                num_p_matches_R1 += 1
+            else:
+                num_np_matches_R1 += 1
+                list_np.append(f'{guide}_spacer')
+                continue
+            
+            # STEP 2B: PROCESS FASTQ R2 FILE READS AND ADD COUNTS TO DICT
+            num_reads_R2 += 1
+            read2_sequence = str.upper(str(read2))
+            read2_key_index = read2_sequence.find(KEY_FLANK5_REV)
+            if read2_key_index < 0: # if keys not found
+                num_nokey_R2 += 1
+                continue
+            start_index = read2_key_index + len(KEY_FLANK5_REV)
+            read2_region = read2_sequence[start_index:]
+            df_ref_guide = df_ref[df_ref[spacer_col]==guide]
+            df_ref_guide[f'RC_{pbs_col}'] = [str(Seq(pbs).reverse_complement()) for pbs in df_ref_guide[pbs_col]]
+            df_ref_guide.sort_values(by=pbs_len_col,ascending=False,inplace=True)
+            for i,rc_pbs in enumerate(df_ref_guide[f'RC_{pbs_col}']):
+                if rc_pbs in read2_region:
+                    dict_p[f'{guide}_{df_ref_guide.iloc[i][pbs_col]}'] += 1
+                    num_p_matches_R2 += 1
+                    break
+                elif i+1>=len(df_ref_guide[f'RC_{pbs_col}']):
+                    num_np_matches_R2 += 1
+                    list_np.append(f'{guide}_pbs')
+                    break
+        reader1.close()
+        reader2.close()
+            
+
+        # STEP 3: SORT DICTIONARIES AND GENERATE OUTPUT FILES
+        # sort perf matches (A-Z) with epegRNAs, counts as k,v and output to csv
+        df_perfects = pd.DataFrame(data=dict_p.items(), columns=[f'{spacer_col}_{pbs_col}', cond])
+        spacers_perfects = []
+        pbs_perfects = []
+        for seqs in df_perfects[f'{spacer_col}_{pbs_col}']:
+            spacers_perfects.append(seqs.split('_')[0])
+            pbs_perfects.append(seqs.split('_')[1])
+        df_perfects[spacer_col] = spacers_perfects
+        df_perfects[pbs_col] = pbs_perfects
+        df_perfects = df_perfects[[spacer_col,pbs_col,cond]]
+        if save_files:
+            df_perfects.sort_values(by=cond, ascending=False, inplace=True)
+            df_perfects.to_csv(out_counts, index=False)
+
+            weights = np.ones_like(df_perfects[cond]) / len(df_perfects[cond])
+            # histogram for df_ref[cond] column
+            plt.hist(df_perfects[cond], weights=weights, bins=(len(df_perfects[cond])//5)+1)
+            outpath = path / out_dir
+            out = stats.split('.')[0] + '_histogram.' + plot_out_type
+            plt.title(f"Distributions of epegRNAs in\n{fastq_R1} & {fastq_R2}")
+            plt.xlabel('Count of epegRNA')
+            plt.ylabel('Proportion of epegRNA')
+            plt.savefig(outpath / out, format=plot_out_type)
+            plt.clf()
+
+        # add matching counts to dataframe
+        df_ref = pd.merge(df_ref, df_perfects, on=[spacer_col,pbs_col], how='outer')
+        df_ref[cond] = df_ref[cond].fillna(0)
+
+        # now sort non-perfect matches by frequency and output to csv
+        dict_np = Counter(list_np) # use Counter to tally up np matches
+        nc_name = nc.split("/")[-1]
+        df_ncmatches = pd.DataFrame(data=dict_np.items(), columns=[f'{spacer_col}_mismatch', nc_name])
+        spacers_ncs = []
+        mismatches = []
+        for spacer_mismatch in df_ncmatches[f'{spacer_col}_mismatch']:
+            spacers_ncs.append(spacer_mismatch.split('_')[0])
+            mismatches.append('_'.join(spacer_mismatch.split('_')[1:]))
+        df_ncmatches[spacer_col] = spacers_ncs
+        df_ncmatches['mismatch'] = mismatches
+        if save_files:
+            df_ncmatches.sort_values(by=nc_name, ascending=False, inplace=True)
+            df_ncmatches.to_csv(out_nc, index=False)
+        # calculate the read coverage (reads processed / sgRNAs in library)
+        num_guides = df_ref[spacer_col].shape[0]
+    
+        # STEP 4: CALCULATE STATS AND GENERATE STAT OUTPUT FILE
+        # percentage of guides that matched perfectly
+        pct_p_match_R1 = round(num_p_matches_R1/float(num_p_matches_R1 + num_np_matches_R1) * 100, 1)
+        pct_p_match_R2 = round(num_p_matches_R2/float(num_p_matches_R2 + num_np_matches_R2) * 100, 1)
+        # percentage of undetected guides (no read counts)
+        vals_p = np.fromiter(dict_p.values(), dtype=int)
+        guides_no_reads = np.count_nonzero(vals_p==0)
+        pct_no_reads = round(guides_no_reads/float(len(dict_p.values())) * 100, 1)
+        # skew ratio of top 10% to bottom 10% of guide counts
+        top_10 = np.percentile(list(dict_p.values()), 90)
+        bottom_10 = np.percentile(list(dict_p.values()), 10)
+        if top_10 != 0 and bottom_10 != 0:
+            skew_ratio = top_10/bottom_10
+        else:
+            skew_ratio = 'Not enough perfect matches to determine skew ratio'
+        # calculate the read coverage (reads processed / sgRNAs in library)
+        coverage = round(num_reads_R1 / num_guides, 1)
+        # calculate the number of unmapped reads (num_nokey / total_reads)
+        pct_unmapped_R1 = round((num_nokey_R1 / num_reads_R1) * 100, 2)
+        pct_unmapped_R2 = round((num_nokey_R2 / num_reads_R2) * 100, 2)
+        # write analysis statistics to statfile
+        if save_files:
+            with open(out_stats, 'w') as statfile:
+                statfile.write('Number of R1 reads processed: ' + str(num_reads_R1) + '\n')
+                statfile.write('Number of R2 reads processed: ' + str(num_reads_R2) + '\n')
+                statfile.write('Number of R1 reads where key was not found: ' + str(num_nokey_R1) + '\n')
+                statfile.write('Number of R2 reads where key was not found: ' + str(num_nokey_R2) + '\n')
+                statfile.write('Number of R1 reads where length was not 20bp: ' + str(num_badlength_R1) + '\n')
+                statfile.write('Number of R1 perfect epegRNA matches: ' + str(num_p_matches_R1) + '\n')
+                statfile.write('Number of R2 perfect epegRNA matches: ' + str(num_p_matches_R2) + '\n')
+                statfile.write('Number of R1 nonperfect epegRNA matches: ' + str(num_np_matches_R1) + '\n')
+                statfile.write('Number of R2 nonperfect epegRNA matches: ' + str(num_np_matches_R2) + '\n')
+                statfile.write('Number of undetected epegRNAs: ' + str(guides_no_reads) + '\n')
+                statfile.write('Percentage of R1 unmapped reads (key not found): ' + str(pct_unmapped_R1) + '\n') #
+                statfile.write('Percentage of R2 unmapped reads (key not found): ' + str(pct_unmapped_R2) + '\n') #
+                statfile.write('Percentage of epegRNA that matched perfectly in R1: ' + str(pct_p_match_R1) + '\n') #
+                statfile.write('Percentage of epegRNA that matched perfectly in R2: ' + str(pct_p_match_R2) + '\n') 
+                statfile.write('Percentage of undetected epegRNAs: ' + str(pct_no_reads) + '\n') #
+                statfile.write('Skew ratio of top 10% to bottom 10%: ' + str(skew_ratio) + '\n') #
+                statfile.write('Read coverage: ' + str(coverage))
+                statfile.close()
+                print(str(in_fastq_R1), 'processed')
+                print(str(in_fastq_R2), 'processed')
+
+    plt.close()
+    # export files and return dataframes if necessary
+    if save: 
+        outpath = path / out_dir
+        Path.mkdir(outpath, exist_ok=True)
+        df_ref.to_csv(outpath / out_file, index=False)
+        print('count_spacers_pbs outputed to', str(outpath / out_file))
+    print('Count reads completed')
+    if return_df:
+        return df_ref
+
+def count_spacers_pbs_linkers(sample_sheet: str, annotated_lib: str, fastq_R1_dir: str, fastq_R2_dir: str,
+                             KEY_INTERVAL=(10,80), KEY_FLANK5='CGAAACACC', KEY_FLANK3='GTTTAAGA', 
+                             spacer_col='Spacer_sequence', dont_trim_G=False, KEY_FLANK5_REV='AACCGCG', 
+                             pbs_col='PBS_sequence', pbs_len_col='PBS_length', linker_col='Linker_sequence', out_dir='', 
+                             out_file='library_count_spacers_pbs_linkers.csv', save=True, return_df=True, 
+                             save_files=True, plot_out_type='pdf'):
+    
+    """[Summary]
+    Given a set of epegRNA sequences and a FASTQ file, count the reads in the
+    FASTQ, assign the reads to epegRNAs, and export the counts to a csv file `out_counts`. All
+    sgRNA sequences not found in the reference file (non-perfect matches) are
+    written to a separate csv file `out_nc`. 
+    count_reads works by reading through a .fastq file and searching for the guide in between
+    the subsequences for KEY_FLANK5 and KEY_FLANK3 within the KEY_INTERVAL. These counts are then recorded.
+
+    Parameters
+    ----------
+    sample_sheet : str or path
+        REQUIRED COLS: 'fastq_R1_file', 'fastq_R2_file', 'counts_file', 'noncounts_file', 'stats_file'
+        a sheet with information on sequence id, 
+        fastq_R1_file, fastq_R2_file (string or path to the FASTQ file to be processed), 
+        out_counts (string or path for the output csv file with perfect sgRNA matches ex: 'counts.csv'),
+        out_nc (string or path for the output csv file with non-perfect sgRNA matches ex: 'noncounts.csv'), 
+        out_stats (string or path for the output txt file with the read counting statistics ex: 'stats.txt'), 
+        condition names, and condition categories
+    annotated_lib : str or path
+        String or path to the reference file. annotated_lib must have column headers,
+        with 'sgRNA_seq' as the header for the column with the sgRNA sequences.
+    fastq_R1_dir : str or path, defaults to ''
+        String or path to the directory where all fastq R1 files are found. 
+    fastq_R2_dir : str or path, defaults to ''
+        String or path to the directory where all fastq R2 files are found. 
+    KEY_INTERVAL : tuple, default (10,80)
+        Tuple of (KEY_START, KEY_END) that defines the KEY_REGION. Denotes the
+        substring within the read to search for the KEY.
+    KEY_FLANK5 : str, default 'CGAAACACC'
+        Sequence that is expected upstream of the spacer sequence. The default
+        is the end of the hU6 promoter.
+    KEY_FLANK3 : str, default 'GTTTGAGA'
+        Sequence that is expected downstream of the spacer sequence. The
+        default is the start of the sgRNA scaffold sequence.
+    spacer_col : str, default 'Spacer_sequence'
+        Spacer sequence column name in annotated library
+    dont_trim_G : bool, default False
+        Whether to trim the first G from 21-nt sgRNA sequences to make them 20-nt.
+    KEY_FLANK5_REV : str, default 'AACCGCG'
+        Sequence that is expected downstream of the extebsuib sequence. The default
+        is the start of the tevoPreQ1 motif.
+    pbs_col : str, default 'PBS_sequence'
+        PBS sequence column name in annotated library
+    pbs_len_col : str, default 'PBS_length'
+        PBS length column name in annotated library
+    linker_col : str, default 'Linker_sequence'
+        Linker sequence column name in annotated library
+    out_dir : str or path, defaults to ''
+        String or path to the directory where all files are found. 
+    out_file : str or path, defaults to 'counts_library.csv'
+        Name of output dataframe with guides and counts. 
+    return_df : bool, default True
+        Whether or not to return the resulting dataframe
+    save : bool, default True
+        Whether or not to save the resulting dataframe
+    save_files : bool, default True
+        Whether or not to save individual counts, noncounts, and stats files
+    plot_out_type : str, optional, defaults to 'pdf'
+        file type of figure output
+
+    Dependencies: os,pandas,Path,gzip,matplolib,Counter,numpy,io
+    """
+    io.mkdir(out_dir) # Make output directory if it does not exist
+
+    sample_filepath = Path(sample_sheet)
+    sample_df = pd.read_csv(sample_filepath)
+    for colname in ['fastq_R1_file', 'fastq_R2_file', 'counts_file', 'noncounts_file', 'stats_file', 'condition']: 
+        if colname not in sample_df.columns.tolist():
+            raise Exception(f"annotated_lib is missing column: {colname}")
+    samples = [list(a) for a in zip(sample_df.fastq_R1_file, sample_df.fastq_R2_file,
+                                    sample_df.counts_file, sample_df.noncounts_file, 
+                                    sample_df.stats_file, sample_df.condition)]
+
+    # STEP 1A: OPEN INPUT FILES FOR PROCESSING, CHECK FOR REQUIRED FORMATTING
+    # look for 'Spacer_squence', 'PBS_squence', & 'Linker_squence' columns, raise Exception if missing
+    annotated_lib = Path(annotated_lib)
+    df_ref = pd.read_csv(annotated_lib, header=0) # explicit header = first row
+    if spacer_col not in df_ref.columns.tolist():
+        raise Exception(f'annotated_lib is missing column: {spacer_col}')
+    if pbs_col not in df_ref.columns.tolist():
+        raise Exception(f'annotated_lib is missing column: {pbs_col}')
+    if linker_col not in df_ref.columns.tolist():
+        raise Exception(f'annotated_lib is missing column: {linker_col}')
+    df_ref[spacer_col] = df_ref[spacer_col].str.upper()
+    spacers = set(df_ref[spacer_col])
+    df_ref[pbs_col] = df_ref[pbs_col].str.upper() 
+    df_ref[linker_col] = df_ref[linker_col].str.upper() 
+    path = Path.cwd()
+
+    for fastq_R1, fastq_R2, counts, nc, stats, cond in samples: 
+        # fastq file of reads and paths to all output files, imported from sample_sheet
+        in_fastq_R1 = Path(fastq_R1_dir) / fastq_R1
+        in_fastq_R2 = Path(fastq_R2_dir) / fastq_R2
+        out_counts, out_nc, out_stats = Path(out_dir) / counts, Path(out_dir) / nc, Path(out_dir) / stats        
+        # try opening input FASTQ, raise Exception if not possible
+        reader1 = gzip.open(in_fastq_R1, 'rt') if str(in_fastq_R1).endswith('.gz') else open(in_fastq_R1, 'r')
+        reader2 = gzip.open(in_fastq_R2, 'rt') if str(in_fastq_R2).endswith('.gz') else open(in_fastq_R2, 'r')
+        
+        # STEP 1B: SET UP VARIABLES FOR SCRIPT
+        # make dictionary to hold epegRNA counts - spacer_pbs_linker, count as k,v
+        dict_p = {f'{spacer}_{pbs}_{linker}':0 for (spacer,pbs,linker) in zip(df_ref[spacer_col],df_ref[pbs_col],df_ref[linker_col])}
+        list_np = [] # placeholder list for non-perfect matches
+        # reads count of: total, perfect match, non perfect match, no key found, not 20bps
+        num_reads_R1, num_p_matches_R1, num_np_matches_R1, num_nokey_R1, num_badlength_R1 = 0, 0, 0, 0, 0
+        num_reads_R2, num_p_matches_R2, num_np_matches_R2, num_nokey_R2, num_badlength_R2 = 0, 0, 0, 0, 0
+        KEY_START, KEY_END = KEY_INTERVAL[0], KEY_INTERVAL[1] # set the key interval
+
+        # STEP 2A: PROCESS FASTQ R1 FILE READS AND ADD COUNTS TO DICT
+        while True: # contains the seq and Qscore etc.
+            read1 = reader1.readline()
+            read2 = reader2.readline()
+            if not read1: # end of file
+                break
+            elif read1.startswith("@"): # if line is a read header
+                read1 = reader1.readline() # next line is the actual sequence
+                read2 = reader2.readline()
+            else:
+                continue
+            num_reads_R1 += 1
+            read_sequence = str.upper(str(read1))
+            key_region = read_sequence[KEY_START:KEY_END]
+            key_index = key_region.find(KEY_FLANK5)
+            key_rev_index = key_region.rfind(KEY_FLANK3)
+            if key_index < 0 or key_rev_index <= key_index: # if keys not found
+                num_nokey_R1 += 1
+                continue
+            start_index = key_index + KEY_START + len(KEY_FLANK5)
+            end_index = key_rev_index + KEY_START
+            guide = read_sequence[start_index:end_index]
+            if not dont_trim_G:
+                if guide.startswith('G') and len(guide) == 21:
+                    guide = guide[1:]
+            if len(guide) != 20:
+                num_badlength_R1 += 1
+                continue
+            if guide in spacers:
+                num_p_matches_R1 += 1
+            else:
+                num_np_matches_R1 += 1
+                list_np.append(f'{guide}_spacer')
+                continue
+            
+            # STEP 2B: PROCESS FASTQ R2 FILE READS AND ADD COUNTS TO DICT
+            num_reads_R2 += 1
+            read2_sequence = str.upper(str(read2))
+            read2_key_index = read2_sequence.find(KEY_FLANK5_REV)
+            if read2_key_index < 0: # if keys not found
+                num_nokey_R2 += 1
+                continue
+            start_index = read2_key_index + len(KEY_FLANK5_REV)
+            read2_region = read2_sequence[start_index:]
+            df_ref_guide = df_ref[df_ref[spacer_col]==guide]
+            df_ref_guide['RC_PBS_Linker'] = [str(Seq('').join([pbs,linker]).reverse_complement()) 
+                                for (pbs,linker) in zip(df_ref_guide[pbs_col],df_ref_guide[linker_col])]
+            df_ref_guide.sort_values(by=pbs_len_col,ascending=False,inplace=True)
+            for i,rc_pbs_linker in enumerate(df_ref_guide['RC_PBS_Linker']):
+                if rc_pbs_linker in read2_region:
+                    dict_p[f'{guide}_{df_ref_guide.iloc[i][pbs_col]}_{df_ref_guide.iloc[i][linker_col]}'] += 1
+                    num_p_matches_R2 += 1
+                    break
+                elif i+1>=len(df_ref_guide['RC_PBS_Linker']):
+                    num_np_matches_R2 += 1
+                    list_np.append(f'{guide}_pbs_linker')
+                    break
+        reader1.close()
+        reader2.close()  
+
+        # STEP 3: SORT DICTIONARIES AND GENERATE OUTPUT FILES
+        # sort perf matches (A-Z) with epegRNAs, counts as k,v and output to csv
+        df_perfects = pd.DataFrame(data=dict_p.items(), columns=[f'{spacer_col}_{pbs_col}_{linker_col}', cond])
+        spacers_perfects = []
+        pbs_perfects = []
+        linker_perfects = []
+        for seqs in df_perfects[f'{spacer_col}_{pbs_col}_{linker_col}']:
+            spacers_perfects.append(seqs.split('_')[0])
+            pbs_perfects.append(seqs.split('_')[1])
+            linker_perfects.append(seqs.split('_')[2])
+        df_perfects[spacer_col] = spacers_perfects
+        df_perfects[pbs_col] = pbs_perfects
+        df_perfects[linker_col] = linker_perfects
+        df_perfects = df_perfects[[spacer_col,pbs_col,linker_col,cond]]
+        if save_files:
+            df_perfects.sort_values(by=cond, ascending=False, inplace=True)
+            df_perfects.to_csv(out_counts, index=False)
+
+            weights = np.ones_like(df_perfects[cond]) / len(df_perfects[cond])
+            # histogram for df_ref[cond] column
+            plt.hist(df_perfects[cond], weights=weights, bins=(len(df_perfects[cond])//5)+1)
+            outpath = path / out_dir
+            out = stats.split('.')[0] + '_histogram.' + plot_out_type
+            plt.title(f"Distributions of epegRNAs in\n{fastq_R1} & {fastq_R2}")
+            plt.xlabel('Count of epegRNA')
+            plt.ylabel('Proportion of epegRNA')
+            plt.savefig(outpath / out, format=plot_out_type)
+            plt.clf()
+        
+        # add matching counts to dataframe
+        df_ref = pd.merge(df_ref, df_perfects, on=[spacer_col,pbs_col,linker_col], how='outer')
+        df_ref[cond] = df_ref[cond].fillna(0)
+
+        # now sort non-perfect matches by frequency and output to csv
+        dict_np = Counter(list_np) # use Counter to tally up np matches
+        nc_name = nc.split("/")[-1]
+        df_ncmatches = pd.DataFrame(data=dict_np.items(), columns=[f'{spacer_col}_mismatch', nc_name])
+        spacers_ncs = []
+        mismatches = []
+        for spacer_mismatch in df_ncmatches[f'{spacer_col}_mismatch']:
+            spacers_ncs.append(spacer_mismatch.split('_')[0])
+            mismatches.append('_'.join(spacer_mismatch.split('_')[1:]))
+        df_ncmatches[spacer_col] = spacers_ncs
+        df_ncmatches['mismatch'] = mismatches
+        if save_files:
+            df_ncmatches.sort_values(by=nc_name, ascending=False, inplace=True)
+            df_ncmatches.to_csv(out_nc, index=False)
+        # calculate the read coverage (reads processed / sgRNAs in library)
+        num_guides = df_ref[spacer_col].shape[0]
+    
+        # STEP 4: CALCULATE STATS AND GENERATE STAT OUTPUT FILE
+        # percentage of guides that matched perfectly
+        pct_p_match_R1 = round(num_p_matches_R1/float(num_p_matches_R1 + num_np_matches_R1) * 100, 1)
+        pct_p_match_R2 = round(num_p_matches_R2/float(num_p_matches_R2 + num_np_matches_R2) * 100, 1)
+        # percentage of undetected guides (no read counts)
+        vals_p = np.fromiter(dict_p.values(), dtype=int)
+        guides_no_reads = np.count_nonzero(vals_p==0)
+        pct_no_reads = round(guides_no_reads/float(len(dict_p.values())) * 100, 1)
+        # skew ratio of top 10% to bottom 10% of guide counts
+        top_10 = np.percentile(list(dict_p.values()), 90)
+        bottom_10 = np.percentile(list(dict_p.values()), 10)
+        if top_10 != 0 and bottom_10 != 0:
+            skew_ratio = top_10/bottom_10
+        else:
+            skew_ratio = 'Not enough perfect matches to determine skew ratio'
+        # calculate the read coverage (reads processed / sgRNAs in library)
+        coverage = round(num_reads_R1 / num_guides, 1)
+        # calculate the number of unmapped reads (num_nokey / total_reads)
+        pct_unmapped_R1 = round((num_nokey_R1 / num_reads_R1) * 100, 2)
+        pct_unmapped_R2 = round((num_nokey_R2 / num_reads_R2) * 100, 2)
+        # write analysis statistics to statfile
+        if save_files:
+            with open(out_stats, 'w') as statfile:
+                statfile.write('Number of R1 reads processed: ' + str(num_reads_R1) + '\n')
+                statfile.write('Number of R2 reads processed: ' + str(num_reads_R2) + '\n')
+                statfile.write('Number of R1 reads where key was not found: ' + str(num_nokey_R1) + '\n')
+                statfile.write('Number of R2 reads where key was not found: ' + str(num_nokey_R2) + '\n')
+                statfile.write('Number of R1 reads where length was not 20bp: ' + str(num_badlength_R1) + '\n')
+                statfile.write('Number of R1 perfect epegRNA matches: ' + str(num_p_matches_R1) + '\n')
+                statfile.write('Number of R2 perfect epegRNA matches: ' + str(num_p_matches_R2) + '\n')
+                statfile.write('Number of R1 nonperfect epegRNA matches: ' + str(num_np_matches_R1) + '\n')
+                statfile.write('Number of R2 nonperfect epegRNA matches: ' + str(num_np_matches_R2) + '\n')
+                statfile.write('Number of undetected epegRNAs: ' + str(guides_no_reads) + '\n')
+                statfile.write('Percentage of R1 unmapped reads (key not found): ' + str(pct_unmapped_R1) + '\n') #
+                statfile.write('Percentage of R2 unmapped reads (key not found): ' + str(pct_unmapped_R2) + '\n') #
+                statfile.write('Percentage of epegRNA that matched perfectly in R1: ' + str(pct_p_match_R1) + '\n') #
+                statfile.write('Percentage of epegRNA that matched perfectly in R2: ' + str(pct_p_match_R2) + '\n') 
+                statfile.write('Percentage of undetected epegRNAs: ' + str(pct_no_reads) + '\n') #
+                statfile.write('Skew ratio of top 10% to bottom 10%: ' + str(skew_ratio) + '\n') #
+                statfile.write('Read coverage: ' + str(coverage))
+                statfile.close()
+                print(str(in_fastq_R1), 'processed')
+                print(str(in_fastq_R2), 'processed')
+
+    plt.close()
+    # export files and return dataframes if necessary
+    if save: 
+        outpath = path / out_dir
+        Path.mkdir(outpath, exist_ok=True)
+        df_ref.to_csv(outpath / out_file, index=False)
+        print('count_spacers_pbs_linkers outputed to', str(outpath / out_file))
+    print('Count reads completed')
+    if return_df:
+        return df_ref
+
+# Quantify edit outcome methods
 def trim_filter(record,qall:int,qavg:int,qtrim:int,qmask:int,alls:int,avgs:int,trims:int,masks:int):
     ''' 
     trim_filter(): trim and filter fastq sequence based on quality scores
@@ -249,7 +1012,6 @@ def get_fastqs(dir: str,suf='.fastq.gz',qall=10,qavg=30,qtrim=30,qmask=0,compres
     if save==True: io.save(dir='.',file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_get_fastqs.csv',obj=out)
     return fastqs
 
-# Determine editing outcomes methods
 def region(fastqs: dict, pt='', flank5='', flank3='', save=True, masks=False):
     ''' 
     region(): gets DNA and AA sequence for records within flanks
@@ -373,9 +1135,9 @@ def outcomes(fastqs: dict, edit='edit'):
     ''' 
     outcomes(): returns edit count & fraction per sample (tidy format)
 
-    Parameters 
+    Parameters:
     fastqs (dict): dictionary from genotype
-    edit (str, optional): edit column name
+    edit (str, optional): edit column name (Default: edit)
     
     Dependencies: pandas
     '''
@@ -388,6 +1150,56 @@ def outcomes(fastqs: dict, edit='edit'):
         df=pd.concat([df,temp]).reset_index(drop=True)
     return df
 
+def outcomes_desired(df: pd.DataFrame, desired_edits: list, sample_col='sample',
+                     edit_col='edit', count_col='count',fraction_col='fraction'):
+    ''' 
+    outcomes_desired: groups desired edit count & fraction per sample (tidy format)
+
+    Parameters:
+    df (DataFrame): dataframe with edit count & fraction per sample (tidy format)
+    desired_edits (list): list of desired edits (str)
+    sample_col (str, optional): sample column name (Default: sample)
+    edit_col (str, optional): edit column name (Default: edit)
+    count_col (str, optional): count column name (Default: count)
+    fraction_col (str, optional): fraction column name (Default: fraction)
+
+    Dependencies: pandas
+    '''
+    df_desired = pd.DataFrame()
+    for sample in df[sample_col].value_counts().keys(): # Iterate through samples
+        df_sample = df[df[sample_col]==sample].reset_index(drop=True)
+        
+        i_desired = [] # Store desired edit & corresponding counts & fractions
+        count_desired = []
+        fraction_desired = []
+
+        for i,(edit,count,fraction) in enumerate(zip(df_sample[edit_col],df_sample[count_col],df_sample[fraction_col])):
+            if ', ' in edit: # Search for desired edit within multiple edit outcomes
+                edits = edit.split(', ')
+                for edit in edits:
+                    if edit in desired_edits:
+                        i_desired.append(i)
+                        count_desired.append(count)
+                        fraction_desired.append(fraction)
+                        break
+
+            else: # Search for desired within single edit outcome
+                if edit in desired_edits:
+                    i_desired.append(i)
+                    count_desired.append(count)
+                    fraction_desired.append(fraction)
+        
+            df_sample = df_sample.drop(index=i_desired) # Remove desired edits & combine into 'Desired' edit
+            other_cols = [col for col in df_sample.columns if col not in [edit_col,count_col,fraction_col]]
+            df_sample_desired = df_sample.iloc[0][other_cols].to_frame().T.reset_index(drop=True)
+            df_sample_desired[edit_col] = ['Desired']
+            df_sample_desired[count_col] = [sum(count_desired)]
+            df_sample_desired[fraction_col] = [sum(fraction_desired)]
+            df_sample = pd.concat(objs=[df_sample,df_sample_desired]).reset_index(drop=True)
+            df_desired = pd.concat(objs=[df_desired,df_sample]).reset_index(drop=True)
+
+    return df_desired
+        
 # Supporting methods for plots
 ''' aa_props: dictionary of AA properties with citations (Generated by ChatGPT)
     
@@ -881,8 +1693,7 @@ def dms_grid(dc: dict,x='number',y='after',vals='count',
 
     # Save & show fig
     if file is not None and dir is not None:
-        if not os.path.exists(dir):
-            os.mkdir(dir)
+        io.mkdir(dir) # Make output directory if it does not exist
         plt.savefig(fname=os.path.join(dir, file), dpi=600, bbox_inches='tight', format=f'{file.split(".")[-1]}')
     plt.show()
 

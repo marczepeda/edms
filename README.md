@@ -32,10 +32,12 @@
     - conda create --name emds_env python=3.11.5
         - When conda asks you to proceed, type "y" 
     - conda activate edms_env
-    - mkdir git_edms
-    - cd git_edms
+    - mkdir git
+    - cd git
     - git clone https://github.com/marczepeda/edms.git
+    - cd edms
     - pip install -e .
+        - Include the "."
     - docker pull pinellolab/primedesign
         - Docker desktop app needs to be open
 

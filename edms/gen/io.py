@@ -45,11 +45,29 @@ def get_dir(dir: str,suf='.csv',**kwargs):
     return csvs
 
 # Output methods
+def mkdir(dir: str, sep='/'):
+    '''
+    mkdir(): make directory if it does not exist (including parent directories)
+
+    Parameters:
+    dir (str): directory path
+    sep (str): seperator directory path
+
+    Dependencies: os
+    '''
+    dirs = dir.split(sep)
+    for i in range(len(dirs)):
+        check_dir = sep.join(dirs[:i+1])
+        if (os.path.exists(check_dir)==False)&(i!=0):
+            os.mkdir(check_dir)
+            print(f'Created {check_dir}')
+
+
 def save(dir: str, file: str, obj, cols=[], id=False, sort=True, **kwargs):
     ''' 
     save(): save .csv file to a specified output directory from obj
     
-    Parameters
+    Parameters:
     dir (str): output directory path
     file (str): file name
     obj: dataframe, series, set, or list
@@ -57,10 +75,9 @@ def save(dir: str, file: str, obj, cols=[], id=False, sort=True, **kwargs):
     id (bool, optional): include dataframe index (False)
     sort (bool, optional): sort set, list, or series before saving (True)
     
-    Dependencies: pandas, os, & csv
+    Dependencies: pandas, os, csv & mkdir()
     '''
-    if not os.path.exists(dir): # Make output directory if it does not exist
-        os.mkdir(dir)
+    mkdir(dir) # Make output directory if it does not exist
 
     if type(obj)==pd.DataFrame:
         for col in cols: # Check if each element in the list is a string
@@ -97,10 +114,10 @@ def excel_csvs(pt: str,dir='',**kwargs):
     pt (str): excel file path
     dir (str, optional): output directory path (same directory as excel file)
     
-    Dependencies: pandas & os
+    Dependencies: pandas, os, & mkdir
     '''
     if dir=='': dir = '.'.join(pt.split('.')[:-1]) # Get the directory where the Excel file is located
-    if not os.path.exists(dir): os.mkdir(dir) # Make directory if it does not already exist
+    mkdir(dir) # Make output directory if it does not exist
     for sheet_name in pd.ExcelFile(pt).sheet_names: # Loop through each sheet in the Excel file
         df = pd.read_excel(pd.ExcelFile(pt),sheet_name,**kwargs) # Read the sheet into a DataFrame
         df.to_csv(os.path.join(dir,f"{sheet_name}.csv"),index=False) # Save the DataFrame to a CSV file

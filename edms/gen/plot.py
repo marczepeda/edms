@@ -12,6 +12,7 @@ import matplotlib.cm as cm
 from matplotlib.ticker import MaxNLocator
 import numpy as np
 from adjustText import adjust_text
+import io
 
 # Supporting methods
 def re_un_cap(input_string: str):
@@ -152,7 +153,7 @@ def formatter(typ:str,ax,df:pd.DataFrame,x:str,y:str,cols:str,file:str,dir:str,p
     legend_loc (str): legend location
     legend_ncol (tuple, optional): # of columns
     
-    Dependencies: os, matplotlib, seaborn, re_un_cap(), & round_up_pow_10()
+    Dependencies: os, matplotlib, seaborn, io, re_un_cap(), & round_up_pow_10()
     '''
     # Define plot types
     scats = ['scat', 'line', 'line_scat']
@@ -209,8 +210,7 @@ def formatter(typ:str,ax,df:pd.DataFrame,x:str,y:str,cols:str,file:str,dir:str,p
 
     # Save & show fig
     if file is not None and dir is not None:
-        if not os.path.exists(dir):
-            os.mkdir(dir)
+        io.mkdir(dir) # Make output directory if it does not exist
         plt.savefig(fname=os.path.join(dir, file), dpi=600, bbox_inches='tight', format=f'{file.split(".")[-1]}')
     plt.show()
 
@@ -556,7 +556,7 @@ def dist(typ: str,df: pd.DataFrame,x: str,cols=None,cols_ord=None,cols_exclude=N
     legend_loc (str): legend location
     legend_ncol (tuple, optional): # of columns
     
-    Dependencies: os, matplotlib, seaborn, formatter(), re_un_cap(), & round_up_pow_10()
+    Dependencies: os, matplotlib, seaborn, io, formatter(), re_un_cap(), & round_up_pow_10()
     
     Note: cannot set palette or cmap?
     '''
@@ -645,8 +645,7 @@ def dist(typ: str,df: pd.DataFrame,x: str,cols=None,cols_ord=None,cols_exclude=N
         g.figure.legend(title=legend_title,title_fontsize=legend_title_size,fontsize=legend_size,
                         loc=legend_loc,bbox_to_anchor=legend_bbox_to_anchor)
         if file is not None and dir is not None:
-            if not os.path.exists(dir):
-                os.mkdir(dir)
+            io.mkdir(dir) # Make output directory if it does not exist
             plt.savefig(fname=os.path.join(dir, file), dpi=600, bbox_inches='tight', format=f'{file.split(".")[-1]}')
         plt.show()
     else:
@@ -791,7 +790,7 @@ def stack(df: pd.DataFrame,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord=[],
     legend_loc (str): legend location
     legend_ncol (tuple, optional): # of columns
     
-    Dependencies: re, os, pandas, numpy, & matplotlib.pyplot
+    Dependencies: re, os, pandas, numpy, matplotlib.pyplot, & io
     '''
     # Make pivot table
     df_cut=df[df[y]>=cutoff]
@@ -824,8 +823,7 @@ def stack(df: pd.DataFrame,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord=[],
     
     # Save & show fig
     if file is not None and dir is not None:
-        if not os.path.exists(dir):
-            os.mkdir(dir)
+        io.mkdir(dir) # Make output directory if it does not exist
         plt.savefig(fname=os.path.join(dir, file), dpi=600, bbox_inches='tight', format=f'{file.split(".")[-1]}')
     plt.show()
 
