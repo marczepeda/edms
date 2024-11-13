@@ -12,7 +12,7 @@ import matplotlib.cm as cm
 from matplotlib.ticker import MaxNLocator
 import numpy as np
 from adjustText import adjust_text
-import io
+from ..gen import io
 
 # Supporting methods
 def re_un_cap(input_string: str):

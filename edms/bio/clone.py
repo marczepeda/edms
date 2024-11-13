@@ -417,3 +417,55 @@ def pe_twist_oligos(df: pd.DataFrame,tG=True, make_extension=True,spacer='Spacer
     df['twist_oligo_length']=[len(twist) for twist in df['Twist_oligo']]
 
     return df
+
+# PCR calculation methods
+def pcr_mm(primers: pd.Series, template_uL: int, template='1-2 ng/uL template',
+           Q5_mm_x_stock=5,dNTP_mM_stock=10,fwd_uM_stock=10,rev_uM_stock=10,Q5_U_uL_stock=2,
+           Q5_mm_x_desired=1,dNTP_mM_desired=0.2,fwd_uM_desired=0.5,rev_uM_desired=0.5,Q5_U_uL_desired=0.02,
+           total_uL=25,mm_x=1.1):
+    '''
+    pcr_mm:
+    
+    Parameters:
+    primers (Series): value_counts() for primers
+    template_uL (int): template uL per reaction
+    template (str, optional): template name (Default: '1-2 ng/uL template')
+    Q5_mm_x_stock (int, optional): Q5 reaction master mix stock (Default: 5)
+    dNTP_mM_stock (int, optional): [dNTP] stock in mM (Default: 10)
+    fwd_uM_stock (int, optional): [FWD Primer] stock in mM (Default: 10)
+    rev_uM_stock (int, optional): [REV Primer] stock in mM (Default: 10)
+    Q5_U_uL_stock (int, optional): [Q5 Polymerase] stock in U/uL (Default: 2)
+    Q5_mm_x_desired (int, optional): Q5 reaction master mix desired (Default: 1)
+    dNTP_mM_desired (int, optional): [dNTP] desired in mM (Default: 0.2)
+    fwd_uM_desired (float, optional): [FWD Primer] desired in mM (Default: 0.5)
+    rev_uM_desired (float, optional): [REV Primer] desired in mM (Default: 0.5)
+    Q5_U_uL_desired (float, optional): [Q5 Polymerase] desired in U/uL (Default: 0.02)
+    total_uL (int, optional): total uL per reaction (Default: 25)
+    mm_x (float, optional): master mix multiplier (Default: 1.1)
+
+    Dependencies: pandas
+    '''
+    pcr_mm_dc = dict()
+    for i,(pcr1_fwd,pcr1_rev) in enumerate(primers.keys()):
+        pcr_mm_dc[(pcr1_fwd,pcr1_rev)] = pd.DataFrame({'Component':['Nuclease-free H2O',f'{Q5_mm_x_stock}x Q5 Reaction Buffer','dNTPs',pcr1_fwd,pcr1_rev,template,'Q5 Polymerase','Total'],
+                                                       'Stock':['',Q5_mm_x_stock,dNTP_mM_stock,fwd_uM_stock,rev_uM_stock,'',Q5_U_uL_stock,''],
+                                                       'Desired':['',Q5_mm_x_desired,dNTP_mM_desired,fwd_uM_desired,rev_uM_desired,'',Q5_U_uL_desired,''],
+                                                       'Unit':['','x','mM','uM','uM','','U/uL',''],
+                                                       'uL': [round(total_uL-sum([Q5_mm_x_desired/Q5_mm_x_stock,dNTP_mM_desired/dNTP_mM_stock,fwd_uM_desired/fwd_uM_stock,rev_uM_desired/rev_uM_stock,template_uL/total_uL,Q5_U_uL_desired/Q5_U_uL_stock]*total_uL),2),
+                                                              round(Q5_mm_x_desired/Q5_mm_x_stock*total_uL,2),
+                                                              round(dNTP_mM_desired/dNTP_mM_stock*total_uL,2),
+                                                              round(fwd_uM_desired/fwd_uM_stock*total_uL,2),
+                                                              round(rev_uM_desired/rev_uM_stock*total_uL,2),
+                                                              round(template_uL,2),
+                                                              round(Q5_U_uL_desired/Q5_U_uL_stock*total_uL,2),
+                                                              round(total_uL,2)],
+                                                       'uL MM': [round((total_uL-sum([Q5_mm_x_desired/Q5_mm_x_stock,dNTP_mM_desired/dNTP_mM_stock,fwd_uM_desired/fwd_uM_stock,rev_uM_desired/rev_uM_stock,template_uL/total_uL,Q5_U_uL_desired/Q5_U_uL_stock]*total_uL))*primers.iloc[i]*mm_x,2),
+                                                                 round(Q5_mm_x_desired/Q5_mm_x_stock*total_uL*primers.iloc[i]*mm_x,2),
+                                                                 round(dNTP_mM_desired/dNTP_mM_stock*total_uL*primers.iloc[i]*mm_x,2),
+                                                                 round(fwd_uM_desired/fwd_uM_stock*total_uL*primers.iloc[i]*mm_x,2),
+                                                                 round(rev_uM_desired/rev_uM_stock*total_uL*primers.iloc[i]*mm_x,2),
+                                                                 round(template_uL*primers.iloc[i]*mm_x,2),
+                                                                 round(Q5_U_uL_desired/Q5_U_uL_stock*total_uL*primers.iloc[i]*mm_x,2),
+                                                                 round(total_uL*primers.iloc[i]*mm_x,2)]
+                                                     })
+    return pcr_mm_dc

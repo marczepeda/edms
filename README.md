@@ -5,7 +5,9 @@
     - import edms.gen.tidy as t
     - import edms.gen.plot as p
     - import edms.gen.stat as st
-- bio: molecular biology workflows including cloning and sequencing.
+- bio: molecular biology & tissue culture workflows.
+    - import edms.bio.transfect as tf
+    - import edms.bio.ngs as ngs
     - import edms.bio.fastq as f
     - import edms.bio.clone as cl
     - import edms.bio.pe as pe
