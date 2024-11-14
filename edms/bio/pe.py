@@ -124,50 +124,78 @@ def PrimeDesign(file: str,pbs_length_list: list = [],rtt_length_list: list = [],
 
     os.system(cmd) # Execute PrimeDesign Command Line
 
-def PrimeDesignOutput(pt: str, aa_index: int=1, 
+def PrimeDesignOutput(pt: str, saturation_mutagenesis:str=None, aa_index: int=1, 
                       scaffold_sequence: str='GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC'):
     ''' 
     PrimeDesignOutput(): splits peg/ngRNAs from PrimeDesign output & finishes annotations
     
     Parameters:
     pt (str): path to primeDesign output
+    saturation_mutagenesis (str, optional): saturation mutagenesis design with prime editing (Options: 'aa', 'base').
     aa_index (int, optional): 1st amino acid in target sequence index (Optional, Default: start codon = 1)
     scaffold_sequence (str, optional): sgRNA scaffold sequence (Optional, Default: SpCas9)
     
     Dependencies: io & numpy
     '''
-    # Get PrimeDesign output & seperate pegRNAs and ngRNAs
-    primeDesign_output = io.get(pt)
-    pegRNAs = primeDesign_output[primeDesign_output['gRNA_type']=='pegRNA'].reset_index(drop=True)
-    ngRNAs = primeDesign_output[primeDesign_output['gRNA_type']=='ngRNA'].reset_index(drop=True)
+    if saturation_mutagenesis: # Saturation mutagenesis mode
 
-    # Generate epegRNAs
-    pegRNAs['Edit']=[str(target_name.split('_')[-1].split('to')[0]) + # AA Before
-                    str(int(target_name.split('_')[-2]) + aa_index-1) + # AA Index
-                    str(target_name.split('_')[-1].split('to')[1]) # AA After
-                    for target_name in pegRNAs['Target_name']]
-    pegRNAs['Scaffold_sequence']=[scaffold_sequence]*len(pegRNAs)
-    pegRNAs['RTT_sequence']=[pegRNAs.iloc[i]['Extension_sequence'][0:int(pegRNAs.iloc[i]['RTT_length'])] for i in range(len(pegRNAs))]
-    pegRNAs['PBS_sequence']=[pegRNAs.iloc[i]['Extension_sequence'][int(pegRNAs.iloc[i]['RTT_length']):]  for i in range(len(pegRNAs))]
-    pegRNAs = t.reorder_cols(df=pegRNAs,
-                             cols=['pegRNA_number','gRNA_type','Strand','Edit', # Important metadata
-                                   'Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence',  # Sequence information
-                                   'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','ngRNA-to-pegRNA_distance','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide'], # Less important metadata
-                             keep=False) 
+        # Get PrimeDesign output & seperate pegRNAs and ngRNAs
+        primeDesign_output = io.get(pt)
+        pegRNAs = primeDesign_output[primeDesign_output['gRNA_type']=='pegRNA'].reset_index(drop=True)
+        ngRNAs = primeDesign_output[primeDesign_output['gRNA_type']=='ngRNA'].reset_index(drop=True)
+
+        # Generate pegRNAs
+        pegRNAs['Edit']=[str(target_name.split('_')[-1].split('to')[0]) + # AA Before
+                        str(int(target_name.split('_')[-2]) + aa_index-1) + # AA Index
+                        str(target_name.split('_')[-1].split('to')[1]) # AA After
+                        for target_name in pegRNAs['Target_name']]
+        pegRNAs['Scaffold_sequence']=[scaffold_sequence]*len(pegRNAs)
+        pegRNAs['RTT_sequence']=[pegRNAs.iloc[i]['Extension_sequence'][0:int(pegRNAs.iloc[i]['RTT_length'])] for i in range(len(pegRNAs))]
+        pegRNAs['PBS_sequence']=[pegRNAs.iloc[i]['Extension_sequence'][int(pegRNAs.iloc[i]['RTT_length']):]  for i in range(len(pegRNAs))]
+        pegRNAs = t.reorder_cols(df=pegRNAs,
+                                cols=['pegRNA_number','gRNA_type','Strand','Edit', # Important metadata
+                                    'Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence',  # Sequence information
+                                    'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','ngRNA-to-pegRNA_distance','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide'], # Less important metadata
+                                keep=False) 
+        
+        # Generate ngRNAs
+        ngRNAs['Edit']=[str(target_name.split('_')[-1].split('to')[0]) + # AA Before
+                        str(int(target_name.split('_')[-2]) + aa_index-1) + # AA Index
+                        str(target_name.split('_')[-1].split('to')[1]) # AA After
+                        for target_name in ngRNAs['Target_name']]
+        ngRNAs['Scaffold_sequence']=[scaffold_sequence]*len(ngRNAs)
+        ngRNAs['ngRNA_number']=list(np.arange(len(ngRNAs)))
+        ngRNAs = t.reorder_cols(df=ngRNAs,
+                                cols=['pegRNA_number','ngRNA_number','gRNA_type','Strand','Edit', # Important metadata
+                                    'Spacer_sequence','Scaffold_sequence',  # Sequence information
+                                    'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','ngRNA-to-pegRNA_distance','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide'], # Less important metadata
+                                keep=False) 
     
-    # Generate ngRNAs
-    ngRNAs['Edit']=[str(target_name.split('_')[-1].split('to')[0]) + # AA Before
-                    str(int(target_name.split('_')[-2]) + aa_index-1) + # AA Index
-                    str(target_name.split('_')[-1].split('to')[1]) # AA After
-                    for target_name in ngRNAs['Target_name']]
-    ngRNAs['Scaffold_sequence']=[scaffold_sequence]*len(ngRNAs)
-    ngRNAs['ngRNA_number']=list(np.arange(len(ngRNAs)))
-    ngRNAs = t.reorder_cols(df=ngRNAs,
-                            cols=['pegRNA_number','ngRNA_number','gRNA_type','Strand','Edit', # Important metadata
-                                  'Spacer_sequence','Scaffold_sequence',  # Sequence information
-                                  'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','ngRNA-to-pegRNA_distance','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide'], # Less important metadata
-                            keep=False) 
-    
+    else: # Not saturation mutagenesis mode
+        
+        # Get PrimeDesign output & seperate pegRNAs and ngRNAs
+        primeDesign_output = io.get(pt)
+        pegRNAs = primeDesign_output[primeDesign_output['gRNA_type']=='pegRNA'].reset_index(drop=True)
+        ngRNAs = primeDesign_output[primeDesign_output['gRNA_type']=='ngRNA'].reset_index(drop=True)
+
+        # Generate pegRNAs
+        pegRNAs['Scaffold_sequence']=[scaffold_sequence]*len(pegRNAs)
+        pegRNAs['RTT_sequence']=[pegRNAs.iloc[i]['Extension_sequence'][0:int(pegRNAs.iloc[i]['RTT_length'])] for i in range(len(pegRNAs))]
+        pegRNAs['PBS_sequence']=[pegRNAs.iloc[i]['Extension_sequence'][int(pegRNAs.iloc[i]['RTT_length']):]  for i in range(len(pegRNAs))]
+        pegRNAs = t.reorder_cols(df=pegRNAs,
+                                cols=['Target_name','pegRNA_number','gRNA_type','Strand', # Important metadata
+                                    'Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence',  # Sequence information
+                                    'Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','ngRNA-to-pegRNA_distance','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide'], # Less important metadata
+                                keep=False) 
+        
+        # Generate ngRNAs
+        ngRNAs['Scaffold_sequence']=[scaffold_sequence]*len(ngRNAs)
+        ngRNAs = t.reorder_cols(df=ngRNAs,
+                                cols=['Target_name','pegRNA_number','gRNA_type','Strand', # Important metadata
+                                    'Spacer_sequence','Scaffold_sequence',  # Sequence information
+                                    'Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','ngRNA-to-pegRNA_distance','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide'], # Less important metadata
+                                keep=False) 
+
     return pegRNAs,ngRNAs
 
 # pegRNA Methods

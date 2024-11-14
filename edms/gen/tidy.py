@@ -213,3 +213,15 @@ def reorder_cols(df: pd.DataFrame, cols: list, keep=True):
     '''
     if keep==True: cols.extend([c for c in list(df.columns) if c not in cols]) # Append remaining columns
     return df[cols]
+
+def zip_cols(df: pd.DataFrame, cols: list):
+    ''' 
+    zip_cols(): returns zip(dataframe[cols[0]],dataframe[cols[1]],...) for tuple loops
+    
+    Parameters:
+    df (dataframe): pandas dataframe
+    cols (list): list of column names
+
+    Dependencies: pandas
+    ''' 
+    return zip(*[df[col] for col in cols])
