@@ -94,32 +94,32 @@ def comb_fastqs(in_dir: str, out_dir: str, out_file: str):
     '''
     os.makedirs(out_dir, exist_ok=True) # Ensure the output directory exists
 
-    if in_file.endswith(".fastq.gz"):
+    if out_file.endswith(".fastq.gz"):
         with gzip.open(os.path.join(out_dir,out_file), 'wt') as out:
             for in_file in os.listdir(in_dir): # Find all .fastq.gz & .fastq files in the input directory
                 print(f"Processing {in_file}...")
                 if in_file.endswith(".fastq.gz"):
-                    with gzip.open(os.path.join(in_dir,in_file), 'rt') as f:
-                        for line in f:
+                    with gzip.open(os.path.join(in_dir,in_file), 'rt') as handle:
+                        for line in handle:
                             out.write(line)
                 
                 elif in_file.endswith(".fastq"):
-                    with open(os.path.join(in_dir,in_file), 'r') as f:
-                        for line in f:
+                    with open(os.path.join(in_dir,in_file), 'r') as handle:
+                        for line in handle:
                             out.write(line)
     
-    elif in_file.endswith(".fastq"):
+    elif out_file.endswith(".fastq"):
         with open(os.path.join(out_dir,out_file), 'wt') as out:
             for in_file in os.listdir(in_dir): # Find all .fastq.gz & .fastq files in the input directory
                 print(f"Processing {in_file}...")
                 if in_file.endswith(".fastq.gz"):
-                    with gzip.open(os.path.join(in_dir,in_file), 'rt') as f:
-                        for line in f:
+                    with gzip.open(os.path.join(in_dir,in_file), 'rt') as handle:
+                        for line in handle:
                             out.write(line)
                 
                 elif in_file.endswith(".fastq"):
                     with open(os.path.join(in_dir,in_file), 'r') as f:
-                        for line in f:
+                        for line in handle:
                             out.write(line)
 
     else: print('out_file needs .fastq or .fastq.gz suffix')
@@ -882,6 +882,51 @@ def count_spacers_pbs_linkers(sample_sheet: str, annotated_lib: str, fastq_R1_di
     print('Count reads completed')
     if return_df:
         return df_ref
+
+def count_region(fastq_dir: str, end_i: int, start_i:int=0, 
+                 out_dir:str=None, out_file:str=None):
+    ''' 
+    count_region(): returns dataframe with sequence region abundance for every fastq file in a directory
+
+    Parameters:
+    fastq_dir (str): path to fastq directory
+    end_i (int): region end index (zero-indexed)
+    start_i (int, optional): region start index (Default: 0, zero-indexed)
+    out_dir (str, optional): path to save directory (Default: None)
+    out_file (str, optional): save file name (Default: None)
+
+    Dependencies: pandas,gzip,os,tidy
+    '''
+    sequences_dc = dict()
+    for fastq_file in os.listdir(fastq_dir): # Find all .fastq.gz & .fastq files in the fastq directory
+        print(f"Processing {fastq_file}...") # Keep track of sequence regions & reads
+        regions = [] 
+        reads = 0 
+
+        if fastq_file.endswith(".fastq.gz"): # Compressed fastq
+            with gzip.open(os.path.join(fastq_dir,fastq_file), 'rt') as handle:
+                for r,record in enumerate(SeqIO.parse(handle, "fastq")): # Parse reads
+                    reads=r+1
+                    regions.append(''.join(record.seq[start_i:end_i])) # Obtain region
+                 
+        elif fastq_file.endswith(".fastq"): # Uncompressed fastq
+            with open(os.path.join(fastq_dir,fastq_file), 'r') as handle:
+                for r,record in enumerate(SeqIO.parse(handle, "fastq")): # Parse reads    
+                    reads=r+1
+                    regions.append(''.join(record.seq[start_i:end_i])) # Obtain region
+
+        print(f'Completed {reads} reads') # Create dataframe with abundance of regions
+        sequences_dc[fastq_file]=pd.Series(regions).value_counts().to_frame().reset_index().rename(columns={'index': 'region'})
+        sequences_dc[fastq_file]['fraction']=sequences_dc[fastq_file]['count']/reads
+    
+    df = t.join(dc=sequences_dc,col='fastq_file') # Join fastq files into single dataframe
+    df = df[['fastq_file','region','count','fraction']] # Change column order
+
+    if out_dir is not None and out_file is not None: # Save dataframe (optional)
+        io.mkdir(out_dir) # Make output directory if it does not exist
+        io.save(dir=out_dir,file=out_file,obj=df)
+
+    return df
 
 # Quantify edit outcome methods
 def trim_filter(record,qall:int,qavg:int,qtrim:int,qmask:int,alls:int,avgs:int,trims:int,masks:int):
