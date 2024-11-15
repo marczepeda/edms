@@ -5,6 +5,7 @@
 # Import packages
 from Bio.Seq import Seq
 from Bio import SeqIO
+from Bio import pairwise2
 import gzip
 import os
 import re
@@ -928,6 +929,134 @@ def count_region(fastq_dir: str, end_i: int, start_i:int=0,
 
     return df
 
+def count_alignments(annotated_lib: str, align_col: str, id_col: str, fastq_dir: str, 
+                     out_dir: str, fastq_suf='.fastq.gz', match_score=1, mismatch_score=-4,
+                     align_max:int=None,plot_suf='.pdf', show=False, **plot_kwargs):
+    ''' 
+    count_alignments(): get fastq files from directory and store records in dataframes in a dictionary
+    
+    Parameters:
+    annotated_lib (str): path to the annotated library reference file
+    align_col (str): align column name in annotated library reference file
+    id_col (str): id column name in annotated library reference file
+    fastq_dir (str): directory with fastq files
+    out_dir (str): directory for output files
+    fastq_suf (str, optional): file suffix (.fastq.gz or .fastq)
+    match_score (int, optional): match score for pairwise alignment (Default: 1)
+    mismatch_score (int, optional): mismatch score for pairwise alignment (Default: -4)
+    align_max (int, optional): max alignments per fastq file to save compute (Default: None)
+    plot_suf (str, optional): plot type suffix with '.' (Default: '.pdf')
+    show (bool, optional): show plots (Default: False)
+    **plot_kwargs (optional): plot key word arguments
+
+    Dependencies: Bio.SeqIO, gzip, os, pandas, Bio.Seq.Seq, Bio.pairwise2, & trim_filter()
+    '''
+    # Obtain reference file & check for alignment column
+    annotatated_lib_name = annotated_lib.split('/')[-1].split('.')[0]
+    df_ref = io.get(annotated_lib)
+    if align_col not in df_ref.columns.tolist():
+        raise Exception(f'{annotated_lib} is missing column: {align_col}') 
+    if id_col not in df_ref.columns.tolist():
+        raise Exception(f'{annotated_lib} is missing column: {id_col}')
+    df_ref[align_col] = df_ref[align_col].str.upper() 
+
+    # Obtain fastq files
+    files = os.listdir(fastq_dir)
+    fastq_files = [file for file in files if fastq_suf in file]
+    
+    # Make fastqs dictionary
+    fastqs = dict()
+    for fastq_file in fastq_files:
+        
+        # Get reads
+        if fastq_suf=='.fastq.gz': # Compressed fastq files
+            with gzip.open(os.path.join(fastq_dir,fastq_file), "rt") as handle:
+                seqs=[record.seq for record in SeqIO.parse(handle, "fastq")] # Parse reads
+        else: # Uncompressed fastq files
+            with open(os.path.join(fastq_dir,fastq_file), "r") as handle:    
+                seqs=[record.seq for record in SeqIO.parse(handle, "fastq")] # Parse reads
+        fastq_name = fastq_file[:-len(fastq_suf)]
+        print(f'{fastq_name}:\t{len(seqs)} reads')
+        
+        # Perform alignments
+        print('Perform alignments')
+        dc_alignments = {ref:0 for ref in df_ref[align_col]}
+        dc_alignments_mismatches = {ref:0 for ref in df_ref[align_col]}
+        dc_alignments_mismatch_indices = {ref:[] for ref in df_ref[align_col]}
+        a=0
+        for seq in seqs: # Iterate though sequences
+            a+=1
+            print(f'{a} out of {len(seqs)}')
+            if align_max is not None:
+                if a>align_max: break
+            seq_alignments = []
+            seq_alignments_scores = []
+            for ref in df_ref[align_col]: # Iterate though reference sequences
+                seq_alignment = pairwise2.align.globalms(ref,              # seqA; reference sequence
+                                                         seq[0:len(ref)],  # seqB; ngs sequence; trim to reference sequence
+                                                         match_score,      # match reward
+                                                         mismatch_score,   # mismatch penalty
+                                                         mismatch_score/2, # open gap penalties; applied to both strands
+                                                         mismatch_score/2) # extend gap penalties; applied to both strands
+                seq_alignments.append(seq_alignment) # Save alignments
+                seq_alignments_scores.append(seq_alignment[0].score) # Save scores
+
+            # Isolate maximum score alignment
+            i = seq_alignments_scores.index(max(seq_alignments_scores))
+            dc_alignments[df_ref.iloc[i][align_col]] = dc_alignments[df_ref.iloc[i][align_col]]+1
+
+            # Find & quantify mismatches
+            mismatch_indices = [i for i, (a, b) in enumerate(zip(seq_alignments[i][0].seqA, seq_alignments[i][0].seqB)) if a != b and a != '-' and b != '-']
+            gap_indices = [i for i, (a, b) in enumerate(zip(seq_alignments[i][0].seqA, seq_alignments[i][0].seqB)) if a == '-' or b == '-']
+            pair_gap_indices = [sum([gap_indices[j],gap_indices[j+1]])/2 for j in np.arange(0,len(gap_indices),2)] # average neighboring gaps into mismatches
+            mismatch_indices.extend(pair_gap_indices)
+            dc_alignments_mismatches[df_ref.iloc[i][align_col]] = dc_alignments_mismatches[df_ref.iloc[i][align_col]] + len(mismatch_indices)
+            dc_alignments_mismatch_indices[df_ref.iloc[i][align_col]] = dc_alignments_mismatch_indices[df_ref.iloc[i][align_col]] + mismatch_indices
+
+        # Merge alignment dictionaries into a fastq dataframe
+        print('Merge alignment dictionaries into a fastq dataframe')
+        df_alignments = pd.DataFrame(dc_alignments.items(),columns=[align_col,'alignments'])
+        df_alignments_mismatches = pd.DataFrame(dc_alignments_mismatches.items(),columns=[align_col,'mismatches'])
+        df_alignments_mismatch_indices = pd.DataFrame(dc_alignments_mismatch_indices.items(),columns=[align_col,'mismatch_indices']) 
+        df_fastq = pd.merge(left=df_ref,right=df_alignments,on=align_col)
+        df_fastq = pd.merge(left=df_fastq,right=df_alignments_mismatches,on=align_col)
+        df_fastq = pd.merge(left=df_fastq,right=df_alignments_mismatch_indices,on=align_col)
+        df_fastq['mismatches_per_alignment'] = [mismatches/alignments if alignments!=0 else 0 for mismatches,alignments in t.zip_cols(df=df_fastq,cols=['mismatches','alignments'])]
+        
+        # Save & append fastq dataframe to fastq dictionary
+        io.save(dir=out_dir,file=f'alignment_{annotatated_lib_name}_{fastq_name}.csv',obj=df_fastq)
+        fastqs[fastq_name]=df_fastq
+
+        # Plot aligment mismatch indices
+        print('Plot alingment mismatch indices')
+        out_dir_fastq_name = os.path.join(out_dir,fastq_name)
+        df_fastq_plot = pd.DataFrame()
+        for align,id,mismatch_indices_ls in t.zip_cols(df=df_fastq,cols=[align_col,id_col,'mismatch_indices']):
+            df_fastq_plot_align = pd.DataFrame({align_col:[align]*len(mismatch_indices_ls), # Obtain individual mismatches
+                                                id_col:[id]*len(mismatch_indices_ls),
+                                                'mismatch_index':mismatch_indices_ls})
+            
+            p.dist(typ='hist',df=df_fastq_plot_align,x='mismatch_index', # Plot mismatches for each alignment
+                   bins=len(align),
+                   title=f'{fastq_name} {id} Mismatches',
+                   x_axis='Alignment Indices',
+                   dir=out_dir_fastq_name,
+                   file=f'alignment_mismatch_{id.replace(".","_")}{plot_suf}',
+                   show=show,
+                   **plot_kwargs)
+            
+            df_fastq_plot = pd.concat(objs=[df_fastq_plot,df_fastq_plot_align]) # Group alignment mismatches
+
+        p.dist(typ='kde',df=df_fastq_plot,x='mismatch_index',cols=id_col, # Plot mismatches for all alignments
+               bins=max(len(ref) for ref in [df_fastq[align_col]]),
+               title=f'{fastq_name} Mismatches',
+               x_axis='Alignment Indices',
+               dir=out_dir,file=f'alignment_mismatch_{fastq_name}{plot_suf}',
+               show=show,
+               **plot_kwargs)
+    
+    return fastqs
+
 # Quantify edit outcome methods
 def trim_filter(record,qall:int,qavg:int,qtrim:int,qmask:int,alls:int,avgs:int,trims:int,masks:int):
     ''' 
@@ -954,20 +1083,21 @@ def trim_filter(record,qall:int,qavg:int,qtrim:int,qmask:int,alls:int,avgs:int,t
             trim_3 = len(quality_scores)
             sequence = record.seq
             
-            for i in range(len(quality_scores)): # Find 5' trim
-                if quality_scores[i] >= qtrim: break
-                trim_5 = i
-            for i in reversed(range(len(quality_scores))): # Find 3' trim
-                if quality_scores[i] >= qtrim: break
-                trim_3 = i
-            if (trim_5!=0)|(trim_3!=len(quality_scores)): trims += 1 # Trimmed read
+            if qtrim!=0: # Save compute time if trim is not desired
+                for i in range(len(quality_scores)): # Find 5' trim
+                    if quality_scores[i] >= qtrim: break
+                    trim_5 = i
+                for i in reversed(range(len(quality_scores))): # Find 3' trim
+                    if quality_scores[i] >= qtrim: break
+                    trim_3 = i
+                if (trim_5!=0)|(trim_3!=len(quality_scores)): trims += 1 # Trimmed read
 
             sequence = sequence[trim_5:trim_3] # Trim the sequence and quality scores
             quality_scores = quality_scores[trim_5:trim_3]
 
             
             bases = list(sequence) # Mask bases with 'N' threshold
-            if masks !=0:
+            if masks !=0: # Save compute time if mask is not desired
                 for i, qual in enumerate(quality_scores):
                     if qual < qmask: bases[i] = 'N'
             sequenceN = Seq('').join(bases) # Update the sequence with the modified version
@@ -978,7 +1108,7 @@ def trim_filter(record,qall:int,qavg:int,qtrim:int,qmask:int,alls:int,avgs:int,t
         else: return None,None,None,None,alls,avgs+1,trims,masks # Avg threshold not met
     else: return None,None,None,None,alls+1,avgs,trims,masks # All threshold not met
 
-def get_fastqs(dir: str,suf='.fastq.gz',qall=10,qavg=30,qtrim=30,qmask=0,compressed=True,save=True):
+def get_fastqs(dir: str,suf='.fastq.gz',qall=10,qavg=30,qtrim=30,qmask=0,save=True):
     ''' 
     get_fastqs(): get fastq files from directory and store records in dataframes in a dictionary
     
@@ -989,8 +1119,7 @@ def get_fastqs(dir: str,suf='.fastq.gz',qall=10,qavg=30,qtrim=30,qmask=0,compres
     qtrim (int, optional): phred quality score threshold for trimming reads on both ends (Q = -log(err))
     qavg (int, optional): average phred quality score threshold for a read to not be discarded (Q = -log(err))
     qmask (int, optional): phred quality score threshold for base to not be masked to N (Q = -log(err))
-    compressed (str, optional): zipped file(s)? (Default: True)
-    save (bool, optional): save reads statistics file to local directory (DefaultL True)
+    save (bool, optional): save reads statistics file to local directory (Default: True)
 
     Dependencies: Bio.SeqIO, gzip, os, pandas, Bio.Seq.Seq, & trim_filter()
     '''
@@ -1008,7 +1137,7 @@ def get_fastqs(dir: str,suf='.fastq.gz',qall=10,qavg=30,qtrim=30,qmask=0,compres
         trims = 0
         masks = 0
 
-        if (compressed==True)|(suf=='.fastq.gz'): # Compressed fastq files
+        if suf=='.fastq.gz': # Compressed fastq files
             ids=[]
             seqs=[]
             seqsN=[]
@@ -1443,7 +1572,7 @@ def scat(typ: str,df: pd.DataFrame,x: str,y: str,cols=None,cols_ord=None,stys=No
          figsize=(10,6),title='',title_size=18,title_weight='bold',
          x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_scale='linear',x_axis_dims=(0,100),x_ticks_rot=0,xticks=[],
          y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_scale='linear',y_axis_dims=(0,100),y_ticks_rot=0,yticks=[],
-         legend_title='',legend_title_size=12,legend_size=9,legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_items=(0,0),
+         legend_title='',legend_title_size=12,legend_size=9,legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_items=(0,0),show=True,
          **kwargs):
     ''' 
     scat(): creates scatter plot related graphs.
@@ -1485,6 +1614,7 @@ def scat(typ: str,df: pd.DataFrame,x: str,y: str,cols=None,cols_ord=None,stys=No
     legend_bbox_to_anchor (tuple, optional): coordinates for bbox anchor
     legend_loc (str): legend location
     legend_ncol (tuple, optional): # of columns
+    show (bool, optional): show plot (Default: True)
     
     Dependencies: os, matplotlib, seaborn, & plot
     '''
@@ -1519,7 +1649,7 @@ def scat(typ: str,df: pd.DataFrame,x: str,y: str,cols=None,cols_ord=None,stys=No
            figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,
            x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_ticks_rot=x_ticks_rot,xticks=xticks,
            y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_scale=y_axis_scale,y_axis_dims=y_axis_dims,y_ticks_rot=y_ticks_rot,yticks=yticks,
-           legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_items=legend_items, 
+           legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_items=legend_items,show=show, 
            **kwargs)
 
 def cat(typ: str,df: pd.DataFrame,x: str,y: str,errorbar=None,cols=None,cols_ord=None,cutoff=0.01,cols_exclude=None,
@@ -1527,7 +1657,7 @@ def cat(typ: str,df: pd.DataFrame,x: str,y: str,errorbar=None,cols=None,cols_ord
         figsize=(10,6),title='',title_size=18,title_weight='bold',
         x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_scale='linear',x_axis_dims=(0,1),x_ticks_rot=0,xticks=[],
         y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_scale='linear',y_axis_dims=(0,1),y_ticks_rot=0,yticks=[],
-        legend_title='',legend_title_size=12,legend_size=9,legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_items=(0,0), 
+        legend_title='',legend_title_size=12,legend_size=9,legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_items=(0,0),show=True,
         **kwargs):
     ''' 
     cat: creates category dependent graphs.
@@ -1572,6 +1702,7 @@ def cat(typ: str,df: pd.DataFrame,x: str,y: str,errorbar=None,cols=None,cols_ord
     legend_bbox_to_anchor (tuple, optional): coordinates for bbox anchor
     legend_loc (str): legend location
     legend_ncol (tuple, optional): # of columns
+    show (bool, optional): show plot (Default: True)
     
     Dependencies: os, matplotlib, seaborn, & plot
     '''
@@ -1606,7 +1737,7 @@ def cat(typ: str,df: pd.DataFrame,x: str,y: str,errorbar=None,cols=None,cols_ord
           figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,
           x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_ticks_rot=x_ticks_rot,xticks=xticks,
           y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_scale=y_axis_scale,y_axis_dims=y_axis_dims,y_ticks_rot=y_ticks_rot,yticks=yticks,
-          legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_items=legend_items, 
+          legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_items=legend_items,show=show, 
           **kwargs)
 
 def stack(df: pd.DataFrame,x='sample',y='fraction',cols='edit',cutoff=0.01,cols_ord=[],x_ord=[],
@@ -1615,7 +1746,7 @@ def stack(df: pd.DataFrame,x='sample',y='fraction',cols='edit',cutoff=0.01,cols_
           figsize=(10,6),x_axis='',x_axis_size=12,x_axis_weight='bold',x_ticks_rot=45,x_ticks_ha='right',
           y_axis='',y_axis_size=12,y_axis_weight='bold',y_ticks_rot=0,
           legend_title='',legend_title_size=12,legend_size=12,
-          legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_ncol=1,**kwargs):
+          legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_ncol=1,show=True,**kwargs):
     ''' 
     stack(): creates stacked bar plot
 
@@ -1651,6 +1782,7 @@ def stack(df: pd.DataFrame,x='sample',y='fraction',cols='edit',cutoff=0.01,cols_
     legend_bbox_to_anchor (tuple, optional): coordinates for bbox anchor
     legend_loc (str): legend location
     legend_ncol (tuple, optional): # of columns
+    show (bool, optional): show plot (Default: True)
     
     Dependencies: re, os, pandas, numpy, matplotlib.pyplot & plot
     '''
@@ -1682,14 +1814,14 @@ def stack(df: pd.DataFrame,x='sample',y='fraction',cols='edit',cutoff=0.01,cols_
             figsize=figsize,x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_ticks_rot=x_ticks_rot,x_ticks_ha=x_ticks_ha,
             y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_ticks_rot=y_ticks_rot,
             legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,
-            legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_ncol=legend_ncol,**kwargs)
+            legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_ncol=legend_ncol,show=show,**kwargs)
 
 def dms_grid(dc: dict,x='number',y='after',vals='count',
              file=None,dir=None,edgecol='black',lw=1,annot=False,cmap="bone_r",
              title='',title_size=12,title_weight='bold',
              x_axis='',x_axis_size=12,x_axis_weight='bold',x_ticks_rot=45,
              y_axis='',y_axis_size=12,y_axis_weight='bold',y_ticks_rot=0,
-             **kwargs):
+             show=True,**kwargs):
     ''' 
     dms_grid(): creates amino acide by residue number heatmaps from tidy-formatted DMS data
     
@@ -1715,6 +1847,7 @@ def dms_grid(dc: dict,x='number',y='after',vals='count',
     y_axis_size (int, optional): y-axis name font size
     y_axis_weight (str, optional): y-axis name bold, italics, etc.
     y_ticks_rot (int, optional): y-axis ticks rotation
+    show (bool, optional): show plot (Default: True)
     
     Dependencies: matplotlib, seaborn, pandas, & aa_props
     '''
@@ -1740,7 +1873,7 @@ def dms_grid(dc: dict,x='number',y='after',vals='count',
     if file is not None and dir is not None:
         io.mkdir(dir) # Make output directory if it does not exist
         plt.savefig(fname=os.path.join(dir, file), dpi=600, bbox_inches='tight', format=f'{file.split(".")[-1]}')
-    plt.show()
+    if show: plt.show()
 
 def vol(df: pd.DataFrame,x: str,y: str, stys=None,size=None,
         file=None,dir=None,palette_or_cmap='colorblind',edgecol='black',

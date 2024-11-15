@@ -178,7 +178,7 @@ def dc_to_ls(dc: dict,sep='.'):
 
 def ls_to_dc(ls: list, sep='.'):
     ''' 
-    ls_to_dc(): convert a dictionary containing several subdictionaries into a list with all the key value relationships stored as individual values
+    ls_to_dc(): convert a list with all the key value relationships stored as individual values into a dictionary containing several subdictionaries
     
     Parameters:
     ls (list): list
