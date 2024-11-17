@@ -5,7 +5,7 @@
 # Import packages
 from Bio.Seq import Seq
 from Bio import SeqIO
-from Bio import pairwise2
+from Bio.Align import PairwiseAligner
 import gzip
 import os
 import re
@@ -949,8 +949,16 @@ def count_alignments(annotated_lib: str, align_col: str, id_col: str, fastq_dir:
     show (bool, optional): show plots (Default: False)
     **plot_kwargs (optional): plot key word arguments
 
-    Dependencies: Bio.SeqIO, gzip, os, pandas, Bio.Seq.Seq, Bio.pairwise2, & trim_filter()
+    Dependencies: Bio.SeqIO, gzip, os, pandas, Bio.Seq.Seq, Bio.PairwiseAligner, & trim_filter()
     '''
+    # Intialize the aligner
+    aligner = PairwiseAligner()
+    aligner.mode = 'global'  # Use 'local' for local alignment
+    aligner.match_score = match_score  # Score for a match
+    aligner.mismatch_score = mismatch_score  # Penalty for a mismatch
+    aligner.open_gap_score = mismatch_score/2  # Penalty for opening a gap; applied to both strands
+    aligner.extend_gap_score = mismatch_score/2  # Penalty for extending a gap; applied to both strands
+
     # Obtain reference file & check for alignment column
     annotatated_lib_name = annotated_lib.split('/')[-1].split('.')[0]
     df_ref = io.get(annotated_lib)
@@ -981,79 +989,100 @@ def count_alignments(annotated_lib: str, align_col: str, id_col: str, fastq_dir:
         # Perform alignments
         print('Perform alignments')
         dc_alignments = {ref:0 for ref in df_ref[align_col]}
-        dc_alignments_mismatches = {ref:0 for ref in df_ref[align_col]}
-        dc_alignments_mismatch_indices = {ref:[] for ref in df_ref[align_col]}
-        a=0
+        dc_alignments_mismatch_num = {ref:0 for ref in df_ref[align_col]}
+        dc_alignments_mismatch_pos = {ref:[] for ref in df_ref[align_col]}
+        s=0
         for seq in seqs: # Iterate though sequences
-            a+=1
-            print(f'{a} out of {len(seqs)}')
+            s+=1
             if align_max is not None:
-                if a>align_max: break
-            seq_alignments = []
+                if s>align_max: break
+            print(f'{s} out of {len(seqs)}')
             seq_alignments_scores = []
+            seq_alignments_aligned = []
             for ref in df_ref[align_col]: # Iterate though reference sequences
-                seq_alignment = pairwise2.align.globalms(ref,              # seqA; reference sequence
-                                                         seq[0:len(ref)],  # seqB; ngs sequence; trim to reference sequence
-                                                         match_score,      # match reward
-                                                         mismatch_score,   # mismatch penalty
-                                                         mismatch_score/2, # open gap penalties; applied to both strands
-                                                         mismatch_score/2) # extend gap penalties; applied to both strands
-                seq_alignments.append(seq_alignment) # Save alignments
-                seq_alignments_scores.append(seq_alignment[0].score) # Save scores
+                seq_alignment = aligner.align(ref, seq[0:len(ref)]) # trim ngs sequence to reference sequence & align
+                seq_alignments_scores.append(seq_alignment[0].score) # Save highest alignment score
+                seq_alignments_aligned.append(seq_alignment[0].aligned[0]) # Save alignment matches
 
             # Isolate maximum score alignment
             i = seq_alignments_scores.index(max(seq_alignments_scores))
-            dc_alignments[df_ref.iloc[i][align_col]] = dc_alignments[df_ref.iloc[i][align_col]]+1
+            ref_i = df_ref.iloc[i][align_col]
+            aligned_i = seq_alignments_aligned[i]
+            dc_alignments[df_ref.iloc[i][align_col]] = dc_alignments[ref_i]+1
 
-            # Find & quantify mismatches
-            mismatch_indices = [i for i, (a, b) in enumerate(zip(seq_alignments[i][0].seqA, seq_alignments[i][0].seqB)) if a != b and a != '-' and b != '-']
-            gap_indices = [i for i, (a, b) in enumerate(zip(seq_alignments[i][0].seqA, seq_alignments[i][0].seqB)) if a == '-' or b == '-']
-            pair_gap_indices = [sum([gap_indices[j],gap_indices[j+1]])/2 for j in np.arange(0,len(gap_indices),2)] # average neighboring gaps into mismatches
-            mismatch_indices.extend(pair_gap_indices)
-            dc_alignments_mismatches[df_ref.iloc[i][align_col]] = dc_alignments_mismatches[df_ref.iloc[i][align_col]] + len(mismatch_indices)
-            dc_alignments_mismatch_indices[df_ref.iloc[i][align_col]] = dc_alignments_mismatch_indices[df_ref.iloc[i][align_col]] + mismatch_indices
+            # Find & quantify mismatches (Change zero-index to one-indexed)
+            mismatch_pos = []
+            if len(aligned_i) == 1: 
+                (a1,b1) = aligned_i[0]
+                if (a1==0)&(b1==len(ref_i)-1): mismatch_pos.extend([])
+                elif a1==0: mismatch_pos.extend([k+1 for k in range(b1+1,len(ref_i))])
+                elif b1==len(ref_i)-1: mismatch_pos.extend([k+1 for k in range(0,a1-1)])
+                else: mismatch_pos.extend([j+1 for j in range(0,a1-1)] + [k+1 for k in range(b1+1,len(ref_i))])
+            else:
+                for j in range(len(aligned_i)-1):
+                    (a1,b1) = aligned_i[j]
+                    (a2,b2) = aligned_i[j+1]
+                    if (j==0)&(a1!=0): mismatch_pos.extend([k+1 for k in range(0,a1-1)])
+                    if (j==len(aligned_i)-2)&(b2!=len(ref_i)-1): mismatch_pos.extend([k+1 for k in range(b2+1,len(ref_i))])
+                    mismatch_pos.extend([k+1 for k in range(b1+1,a2-1)])
+            dc_alignments_mismatch_num[ref_i] = dc_alignments_mismatch_num[ref_i] + len(mismatch_pos)
+            dc_alignments_mismatch_pos[ref_i] = dc_alignments_mismatch_pos[ref_i] + mismatch_pos
+
+        # Calculate mismatch position fraction of alignments
+        dc_alignments_mismatch_pos_fraction = dict()
+        for (ref,mismatch_pos) in dc_alignments_mismatch_pos.items():
+            dc_alignments_mismatch_pos_fraction[ref] = {pos:mismatch_pos.count(pos) for pos in range(1,len(ref)+1)}
 
         # Merge alignment dictionaries into a fastq dataframe
         print('Merge alignment dictionaries into a fastq dataframe')
         df_alignments = pd.DataFrame(dc_alignments.items(),columns=[align_col,'alignments'])
-        df_alignments_mismatches = pd.DataFrame(dc_alignments_mismatches.items(),columns=[align_col,'mismatches'])
-        df_alignments_mismatch_indices = pd.DataFrame(dc_alignments_mismatch_indices.items(),columns=[align_col,'mismatch_indices']) 
+        df_alignments_mismatch_num = pd.DataFrame(dc_alignments_mismatch_num.items(),columns=[align_col,'mismatch_num'])
+        df_alignments_mismatch_pos = pd.DataFrame(dc_alignments_mismatch_pos.items(),columns=[align_col,'mismatch_pos']) 
         df_fastq = pd.merge(left=df_ref,right=df_alignments,on=align_col)
-        df_fastq = pd.merge(left=df_fastq,right=df_alignments_mismatches,on=align_col)
-        df_fastq = pd.merge(left=df_fastq,right=df_alignments_mismatch_indices,on=align_col)
-        df_fastq['mismatches_per_alignment'] = [mismatches/alignments if alignments!=0 else 0 for mismatches,alignments in t.zip_cols(df=df_fastq,cols=['mismatches','alignments'])]
+        df_fastq = pd.merge(left=df_fastq,right=df_alignments_mismatch_num,on=align_col)
+        df_fastq = pd.merge(left=df_fastq,right=df_alignments_mismatch_pos,on=align_col)
+        
+        # Calculate mismatch num & position per alignment
+        print('Calculate mismatch num & position per alignment')
+        mismatch_num_per_alignment_ls = []
+        mismatch_pos_per_alignment_ls = []
+        for (ref,mismatch_pos,mismatch_num,alignments) in t.zip_cols(df=df_fastq,cols=[align_col,'mismatch_pos','mismatch_num','alignments']):
+            if alignments==0:
+                mismatch_num_per_alignment_ls.append(0)
+                mismatch_pos_per_alignment_ls.append({pos:0 for pos in range(1,len(ref)+1)})
+            else:
+                mismatch_num_per_alignment_ls.append(mismatch_num/alignments)
+                mismatch_pos_per_alignment_ls.append({pos:mismatch_pos.count(pos)/alignments for pos in range(1,len(ref)+1)})
+        df_fastq['mismatch_num_per_alignment'] = mismatch_num_per_alignment_ls
+        df_fastq['mismatch_pos_per_alignment'] = mismatch_pos_per_alignment_ls
         
         # Save & append fastq dataframe to fastq dictionary
+        print('Save & append fastq dataframe to fastq dictionary')
         io.save(dir=out_dir,file=f'alignment_{annotatated_lib_name}_{fastq_name}.csv',obj=df_fastq)
         fastqs[fastq_name]=df_fastq
 
-        # Plot aligment mismatch indices
-        print('Plot alingment mismatch indices')
+        # Plot mismatch position per alignment
+        print('Plot mismatch position per alignment')
+        
         out_dir_fastq_name = os.path.join(out_dir,fastq_name)
         df_fastq_plot = pd.DataFrame()
-        for align,id,mismatch_indices_ls in t.zip_cols(df=df_fastq,cols=[align_col,id_col,'mismatch_indices']):
-            df_fastq_plot_align = pd.DataFrame({align_col:[align]*len(mismatch_indices_ls), # Obtain individual mismatches
-                                                id_col:[id]*len(mismatch_indices_ls),
-                                                'mismatch_index':mismatch_indices_ls})
+        for align,id,mismatch_pos_per_alignment in t.zip_cols(df=df_fastq,cols=[align_col,id_col,'mismatch_pos_per_alignment']):
+            df_fastq_plot_align = pd.DataFrame({align_col:[align]*len(mismatch_pos_per_alignment), # Obtain individual alignments
+                                                id_col:[id]*len(mismatch_pos_per_alignment),
+                                                'mismatch_pos':list(mismatch_pos_per_alignment.keys()),
+                                                'mismatch_pos_per_alignment':list(mismatch_pos_per_alignment.values())})
             
-            p.dist(typ='hist',df=df_fastq_plot_align,x='mismatch_index', # Plot mismatches for each alignment
-                   bins=len(align),
-                   title=f'{fastq_name} {id} Mismatches',
-                   x_axis='Alignment Indices',
-                   dir=out_dir_fastq_name,
-                   file=f'alignment_mismatch_{id.replace(".","_")}{plot_suf}',
-                   show=show,
-                   **plot_kwargs)
+            p.scat(typ='line',df=df_fastq_plot_align,x='mismatch_pos',y='mismatch_pos_per_alignment', # Plot mismatches for each alignment
+                   title=f'{fastq_name} {id}',x_axis='Alignment Position',y_axis='Mismatches/Alignment',
+                   dir=out_dir_fastq_name,file=f'{id.replace(".","_")}{plot_suf}',
+                   show=show,**plot_kwargs)
             
-            df_fastq_plot = pd.concat(objs=[df_fastq_plot,df_fastq_plot_align]) # Group alignment mismatches
+            df_fastq_plot = pd.concat(objs=[df_fastq_plot,df_fastq_plot_align]).reset_index(drop=True) # Group alignment mismatches
 
-        p.dist(typ='kde',df=df_fastq_plot,x='mismatch_index',cols=id_col, # Plot mismatches for all alignments
-               bins=max(len(ref) for ref in [df_fastq[align_col]]),
-               title=f'{fastq_name} Mismatches',
-               x_axis='Alignment Indices',
-               dir=out_dir,file=f'alignment_mismatch_{fastq_name}{plot_suf}',
-               show=show,
-               **plot_kwargs)
+        p.scat(typ='line',df=df_fastq_plot,x='mismatch_pos',y='mismatch_pos_per_alignment',cols=id_col, # Plot mismatches for each alignment
+               title=f'{fastq_name}',x_axis='Alignment Position',y_axis='Mismatches/Alignment',
+               dir=out_dir,file=f'{fastq_name}{plot_suf}',legend_ncol=4,
+               show=show,**plot_kwargs)
     
     return fastqs
 
