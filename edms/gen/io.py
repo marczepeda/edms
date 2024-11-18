@@ -84,13 +84,27 @@ def save(dir: str, file: str, obj, cols=[], id=False, sort=True, **kwargs):
             if not isinstance(col, str):
                 raise ValueError("All elements in the list must be strings.")
         if cols!=[]: obj = obj[cols]
-        obj.to_csv(os.path.join(dir,file), index=id,**kwargs)
+        if file.split('.')[-1]=='tsv': obj.to_csv(os.path.join(dir,file), index=id, sep='\t', **kwargs)
+        elif file.split('.')[-1]=='xlsx': 
+            with pd.ExcelWriter(os.path.join(dir,file)) as writer: 
+                obj.to_excel(writer,sheet_name='.'.join(file.split('.')[:-1]),index=id) # Dataframe per sheet
+        else: obj.to_csv(os.path.join(dir,file), index=id, **kwargs)
     elif type(obj)==set or type(obj)==list or type(obj)==pd.Series:
         if sort==True: obj2 = sorted(list(obj))
         else: obj2=list(obj)
         with open(os.path.join(dir,file), 'w', newline='') as csv_file:
             csv_writer = csv.writer(csv_file, dialect='excel') # Create a CSV writer object
             csv_writer.writerow(obj2) # Write each row of the list to the CSV file
+    elif (type(obj)==dict)&(file.split('.')[-1]=='xlsx'):
+        for col in cols: # Check if each element in the list is a string
+            if not isinstance(col, str):
+                raise ValueError("All elements in the list must be strings.")
+        with pd.ExcelWriter(os.path.join(dir,file)) as writer:
+            if cols!=[]: obj = obj[cols]
+            for key,df in obj.items(): 
+                if cols!=[]: df = df[cols]
+                df.to_excel(writer,sheet_name=key,index=id) # Dataframe per sheet
+    else: raise ValueError(f'save() does not work for {type(obj)} objects with {file.split(".")[-1]} files.')
 
 def save_dir(dir: str, file_suffix: str, dc: dict, **kwargs):
     ''' 
