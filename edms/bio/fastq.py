@@ -1086,6 +1086,47 @@ def count_alignments(annotated_lib: str, align_col: str, id_col: str, fastq_dir:
     
     return fastqs
 
+def plot_alignments(fastq_alignments: dict, align_col: str, id_col: str,
+                     out_dir: str, plot_suf='.pdf', show=False, **plot_kwargs):
+    ''' 
+    plot_alignments(): plot fastq alignments dictionary output from count_alignments()
+    
+    Parameters:
+    fastq_alignments (dict): fastq alignments dictionary output from count_alignments()
+    align_col (str): align column name in annotated library reference file
+    id_col (str): id column name in annotated library reference file
+    fastq_dir (str): directory with fastq files
+    out_dir (str): directory for output files
+    plot_suf (str, optional): plot type suffix with '.' (Default: '.pdf')
+    show (bool, optional): show plots (Default: False)
+    **plot_kwargs (optional): plot key word arguments
+
+    Dependencies: Bio.SeqIO, gzip, os, pandas, Bio.Seq.Seq, Bio.PairwiseAligner, & trim_filter()
+    '''
+    for fastq_name,df_fastq in fastq_alignments.items():
+        
+        # Plot mismatch position per alignment
+        print('Plot mismatch position per alignment')
+        
+        out_dir_fastq_name = os.path.join(out_dir,fastq_name)
+        df_fastq_plot = pd.DataFrame()
+        for align,id,mismatch_pos_per_alignment in t.zip_cols(df=df_fastq,cols=[align_col,id_col,'mismatch_pos_per_alignment']):
+            df_fastq_plot_align = pd.DataFrame({align_col:[align]*len(mismatch_pos_per_alignment), # Obtain individual alignments
+                                                id_col:[id]*len(mismatch_pos_per_alignment),
+                                                'mismatch_pos':list(mismatch_pos_per_alignment.keys()),
+                                                'mismatch_pos_per_alignment':list(mismatch_pos_per_alignment.values())})
+            
+            p.scat(typ='line',df=df_fastq_plot_align,x='mismatch_pos',y='mismatch_pos_per_alignment', # Plot mismatches for each alignment
+                   title=f'{fastq_name} {id}',x_axis='Alignment Position',y_axis='Mismatches/Alignment',
+                   dir=out_dir_fastq_name,file=f'{id.replace(".","_")}{plot_suf}',
+                   show=show,**plot_kwargs)
+            
+            df_fastq_plot = pd.concat(objs=[df_fastq_plot,df_fastq_plot_align]).reset_index(drop=True) # Group alignment mismatches
+
+        p.scat(typ='line',df=df_fastq_plot,x='mismatch_pos',y='mismatch_pos_per_alignment',cols=id_col, # Plot mismatches for each alignment
+               title=f'{fastq_name}',x_axis='Alignment Position',y_axis='Mismatches/Alignment',
+               dir=out_dir,file=f'{fastq_name}{plot_suf}',
+               show=show,**plot_kwargs)
 # Quantify edit outcome methods
 def trim_filter(record,qall:int,qavg:int,qtrim:int,qmask:int,alls:int,avgs:int,trims:int,masks:int):
     ''' 
