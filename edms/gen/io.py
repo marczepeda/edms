@@ -8,23 +8,81 @@ import os
 import ast
 import csv
 
+# Parsing Python literals methods
+def try_parse(value):
+    """
+    try_parse(): try to parse a string as a Python literal; if not possible, return the original value.
+    
+    Parameters:
+    value: value of any type (looking for strings)
+
+    Dependencies: ast,recusive_parse()
+    """
+    if isinstance(value, str):  # Only attempt parsing for strings
+        try:
+            parsed_value = ast.literal_eval(value)
+            # If parsed_value is a dictionary, list, etc., recursively evaluate its contents
+            if isinstance(parsed_value, (dict, list, set, tuple)):
+                return recursive_parse(parsed_value)
+            return parsed_value
+        except (ValueError, SyntaxError):
+            # Return the value as-is if it can't be parsed
+            return value
+    return value
+
+def recursive_parse(data):
+    """
+    recursive_parse(): recursively parse nested structures.
+    
+    Parameters:
+    data: data of any type (looking for dict, list, set, or tuple)
+
+    Dependencies: ast,try_parse()
+    """
+    if isinstance(data, dict):
+        return {k: try_parse(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [try_parse(item) for item in data]
+    elif isinstance(data, set):
+        return {try_parse(item) for item in data}
+    elif isinstance(data, tuple):
+        return tuple(try_parse(item) for item in data)
+    return data  # Return the data as-is if it doesn't match any known structure
+
+def df_try_parse(df: pd.DataFrame):
+    '''
+    df_try_parse(): apply try_parse() to dataframe columns and return dataframe
+
+    Parameters: 
+    df (dataframe): dataframe with columns to try_parse()
+
+    Dependencies: try_parse()
+    '''
+    # Apply the parsing function to all columns
+    for col in df.columns:
+        df[col] = df[col].apply(try_parse)
+    return df
+
 # Input methods
 def get(pt: str,typ='',**kwargs):
     ''' 
-    get(): returns pandas dataframe from file.
+    get(): returns pandas dataframe from a file.
+    (1) automatically detects and parses columns containing Python literals (e.g., dict, list, set, tuple) encoded as strings.
+    (2) recursively evaluates nested structures.
 
     Parameters:    
     pt (str): file path
     typ (str, optional): file type (can be determined from suffix)
     
-    Dependencies: pandas
+    Dependencies: pandas,ast,try_parse(),recursive_parse(),df_try_parse()
     '''
     suf = pt.split('.')[-1]
-    if (typ=='csv')|(suf=='csv'): return pd.read_csv(filepath_or_buffer=pt,sep=',',**kwargs)
-    elif (typ=='tsv')|(suf=='tsv'): return pd.read_csv(filepath_or_buffer=pt,sep='\t',**kwargs)
-    elif (typ=='excel')|(suf=='xlsx'): return {sheet_name:pd.read_excel(pt,sheet_name,**kwargs) for sheet_name in pd.ExcelFile(pt).sheet_names}
-    elif (typ=='html')|(suf=='html'): return pd.read_html(pt,**kwargs)
-    elif typ=='': return pd.read_csv(filepath_or_buffer=pt,**kwargs)
+    if (typ=='csv')|(suf=='csv'): return df_try_parse(pd.read_csv(filepath_or_buffer=pt,sep=',',**kwargs))
+    elif (typ=='tsv')|(suf=='tsv'): return df_try_parse(pd.read_csv(filepath_or_buffer=pt,sep='\t',**kwargs))
+    elif (typ=='excel')|(suf=='xlsx'): return {sheet_name:df_try_parse(pd.read_excel(pt,sheet_name,**kwargs))
+                                               for sheet_name in pd.ExcelFile(pt).sheet_names}
+    elif (typ=='html')|(suf=='html'): return df_try_parse(pd.read_html(pt,**kwargs))
+    elif typ=='': return df_try_parse(pd.read_csv(filepath_or_buffer=pt,**kwargs))
     else: print("Error: Unknown typ specified")
 
 def get_dir(dir: str,suf='.csv',**kwargs):
