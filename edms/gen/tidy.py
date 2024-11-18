@@ -6,6 +6,45 @@
 import pandas as pd
 import re
 
+# Dataframe methods
+def reorder_cols(df: pd.DataFrame, cols: list, keep=True):
+    ''' 
+    reorder_cols(): returns dataframe with columns reorganized 
+    
+    Parameters:
+    df (dataframe): pandas dataframe
+    cols (list): list of column names prioritized in order
+    keep (bool, optional): keep columns not listed (Default: True)
+
+    Dependencies: pandas
+    '''
+    if keep==True: cols.extend([c for c in list(df.columns) if c not in cols]) # Append remaining columns
+    return df[cols]
+
+def zip_cols(df: pd.DataFrame, cols: list):
+    ''' 
+    zip_cols(): returns zip(dataframe[cols[0]],dataframe[cols[1]],...) for tuple loops
+    
+    Parameters:
+    df (dataframe): pandas dataframe
+    cols (list): list of column names
+
+    Dependencies: pandas
+    ''' 
+    return zip(*[df[col] for col in cols])
+
+def missing_cols(df: pd.DataFrame, cols: list):
+    '''
+    missing_cols(): returns values from a list if they are not dataframe columns
+
+    Parameters:
+    df (dataframe): check this dataframe for col
+    cols (list): column name to be checked
+
+    Dependencies: pandas
+    '''
+    return [col for col in cols if col not in df.columns]
+
 # Methods for dictionary containing dataframes.
 def split_by(series, by=', '):
     ''' 
@@ -89,18 +128,44 @@ def modify(dc: dict, col: str, val, axis=1, **kwargs):
         dc2[key]=df2
     return dc2
 
-def melt(dc: dict,id_vars,**kwargs):
+def melt(dc: dict,id_vars:list=None,value_vars:list=None,**kwargs):
     ''' 
     melt(): returns dictionary containing tidy dataframes
     
     Parameters:
     dc: dictionary of dataframes
-    id_vars: metadata columns
+    id_vars (list, optional 1): metadata columns
+    value_vars (list, optional 2): data columns
     
-    Dependencies: pandas
+    Dependencies: pandas, missing_cols()
     '''
-    dc2=dict()
-    for key,df in dc.items(): dc2[key]=pd.melt(frame=df,id_vars=id_vars,**kwargs)
+    # Check for id_vars and/or value_vars
+    if id_vars is not None and value_vars is not None:
+        dc2=dict()
+        for key,df in dc.items(): 
+            missing_id_vars = missing_cols(df=df,cols=id_vars)
+            missing_value_vars = missing_cols(df=df,cols=value_vars)
+            if len(missing_id_vars)>0: raise TypeError(f'Error: missing {missing_id_vars} in {key} dataframe columns.')
+            if len(missing_value_vars)>0: raise TypeError(f'Error: missing {missing_value_vars} in {key} dataframe columns.')
+            dc2[key]=pd.melt(frame=df,id_vars=id_vars,value_vars=value_vars,**kwargs)
+    elif id_vars is not None:
+        dc2=dict()
+        for key,df in dc.items():
+            missing_id_vars = missing_cols(df=df,cols=id_vars)
+            if len(missing_id_vars)>0: raise TypeError(f'Error: missing {missing_id_vars} in {key} dataframe columns.')
+            value_vars = list(df.columns)
+            for item in id_vars: value_vars.remove(item)
+            dc2[key]=pd.melt(frame=df,id_vars=id_vars,value_vars=value_vars,**kwargs)
+    elif value_vars is not None:
+        dc2=dict()
+        for key,df in dc.items(): 
+            missing_value_vars = missing_cols(df=df,cols=value_vars)
+            if len(missing_value_vars)>0: raise TypeError(f'Error: missing {missing_value_vars} in {key} dataframe columns.')
+            id_vars = list(df.columns)
+            for item in value_vars: id_vars.remove(item)
+            dc2[key]=pd.melt(frame=df,id_vars=id_vars,value_vars=value_vars,**kwargs)
+    else: raise TypeError('Error: specify id_vars and/or value_vars.')
+    
     return dc2
 
 def join(dc: dict, col='key'):
@@ -198,30 +263,3 @@ def ls_to_dc(ls: list, sep='.'):
         d[parts[-1]] = value.strip()  # Assign the value, strip any leading/trailing whitespace
 
     return dc
-
-# Dataframe methods
-def reorder_cols(df: pd.DataFrame, cols: list, keep=True):
-    ''' 
-    reorder_cols(): returns dataframe with columns reorganized 
-    
-    Parameters:
-    df (dataframe): pandas dataframe
-    cols (list): list of column names prioritized in order
-    keep (bool, optional): keep columns not listed (Default: True)
-
-    Dependencies: pandas
-    '''
-    if keep==True: cols.extend([c for c in list(df.columns) if c not in cols]) # Append remaining columns
-    return df[cols]
-
-def zip_cols(df: pd.DataFrame, cols: list):
-    ''' 
-    zip_cols(): returns zip(dataframe[cols[0]],dataframe[cols[1]],...) for tuple loops
-    
-    Parameters:
-    df (dataframe): pandas dataframe
-    cols (list): list of column names
-
-    Dependencies: pandas
-    ''' 
-    return zip(*[df[col] for col in cols])
