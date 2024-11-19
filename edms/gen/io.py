@@ -7,6 +7,7 @@ import pandas as pd
 import os
 import ast
 import csv
+import subprocess
 
 # Parsing Python literals methods
 def try_parse(value):
@@ -228,6 +229,21 @@ def dc_txt_to_df(dc_txt: str, transpose=True):
     '''
     if transpose==True: return pd.DataFrame(ast.literal_eval(dc_txt)).T
     else: return pd.DataFrame(ast.literal_eval(dc_txt))
+
+def echo(message: str):
+    """
+    echo(): write message to slurm output file using echo
+
+    Parameters:
+    message (str): text that will be written to slurm output file.
+
+    Dependencies: subprocess
+    """
+    try:
+        # Use subprocess to run `echo` and append the message to stdout
+        subprocess.run(['echo', message], check=True)
+    except Exception as e:
+        print(f"Failed to log progress: {e}")
 
 # Directory Methods
 def print_relative_paths(root_dir: str):
