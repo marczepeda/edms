@@ -243,7 +243,7 @@ def echo(message: str):
         # Use subprocess to run `echo` and append the message to stdout
         subprocess.run(['echo', message], check=True)
     except Exception as e:
-        print(f"Failed to log progress: {e}")
+        print(f"Failed to write message: {e}")
 
 # Directory Methods
 def print_relative_paths(root_dir: str):

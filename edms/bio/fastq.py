@@ -52,7 +52,7 @@ def revcom_fastqs(in_dir: str, out_dir: str):
     
     Dependencies: Bio.SeqIO, gzip, os, & Bio.Seq.Seq
     '''
-    os.makedirs(out_dir, exist_ok=True) # Ensure the output directory exists
+    io.mkdir(out_dir) # Ensure the output directory exists
 
     for filename in os.listdir(in_dir): # Find all .fastq.gz & .fastq files in the input directory
 
@@ -80,11 +80,29 @@ def revcom_fastqs(in_dir: str, out_dir: str):
                     SeqIO.write(reverse_complement_record, outfile, "fastq")
             print(f"Saved reverse complement to {output_fastq_gz}")
 
+def unzip_fastqs(in_dir: str, out_dir: str):
+    ''' 
+    unzip_fastqs(): Unzip gzipped fastqs and write to a new directory.
+
+    Parameters:
+    in_dir (str): directory with compresesd fastq files
+    out_dir (str): new directory with uncompressed fastq files
+    
+    Dependencies: gzip & os
+    '''
+    io.mkdir(out_dir) # Ensure the output directory exists
+
+    for in_file in os.listdir(in_dir): # Find all .fastq.gz & .fastq files in the input directory
+        print(f"Processing {in_file}...")
+        if in_file.endswith(".fastq.gz"):
+            with gzip.open(os.path.join(in_dir,in_file), 'rt') as handle:
+                with open(os.path.join(out_dir,in_file.split('.fastq.gz')[0]+'.fastq'), 'wt') as out:
+                    for line in handle:
+                        out.write(line)
+
 def comb_fastqs(in_dir: str, out_dir: str, out_file: str):
     ''' 
-    comb_fastqs(): Combine fastqs to a new directory
-
-    Combines one or more (un)compressed fastqs files into a single (un)compressed fastq file.
+    comb_fastqs(): Combines one or more (un)compressed fastqs files into a single (un)compressed fastq file.
 
     Parameters:
     in_dir (str): directory with fastq files
@@ -93,7 +111,7 @@ def comb_fastqs(in_dir: str, out_dir: str, out_file: str):
     
     Dependencies: gzip & os
     '''
-    os.makedirs(out_dir, exist_ok=True) # Ensure the output directory exists
+    io.mkdir(out_dir) # Ensure the output directory exists
 
     if out_file.endswith(".fastq.gz"):
         with gzip.open(os.path.join(out_dir,out_file), 'wt') as out:
