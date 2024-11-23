@@ -65,43 +65,54 @@ def df_try_parse(df: pd.DataFrame):
     return df
 
 # Input methods
-def get(pt: str,typ='',**kwargs):
+def get(pt: str,literal_eval=False,**kwargs):
     ''' 
-    get(): returns pandas dataframe from a file.
-    (1) automatically detects and parses columns containing Python literals (e.g., dict, list, set, tuple) encoded as strings.
-    (2) recursively evaluates nested structures.
-
+    get(): returns pandas dataframe from a file
+    
     Parameters:    
     pt (str): file path
-    typ (str, optional): file type (can be determined from suffix)
+    literal_evals (bool, optional): convert Python literals encoded as strings (Default: False)
+        (1) automatically detects and parses columns containing Python literals (e.g., dict, list, set, tuple) encoded as strings
+        (2) recursively evaluates nested structures
+    **kwargs: pandas.read_csv() parameters
     
     Dependencies: pandas,ast,try_parse(),recursive_parse(),df_try_parse()
     '''
     suf = pt.split('.')[-1]
-    if (typ=='csv')|(suf=='csv'): return df_try_parse(pd.read_csv(filepath_or_buffer=pt,sep=',',**kwargs))
-    elif (typ=='tsv')|(suf=='tsv'): return df_try_parse(pd.read_csv(filepath_or_buffer=pt,sep='\t',**kwargs))
-    elif (typ=='excel')|(suf=='xlsx'): return {sheet_name:df_try_parse(pd.read_excel(pt,sheet_name,**kwargs))
-                                               for sheet_name in pd.ExcelFile(pt).sheet_names}
-    elif (typ=='html')|(suf=='html'): return df_try_parse(pd.read_html(pt,**kwargs))
-    elif typ=='': return df_try_parse(pd.read_csv(filepath_or_buffer=pt,**kwargs))
-    else: print("Error: Unknown typ specified")
-
-def get_dir(dir: str,suf='.csv',**kwargs):
+    if suf=='csv': 
+        if literal_eval: return df_try_parse(pd.read_csv(filepath_or_buffer=pt,sep=',',**kwargs))
+        else: pd.read_csv(filepath_or_buffer=pt,sep=',',**kwargs)
+    elif suf=='tsv': 
+        if literal_eval: return df_try_parse(pd.read_csv(filepath_or_buffer=pt,sep='\t',**kwargs))
+        else: pd.read_csv(filepath_or_buffer=pt,sep='\t',**kwargs)
+    elif suf=='xlsx': 
+        if literal_eval: return {sheet_name:df_try_parse(pd.read_excel(pt,sheet_name,**kwargs))
+                                 for sheet_name in pd.ExcelFile(pt).sheet_names}
+        else: {sheet_name:pd.read_excel(pt,sheet_name,**kwargs)
+                          for sheet_name in pd.ExcelFile(pt).sheet_names}
+    elif suf=='html': 
+        if literal_eval: return df_try_parse(pd.read_html(pt,**kwargs))
+        else: pd.read_html(pt,**kwargs)
+    else: 
+        if literal_eval: return df_try_parse(pd.read_csv(filepath_or_buffer=pt,**kwargs))
+        else: pd.read_csv(filepath_or_buffer=pt,**kwargs)
+    
+def get_dir(dir: str,suf='.csv',literal_eval=False,**kwargs):
     ''' 
     get_dir(): returns python dictionary of dataframe from files within a directory.
     
     Parameters:
     dir (str): directory path with files
     suf (str): file type suffix
+    literal_evals (bool, optional): convert Python literals encoded as strings (Default: False)
+        (1) automatically detects and parses columns containing Python literals (e.g., dict, list, set, tuple) encoded as strings
+        (2) recursively evaluates nested structures
+    **kwargs: pandas.read_csv() parameters
     
     Dependencies: pandas
     '''
-    files = os.listdir(dir)
-    csv_files = [file for file in files if file[-4:]==suf]
-    csvs = dict()
-    for csv_file in csv_files:
-        csvs[csv_file[:-len(suf)]] = get(pt=os.path.join(dir,csv_file),**kwargs)
-    return csvs
+    files = [file for file in os.listdir(dir) if file[-len(suf):]==suf]
+    return {file[:-len(suf)]:get(os.path.join(dir,file),literal_eval,**kwargs) for file in files}
 
 # Output methods
 def mkdir(dir: str, sep='/'):
