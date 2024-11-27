@@ -74,9 +74,9 @@ def difference(df: pd.DataFrame,data_col: str,compare_col: str,compare: list,sam
                 if p_value<alpha: null='reject'
                 else: null='fail to reject'
                 inference = pd.DataFrame({'test':['Student\'s T-test'],
-                                            'comparison': [','.join(compare)], 
-                                            'p_value': [p_value],
-                                            'null_hypothesis':[null]})
+                                          'comparison': [','.join(compare)], 
+                                          'p_value': [p_value],
+                                          'null_hypothesis':[null]})
                 
                 return inference
             

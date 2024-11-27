@@ -81,21 +81,21 @@ def get(pt: str,literal_eval=False,**kwargs):
     suf = pt.split('.')[-1]
     if suf=='csv': 
         if literal_eval: return df_try_parse(pd.read_csv(filepath_or_buffer=pt,sep=',',**kwargs))
-        else: pd.read_csv(filepath_or_buffer=pt,sep=',',**kwargs)
+        else: return pd.read_csv(filepath_or_buffer=pt,sep=',',**kwargs)
     elif suf=='tsv': 
         if literal_eval: return df_try_parse(pd.read_csv(filepath_or_buffer=pt,sep='\t',**kwargs))
-        else: pd.read_csv(filepath_or_buffer=pt,sep='\t',**kwargs)
+        else: return pd.read_csv(filepath_or_buffer=pt,sep='\t',**kwargs)
     elif suf=='xlsx': 
         if literal_eval: return {sheet_name:df_try_parse(pd.read_excel(pt,sheet_name,**kwargs))
                                  for sheet_name in pd.ExcelFile(pt).sheet_names}
-        else: {sheet_name:pd.read_excel(pt,sheet_name,**kwargs)
-                          for sheet_name in pd.ExcelFile(pt).sheet_names}
+        else: return {sheet_name:pd.read_excel(pt,sheet_name,**kwargs)
+                                 for sheet_name in pd.ExcelFile(pt).sheet_names}
     elif suf=='html': 
         if literal_eval: return df_try_parse(pd.read_html(pt,**kwargs))
-        else: pd.read_html(pt,**kwargs)
+        else: return pd.read_html(pt,**kwargs)
     else: 
         if literal_eval: return df_try_parse(pd.read_csv(filepath_or_buffer=pt,**kwargs))
-        else: pd.read_csv(filepath_or_buffer=pt,**kwargs)
+        else: return pd.read_csv(filepath_or_buffer=pt,**kwargs)
     
 def get_dir(dir: str,suf='.csv',literal_eval=False,**kwargs):
     ''' 

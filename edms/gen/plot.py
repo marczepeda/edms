@@ -13,6 +13,7 @@ from matplotlib.ticker import MaxNLocator
 import numpy as np
 from adjustText import adjust_text
 from ..gen import io
+from ..gen import tidy as t
 
 # Supporting methods
 def re_un_cap(input_string: str):
@@ -164,7 +165,7 @@ def formatter(typ:str,ax,df:pd.DataFrame,x:str,y:str,cols:str,file:str,dir:str,p
         
     if typ not in heats:
         # Set title
-        if title=='' and file is not None: title=re_un_cap(file[-4])
+        if title=='' and file is not None: title=re_un_cap(".".join(file.split(".")[:-1]))
         plt.title(title, fontsize=title_size, fontweight=title_weight)
         
         # Set x axis
@@ -638,7 +639,7 @@ def dist(typ: str,df: pd.DataFrame,x: str,cols=None,cols_ord=None,cols_exclude=N
             ax.set_xlabel(x_axis,fontsize=x_axis_size,fontweight=x_axis_weight)
         g.set(yticks=yticks, ylabel=y_axis)
         g.set_titles("")
-        if title=='' and file is not None: title=re_un_cap(file[-4])
+        if title=='' and file is not None: title=re_un_cap(".".join(file.split(".")[:-1]))
         g.figure.suptitle(title, fontsize=title_size, fontweight=title_weight)
         g.figure.subplots_adjust(top=tp,hspace=hs)
         if des==False: g.despine(top=False,right=False)
@@ -654,23 +655,16 @@ def dist(typ: str,df: pd.DataFrame,x: str,cols=None,cols_ord=None,cols_exclude=N
         print('Invalid type! hist, kde, hist_kde, rid')
         return
 
-def heat(typ: str,df: pd.DataFrame, x: str, y: str, vars='variable', vals='value',
-         file=None,dir=None,palette_or_cmap='colorblind',edgecol='black',lw=1,annot=False,cmap="Reds",sq=True,
-         title='',title_size=18,title_weight='bold',
+def heat(df: pd.DataFrame, x: str, y: str, vars='variable', vals='value',
+         file=None,dir=None,edgecol='black',lw=1,annot=False,cmap="Reds",sq=True,cbar=True,
+         title='',title_size=18,title_weight='bold',figsize=(10,6),
          x_axis='',x_axis_size=12,x_axis_weight='bold',x_ticks_rot=0,
          y_axis='',y_axis_size=12,y_axis_weight='bold',y_ticks_rot=0,
          show=True,**kwargs):
     '''
     heat(): creates heat plot related graphs.
 
-    Updates: 
-    Need to make split heat maps optional
-    Need to keep palette_or_cmap or cmap
-    Need to add figsize maybe.
-    Needs to be updated to be similar to edms.fastq.dms_grid()
-
     Parameters:
-    typ (str): plot type (ht)
     df (dataframe): pandas dataframe
     x (str): x-axis column name
     y (str): y-axis column name
@@ -678,77 +672,54 @@ def heat(typ: str,df: pd.DataFrame, x: str, y: str, vars='variable', vals='value
     vals (str, optional): value column name
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
-    palette_or_cmap (str, optional): seaborn color palette or matplotlib color map
     edgecol (str, optional): point edge color
     lw (int, optional): line width
     annot (bool, optional): annotate values
     cmap (str, optional): matplotlib color map
-    sq (bool, optional): square
+    sq (bool, optional): square dimensions (Default: True)
+    cbar (bool, optional): show colorbar (Default: True)
     title (str, optional): plot title
     title_size (int, optional): plot title font size
     title_weight (str, optional): plot title bold, italics, etc.
+    figsize (tuple, optional): figure size per subplot
     x_axis (str, optional): x-axis name
     x_axis_size (int, optional): x-axis name font size
     x_axis_weight (str, optional): x-axis name bold, italics, etc.
-    x_axis_scale (str, optional): x-axis scale linear, log, etc.
-    x_axis_dims (tuple, optional): x-axis dimensions (start, end)
     x_ticks_rot (int, optional): x-axis ticks rotation
-    xticks (list, optional): x-axis tick values
     y_axis (str, optional): y-axis name
     y_axis_size (int, optional): y-axis name font size
     y_axis_weight (str, optional): y-axis name bold, italics, etc.
-    y_axis_scale (str, optional): y-axis scale linear, log, etc.
-    y_axis_dims (tuple, optional): y-axis dimensions (start, end)
     y_ticks_rot (int, optional): y-axis ticks rotation
-    yticks (list, optional): y-axis tick values
-    legend_title (str, optional): legend title
-    legend_title_size (str, optional): legend title font size
-    legend_size (str, optional): legend font size
-    legend_bbox_to_anchor (tuple, optional): coordinates for bbox anchor
-    legend_loc (str): legend location
-    legend_ncol (tuple, optional): # of columns
     show (bool, optional): show plot (Default: True)
     
     Dependencies: os, matplotlib, seaborn, formatter(), re_un_cap(), & round_up_pow_10()
-    
-    Note: cannot set palette or cmap?
     '''
     # Find min and max values in the dataset for normalization
     vmin = df[vals].values.min()
     vmax = df[vals].values.max()
 
-    # Generates dictionary of pivot tables
-    pivots = extract_pivots(df=df,x=x,y=y,vars=vars,vals=vals)
-    pivots['colorbar']=pivots[next(iter(pivots))]
+    # Extract pivots
+    dc = extract_pivots(df=df,x=x,y=y,vars=vars,vals=vals)
 
     # Create a single figure with multiple heatmap subplots
-    fig, axes = plt.subplots(nrows=1,ncols=len(list(pivots.keys())),figsize=(pivots[next(iter(pivots))].shape[0]*len(list(pivots.keys())),pivots[next(iter(pivots))].shape[1]),sharex=True,sharey=True)
-    for i, (ax, subtitle) in enumerate(zip(axes, list(pivots.keys()))):
-        if i!=len(axes)-1: sns.heatmap(pivots[subtitle],annot=annot,cmap=cmap,square=sq,ax=ax,vmin=vmin,vmax=vmax,linecolor=edgecol,linewidths=lw,cbar=False) # No heatmap colorbar
-        else: # Add heatmap colorbar to the end
-            sns.heatmap(pivots[subtitle],annot=annot,cmap=cmap,ax=ax,vmin=vmin,vmax=vmax,linecolor=edgecol,linewidths=lw,cbar=True)
-            plt.gca().set_visible(False)
-        if len(list(pivots.keys()))>1: ax.set_title(subtitle,fontsize=x_axis_size,fontweight=x_axis_weight)  # Add title to subplot
-        else: ax.set_title(title,fontsize=x_axis_size,fontweight=x_axis_weight)
-        if i==0: # First heatmap subplot has x & y axes
-            if x_axis=='': ax.set_xlabel(re_un_cap(x),fontsize=x_axis_size,fontweight=x_axis_weight)
-            else: ax.set_xlabel(x_axis,fontsize=x_axis_size,fontweight=x_axis_weight)
-            if y_axis=='': ax.set_ylabel(re_un_cap(y),fontsize=y_axis_size,fontweight=y_axis_weight)
-            else: ax.set_ylabel(y_axis,fontsize=y_axis_size,fontweight=y_axis_weight)
-            ax.tick_params(axis='x',rotation=x_ticks_rot)
-            ax.tick_params(axis='y',rotation=y_ticks_rot)
-        else: # Remove redundant information from remaining heatmap subplots 
-            if x_axis=='': ax.set_xlabel(re_un_cap(x),fontsize=x_axis_size,fontweight=x_axis_weight)
-            else: ax.set_xlabel(x_axis,fontsize=x_axis_size,fontweight=x_axis_weight)
-            ax.set_ylabel('')
-            ax.tick_params(axis='x',rotation=x_ticks_rot)
+    fig, axes = plt.subplots(nrows=len(list(dc.keys())),ncols=1,figsize=(figsize[0],figsize[1]*len(list(dc.keys()))),sharex=False,sharey=True)
+    for (ax, key) in zip(axes, list(dc.keys())):
+        sns.heatmap(dc[key],annot=annot,cmap=cmap,ax=ax,linecolor=edgecol,linewidths=lw,cbar=cbar,square=sq,vmin=vmin,vmax=vmax, **kwargs)
+        if len(list(dc.keys()))>1: ax.set_title(key,fontsize=title_size,fontweight=title_weight)  # Add title to subplot
+        else: ax.set_title(title,fontsize=title_size,fontweight=title_weight)
+        if x_axis=='': ax.set_xlabel(re_un_cap(x),fontsize=x_axis_size,fontweight=x_axis_weight) # Add x axis label
+        else: ax.set_xlabel(x_axis,fontsize=x_axis_size,fontweight=x_axis_weight)
+        if y_axis=='': ax.set_ylabel(re_un_cap(y),fontsize=y_axis_size,fontweight=y_axis_weight) # Add y axis label
+        else: ax.set_ylabel(y_axis,fontsize=y_axis_size,fontweight=y_axis_weight)
+        plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, va='center', ha="right",rotation_mode="anchor") # Format x ticks
+        plt.setp(ax.get_yticklabels(), rotation=y_ticks_rot, va='center', ha="right",rotation_mode="anchor") # Format y ticks
         ax.set_facecolor('white')  # Set background to transparent
-
-    formatter(typ,ax,df,x,y,'cols',file,dir,palette_or_cmap,
-              title,title_size,title_weight,
-              x_axis,x_axis_size,x_axis_weight,'linear',(0,0),x_ticks_rot,
-              y_axis,y_axis_size,y_axis_weight,'linear',(0,0),y_ticks_rot,
-              '',12,9,(1,1),'upper left',(0,0),show)
+    
+    # Save & show fig
+    if file is not None and dir is not None:
+        io.mkdir(dir) # Make output directory if it does not exist
+        plt.savefig(fname=os.path.join(dir, file), dpi=600, bbox_inches='tight', format=f'{file.split(".")[-1]}')
+    if show: plt.show()
 
 def stack(df: pd.DataFrame,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord=[],
           file=None,dir=None,cmap='Set2',errcap=4,
@@ -806,7 +777,7 @@ def stack(df: pd.DataFrame,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord=[],
     df_pivot.plot(kind='bar',yerr=df_pivot_err,capsize=errcap, figsize=figsize,colormap=cmap,stacked=True,**kwargs)
 
     # Set title
-    if title=='' and file is not None: title=re_un_cap(file[-4])
+    if title=='' and file is not None: title=re_un_cap(".".join(file.split(".")[:-1]))
     plt.title(title, fontsize=title_size, fontweight=title_weight)
     
     # Set x axis
@@ -830,25 +801,25 @@ def stack(df: pd.DataFrame,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord=[],
         plt.savefig(fname=os.path.join(dir, file), dpi=600, bbox_inches='tight', format=f'{file.split(".")[-1]}')
     if show: plt.show()
 
-def vol(df: pd.DataFrame,x: str,y: str, stys=None,size=None,cols_exclude=None,
-        file=None,dir=None,palette_or_cmap='colorblind',edgecol='black',
+def vol(df: pd.DataFrame,x: str,y: str,stys:str=None, size:str=None,size_dims:tuple=None,
+        file=None,dir=None,palette_or_cmap='YlOrRd',edgecol='black',
         figsize=(10,6),title='',title_size=18,title_weight='bold',
-        x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_scale='linear',x_axis_dims=(0,0),x_ticks_rot=0,xticks=[],
-        y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_scale='linear',y_axis_dims=(0,0),y_ticks_rot=0,yticks=[],
-        legend_title='',legend_title_size=12,legend_size=9,legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_items=(0,0),legend_ncol=1,show=True,
+        x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_dims=(0,0),x_ticks_rot=0,xticks=[],
+        y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_dims=(0,0),y_ticks_rot=0,yticks=[],
+        legend_title='',legend_title_size=12,legend_size=9,legend_bbox_to_anchor=(1,1),legend_loc='upper left',
+        legend_items=(0,0),legend_ncol=1,display_size=True,display_labels=True,return_df=True,show=True,
         **kwargs):
     ''' 
     vol(): creates volcano plot
     
-    Work in progress...
-
     Parameters:
     df (dataframe): pandas dataframe
     x (str): x-axis column name
     y (str): y-axis column name
     cols (str, optional): color column name
-    stys (str, optional): styles column name
+    sty (str, optional): sty column name
     size (str, optional): size column name
+    size_dims (tuple, optional): (minimum,maximum) values in size column (Default: None)
     cols_exclude (list, optional): color column values exclude
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
@@ -861,14 +832,12 @@ def vol(df: pd.DataFrame,x: str,y: str, stys=None,size=None,cols_exclude=None,
     x_axis (str, optional): x-axis name
     x_axis_size (int, optional): x-axis name font size
     x_axis_weight (str, optional): x-axis name bold, italics, etc.
-    x_axis_scale (str, optional): x-axis scale linear, log, etc.
     x_axis_dims (tuple, optional): x-axis dimensions (start, end)
     x_ticks_rot (int, optional): x-axis ticks rotation
     xticks (list, optional): x-axis tick values
     y_axis (str, optional): y-axis name
     y_axis_size (int, optional): y-axis name font size
     y_axis_weight (str, optional): y-axis name bold, italics, etc.
-    y_axis_scale (str, optional): y-axis scale linear, log, etc.
     y_axis_dims (tuple, optional): y-axis dimensions (start, end)
     y_ticks_rot (int, optional): y-axis ticks rotation
     yticks (list, optional): y-axis tick values
@@ -878,120 +847,95 @@ def vol(df: pd.DataFrame,x: str,y: str, stys=None,size=None,cols_exclude=None,
     legend_bbox_to_anchor (tuple, optional): coordinates for bbox anchor
     legend_loc (str): legend location
     legend_ncol (tuple, optional): # of columns
+    display_size (bool, optional): display size on plot (Default: True)
+    display_labels (bool, optional): display labels for significant values (Default: True)
+    return_df (bool, optional): return dataframe (Default: True)
+    show (bool, optional): show plot (Default: True)
     
-    Dependencies: os, matplotlib, seaborn, formatter(), re_un_cap(), & round_up_pow_10()
+    Dependencies: os, matplotlib, seaborn, pandas, & edit_1()
     '''
     # Strings with subscripts
     log2 = 'log\u2082'
     log10 = 'log\u2081\u2080'
     
     # Log transform data
-    df[f'{log2}({x})'] = [-np.log10(xval)/np.log10(2) for xval in df[x]]
+    df[f'{log2}({x})'] = [np.log10(xval)/np.log10(2) for xval in df[x]]
     df[f'-{log10}({y})'] = [-np.log10(yval) for yval in df[y]]
     
     # Organize data by significance
     signif = []
     for (log2FC,log10P) in zip(df[f'{log2}({x})'],df[f'-{log10}({y})']):
-        if (np.abs(log2FC)>1)&(log10P>-np.log10(0.05)): signif.append(f'{log2}FC & p-value')
+        if (np.abs(log2FC)>1)&(log10P>-np.log10(0.05)): signif.append(f'FC & p-value')
         elif (np.abs(log2FC)<=1)&(log10P>-np.log10(0.05)): signif.append('p-value')
-        elif (np.abs(log2FC)>1)&(log10P<=-np.log10(0.05)): signif.append(f'{log2}FC')
+        elif (np.abs(log2FC)>1)&(log10P<=-np.log10(0.05)): signif.append('FC')
         else: signif.append('NS')
     df['Significance']=signif
-    signif_order = ['NS',f'{log2}FC','p-value',f'{log2}FC & p-value']
+    signif_order = ['NS','FC','p-value','FC & p-value']
 
-    # Organize data by conservation
+    # Organize data by abundance
+    sizes=(1,100)
+    if size_dims is not None: df = df[(df[size]>=size_dims[0])&(df[size]<=size_dims[1])]
 
     # Set dimensions
     if x_axis_dims==(0,0): x_axis_dims=(min(df[f'{log2}({x})']),max(df[f'{log2}({x})']))
     if y_axis_dims==(0,0): y_axis_dims=(0,max(df[f'-{log10}({y})']))
 
     # Generate figure
-    fig, ax = plt.subplots(figsize=(5,5))
+    fig, ax = plt.subplots(figsize=figsize)
     
     # with significance boundraries
     plt.vlines(x=-1, ymin=y_axis_dims[0], ymax=y_axis_dims[1], colors='k', linestyles='dashed', linewidth=1)
     plt.vlines(x=1, ymin=y_axis_dims[0], ymax=y_axis_dims[1], colors='k', linestyles='dashed', linewidth=1)
     plt.hlines(y=-np.log10(0.05), xmin=x_axis_dims[0], xmax=x_axis_dims[1], colors='k', linestyles='dashed', linewidth=1)
     
-    # and with data
-    sns.scatterplot(data=df, x=f'{log2}({x})', y=f'-{log10}({y})', hue='Significance', hue_order=signif_order, edgecolor=edgecol, palette='YlOrRd', ax=ax, **kwargs)
+    # with data
+    if display_size==False: size=None
+    sns.scatterplot(data=df, x=f'{log2}({x})', y=f'-{log10}({y})', 
+                    hue='Significance', hue_order=signif_order, 
+                    edgecolor=edgecol, palette=palette_or_cmap, style=stys,
+                    size=size, sizes=sizes,
+                    ax=ax, **kwargs)
+    
+    # with labels
+    if display_labels:
+        df_signif = df[df['Significance']=='FC & p-value']
+        adjust_text([plt.text(x=df_signif.iloc[i][f'{log2}({x})'], 
+                              y=df_signif.iloc[i][f'-{log10}({y})'],
+                              s=edit) for i,edit in enumerate(df_signif['edit'])])
+
+    # Set title
+    if title=='' and file is not None: title=p.re_un_cap(file[-4])
+    plt.title(title, fontsize=title_size, fontweight=title_weight)
+    
+    # Set x axis
+    if x_axis=='': x_axis=f'{log2}({x})'
+    plt.xlabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight)
+    if xticks==[]: 
+        if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(rotation=x_ticks_rot,ha='center')
+        else: plt.xticks(rotation=x_ticks_rot,ha='right')
+    else: 
+        if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(ticks=xticks,labels=xticks,rotation=x_ticks_rot, ha='center')
+        else: plt.xticks(ticks=xticks,labels=xticks,rotation=x_ticks_rot,ha='right')
+
+    # Set y axis
+    if y_axis=='': y_axis=f'-{log10}({y})'
+    plt.ylabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight)
+
+    if yticks==[]: plt.yticks(rotation=y_ticks_rot)
+    else: plt.yticks(ticks=yticks,labels=yticks,rotation=y_ticks_rot)
 
     # Move legend to the right of the graph
-    ax.legend(title=legend_title,title_fontsize=legend_title_size,fontsize=legend_size,
-              bbox_to_anchor=legend_bbox_to_anchor,loc=legend_loc,ncol=legend_ncol)
+    if legend_items==(0,0): ax.legend(title=legend_title,title_fontsize=legend_title_size,fontsize=legend_size,
+                                        bbox_to_anchor=legend_bbox_to_anchor,loc=legend_loc,ncol=legend_ncol)
+    else: 
+        handles, labels = ax.get_legend_handles_labels()
+        ax.legend(title=legend_title,title_fontsize=legend_title_size,fontsize=legend_size,
+                  bbox_to_anchor=legend_bbox_to_anchor,loc=legend_loc,ncol=legend_ncol, # Move right of the graph
+                  handles=handles[legend_items[0]:legend_items[1]],labels=labels[legend_items[0]:legend_items[1]]) # Only retains specified labels
 
-# Color display methods
-def matplotlib_cmaps():
-    ''' 
-    matplotlib_cmaps(): view all matplotlib color maps
-    
-    Dependencies: matplotlib & numpy
-    '''
-    # Get the list of all available colormaps
-    cmaps = plt.colormaps()
-
-    # Create some data to display the colormaps
-    gradient = np.linspace(0, 1, 256)
-    gradient = np.vstack((gradient, gradient))
-
-    # Define how many colormaps to show per row
-    n_col = 4
-    n_row = len(cmaps) // n_col + 1
-
-    # Create a figure to display the colormaps
-    fig, axes = plt.subplots(n_row, n_col, figsize=(12, 15))
-    axes = axes.flatten()
-
-    # Loop through all colormaps and display them
-    for i, cmap in enumerate(cmaps):
-        ax = axes[i]
-        ax.imshow(gradient, aspect='auto', cmap=plt.get_cmap(cmap))
-        ax.set_title(cmap, fontsize=8)
-        ax.axis('off')
-
-    # Turn off any unused subplots
-    for j in range(i+1, len(axes)):
-        axes[j].axis('off')
-
-    # Display plot
-    plt.tight_layout()
-    plt.show()
-
-def seaborn_palettes():
-    ''' 
-    seaborn_palettes(): view all seaborn color palettes
-    
-    Dependencies: matplotlib & seaborn
-    '''
-    # List of common Seaborn palettes
-    palettes = [
-        "deep", "muted", "bright", "pastel", "dark", "colorblind",
-        "husl", "hsv", "Paired", "Set1", "Set2", "Set3", "tab10", "tab20"
-    ]
-    
-    # Create a figure to display the color palettes
-    n_col = 2  # Palettes per row
-    n_row = len(palettes) // n_col + 1
-    fig, axes = plt.subplots(n_row, n_col, figsize=(10, 8))
-    axes = axes.flatten()
-
-    # Loop through the palettes and display them
-    for i, palette in enumerate(palettes):
-        ax = axes[i]
-        colors = sns.color_palette(palette, 10)  # Get the palette with 10 colors
-        # Plot the colors as a series of rectangles (like palplot)
-        for j, color in enumerate(colors):
-            ax.add_patch(plt.Rectangle((j, 0), 1, 1, color=color))
-        
-        ax.set_xlim(0, len(colors))
-        ax.set_ylim(0, 1)
-        ax.set_title(palette, fontsize=12)
-        ax.axis('off')
-
-    # Turn off any unused subplots
-    for j in range(i + 1, len(axes)):
-        axes[j].axis('off')
-
-    # Display plot
-    plt.tight_layout()
-    plt.show()
+    # Save & show fig; return dataframe
+    if file is not None and dir is not None:
+        io.mkdir(dir) # Make output directory if it does not exist
+        plt.savefig(fname=os.path.join(dir, file), dpi=600, bbox_inches='tight', format=f'{file.split(".")[-1]}')
+    if show: plt.show()
+    if return_df: return df     
