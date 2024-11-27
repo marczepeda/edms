@@ -1909,7 +1909,7 @@ def stack(df: pd.DataFrame,x='sample',y='fraction',cols='edit',cutoff=0.01,cols_
             legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,
             legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_ncol=legend_ncol,show=show,**kwargs)
 
-def heat(df: pd.DataFrame, cond: str,x='number',y='after',vals='fraction_avg',
+def heat(df: pd.DataFrame, cond: str,x='number',y='after',vals='fraction_avg',vals_dims:tuple=None,
          file=None,dir=None,edgecol='black',lw=1,annot=False,cmap="bone_r",sq=True,cbar=True,
          title='',title_size=12,title_weight='bold',figsize=(20,7),
          x_axis='',x_axis_size=12,x_axis_weight='bold',x_ticks_rot=45,
@@ -1923,6 +1923,7 @@ def heat(df: pd.DataFrame, cond: str,x='number',y='after',vals='fraction_avg',
     x (str, optional): x-axis column name (AA residues number column)
     y (str, optional): y-axis column name (AA change column)
     vals (str, optional): values column name
+    vals_dims (tuple, optional): vals minimum and maximum formatted (vmin, vmax; Default: None)
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     edgecol (str, optional): point edge color
@@ -1946,8 +1947,12 @@ def heat(df: pd.DataFrame, cond: str,x='number',y='after',vals='fraction_avg',
     Dependencies: matplotlib, seaborn, pandas, & aa_props
     '''
     # Find min and max values in the dataset for normalization
-    vmin = df[vals].values.min()
-    vmax = df[vals].values.max()
+    if vals_dims is None:
+        vmin = df[vals].values.min()
+        vmax = df[vals].values.max()
+    else:
+        vmin = vals_dims[0]
+        vmax = vals_dims[1]
 
     # Make DMS grids
     print('Make DMS grids')
@@ -1958,6 +1963,7 @@ def heat(df: pd.DataFrame, cond: str,x='number',y='after',vals='fraction_avg',
     # Create a single figure with multiple heatmap subplots
     print('Create a single figure with multiple heatmap subplots')
     fig, axes = plt.subplots(nrows=len(list(dc2.keys())),ncols=1,figsize=(figsize[0],figsize[1]*len(list(dc2.keys()))),sharex=False,sharey=True)
+    if isinstance(axes, np.ndarray)==False: axes = np.array([axes]) # Make axes iterable if there is only 1 heatmap
     for (ax, key) in zip(axes, list(dc2.keys())):
         print(f'{key}')
         sns.heatmap(dc2[key],annot=annot,cmap=cmap,ax=ax,linecolor=edgecol,linewidths=lw,cbar=cbar,square=sq,vmin=vmin,vmax=vmax, **kwargs)
@@ -1978,7 +1984,7 @@ def heat(df: pd.DataFrame, cond: str,x='number',y='after',vals='fraction_avg',
         plt.savefig(fname=os.path.join(dir, file), dpi=600, bbox_inches='tight', format=f'{file.split(".")[-1]}')
     if show: plt.show()
 
-def vol(df: pd.DataFrame,x: str,y: str,size:str=None,size_dims:tuple=None,
+def vol(df: pd.DataFrame,x: str,y: str,size:str=None,size_dims:tuple=None,include_wt=False,
         file=None,dir=None,palette_or_cmap='YlOrRd',edgecol='black',
         figsize=(10,6),title='',title_size=18,title_weight='bold',
         x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_dims=(0,0),x_ticks_rot=0,xticks=[],
@@ -1996,7 +2002,7 @@ def vol(df: pd.DataFrame,x: str,y: str,size:str=None,size_dims:tuple=None,
     cols (str, optional): color column name
     size (str, optional): size column name
     size_dims (tuple, optional): (minimum,maximum) values in size column (Default: None)
-    cols_exclude (list, optional): color column values exclude
+    include_wt (bool, optional): include wildtype (Default: False)
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     palette_or_cmap (str, optional): seaborn color palette or matplotlib color map
@@ -2066,6 +2072,11 @@ def vol(df: pd.DataFrame,x: str,y: str,size:str=None,size_dims:tuple=None,
 
     sty_order = ['Conserved','Basic','Acidic','Polar','Nonpolar']
     mark_order = ['D','^','v','<','>']
+
+    # Remove wildtype
+    if include_wt==False:
+        wt_i = [i for i,(before,after) in enumerate(t.zip_cols(df=df,cols=['before','after'])) if before == after]
+        df = df.drop(wt_i,axis=0).reset_index(drop=True)
 
     # Organize data by abundance
     sizes=(1,100)
