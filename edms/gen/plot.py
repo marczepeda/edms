@@ -808,121 +808,7 @@ def stack(df: pd.DataFrame,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord=[],
         plt.savefig(fname=os.path.join(dir, file), dpi=600, bbox_inches='tight', format=f'{file.split(".")[-1]}')
     if show: plt.show()
 
-def cond_comp(df: pd.DataFrame, cond: str, cond_comp: str, wt:str, res: int, sample='sample', edit='edit', psuedocount=1):
-    ''' 
-    cond_comp(): returns DMS grid data in tidy format grouped by condition
-    
-    Need to update to be generalized to any dataset; test case Idris proteomics
-
-    Parameters:
-    df (dataframe): fastq outcomes dataframe
-    cond (str): Condition column name for grouping fastq outcomes dataframe
-    cond_comp (str): Condition for comparison group
-    wt (str): Expected wildtype nucleotide sequence (in frame AA)
-    res (int): First AA number
-    sample (str, optional): Sample column name for splicing fastq outcomes dataframe (Default: 'sample')
-    edit (str, optional): Edit column name within fastq outcomes dataframe (Default: 'edit')
-    psuedocount (int, optional): psuedocount to avoid log(0) & /0 (Default: 1)
-    
-    Dependencies: Bio.Seq.Seq, pandas, numpy, tidy, edit_1(), dms_cond(), & aa_props
-    '''
-    #wt_nums = np.arange(res,res+len(wt_prot))
-    print('Isolate single aa change fastq outcomes')
-    dc=t.split((df),sample) # Isolate single aa change fastq outcomes and split by sample
-    
-    print('Fill with DMS grid data for each sample:')
-    dc2=dict() # Fill with DMS grid data in tidy format split by sample
-    for key_sample,df_sample in dc.items():
-        print(key_sample)
-        wt_fastq = df[(df['edit']=='WT')&(df[sample]==key_sample)] # Obtain WT fastq outcome
-        df_sample_DMS=pd.DataFrame(columns=wt_fastq.columns) # Fill with DMS grid data in tidy format
-        '''
-        for num in wt_nums: # Iterate through WT protein sequence
-            vals=dict() # Create dictionary with all amino acid changes for a given residue
-            
-            # Add metadata that is the same for all genotypes
-            meta = [x for x in df_sample.columns if x not in [edit,'count','fraction','before','after','number']]
-            for m in meta: 
-                vals[m]=[wt_fastq[m].to_list()[0]]*len(list(aa_props.keys()))
-            
-            # Create all amino acid changes
-            vals['before']=[wt_prot[num-res]]*len(list(aa_props.keys()))
-            vals['number']=[num]*len(list(aa_props.keys()))
-            vals['after']=list(aa_props.keys())
-            vals[edit]=[vals['before'][i]+str(num)+vals['after'][i] for i in range(len(vals['after']))]
-
-            # Fill in counts (+ psuedocount) for amino acid changes, WT, and none
-            counts=[]
-            num_mut = df_sample[df_sample['number']==num]
-            for a in vals['after']:
-                if a == wt_prot[num-res]: counts.append(wt_fastq['count'].to_list()[0]+psuedocount) # Wild type
-                elif a in num_mut['after'].to_list(): counts.append(num_mut[num_mut['after']==a]['count'].to_list()[0]+psuedocount) # Amino acid change present
-                else: counts.append(psuedocount) # Amino acid change absent
-            vals['count']=counts
-            sum_counts = sum(vals['count'])
-            vals['fraction']=[count/sum_counts for count in vals['count']]
-
-            df_sample_DMS = pd.concat([df_sample_DMS,pd.DataFrame(vals)]).reset_index(drop=True) # Append residue DMS data
-        '''
-        df_sample_DMS['number']=df_sample_DMS['number'].astype(int) # Set number as type int
-        df_sample_DMS['count']=df_sample_DMS['count'].astype(int) # Set count as type int for plotting
-
-        df_sample_DMS[sample] = [key_sample]*df_sample_DMS.shape[0]
-        dc2[key_sample]=df_sample_DMS # Append sample DMS data
-
-    print('Group samples by condition:')
-    dc3=t.split(t.join(dc2,sample),cond) # Join samples back into 1 dataframe & split by condition
-    df_cond_stat = pd.DataFrame()
-    for key_cond,df_cond in dc3.items(): # Iterate through conditions
-        print(key_cond)
-        edit_ls = []
-        fraction_avg_ls = []
-        fraction_ls = []
-        count_avg_ls = []
-        before_ls = []
-        after_ls = []
-        number_ls = []
-        for e in df_cond[edit]: # iterate through edits
-            df_cond_edit = df_cond[df_cond[edit]==e]
-            edit_ls.append(e)
-            fraction_avg_ls.append(sum(df_cond_edit['fraction'])/len(df_cond_edit['fraction']))
-            fraction_ls.append(df_cond_edit['fraction'].tolist())
-            count_avg_ls.append(sum(df_cond_edit['count'])/len(df_cond_edit['count']))
-            before_ls.append(df_cond_edit.iloc[0]['before'])
-            after_ls.append(df_cond_edit.iloc[0]['after'])
-            number_ls.append(df_cond_edit.iloc[0]['number'])
-        df_cond_stat = pd.concat([df_cond_stat,
-                                  pd.DataFrame({'edit':edit_ls,
-                                                'before':before_ls,
-                                                'after':after_ls,
-                                                'number':number_ls,
-                                                'fraction_ls':fraction_ls,
-                                                'fraction_avg':fraction_avg_ls,
-                                                'count_avg':count_avg_ls,
-                                                cond:[key_cond]*len(number_ls)})])
-    df_cond_stat = df_cond_stat.drop_duplicates(subset=['edit','Description']).reset_index(drop=True)
-
-    # Fold change & p-value relative comparison group
-    print(f'Compute FC & pval relative to {cond_comp}:')
-    df_stat = pd.DataFrame()
-    df_comp = df_cond_stat[df_cond_stat[cond]==cond_comp] # Isolate comparison group
-    df_other = df_cond_stat[df_cond_stat[cond]!=cond_comp] # From other groups
-    for e in set(df_other[edit].tolist()): # iterate through edits
-        print(f'{e}')
-        df_other_edit = df_other[df_other[edit]==e]
-        df_comp_edit = df_comp[df_comp[edit]==e]
-        df_other_edit['fraction_avg_compare'] = [df_comp_edit.iloc[0]['fraction_avg']]*df_other_edit.shape[0]
-        df_other_edit['count_avg_compare'] = [df_comp_edit.iloc[0]['count_avg']]*df_other_edit.shape[0]
-        df_other_edit['FC'] = df_other_edit['fraction_avg']/df_comp_edit.iloc[0]['fraction_avg']
-        ttests = [ttest_ind(other_fraction_ls,df_comp_edit.iloc[0]['fraction_ls']) 
-                                 for other_fraction_ls in df_other_edit['fraction_ls']]
-        df_other_edit['pval'] = [ttest[1] for ttest in ttests]
-        df_other_edit['tstat'] = [ttest[0] for ttest in ttests]
-        df_stat = pd.concat([df_stat,df_other_edit])
-    df_stat['compare'] = [cond_comp]*df_stat.shape[0]
-    return df_stat[[edit,'before','after','number','FC','pval','tstat','fraction_avg','fraction_avg_compare','count_avg','count_avg_compare',cond,'compare']].sort_values(by=['number','after']).reset_index(drop=True) 
-
-def vol(df: pd.DataFrame,x: str,y: str,stys:str=None, size:str=None,size_dims:tuple=None,
+def vol(df: pd.DataFrame,x: str,y: str,stys:str=None, size:str=None,size_dims:tuple=None,label:str=None,
         file=None,dir=None,palette_or_cmap='YlOrRd',edgecol='black',
         figsize=(10,6),title='',title_size=18,title_weight='bold',
         x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_dims=(0,0),x_ticks_rot=0,xticks=[],
@@ -941,6 +827,7 @@ def vol(df: pd.DataFrame,x: str,y: str,stys:str=None, size:str=None,size_dims:tu
     sty (str, optional): sty column name
     size (str, optional): size column name
     size_dims (tuple, optional): (minimum,maximum) values in size column (Default: None)
+    label (str, optional): label column name
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     palette_or_cmap (str, optional): seaborn color palette or matplotlib color map
@@ -1017,14 +904,14 @@ def vol(df: pd.DataFrame,x: str,y: str,stys:str=None, size:str=None,size_dims:tu
                     ax=ax, **kwargs)
     
     # with labels
-    if display_labels:
+    if (display_labels==True) and label is not None:
         df_signif = df[df['Significance']=='FC & p-value']
         adjust_text([plt.text(x=df_signif.iloc[i][f'{log2}({x})'], 
                               y=df_signif.iloc[i][f'-{log10}({y})'],
-                              s=edit) for i,edit in enumerate(df_signif['edit'])])
+                              s=lab) for i,lab in enumerate(df_signif[label])])
 
     # Set title
-    if title=='' and file is not None: title=p.re_un_cap(file[-4])
+    if title=='' and file is not None: title=re_un_cap(file[-4])
     plt.title(title, fontsize=title_size, fontweight=title_weight)
     
     # Set x axis

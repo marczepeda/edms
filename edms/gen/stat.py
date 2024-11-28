@@ -9,6 +9,7 @@ from scipy.stats import skew, kurtosis, ttest_ind, ttest_rel, f_oneway, ttest_in
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
 from statsmodels.stats.anova import AnovaRM
 from statsmodels.stats.multitest import multipletests
+from ..gen import tidy as t
 
 # Statistics methods
 def describe(df: pd.DataFrame, cols=[], group=''):
@@ -232,3 +233,75 @@ def correlation(df: pd.DataFrame, var_cols=[], value_cols=[], method='pearson',n
     if (len(var_cols)==2)&(len(value_cols)==1): df = df.pivot(index=var_cols[0],columns=var_cols[1],values=value_cols[0]) # Splits tidy dataframe
     elif len(value_cols)>=1: df = df[value_cols] # Isolate specified columns for non-tidy dataframe
     return df.corr(method=method,numeric_only=numeric_only) # Correlation matrix with specified method
+
+# Comparison methods
+def compare(df: pd.DataFrame, sample: str, cond: str, cond_comp: str, var: str, count: str, psuedocount=1):
+    ''' 
+    compare(): computes FC, pval, and log transformations relative to a specified condition
+
+    Parameters:
+    df (dataframe): tidy dataframe
+    sample (str): sample column name
+    cond (str): condition column name
+    cond_comp (str): condition for comparison group
+    var (str): variable column name
+    count (str): count column name
+    psuedocount (int, optional): psuedocount to avoid log(0) & /0 (Default: 1)
+    
+    Dependencies: Bio.Seq.Seq, pandas, numpy, tidy, edit_1(), dms_cond(), & aa_props
+    '''
+    # Get metadata
+    meta_cols = list(df.columns)
+    meta_cols.remove(count)
+
+    print(f'Add psuedocount ({psuedocount}) to avoid log(0) & compute fraction')
+    df[f'{count}+{psuedocount}'] = df[count]+psuedocount
+    dc = t.split(df=df,key=sample)
+    for s,df_sample in dc.items():
+        count_total = sum(df_sample[count])
+        dc[s]['fraction']=[c/count_total for c in df_sample[count]]
+
+    print('Group samples by condition & compute averages')
+    df_cond_stat = pd.DataFrame()
+    # Define aggregation dictionary dynamically
+    agg_dict = {count: 'mean', 
+                f'{count}+{psuedocount}': 'mean',
+                'fraction': ['mean',list]} # Include both mean and list of original values
+    for col in meta_cols: # Add metadata columns to be aggregated as sets
+        agg_dict[col] = lambda x: set(x)
+
+    # Join samples back into 1 dataframe and split by condition
+    for c,df_cond in t.split(df=t.join(dc=dc,col=sample),key=cond).items(): # Iterate through conditions
+        print(c)
+        # Group by variable and aggregate
+        df_cond_agg = df_cond.groupby(by=var).agg(agg_dict).reset_index(drop=True)
+        df_cond_agg.columns = ['_'.join(col).strip('_') for col in df_cond_agg.columns] # Flatten multi-level column names
+        for col in df_cond_agg.columns: # Change metadata sets to comma-seperated strings or lists
+            if '_<lambda>' in col: 
+                if isinstance(list(df_cond_agg.iloc[0][col])[0],str): df_cond_agg[col] = [','.join(sorted(s)) for s in df_cond_agg[col]]
+                else: df_cond_agg[col] = [sorted(s) for s in df_cond_agg[col]]
+        df_cond_agg.columns = df_cond_agg.columns.str.replace('_<lambda>', '', regex=True) # Remove '_<lambda>' in column names
+        df_cond_agg[cond]=c
+        df_cond_stat = pd.concat([df_cond_stat,df_cond_agg]).reset_index(drop=True)
+    
+    # Fold change & p-value relative comparison group
+    print(f'Compute FC & pval relative to {cond_comp}:')
+    df_stat = pd.DataFrame()
+    df_comp = df_cond_stat[df_cond_stat[cond]==cond_comp] # Isolate comparison group
+    df_other = df_cond_stat[df_cond_stat[cond]!=cond_comp] # From other groups
+    for v in set(df_other[var].tolist()): # iterate through variables
+        print(f'{v}')
+        df_other_edit = df_other[df_other[var]==v]
+        df_comp_edit = df_comp[df_comp[var]==v]
+        df_other_edit[f'{count}_mean_compare'] = [df_comp_edit.iloc[0][f'{count}_mean']]*df_other_edit.shape[0]
+        df_other_edit[f'{count}+{psuedocount}_mean_compare'] = [df_comp_edit.iloc[0][f'{count}+{psuedocount}_mean']]*df_other_edit.shape[0]
+        df_other_edit['fraction_mean_compare'] = [df_comp_edit.iloc[0]['fraction_mean']]*df_other_edit.shape[0]
+        df_other_edit['FC'] = df_other_edit['fraction_mean']/df_comp_edit.iloc[0]['fraction_mean']
+        ttests = [ttest_ind(list(other_fraction_ls),list(df_comp_edit.iloc[0]['fraction_list'])) 
+                                 for other_fraction_ls in df_other_edit['fraction_list']]
+        df_other_edit['pval'] = [ttest[1] for ttest in ttests]
+        df_other_edit['tstat'] = [ttest[0] for ttest in ttests]
+        df_stat = pd.concat([df_stat,df_other_edit])
+    df_stat['compare'] = [cond_comp]*df_stat.shape[0]
+
+    return df_stat.sort_values(by=[cond,var]).reset_index(drop=True) 
