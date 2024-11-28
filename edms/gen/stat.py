@@ -277,8 +277,11 @@ def compare(df: pd.DataFrame, sample: str, cond: str, cond_comp: str, var: str, 
         df_cond_agg = df_cond.groupby(by=var).agg(agg_dict).reset_index(drop=True)
         df_cond_agg.columns = ['_'.join(col).strip('_') for col in df_cond_agg.columns] # Flatten multi-level column names
         for col in df_cond_agg.columns: # Change metadata sets to comma-seperated strings or lists
-            if '_<lambda>' in col: 
-                if isinstance(list(df_cond_agg.iloc[0][col])[0],str): df_cond_agg[col] = [','.join(sorted(s)) for s in df_cond_agg[col]]
+            if '_<lambda>' in col:
+                if all(isinstance(item, str) for item in df_cond_agg.iloc[0][col]): 
+                    ls = [] # Handling columns with str & other datatypes
+                    for s in df_cond_agg[col]: ls.append([s_ if isinstance(s_,str) else str(s_) for s_ in s])
+                    df_cond_agg[col] = [','.join(sorted(l)) for l in ls] # Sort list and join
                 else: df_cond_agg[col] = [sorted(s) for s in df_cond_agg[col]]
         df_cond_agg.columns = df_cond_agg.columns.str.replace('_<lambda>', '', regex=True) # Remove '_<lambda>' in column names
         df_cond_agg[cond]=c
