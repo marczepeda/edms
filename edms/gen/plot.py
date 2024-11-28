@@ -809,7 +809,7 @@ def stack(df: pd.DataFrame,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord=[],
     if show: plt.show()
 
 def vol(df: pd.DataFrame,x: str,y: str,stys:str=None, size:str=None,size_dims:tuple=None,label:str=None,
-        file=None,dir=None,palette_or_cmap='YlOrRd',edgecol='black',
+        FC_threshold=2, pval_threshold=0.05, file=None,dir=None,palette_or_cmap='YlOrRd',edgecol='black',
         figsize=(10,6),title='',title_size=18,title_weight='bold',
         x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_dims=(0,0),x_ticks_rot=0,xticks=[],
         y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_dims=(0,0),y_ticks_rot=0,yticks=[],
@@ -828,6 +828,8 @@ def vol(df: pd.DataFrame,x: str,y: str,stys:str=None, size:str=None,size_dims:tu
     size (str, optional): size column name
     size_dims (tuple, optional): (minimum,maximum) values in size column (Default: None)
     label (str, optional): label column name
+    FC_threshold (float, optional): fold change threshold (Default: 2; log2(2)=1)
+    pval_threshold (float, optional): p-value threshold (Default: 0.05; -log10(0.05)=1.3)
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     palette_or_cmap (str, optional): seaborn color palette or matplotlib color map
@@ -872,9 +874,9 @@ def vol(df: pd.DataFrame,x: str,y: str,stys:str=None, size:str=None,size_dims:tu
     # Organize data by significance
     signif = []
     for (log2FC,log10P) in zip(df[f'{log2}({x})'],df[f'-{log10}({y})']):
-        if (np.abs(log2FC)>1)&(log10P>-np.log10(0.05)): signif.append(f'FC & p-value')
-        elif (np.abs(log2FC)<=1)&(log10P>-np.log10(0.05)): signif.append('p-value')
-        elif (np.abs(log2FC)>1)&(log10P<=-np.log10(0.05)): signif.append('FC')
+        if (np.abs(log2FC)>=np.log10(FC_threshold)/np.log10(2))&(log10P>=-np.log10(pval_threshold)): signif.append(f'FC & p-value')
+        elif (np.abs(log2FC)<np.log10(FC_threshold)/np.log10(2))&(log10P>=-np.log10(pval_threshold)): signif.append('p-value')
+        elif (np.abs(log2FC)>=np.log10(FC_threshold)/np.log10(2))&(log10P<-np.log10(pval_threshold)): signif.append('FC')
         else: signif.append('NS')
     df['Significance']=signif
     signif_order = ['NS','FC','p-value','FC & p-value']
@@ -891,9 +893,9 @@ def vol(df: pd.DataFrame,x: str,y: str,stys:str=None, size:str=None,size_dims:tu
     fig, ax = plt.subplots(figsize=figsize)
     
     # with significance boundraries
-    plt.vlines(x=-1, ymin=y_axis_dims[0], ymax=y_axis_dims[1], colors='k', linestyles='dashed', linewidth=1)
-    plt.vlines(x=1, ymin=y_axis_dims[0], ymax=y_axis_dims[1], colors='k', linestyles='dashed', linewidth=1)
-    plt.hlines(y=-np.log10(0.05), xmin=x_axis_dims[0], xmax=x_axis_dims[1], colors='k', linestyles='dashed', linewidth=1)
+    plt.vlines(x=-np.log10(FC_threshold)/np.log10(2), ymin=y_axis_dims[0], ymax=y_axis_dims[1], colors='k', linestyles='dashed', linewidth=1)
+    plt.vlines(x=np.log10(FC_threshold)/np.log10(2), ymin=y_axis_dims[0], ymax=y_axis_dims[1], colors='k', linestyles='dashed', linewidth=1)
+    plt.hlines(y=-np.log10(pval_threshold), xmin=x_axis_dims[0], xmax=x_axis_dims[1], colors='k', linestyles='dashed', linewidth=1)
     
     # with data
     if display_size==False: size=None
