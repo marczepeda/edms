@@ -59,11 +59,12 @@
 ### Update
 1. Enter environment & delete edms: write the following in a command line terminal...
     - cd ~
-    - conda activate edms_env
-    - mkdir git
     - cd git
+    - conda activate edms_env
+    - pip uninstall edms
+        - Enter 'Y' when prompted
     - rm -r edms
-        - Enter 'y' three times to completely remove the folder
+        - Enter 'Y' three times to completely remove the folder
 2. Install edms: write the following in a command line terminal...
     - git clone https://github.com/marczepeda/edms.git
     - cd edms
