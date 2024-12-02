@@ -21,7 +21,7 @@
 - See https://github.com/marczepeda/edms_ex
 
 ## Instructions
-### Clone (Option 1)
+### Install
 1. Download Anaconda.
     - Mac: https://docs.anaconda.com/anaconda/install/mac-os/
     - Windows: https://docs.anaconda.com/anaconda/install/windows/
@@ -29,39 +29,47 @@
 2. Download Git: https://github.com/git-guides/install-git
     - Check using command line terminal: git version
 3. Download Docker. https://www.docker.com/
-4. Write the following in a command line terminal:
+4. Make environment: write the following in a command line terminal...
     - cd ~
     - conda create --name emds_env python=3.11.5
         - When conda asks you to proceed, type "y" 
     - conda activate edms_env
     - mkdir git
     - cd git
+5. Download dependencies: write the following in a command line terminal...
+    - conda install pip
+    - conda install conda-forge::biopython
+    - pip install -U scikit-learn
+        - Also, installs numpy, pandas, matplotlib, seaborn, scipy.
+    - conda install -c conda-forge statsmodels
+    - conda install anaconda::requests
+    - conda install bioconda::viennarna
+    - conda install conda-forge::python-levenshtein
+    - conda install conda-forge::adjusttext
+    - conda install anaconda::git
+6. Install edms: write the following in a command line terminal...
     - git clone https://github.com/marczepeda/edms.git
     - cd edms
     - pip install -e .
         - Include the "."
     - docker pull pinellolab/primedesign
         - Docker desktop app needs to be open
+    - conda deactivate
 
-### Install (Option 2)
-1. Download Anaconda.
-    - Mac: https://docs.anaconda.com/anaconda/install/mac-os/
-    - Windows: https://docs.anaconda.com/anaconda/install/windows/
-    - Linux: https://docs.anaconda.com/anaconda/install/linux/
-2. Download Git: https://github.com/git-guides/install-git
-    - Check using command line terminal: git version
-3. Download Docker: https://www.docker.com/
-4. Write the following in a command line terminal:
-    - conda create --name edms_env python=3.11.5
-        - When conda asks you to proceed, type "y" 
+### Update
+1. Enter environment & delete edms: write the following in a command line terminal...
+    - cd ~
     - conda activate edms_env
-    - pip install git+https://github.com/marczepeda/edms.git
-        - Sign into github when asked.
-        - Wait at least a minute for the authentication to process.
-    - conda list
-        - check for edms package
-    - docker pull pinellolab/primedesign
-        - Docker desktop app needs to be open
+    - mkdir git
+    - cd git
+    - rm -r edms
+        - Enter 'y' three times to completely remove the folder
+2. Install edms: write the following in a command line terminal...
+    - git clone https://github.com/marczepeda/edms.git
+    - cd edms
+    - pip install -e .
+        - Include the "."
+    - conda deactivate
 
 ## PE Strategies
 | Strategy | Description | Reference |
