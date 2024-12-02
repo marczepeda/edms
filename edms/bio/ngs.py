@@ -68,7 +68,7 @@ def pcrs(samples: pd.DataFrame, dir:str=None, file:str=None, gDNA_id_col='ID',
          pcr2_id_col='PCR2 ID', pcr2_fwd_col='PCR2 FWD', pcr2_rev_col='PCR2 REV',
          Q5_mm_x_stock=5,dNTP_mM_stock=10,fwd_uM_stock=10,rev_uM_stock=10,Q5_U_uL_stock=2,
          Q5_mm_x_desired=1,dNTP_mM_desired=0.2,fwd_uM_desired=0.5,rev_uM_desired=0.5,Q5_U_uL_desired=0.02,
-         total_uL=20,mm_x=1.1):
+         total_uL=20,mm_x=1.1,outer_wells=True):
     '''
     pcrs(): generates NGS PCR plan automatically (Default: 96-well plates excludingn outer wells)
     
@@ -96,6 +96,7 @@ def pcrs(samples: pd.DataFrame, dir:str=None, file:str=None, gDNA_id_col='ID',
     Q5_U_uL_desired (float, optional): [Q5 Polymerase] desired in U/uL (Default: 0.02)
     total_uL (int, optional): total uL per reaction (Default: 20)
     mm_x (float, optional): master mix multiplier (Default: 1.1)
+    outer_wells (bool, optional): include outer wells (Default: True)
 
     Dependencies: pandas,numpy,os,io
     '''
@@ -109,21 +110,38 @@ def pcrs(samples: pd.DataFrame, dir:str=None, file:str=None, gDNA_id_col='ID',
     col_ls = []
 
     plate_i = 1
-    row_i = 1
-    col_i = 1
-    for i in range(samples.shape[0]):
-        if col_i >= len(cols_96_well)-1:
-            if row_i >= len(rows_96_well)-2:
-                row_i = 1
-                col_i = 1
-                plate_i += 1
-            else:
-                row_i += 1
-                col_i = 1
-        plate_ls.append(plate_i)
-        row_ls.append(rows_96_well[row_i])
-        col_ls.append(cols_96_well[col_i])
-        col_i += 1
+    if outer_wells:
+        row_i = 0
+        col_i = 0
+        for i in range(samples.shape[0]):
+            if col_i >= len(cols_96_well):
+                if row_i >= len(rows_96_well)-1:
+                    row_i = 0
+                    col_i = 0
+                    plate_i += 1
+                else:
+                    row_i += 1
+                    col_i = 0
+            plate_ls.append(plate_i)
+            row_ls.append(rows_96_well[row_i])
+            col_ls.append(cols_96_well[col_i])
+            col_i += 1
+    else:
+        row_i = 1
+        col_i = 1
+        for i in range(samples.shape[0]):
+            if col_i >= len(cols_96_well)-1:
+                if row_i >= len(rows_96_well)-2:
+                    row_i = 1
+                    col_i = 1
+                    plate_i += 1
+                else:
+                    row_i += 1
+                    col_i = 1
+            plate_ls.append(plate_i)
+            row_ls.append(rows_96_well[row_i])
+            col_ls.append(cols_96_well[col_i])
+            col_i += 1
 
     samples['plate'] = plate_ls
     samples['row'] = row_ls
@@ -141,8 +159,14 @@ def pcrs(samples: pd.DataFrame, dir:str=None, file:str=None, gDNA_id_col='ID',
     
     # Create PCR master mixes for PCR1 and PCR2 primer pairs
     samples['PCR2 FWD MM'] = 'PCR2 FWD'
-    pcr1_mms = pcr_mm(primers=samples[[pcr1_fwd_col,pcr1_rev_col]].value_counts(),template='gDNA Extract',template_uL=5)
-    pcr2_mms = pcr_mm(primers=samples[['PCR2 FWD MM',pcr2_rev_col]].value_counts(),template='PCR1 Product',template_uL=1)
+    pcr1_mms = pcr_mm(primers=samples[[pcr1_fwd_col,pcr1_rev_col]].value_counts(),template='gDNA Extract',template_uL=5,
+                      Q5_mm_x_stock=Q5_mm_x_stock,dNTP_mM_stock=dNTP_mM_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
+                      Q5_U_uL_stock=Q5_U_uL_stock,Q5_mm_x_desired=Q5_mm_x_desired,dNTP_mM_desired=dNTP_mM_desired,fwd_uM_desired=fwd_uM_desired,
+                      rev_uM_desired=rev_uM_desired,Q5_U_uL_desired=Q5_U_uL_desired,total_uL=total_uL,mm_x=mm_x)
+    pcr2_mms = pcr_mm(primers=samples[['PCR2 FWD MM',pcr2_rev_col]].value_counts(),template='PCR1 Product',template_uL=1,
+                      Q5_mm_x_stock=Q5_mm_x_stock,dNTP_mM_stock=dNTP_mM_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
+                      Q5_U_uL_stock=Q5_U_uL_stock,Q5_mm_x_desired=Q5_mm_x_desired,dNTP_mM_desired=dNTP_mM_desired,fwd_uM_desired=fwd_uM_desired,
+                      rev_uM_desired=rev_uM_desired,Q5_U_uL_desired=Q5_U_uL_desired,total_uL=total_uL,mm_x=mm_x)
 
     if dir is not None and file is not None: # Save file if dir & file are specified
         io.mkdir(dir=dir)
