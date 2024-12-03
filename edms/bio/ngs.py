@@ -70,7 +70,7 @@ def pcrs(samples: pd.DataFrame, dir:str=None, file:str=None, gDNA_id_col='ID',
          Q5_mm_x_desired=1,dNTP_mM_desired=0.2,fwd_uM_desired=0.5,rev_uM_desired=0.5,Q5_U_uL_desired=0.02,
          total_uL=20,mm_x=1.1,outer_wells=True):
     '''
-    pcrs(): generates NGS PCR plan automatically (Default: 96-well plates excludingn outer wells)
+    pcrs(): generates NGS PCR plan automatically (Default: 96-well plates including outer wells)
     
     Parameters:
     samples (DataFrame): NGS samples dataframe

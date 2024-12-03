@@ -254,19 +254,19 @@ def compare(df: pd.DataFrame, sample: str, cond: str, cond_comp: str, var: str, 
     meta_cols = list(df.columns)
     meta_cols.remove(count)
 
-    print(f'Add psuedocount ({psuedocount}) to avoid log(0) & compute fraction')
+    print(f'Add psuedocount ({psuedocount}) to avoid log(0) & compute fraction per million (FPM)')
     df[f'{count}+{psuedocount}'] = df[count]+psuedocount
     dc = t.split(df=df,key=sample)
     for s,df_sample in dc.items():
         count_total = sum(df_sample[count])
-        dc[s]['fraction']=[c/count_total for c in df_sample[count]]
+        dc[s]['FPM']=[c/count_total*1000000 for c in df_sample[count]]
 
     print('Group samples by condition & compute averages')
     df_cond_stat = pd.DataFrame()
     # Define aggregation dictionary dynamically
     agg_dict = {count: 'mean', 
                 f'{count}+{psuedocount}': 'mean',
-                'fraction': ['mean',list]} # Include both mean and list of original values
+                'FPM': ['mean',list]} # Include both mean and list of original values
     for col in meta_cols: # Add metadata columns to be aggregated as sets
         agg_dict[col] = lambda x: set(x)
 
@@ -278,7 +278,7 @@ def compare(df: pd.DataFrame, sample: str, cond: str, cond_comp: str, var: str, 
         df_cond_agg.columns = ['_'.join(col).strip('_') for col in df_cond_agg.columns] # Flatten multi-level column names
         for col in df_cond_agg.columns: # Change metadata sets to comma-seperated strings or lists
             if '_<lambda>' in col:
-                if all(isinstance(item, str) for item in df_cond_agg.iloc[0][col]): 
+                if any(isinstance(item, str) for item in df_cond_agg.iloc[0][col]): 
                     ls = [] # Handling columns with str & other datatypes
                     for s in df_cond_agg[col]: ls.append([s_ if isinstance(s_,str) else str(s_) for s_ in s])
                     df_cond_agg[col] = [','.join(sorted(l)) for l in ls] # Sort list and join
@@ -298,10 +298,10 @@ def compare(df: pd.DataFrame, sample: str, cond: str, cond_comp: str, var: str, 
         df_comp_edit = df_comp[df_comp[var]==v]
         df_other_edit[f'{count}_mean_compare'] = [df_comp_edit.iloc[0][f'{count}_mean']]*df_other_edit.shape[0]
         df_other_edit[f'{count}+{psuedocount}_mean_compare'] = [df_comp_edit.iloc[0][f'{count}+{psuedocount}_mean']]*df_other_edit.shape[0]
-        df_other_edit['fraction_mean_compare'] = [df_comp_edit.iloc[0]['fraction_mean']]*df_other_edit.shape[0]
-        df_other_edit['FC'] = df_other_edit['fraction_mean']/df_comp_edit.iloc[0]['fraction_mean']
-        ttests = [ttest_ind(list(other_fraction_ls),list(df_comp_edit.iloc[0]['fraction_list'])) 
-                                 for other_fraction_ls in df_other_edit['fraction_list']]
+        df_other_edit['FPM_mean_compare'] = [df_comp_edit.iloc[0]['FPM_mean']]*df_other_edit.shape[0]
+        df_other_edit['FC'] = df_other_edit['FPM_mean']/df_comp_edit.iloc[0]['FPM_mean']
+        ttests = [ttest_ind(list(other_fraction_ls),list(df_comp_edit.iloc[0]['FPM_list'])) 
+                                 for other_fraction_ls in df_other_edit['FPM_list']]
         df_other_edit['pval'] = [ttest[1] for ttest in ttests]
         df_other_edit['tstat'] = [ttest[0] for ttest in ttests]
         df_stat = pd.concat([df_stat,df_other_edit])
