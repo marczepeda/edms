@@ -8,6 +8,7 @@ import numpy as np
 import os
 import re
 from Bio.Seq import Seq
+from Bio.Align import PairwiseAligner
 from ..bio import pegLIT as pegLIT
 from ..gen import io as io
 from ..gen import tidy as t
@@ -1072,3 +1073,67 @@ def print_shared_sequences_mutant(dc: dict):
         for key in keys_a:
             text += f"{dc[key].iloc[v]['Spacer_sequence']}\t{dc[key].iloc[v]['PBS_sequence']}\t\t{dc[key].iloc[v]['Priority_mut']}\t\t\t"
     print(text)
+
+# Comparing pegRNAs
+def group_pe(df: pd.DataFrame, other_cols: list, epegRNA_id_col='epegRNA',ngRNA_id_col='ngRNA',
+             epegRNA_spacer_col='Spacer_sequence_epegRNA',epegRNA_RTT_col='RTT_sequence',epegRNA_PBS_col='PBS_sequence',
+             match_score=1, mismatch_score=-1):
+    '''
+    group_pe(): returns a dataframe containing groups of (epegRNA,ngRNA) pairs that share spacers and have similar PBS and performs pairwise alignment for RTT
+    
+    Parameters:
+    df (dataframe): dataframe
+    other_cols (list): names of other column that will be retained
+    epegRNA_id_col (str, optional): epegRNA id column name (Default: epegRNA)
+    ngRNA_id_col (str, optional): ngRNA id column name (Default: ngRNA)
+    epegRNA_spacer_col (str, optional): epegRNA spacer column name (Default: Spacer_sequence_epegRNA)
+    epegRNA_RTT_col (str, optional): epegRNA reverse transcripase template column name (Default: RTT_sequence_epegRNA)
+    epegRNA_PBS_col (str, optional): epegRNA primer binding site column name (Default: PBS_sequence_epegRNA
+    match_score (int, optional): match score for pairwise alignment (Default: 1)
+    mismatch_score (int, optional): mismatch score for pairwise alignment (Default: -1)
+    
+    Dependencies: pandas,Bio
+    '''
+    # Intialize the aligner
+    aligner = PairwiseAligner()
+    aligner.mode = 'global'  # Use 'local' for local alignment
+    aligner.match_score = match_score  # Score for a match
+    aligner.mismatch_score = mismatch_score/2  # Penalty for a mismatch; applied to both strands
+    aligner.open_gap_score = mismatch_score  # Penalty for opening a gap; applied to both strands
+    aligner.extend_gap_score = mismatch_score  # Penalty for extending a gap; applied to both strands
+
+    # Isolate desired columns
+    other_cols.extend([epegRNA_id_col,ngRNA_id_col,epegRNA_spacer_col,epegRNA_RTT_col,epegRNA_PBS_col])
+    df = df[other_cols]
+
+    df_pairs = pd.DataFrame() # (epegRNA,ngRNA) pairs dataframe
+    for epegRNA_id in list(df[epegRNA_id_col].value_counts().keys()): # Iterate through epegRNA ids
+        
+        # Split dataframe to isolate 1 epegRNA from others with the same spacer
+        df_epegRNA = df[df[epegRNA_id_col]==epegRNA_id].reset_index(drop=True)
+        df_others = df[(df[epegRNA_id_col]!=epegRNA_id)&(df[epegRNA_spacer_col]==df_epegRNA.iloc[0][epegRNA_spacer_col])].reset_index(drop=True)
+
+        # Iterate through (epegRNA,ngRNA) pairs and isolate...
+        for i,(ngRNA,epegRNA_RTT,epegRNA_PBS) in enumerate(t.zip_cols(df=df_epegRNA,cols=[ngRNA_id_col,epegRNA_RTT_col,epegRNA_PBS_col])):
+            df_others = df_others[df_others[ngRNA_id_col]==ngRNA].reset_index(drop=True) # shared ngRNAs
+            df_others = df_others[(df_others[epegRNA_PBS_col].str.contains(epegRNA_PBS))|(epegRNA_PBS in df_others[epegRNA_PBS_col])].reset_index(drop=True) # similar PBS
+            
+            if df_others.empty==False: # Only retain successful pairs
+                df_others['PBS_lengths'] = [f'({len(epegRNA_PBS)},{len(other_epegRNA_PBS)})' for other_epegRNA_PBS in df_others[epegRNA_PBS_col]] # Get PBS lengths
+                
+                # Quantify mismatches in RTT alignments
+                RTT_alignments = []
+                RTT_alignments_mismatches = []
+                for other_epegRNA_RTT in df_others[epegRNA_RTT_col]:
+                    RTT_alignment = aligner.align(epegRNA_RTT,other_epegRNA_RTT)[0]
+                    RTT_alignments.append(RTT_alignment)
+                    RTT_alignments_mismatches.append(int(len(epegRNA_RTT)-RTT_alignment.score))
+                df_others['RTT_alignment'] = RTT_alignments
+                df_others['RTT_alignments_mismatches'] = RTT_alignments_mismatches
+                
+                series_df_epegRNA = pd.concat([pd.DataFrame([df_epegRNA.iloc[i]])]*(len(df_others))).reset_index(drop=True)
+
+                df_pair = pd.concat([df_others,series_df_epegRNA.rename(columns=lambda col: f"{col}_compare")],axis=1) # Append compared (epegRNA,ngRNA)
+                df_pairs = pd.concat([df_pairs,df_pair]).reset_index(drop=True) # Save (epegRNA,ngRNA) pairs to output dataframe
+    
+    return df_pairs

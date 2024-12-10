@@ -974,7 +974,7 @@ def count_alignments(annotated_lib: str, align_col: str, id_col: str, fastq_dir:
     aligner = PairwiseAligner()
     aligner.mode = 'global'  # Use 'local' for local alignment
     aligner.match_score = match_score  # Score for a match
-    aligner.mismatch_score = mismatch_score  # Penalty for a mismatch
+    aligner.mismatch_score = mismatch_score/2  # Penalty for a mismatch; applied to both strands
     aligner.open_gap_score = mismatch_score/2  # Penalty for opening a gap; applied to both strands
     aligner.extend_gap_score = mismatch_score/2  # Penalty for extending a gap; applied to both strands
 
@@ -1029,7 +1029,7 @@ def count_alignments(annotated_lib: str, align_col: str, id_col: str, fastq_dir:
             aligned_i = seq_alignments_aligned[i]
             dc_alignments[df_ref.iloc[i][align_col]] = dc_alignments[ref_i]+1
 
-            # Find & quantify mismatches (Change zero-index to one-indexed)
+            # Find & quantify mismatches (Change zero-indexed to one-indexed)
             mismatch_pos = []
             if len(aligned_i) == 1: 
                 (a1,b1) = aligned_i[0]
@@ -1413,14 +1413,14 @@ def outcomes(fastqs: dict, edit='edit'):
         df=pd.concat([df,temp]).reset_index(drop=True)
     return df
 
-def outcomes_desired(df: pd.DataFrame, desired_edits: list, sample_col='sample',
+def outcomes_desired(df: pd.DataFrame, desired_edits: list | str, sample_col='sample',
                      edit_col='edit', count_col='count',fraction_col='fraction'):
     ''' 
     outcomes_desired: groups desired edit count & fraction per sample (tidy format)
 
     Parameters:
     df (DataFrame): dataframe with edit count & fraction per sample (tidy format)
-    desired_edits (list): list of desired edits (str)
+    desired_edits (list or str): list of desired edits (list of str) or desired edits column name (str)
     sample_col (str, optional): sample column name (Default: sample)
     edit_col (str, optional): edit column name (Default: edit)
     count_col (str, optional): count column name (Default: count)
@@ -1428,15 +1428,24 @@ def outcomes_desired(df: pd.DataFrame, desired_edits: list, sample_col='sample',
 
     Dependencies: pandas
     '''
+    if isinstance(desired_edits, list): desired_edits_col = None # Determine if desired edits is a list or str
+    elif isinstance(desired_edits, str): desired_edits_col = desired_edits
+    else: TypeError(f'desired_edits = {desired_edits} was not a list or str.')
+
     df_desired = pd.DataFrame()
     for sample in df[sample_col].value_counts().keys(): # Iterate through samples
         df_sample = df[df[sample_col]==sample].reset_index(drop=True)
+
+        if desired_edits_col: 
+            desired_edits = df_sample.iloc[0][desired_edits_col] # Get desired edits list for each sample if the column name was provided
+            if isinstance(desired_edits, str): desired_edits = [desired_edits]
         
         i_desired = [] # Store desired edit & corresponding counts & fractions
         count_desired = []
         fraction_desired = []
 
-        for i,(edit,count,fraction) in enumerate(zip(df_sample[edit_col],df_sample[count_col],df_sample[fraction_col])):
+        for i,(edit,count,fraction) in enumerate(t.zip_cols(df=df_sample,cols=[edit_col,count_col,fraction_col])):
+            
             if ', ' in edit: # Search for desired edit within multiple edit outcomes
                 edits = edit.split(', ')
                 for edit in edits:
@@ -1451,15 +1460,15 @@ def outcomes_desired(df: pd.DataFrame, desired_edits: list, sample_col='sample',
                     i_desired.append(i)
                     count_desired.append(count)
                     fraction_desired.append(fraction)
-        
-            df_sample = df_sample.drop(index=i_desired) # Remove desired edits & combine into 'Desired' edit
-            other_cols = [col for col in df_sample.columns if col not in [edit_col,count_col,fraction_col]]
-            df_sample_desired = df_sample.iloc[0][other_cols].to_frame().T.reset_index(drop=True)
-            df_sample_desired[edit_col] = ['Desired']
-            df_sample_desired[count_col] = [sum(count_desired)]
-            df_sample_desired[fraction_col] = [sum(fraction_desired)]
-            df_sample = pd.concat(objs=[df_sample,df_sample_desired]).reset_index(drop=True)
-            df_desired = pd.concat(objs=[df_desired,df_sample]).reset_index(drop=True)
+
+        df_sample = df_sample.drop(index=i_desired) # Remove desired edits & combine into 'Desired' edit
+        other_cols = [col for col in df_sample.columns if col not in [edit_col,count_col,fraction_col]]
+        df_sample_desired = df_sample.iloc[0][other_cols].to_frame().T.reset_index(drop=True)
+        df_sample_desired[edit_col] = ['Desired']
+        df_sample_desired[count_col] = [sum(count_desired)]
+        df_sample_desired[fraction_col] = [sum(fraction_desired)]
+        df_sample = pd.concat(objs=[df_sample,df_sample_desired]).reset_index(drop=True)
+        df_desired = pd.concat(objs=[df_desired,df_sample]).reset_index(drop=True)
 
     return df_desired
         

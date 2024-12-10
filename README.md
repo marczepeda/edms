@@ -1,21 +1,28 @@
 # Endogenous Deep Mutational Scans (EDMS)
 ## Package Organization
 - gen: input/output, data wrangling, generating plots, and statistics.
-    - import edms.gen.io as io
-    - import edms.gen.tidy as t
-    - import edms.gen.plot as p
-    - import edms.gen.stat as st
+    ```shell
+    import edms.gen.io as io
+    import edms.gen.tidy as t
+    import edms.gen.plot as p
+    import edms.gen.stat as st
+    import emds.gen.image as im
+    ```
 - bio: molecular biology & tissue culture workflows.
-    - import edms.bio.transfect as tf
-    - import edms.bio.ngs as ngs
-    - import edms.bio.fastq as f
-    - import edms.bio.clone as cl
-    - import edms.bio.pe as pe
-    - import edms.bio.pegLIT as pegLIT
-    - import edms.bio.qPCR as qPCR
+    ```shell
+    import edms.bio.transfect as tf
+    import edms.bio.ngs as ngs
+    import edms.bio.fastq as f
+    import edms.bio.clone as cl
+    import edms.bio.pe as pe
+    import edms.bio.pegLIT as pegLIT
+    import edms.bio.qPCR as qPCR
+    ```
 - dat: interacting with databases.
-    - import edms.dat.cosmic as co
-    - import edms.dat.cvar as cv
+    ```shell
+    import edms.dat.cosmic as co
+    import edms.dat.cvar as cv
+    ```
 
 ## Examples
 - See https://github.com/marczepeda/edms_ex
@@ -30,47 +37,64 @@
     - Check using command line terminal: git version
 3. Download Docker. https://www.docker.com/
 4. Make environment: write the following in a command line terminal...
-    - cd ~
-    - conda create --name emds_env python=3.11.5
-        - When conda asks you to proceed, type "y" 
-    - conda activate edms_env
-    - mkdir git
-    - cd git
+    ```shell
+    cd ~
+    conda create --name emds_env python=3.11.5
+    # When conda asks you to proceed, type "y" 
+    
+    conda activate edms_env
+    mkdir git
+    cd git
+    ```
 5. Download dependencies: write the following in a command line terminal...
-    - conda install pip
-    - conda install conda-forge::biopython
-    - pip install -U scikit-learn
-        - Also, installs numpy, pandas, matplotlib, seaborn, scipy.
-    - conda install -c conda-forge statsmodels
-    - conda install anaconda::requests
-    - conda install bioconda::viennarna
-    - conda install conda-forge::python-levenshtein
-    - conda install conda-forge::adjusttext
-    - conda install anaconda::git
+    ```shell
+    conda install pip
+    conda install conda-forge::biopython
+    
+    pip install -U scikit-learn
+    # Also, installs numpy, pandas, matplotlib, seaborn, scipy.
+    
+    conda install -c conda-forge statsmodels
+    conda install anaconda::requests
+    conda install bioconda::viennarna
+    conda install conda-forge::python-levenshtein
+    conda install conda-forge::adjusttext
+    conda install anaconda::pillow
+    conda install anaconda::git
+    ```
 6. Install edms: write the following in a command line terminal...
-    - git clone https://github.com/marczepeda/edms.git
-    - cd edms
-    - pip install -e .
-        - Include the "."
-    - docker pull pinellolab/primedesign
-        - Docker desktop app needs to be open
-    - conda deactivate
-
+    ```shell
+    git clone https://github.com/marczepeda/edms.git
+    cd edms
+    pip install -e .
+    # Include the "."
+    
+    docker pull pinellolab/primedesign
+    # Docker desktop app needs to be open
+    
+    conda deactivate
+    ```
 ### Update
 1. Enter environment & delete edms: write the following in a command line terminal...
-    - cd ~
-    - cd git
-    - conda activate edms_env
-    - pip uninstall edms
-        - Enter 'Y' when prompted
-    - rm -r edms
-        - Enter 'Y' three times to completely remove the folder
+    ```shell
+    cd ~
+    cd git
+    conda activate edms_env
+    pip uninstall edms
+    # Enter 'Y' when prompted
+    
+    rm -r edms
+    # Enter 'Y' three times to completely remove the folder
+    ```
 2. Install edms: write the following in a command line terminal...
-    - git clone https://github.com/marczepeda/edms.git
-    - cd edms
-    - pip install -e .
-        - Include the "."
-    - conda deactivate
+    ```shell
+    git clone https://github.com/marczepeda/edms.git
+    cd edms
+    pip install -e .
+    # Include the "."
+
+    conda deactivate
+    ```
 
 ## PE Strategies
 | Strategy | Description | Reference |

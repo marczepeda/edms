@@ -32,6 +32,7 @@ setup(
                       'scikit-learn',
                       'Levenshtein',
                       'ViennaRNA',
-                      'adjustText'],
+                      'adjustText',
+                      'pillow'],
     python_requires='>=3.11'
 )
