@@ -9,38 +9,62 @@ import pandas as pd
 from ..gen import io
 
 # Image processing methods
-def crop(in_dir: str, out_dir: str, box: tuple):
+def crop(in_dir: str, out_dir: str, box_dims: tuple=None, box_fracs: tuple=None):
     """
     crop(): crop all photos in a input directory and save them to new directory.
     
     Parameters:
     in_dir (str): Path to the input directory containing images.
     out_dir (str): Path to the destination folder to save cropped images.
-    box (tuple): A 4-tuple defining the left, upper, right, and lower pixel coordinates for the crop (left, top, right, bottom).
+    box_dims (tuple, optional 1): A 4-tuple defining the left, upper, right, and lower absolute pixel coordinates for the crop (left, top, right, bottom).
+    box_facs (tuple, optional 1): A 4-tuple defining the left, upper, right, and lower fraction pixel coordinates for the crop (left, top, right, bottom).
 
     Dependencies: os,PIL,io
     """
-    # Ensure destination folder exists
+    # Ensure output folder exists
     io.mkdir(out_dir)
 
-    # Check box is a tuple with 4 integers
-    if all([isinstance(coordinate,int) for coordinate in box])==False:
-        KeyError(f"box={box} was not a tuple with 4 integers that define the left, upper, right, and lower pixel coordinates")
+    if box_dims is not None:
+        # Check box_dims is a tuple with 4 integers 
+        if all([isinstance(coordinate,int) for coordinate in box_dims])==False and len(box_dims)==4:
+            KeyError(f"box_dims={box_dims} was not a tuple with 4 integers that define the left, upper, right, and lower absolute pixel coordinates")
+
+        # Loop through all files in the input folder
+        for filename in os.listdir(in_dir):
+            in_path = os.path.join(in_dir, filename)
+            out_path = os.path.join(out_dir, filename)
+            
+            try: # Open and crop supported image formats
+                if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.tiff', '.tif', '.bmp', '.webp')):
+                    with Image.open(in_path) as img:
+                        cropped_img = img.crop(box_dims)
+                        cropped_img.save(out_path)
+                        print(f"Successfully processed: {filename}")
+            except Exception as e:
+                print(f"Error processing {filename}: {e}")
     
-    # Loop through all files in the source folder
-    for filename in os.listdir(in_dir):
-        in_path = os.path.join(in_dir, filename)
-        out_path = os.path.join(out_dir, filename)
-        
-        try:
-            if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.tiff', '.tif', '.bmp', '.webp')):
-                # Open and crop supported image formats
-                with Image.open(in_path) as img:
-                    cropped_img = img.crop(box)
-                    cropped_img.save(out_path)
-                    print(f"Successfully processed: {filename}")
-        except Exception as e:
-            print(f"Error processing {filename}: {e}")
+    elif box_fracs is not None:
+        # Check box_fracs is a tuple with 4 floats
+        if all([isinstance(coordinate,float) for coordinate in box_fracs])==False and len(box_fracs)==4:
+            KeyError(f"box_fracs={box_fracs} was not a tuple with 4 floats that define the left, upper, right, and lower fraction pixel coordinates")
+
+        # Loop through all files in the input folder
+        for filename in os.listdir(in_dir):
+            in_path = os.path.join(in_dir, filename)
+            out_path = os.path.join(out_dir, filename)
+            
+            try: # Open and crop supported image formats
+                if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.tiff', '.tif', '.bmp', '.webp')):
+                    with Image.open(in_path) as img:
+                        box_dims = (box_fracs[0]*img.width,box_fracs[1]*img.height,box_fracs[2]*img.width,box_fracs[3]*img.height)
+                        cropped_img = img.crop(box_dims)
+                        cropped_img.save(out_path)
+                        print(f"Successfully processed: {filename}")
+            except Exception as e:
+                print(f"Error processing {filename}: {e}")
+         
+    else:
+        KeyError(f"Neither box_dims nor box_fracs was provided")
 
 def convert(in_dir: str, out_dir: str, suffix: str):
     """
@@ -53,17 +77,16 @@ def convert(in_dir: str, out_dir: str, suffix: str):
 
     Dependencies: PIL,os,io
     """
-    # Ensure destination folder exists
+    # Ensure output folder exists
     io.mkdir(out_dir)
     
-    # Loop through all files in the source folder
+    # Loop through all files in the input folder
     for filename in os.listdir(in_dir):
         in_path = os.path.join(in_dir, filename)
-        try:
+
+        try: # Open the image
             if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.tiff', '.tif', '.bmp', '.webp')):
-                # Open the image
-                with Image.open(in_path) as img:
-                    # Convert and save the image in the target format
+                with Image.open(in_path) as img: # Convert and save the image in the target format
                     base_name, _ = os.path.splitext(filename)
                     destination_path = os.path.join(out_dir, f"{base_name}{suffix.lower()}")
                     img.convert("RGB").save(destination_path, suffix[1:])
@@ -82,7 +105,7 @@ def combine(in_dir: str, out_dir: str, out_file: str):
 
     Dependencies: PIL,os,io
     """
-    # Ensure destination folder exists
+    # Ensure output folder exists
     io.mkdir(out_dir)
 
     images = []
@@ -92,8 +115,7 @@ def combine(in_dir: str, out_dir: str, out_file: str):
         file_path = os.path.join(in_dir, filename)
         try:
             if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.tiff', '.tif', '.bmp', '.webp')):
-                with Image.open(file_path) as img:
-                    # Convert image to RGB (required for PDF)
+                with Image.open(file_path) as img: # Convert image to RGB (required for PDF)
                     images.append(img.convert("RGB"))
         except Exception as e:
             print(f"Skipping {filename}: {e}")

@@ -4,6 +4,7 @@
 
 # Import packages
 import pandas as pd
+import numpy as np
 from Bio.Seq import Seq
 from ..gen import tidy as t
 
@@ -67,7 +68,7 @@ def tb(df:pd.DataFrame,id:str,seq:str,t5:str,t3:str,b5:str,b3:str,tG:bool,pre:st
     
     return df
 
-# GG cloning
+# Individual GG cloning
 def sgRNAs(df:pd.DataFrame,id:str,spacer='Spacer_sequence',t5='CACC',t3='',b5='AAAC',b3='',tG=True,order=True):
     ''' 
     sgRNAs(): design GG cloning oligonucleotides for cutting and base editing sgRNAs
@@ -159,263 +160,301 @@ def ngRNAs(df: pd.DataFrame,id: str,tG=True, order=True,
     
     else: return df # Original dataframe with top and bottom oligos
 
-# Gibson cloning
+# Library GG cloning
 ''' pe_pcr1: Dataframe of PE library PCR1 primers
 '''
 pe_pcr1 = pd.DataFrame({
-    0: {
+  0: {
     'Subpool Number': 1,
-    'Forward Barcode': 'CGGGTTCCGT',
-    'Reverse Barcode': 'GCTTAGAATAGAA',
-    'Homology Arm 5': 'GTGGAAAGGACGAAACACC',
-    'Homology Arm 3': 'CGCGGTTCTATCTAGTTACGCGTTAAACC',
-    'Forward PCR1 Template': 'CGGGTTCCGTGTGGAAAGGACGAAACACC',
-    'Reverse PCR1 Template': 'TTCTATTCTAAGCGGTTTAACGCGTAACTAGATAGAACCGCG',
-    'Forward PCR1 Primer': 'CGGGTTCCGTGTGGAAAG',
-    'Reverse PCR1 Primer': 'TTCTATTCTAAGCGGTTTAACGCGT',
-    'Forward PCR1 Primer NEB Tm': 66,
-    'Reverse PCR1 Primer NEB Tm': 66,
-    'PCR1 Primers NEB Ta': 67,
-    'Forward PCR1 Primer IDT Tm': 62.5,
-    'Reverse PCR1 Primer IDT Tm': 64.7,
-    'Forward PCR1 Primer IDT Th': 51.4,
-    'Reverse PCR1 Primer IDT Th': 51.4,
-    'Forward PCR1 Primer ID': 'fpMUZ141.1',
-    'Reverse PCR1 Primer ID': 'rpMUZ141.1'
-    },
-    1: {
-    'Subpool Number': 2,
-    'Forward Barcode': 'GTTTATCGGGC',
-    'Reverse Barcode': 'ACTTACTGTACC',
-    'Homology Arm 5': 'GTGGAAAGGACGAAACACC',
-    'Homology Arm 3': 'CGCGGTTCTATCTAGTTACGCGTTAAACC',
-    'Forward PCR1 Template': 'GTTTATCGGGCGTGGAAAGGACGAAACACC',
-    'Reverse PCR1 Template': 'GGTACAGTAAGTGGTTTAACGCGTAACTAGATAGAACCGCG',
-    'Forward PCR1 Primer': 'GTTTATCGGGCGTGGAAAG',
-    'Reverse PCR1 Primer': 'GGTACAGTAAGTGGTTTAACGCGT',
-    'Forward PCR1 Primer NEB Tm': 64,
-    'Reverse PCR1 Primer NEB Tm': 67,
-    'PCR1 Primers NEB Ta': 65,
-    'Forward PCR1 Primer IDT Tm': 60.8,
-    'Reverse PCR1 Primer IDT Tm': 64.7,
-    'Forward PCR1 Primer IDT Th': -4.3,
-    'Reverse PCR1 Primer IDT Th': -4.3,
-    'Forward PCR1 Primer ID': 'fpMUZ141.2',
-    'Reverse PCR1 Primer ID': 'rpMUZ141.2'
-    },
-    2: {
-    'Subpool Number': 3,
-    'Forward Barcode': 'ACCGATGTTGAC',
-    'Reverse Barcode': 'CTCGTAATAGC',
-    'Homology Arm 5': 'GTGGAAAGGACGAAACACC',
-    'Homology Arm 3': 'CGCGGTTCTATCTAGTTACGCGTTAAACC',
-    'Forward PCR1 Template': 'ACCGATGTTGACGTGGAAAGGACGAAACACC',
-    'Reverse PCR1 Template': 'GCTATTACGAGGGTTTAACGCGTAACTAGATAGAACCGCG',
-    'Forward PCR1 Primer': 'ACCGATGTTGACGTGGAAAG',
-    'Reverse PCR1 Primer': 'GCTATTACGAGGGTTTAACGCGT',
-    'Forward PCR1 Primer NEB Tm': 65,
-    'Reverse PCR1 Primer NEB Tm': 67,
-    'PCR1 Primers NEB Ta': 66,
-    'Forward PCR1 Primer IDT Tm': 62.5,
-    'Reverse PCR1 Primer IDT Tm': 64.7,
-    'Forward PCR1 Primer IDT Th': 36.8,
-    'Reverse PCR1 Primer IDT Th': 36.8,
-    'Forward PCR1 Primer ID': 'fpMUZ141.3',
-    'Reverse PCR1 Primer ID': 'rpMUZ141.3'
-    },
-    3: {
-    'Subpool Number': 4,
-    'Forward Barcode': 'GAGGTCTTTCATGC',
-    'Reverse Barcode': 'CACAACATA',
-    'Homology Arm 5': 'GTGGAAAGGACGAAACACC',
-    'Homology Arm 3': 'CGCGGTTCTATCTAGTTACGCGTTAAACC',
-    'Forward PCR1 Template': 'GAGGTCTTTCATGCGTGGAAAGGACGAAACACC',
-    'Reverse PCR1 Template': 'TATGTTGTGGGTTTAACGCGTAACTAGATAGAACCGCG',
-    'Forward PCR1 Primer': 'GAGGTCTTTCATGCGTGGAAAG',
-    'Reverse PCR1 Primer': 'TATGTTGTGGGTTTAACGCGT',
-    'Forward PCR1 Primer NEB Tm': 66,
+    'Forward Barcode': 'CGAATTCCGT',
+    'Reverse Barcode': 'GCTTAGAACA',
+    'Homology Arm 5': 'GGTCTCTGTTT',
+    'Homology Arm 3': 'CGCGGGAGACC',
+    'Forward PCR1 Template': 'CGAATTCCGTGGTCTCTGTTT',
+    'Reverse PCR1 Template': 'TGTTCTAAGCGGTCTCCCGCG',
+    'Forward PCR1 Primer ID': 'fpMUZ187.1',
+    'Forward PCR1 Primer': 'CGAATTCCGTGGTCTCTG',
+    'Reverse PCR1 Primer ID': 'rpMUZ187.1',
+    'Reverse PCR1 Primer': 'TGTTCTAAGCGGTCTCCC',
+    'Forward PCR1 Primer NEB Tm': 63,
     'Reverse PCR1 Primer NEB Tm': 64,
-    'PCR1 Primers NEB Ta': 65,
-    'Forward PCR1 Primer IDT Tm': 63.4,
-    'Reverse PCR1 Primer IDT Tm': 62.7,
-    'Forward PCR1 Primer IDT Th': 45.3,
-    'Reverse PCR1 Primer IDT Th': 45.3,
-    'Forward PCR1 Primer ID': 'fpMUZ141.4',
-    'Reverse PCR1 Primer ID': 'rpMUZ141.4'
-    },
-    4: {
-    'Subpool Number': 5,
-    'Forward Barcode': 'TAGTAGTTCAGACGC',
-    'Reverse Barcode': 'ATGTACCC',
-    'Homology Arm 5': 'GTGGAAAGGACGAAACACC',
-    'Homology Arm 3': 'CGCGGTTCTATCTAGTTACGCGTTAAACC',
-    'Forward PCR1 Template': 'TAGTAGTTCAGACGCGTGGAAAGGACGAAACACC',
-    'Reverse PCR1 Template': 'GGGTACATGGTTTAACGCGTAACTAGATAGAACCGCG',
-    'Forward PCR1 Primer': 'TAGTAGTTCAGACGCGTGGAAAG',
-    'Reverse PCR1 Primer': 'GGGTACATGGTTTAACGCGT',
-    'Forward PCR1 Primer NEB Tm': 66,
-    'Reverse PCR1 Primer NEB Tm': 65,
-    'PCR1 Primers NEB Ta': 66,
-    'Forward PCR1 Primer IDT Tm': 63.8,
-    'Reverse PCR1 Primer IDT Tm': 62.6,
-    'Forward PCR1 Primer IDT Th': 18.5,
-    'Reverse PCR1 Primer IDT Th': 18.5,
-    'Forward PCR1 Primer ID': 'fpMUZ141.5',
-    'Reverse PCR1 Primer ID': 'rpMUZ141.5'
-    },
-    5: {
-    'Subpool Number': 6,
-    'Forward Barcode': 'GGATGCATGATCTAG',
-    'Reverse Barcode': 'CATCAAGC',
-    'Homology Arm 5': 'GTGGAAAGGACGAAACACC',
-    'Homology Arm 3': 'CGCGGTTCTATCTAGTTACGCGTTAAACC',
-    'Forward PCR1 Template': 'GGATGCATGATCTAGGTGGAAAGGACGAAACACC',
-    'Reverse PCR1 Template': 'GCTTGATGGGTTTAACGCGTAACTAGATAGAACCGCG',
-    'Forward PCR1 Primer': 'GGATGCATGATCTAGGTGGAAAG',
-    'Reverse PCR1 Primer': 'GCTTGATGGGTTTAACGCGT',
-    'Forward PCR1 Primer NEB Tm': 65,
-    'Reverse PCR1 Primer NEB Tm': 66,
-    'PCR1 Primers NEB Ta': 66,
-    'Forward PCR1 Primer IDT Tm': 62.7,
-    'Reverse PCR1 Primer IDT Tm': 63.4,
-    'Forward PCR1 Primer IDT Th': 35.3,
-    'Reverse PCR1 Primer IDT Th': 35.3,
-    'Forward PCR1 Primer ID': 'fpMUZ141.6',
-    'Reverse PCR1 Primer ID': 'rpMUZ141.6'
-    },
-    6: {
-    'Subpool Number': 7,
-    'Forward Barcode': 'ATGAGGACGAATCT',
-    'Reverse Barcode': 'CACCTAAAG',
-    'Homology Arm 5': 'GTGGAAAGGACGAAACACC',
-    'Homology Arm 3': 'CGCGGTTCTATCTAGTTACGCGTTAAACC',
-    'Forward PCR1 Template': 'ATGAGGACGAATCTGTGGAAAGGACGAAACACC',
-    'Reverse PCR1 Template': 'CTTTAGGTGGGTTTAACGCGTAACTAGATAGAACCGCG',
-    'Forward PCR1 Primer': 'ATGAGGACGAATCTGTGGAAAG',
-    'Reverse PCR1 Primer': 'CTTTAGGTGGGTTTAACGCGT',
-    'Forward PCR1 Primer NEB Tm': 64,
-    'Reverse PCR1 Primer NEB Tm': 65,
-    'PCR1 Primers NEB Ta': 65,
-    'Forward PCR1 Primer IDT Tm': 62.2,
-    'Reverse PCR1 Primer IDT Tm': 62.8,
-    'Forward PCR1 Primer IDT Th': 24.0,
-    'Reverse PCR1 Primer IDT Th': 24.0,
-    'Forward PCR1 Primer ID': 'fpMUZ141.7',
-    'Reverse PCR1 Primer ID': 'rpMUZ141.7'
-    },
-    7: {
-    'Subpool Number': 8,
-    'Forward Barcode': 'GGTAGGCACG',
-    'Reverse Barcode': 'TAAACTTAGAACC',
-    'Homology Arm 5': 'GTGGAAAGGACGAAACACC',
-    'Homology Arm 3': 'CGCGGTTCTATCTAGTTACGCGTTAAACC',
-    'Forward PCR1 Template': 'GGTAGGCACGGTGGAAAGGACGAAACACC',
-    'Reverse PCR1 Template': 'GGTTCTAAGTTTAGGTTTAACGCGTAACTAGATAGAACCGCG',
-    'Forward PCR1 Primer': 'GGTAGGCACGGTGGAAAG',
-    'Reverse PCR1 Primer': 'GGTTCTAAGTTTAGGTTTAACGCGT',
-    'Forward PCR1 Primer NEB Tm': 66,
-    'Reverse PCR1 Primer NEB Tm': 65,
-    'PCR1 Primers NEB Ta': 66,
-    'Forward PCR1 Primer IDT Tm': 62.0,
-    'Reverse PCR1 Primer IDT Tm': 63.4,
-    'Forward PCR1 Primer IDT Th': 13.2,
-    'Reverse PCR1 Primer IDT Th': 13.2,
-    'Forward PCR1 Primer ID': 'fpMUZ141.8',
-    'Reverse PCR1 Primer ID': 'rpMUZ141.8'
-    },
-    8: {
-    'Subpool Number': 9,
-    'Forward Barcode': 'AGTCATGATTCAG',
-    'Reverse Barcode': 'GTTGCAAGTCTAG',
-    'Homology Arm 5': 'GTGGAAAGGACGAAACACC',
-    'Homology Arm 3': 'CGCGGTTCTATCTAGTTACGCGTTAAACC',
-    'Forward PCR1 Template': 'AGTCATGATTCAGGTGGAAAGGACGAAACACC',
-    'Reverse PCR1 Template': 'CTAGACTTGCAACGGTTTAACGCGTAACTAGATAGAACCGCG',
-    'Forward PCR1 Primer': 'AGTCATGATTCAGGTGGAAAG',
-    'Reverse PCR1 Primer': 'CTAGACTTGCAACGGTTTAACGC',
-    'Forward PCR1 Primer NEB Tm': 62,
-    'Reverse PCR1 Primer NEB Tm': 66,
     'PCR1 Primers NEB Ta': 63,
-    'Forward PCR1 Primer IDT Tm': 60.1,
-    'Reverse PCR1 Primer IDT Tm': 63.9,
-    'Forward PCR1 Primer IDT Th': 36.5,
-    'Reverse PCR1 Primer IDT Th': 36.5,
-    'Forward PCR1 Primer ID': 'fpMUZ141.9',
-    'Reverse PCR1 Primer ID': 'rpMUZ141.9'
-    }
+    'Forward PCR1 Primer IDT Tm': 59.5,
+    'Reverse PCR1 Primer IDT Tm': 60.6,
+    'Forward PCR1 Primer IDT Th': 31.7,
+    'Reverse PCR1 Primer IDT Th': 17.5
+  },
+  1: {
+    'Subpool Number': 2,
+    'Forward Barcode': 'GTTTATCGGG',
+    'Reverse Barcode': 'ACTGACTGTA',
+    'Homology Arm 5': 'GGTCTCTGTTT',
+    'Homology Arm 3': 'CGCGGGAGACC',
+    'Forward PCR1 Template': 'GTTTATCGGGGGTCTCTGTTT',
+    'Reverse PCR1 Template': 'TACAGTCAGTGGTCTCCCGCG',
+    'Forward PCR1 Primer ID': 'fpMUZ187.2',
+    'Forward PCR1 Primer': 'GTTTATCGGGGGTCTCTG',
+    'Reverse PCR1 Primer ID': 'rpMUZ187.2',
+    'Reverse PCR1 Primer': 'TACAGTCAGTGGTCTCCC',
+    'Forward PCR1 Primer NEB Tm': 62,
+    'Reverse PCR1 Primer NEB Tm': 64,
+    'PCR1 Primers NEB Ta': 63,
+    'Forward PCR1 Primer IDT Tm': 58.7,
+    'Reverse PCR1 Primer IDT Tm': 59.6,
+    'Forward PCR1 Primer IDT Th': 2.8,
+    'Reverse PCR1 Primer IDT Th': 36.4
+  },
+  2: {
+    'Subpool Number': 3,
+    'Forward Barcode': 'ACCGATATGG',
+    'Reverse Barcode': 'CTCGTCATAG',
+    'Homology Arm 5': 'GGTCTCTGTTT',
+    'Homology Arm 3': 'CGCGGGAGACC',
+    'Forward PCR1 Template': 'ACCGATATGGGGTCTCTGTTT',
+    'Reverse PCR1 Template': 'CTATGACGAGGGTCTCCCGCG',
+    'Forward PCR1 Primer ID': 'fpMUZ187.3',
+    'Forward PCR1 Primer': 'ACCGATATGGGGTCTCTG',
+    'Reverse PCR1 Primer ID': 'rpMUZ187.3',
+    'Reverse PCR1 Primer': 'CTATGACGAGGGTCTCCC',
+    'Forward PCR1 Primer NEB Tm': 63,
+    'Reverse PCR1 Primer NEB Tm': 63,
+    'PCR1 Primers NEB Ta': 63,
+    'Forward PCR1 Primer IDT Tm': 59.8,
+    'Reverse PCR1 Primer IDT Tm': 59.9,
+    'Forward PCR1 Primer IDT Th': 46.2,
+    'Reverse PCR1 Primer IDT Th': 45.3
+  },
+  3: {
+    'Subpool Number': 4,
+    'Forward Barcode': 'GAGGTCTTTC',
+    'Reverse Barcode': 'CACAACATAC',
+    'Homology Arm 5': 'GGTCTCTGTTT',
+    'Homology Arm 3': 'CGCGGGAGACC',
+    'Forward PCR1 Template': 'GAGGTCTTTCGGTCTCTGTTT',
+    'Reverse PCR1 Template': 'GTATGTTGTGGGTCTCCCGCG',
+    'Forward PCR1 Primer ID': 'fpMUZ187.4',
+    'Forward PCR1 Primer': 'GAGGTCTTTCGGTCTCTG',
+    'Reverse PCR1 Primer ID': 'rpMUZ187.4',
+    'Reverse PCR1 Primer': 'GTATGTTGTGGGTCTCCC',
+    'Forward PCR1 Primer NEB Tm': 62,
+    'Reverse PCR1 Primer NEB Tm': 63,
+    'PCR1 Primers NEB Ta': 63,
+    'Forward PCR1 Primer IDT Tm': 58.5,
+    'Reverse PCR1 Primer IDT Tm': 58.9,
+    'Forward PCR1 Primer IDT Th': 27.1,
+    'Reverse PCR1 Primer IDT Th': 42.6
+  },
+  4: {
+    'Subpool Number': 5,
+    'Forward Barcode': 'GAGTAGCTCA',
+    'Reverse Barcode': 'ATGTACCCAA',
+    'Homology Arm 5': 'GGTCTCTGTTT',
+    'Homology Arm 3': 'CGCGGGAGACC',
+    'Forward PCR1 Template': 'GAGTAGCTCAGGTCTCTGTTT',
+    'Reverse PCR1 Template': 'TTGGGTACATGGTCTCCCGCG',
+    'Forward PCR1 Primer ID': 'fpMUZ187.5',
+    'Forward PCR1 Primer': 'GAGTAGCTCAGGTCTCTG',
+    'Reverse PCR1 Primer ID': 'rpMUZ187.5',
+    'Reverse PCR1 Primer': 'TTGGGTACATGGTCTCCC',
+    'Forward PCR1 Primer NEB Tm': 61,
+    'Reverse PCR1 Primer NEB Tm': 65,
+    'PCR1 Primers NEB Ta': 63,
+    'Forward PCR1 Primer IDT Tm': 57.6,
+    'Reverse PCR1 Primer IDT Tm': 60.4,
+    'Forward PCR1 Primer IDT Th': 39.5,
+    'Reverse PCR1 Primer IDT Th': 42.5
+  },
+  5: {
+    'Subpool Number': 6,
+    'Forward Barcode': 'GGATGCATGA',
+    'Reverse Barcode': 'CATCAAGCTT',
+    'Homology Arm 5': 'GGTCTCTGTTT',
+    'Homology Arm 3': 'CGCGGGAGACC',
+    'Forward PCR1 Template': 'GGATGCATGAGGTCTCTGTTT',
+    'Reverse PCR1 Template': 'AAGCTTGATGGGTCTCCCGCG',
+    'Forward PCR1 Primer ID': 'fpMUZ187.6',
+    'Forward PCR1 Primer': 'GGATGCATGAGGTCTCTG',
+    'Reverse PCR1 Primer ID': 'rpMUZ187.6',
+    'Reverse PCR1 Primer': 'AAGCTTGATGGGTCTCCC',
+    'Forward PCR1 Primer NEB Tm': 62,
+    'Reverse PCR1 Primer NEB Tm': 65,
+    'PCR1 Primers NEB Ta': 63,
+    'Forward PCR1 Primer IDT Tm': 59.0,
+    'Reverse PCR1 Primer IDT Tm': 61.1,
+    'Forward PCR1 Primer IDT Th': 31.9,
+    'Reverse PCR1 Primer IDT Th': 42.6
+  },
+  6: {
+    'Subpool Number': 7,
+    'Forward Barcode': 'ATGAGGACGA',
+    'Reverse Barcode': 'CACATAAAGG',
+    'Homology Arm 5': 'GGTCTCTGTTT',
+    'Homology Arm 3': 'CGCGGGAGACC',
+    'Forward PCR1 Template': 'ATGAGGACGAGGTCTCTGTTT',
+    'Reverse PCR1 Template': 'CCTTTATGTGGGTCTCCCGCG',
+    'Forward PCR1 Primer ID': 'fpMUZ187.7',
+    'Forward PCR1 Primer': 'ATGAGGACGAGGTCTCTG',
+    'Reverse PCR1 Primer ID': 'rpMUZ187.7',
+    'Reverse PCR1 Primer': 'CCTTTATGTGGGTCTCCC',
+    'Forward PCR1 Primer NEB Tm': 63,
+    'Reverse PCR1 Primer NEB Tm': 63,
+    'PCR1 Primers NEB Ta': 63,
+    'Forward PCR1 Primer IDT Tm': 59.7,
+    'Reverse PCR1 Primer IDT Tm': 58.7,
+    'Forward PCR1 Primer IDT Th': 34.0,
+    'Reverse PCR1 Primer IDT Th': 42.6
+  },
+  7: {
+    'Subpool Number': 8,
+    'Forward Barcode': 'GGTAGACACG',
+    'Reverse Barcode': 'TCGACTTAGA',
+    'Homology Arm 5': 'GGTCTCTGTTT',
+    'Homology Arm 3': 'CGCGGGAGACC',
+    'Forward PCR1 Template': 'GGTAGACACGGGTCTCTGTTT',
+    'Reverse PCR1 Template': 'TCTAAGTCGAGGTCTCCCGCG',
+    'Forward PCR1 Primer ID': 'fpMUZ187.8',
+    'Forward PCR1 Primer': 'GGTAGACACGGGTCTCTG',
+    'Reverse PCR1 Primer ID': 'rpMUZ187.8',
+    'Reverse PCR1 Primer': 'TCTAAGTCGAGGTCTCCC',
+    'Forward PCR1 Primer NEB Tm': 64,
+    'Reverse PCR1 Primer NEB Tm': 63,
+    'PCR1 Primers NEB Ta': 63,
+    'Forward PCR1 Primer IDT Tm': 60.4,
+    'Reverse PCR1 Primer IDT Tm': 59.0,
+    'Forward PCR1 Primer IDT Th': 52.1,
+    'Reverse PCR1 Primer IDT Th': 24.3
+  },
+  8: {
+    'Subpool Number': 9,
+    'Forward Barcode': 'AGGCATGACT',
+    'Reverse Barcode': 'GTTACAAGTC',
+    'Homology Arm 5': 'GGTCTCTGTTT',
+    'Homology Arm 3': 'CGCGGGAGACC',
+    'Forward PCR1 Template': 'AGGCATGACTGGTCTCTGTTT',
+    'Reverse PCR1 Template': 'GACTTGTAACGGTCTCCCGCG',
+    'Forward PCR1 Primer ID': 'fpMUZ187.9',
+    'Forward PCR1 Primer': 'AGGCATGACTGGTCTCTG',
+    'Reverse PCR1 Primer ID': 'rpMUZ187.9',
+    'Reverse PCR1 Primer': 'GACTTGTAACGGTCTCCC',
+    'Forward PCR1 Primer NEB Tm': 64,
+    'Reverse PCR1 Primer NEB Tm': 62,
+    'PCR1 Primers NEB Ta': 63,
+    'Forward PCR1 Primer IDT Tm': 60.7,
+    'Reverse PCR1 Primer IDT Tm': 58.8,
+    'Forward PCR1 Primer IDT Th': 31.9,
+    'Reverse PCR1 Primer IDT Th': 30.9
+  }
 }).T
 
-''' pe_pcr2: Dataframe of PE library PCR2 primers
+''' RE_typeII: Dataframe of TypeII restriction enzymes
 '''
-pe_pcr2 = pd.DataFrame({
+RE_typeII = pd.DataFrame({
     0: {
-    'Name': 'fpMUZ141.0',
-    'Extension': 'GCTTTATATATCTT',
-    'Binding': 'GTGGAAAGGACGAAACACC',
-    'Description': 'PE library PCR2 FWD Primer',
-    'NEB Tm': 64,
-    'NEB Ta': 63
+    'Name': 'Esp3I',
+    'Sequence_t5': 'N(CGTCTC)N|N',
+    'Sequence_b3': 'N(GCAGAG)NNNNN|N',
+    'Recognition': 'CGTCTC',
+    'Recognition_rc': 'GAGACG'
     },
     1: {
-    'Name': 'rpMUZ141.0',
-    'Extension': '',
-    'Binding': 'GGTTTAACGCGTAACTAGATAGAA',
-    'Description': 'PE library PCR2 REV Primer',
-    'NEB Tm': 62,
-    'NEB Ta': 63
+    'Name': 'BsaI',
+    'Sequence_t5': 'N(GGTCTC)N|N',
+    'Sequence_b3': 'N(CCAGAG)NNNNN|N',
+    'Recognition': 'GGTCTC',
+    'Recognition_rc': 'GAGACC'
     }
 }).T
 
-def pe_twist_oligos(df: pd.DataFrame,tG=True, make_extension=True,spacer='Spacer_sequence',scaffold='Scaffold_sequence',
-                    extension='Extension_sequence',RTT='RTT_sequence',PBS='PBS_sequence',linker='Linker_sequence'):
+def pe_twist_oligos(df: pd.DataFrame,id_pre:str,tG=True, make_extension=True,
+                    fwd_barcode_t5='Forward Barcode',rev_barcode_t3='Reverse Barcode',
+                    homology_arm_t5='Homology Arm 5',homology_arm_t3='Homology Arm 3',
+                    gg_insert='GTTTAGAGACGNNNNNCGTCTCACACC',ngRNA_spacer='Spacer_sequence_ngRNA',
+                    epegRNA_spacer='Spacer_sequence_epegRNA',epegRNA_scaffold='Scaffold_sequence_epegRNA',
+                    epegRNA_extension='Extension_sequence',epegRNA_RTT='RTT_sequence',
+                    epegRNA_PBS='PBS_sequence',epegRNA_linker='Linker_sequence',
+                    epegRNA_pbs_length='PBS_length',ngRNA_group='ngRNA_group'):
     ''' 
-    pe_twist_oligos: makes prime editing twist olionucleotides
+    pe_twist_oligos: makes twist oligonucleotides for prime editing
     
     Parameters:
     df (dataframe): Dataframe with sequence information for epegRNAs
+    id_pre (str): Prefix for ID column
     tG (bool, optional): add 5' G to spacer if needed (Default: True)
     make_extension (bool, optional): concatenate RTT, PBS, and linker to make extension sequence (Default: True)
-    spacer (str, optional): epegRNA spacer column name (Default: Spacer_sequence)
-    scaffold (str, optional): epegRNA scaffold column name (Default: Scaffold_sequence)
-    extension (str, optional): epegRNA extension name (Default: Extension_sequence)
-    RTT (str, optional): epegRNA reverse transcripase template column name (Default: RTT_sequence)
-    PBS (str, optional): epegRNA primer binding site column name (Default: PBS_sequence)
-    linker (str, optional): epegRNA linker column name (Default: Linker_sequence)
+    fwd_barcode_t5 (bool, optional): forward barcode column name (Default: Forward Barcode)
+    rev_barcode_t3 (bool, optional): reverse barcode column name (Default: Reverse Barcode)
+    homology_arm_t5 (bool, optional): homology arm t5 column name (Default: Homology Arm 5)
+    homology_arm_t3 (bool, optional): homology arm t5 column name (Default: Homology Arm 3)
+    gg_insert (str, optional): Golden Gate insert sequence (Default:  ngRNA_scafold_5nt - Esp3I(R) - random_nt - Esp3I(F) - hU6; GTTTAGAGACGNNNNNCGTCTCACACC)
+    ngRNA_spacer (str, optional): ngRNA spacer column name (Default: ngRNA_Spacer_sequence)
+    epegRNA_spacer (str, optional): epegRNA spacer column name (Default: epegRNA_Spacer_sequence)
+    epegRNA_scaffold (str, optional): epegRNA scaffold column name (Default: Scaffold_sequence)
+    epegRNA_extension (str, optional): epegRNA extension name (Default: Extension_sequence)
+    epegRNA_RTT (str, optional): epegRNA reverse transcripase template column name (Default: RTT_sequence)
+    epegRNA_PBS (str, optional): epegRNA primer binding site column name (Default: PBS_sequence)
+    epegRNA_linker (str, optional): epegRNA linker column name (Default: Linker_sequence)
     
     Assumptions:
-    1. epegRNA scaffold: GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC
+    1. Oligo Template: FWD Barcode - BsaI - mU6 - ngRNA_spacer - ngRNA_scaffold_5nt - Esp3I(R) - random_nt - Esp3I(F) - hU6 - epegRNA_spacer - epegRNA_scaffold - epegRNA_extension - tevopreQ1_motif_5nt - BsaI - REV Barcode
     2. epegRNA motif: tevoPreQ1 (CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA)
     
-    Dependencies: pandas, pe_pcr1, & pe_pcr2
+    Dependencies: pandas, pe_pcr1
     '''
     # Make extension by concatenating RTT, PBS, and linker
-    if make_extension==True: df[extension] = df[RTT]+df[PBS]+df[linker]
-    else: print(f'Warning: Did not make extension sequence!\nMake sure "{extension}" column includes RTT+PBS+linker for epegRNAs.')
+    if make_extension==True: df[epegRNA_extension] = df[epegRNA_RTT]+df[epegRNA_PBS]+df[epegRNA_linker]
+    else: print(f'Warning: Did not make extension sequence!\nMake sure "{epegRNA_extension}" column includes RTT+PBS+linker for epegRNAs.')
 
-    # Assign subpool barcodes to different PBS lengths and strand directions
-    pbs_lengths = sorted(df['PBS_length'].value_counts().keys())
-    strands = sorted(df['Strand'].value_counts().keys())
-    pbs_lengths_ls = pbs_lengths*len(strands)
-    strands_ls = strands*len(pbs_lengths)
+    # Assign subpool barcodes to different PBS lengths and ngRNA groups
+    pbs_lengths = sorted(df[epegRNA_pbs_length].value_counts().keys())
+    ngRNA_groups = sorted(df[ngRNA_group].value_counts().keys())
+    pbs_lengths_ls = [val for val in pbs_lengths for _ in np.arange(len(ngRNA_groups))] 
+    ngRNA_groups_ls = ngRNA_groups*len(pbs_lengths)
     pcr1_barcodes = pe_pcr1.iloc[:len(pbs_lengths_ls)]
-    pcr1_barcodes['PBS_length']=pbs_lengths_ls
-    pcr1_barcodes['Strand']=strands_ls
-    df = pd.merge(left=df,right=pcr1_barcodes,on=['PBS_length','Strand'])
+    pcr1_barcodes[epegRNA_pbs_length]=pbs_lengths_ls
+    pcr1_barcodes[ngRNA_group]=ngRNA_groups_ls
+    df = pd.merge(left=df,right=pcr1_barcodes,on=[epegRNA_pbs_length,ngRNA_group])
 
     # Make twist oligo & determine length
-    df['First_spacer_nucleotide']=[s[0] for s in df[spacer]]
+    df = df.sort_values(by=[epegRNA_pbs_length,ngRNA_group]).reset_index(drop=True)
+    df[f'{epegRNA_spacer}_nt1']=[s[0] for s in df[epegRNA_spacer]]
+    df[f'{ngRNA_spacer}_nt1']=[s[0] for s in df[ngRNA_spacer]]
+    twist_oligos = []
     if tG==True: # Append 5'G to spacer if not already present
-        df['Twist_oligo']=[df.iloc[i]['Forward Barcode']+df.iloc[i]['Homology Arm 5']+df.iloc[i][spacer]+
-                           df.iloc[i][scaffold]+df.iloc[i][extension]+df.iloc[i]['Homology Arm 3']+
-                           df.iloc[i]['Reverse Barcode'] if df.iloc[i]['First_spacer_nucleotide']=='G' else 
-                           df.iloc[i]['Forward Barcode']+df.iloc[i]['Homology Arm 5']+'G'+df.iloc[i][spacer]+
-                           df.iloc[i][scaffold]+df.iloc[i][extension]+df.iloc[i]['Homology Arm 3']+
-                           df.iloc[i]['Reverse Barcode'] for i in range(len(df[spacer]))]
+        for i,(epegRNA_spacer_nt1,ngRNA_spacer_nt1) in enumerate(t.zip_cols(df,[f'{epegRNA_spacer}_nt1',f'{ngRNA_spacer}_nt1'])):
+            if epegRNA_spacer_nt1=='G' and ngRNA_spacer_nt1=='G':
+                twist_oligos.append(df.iloc[i][fwd_barcode_t5]+df.iloc[i][homology_arm_t5]+
+                                    df.iloc[i][ngRNA_spacer]+gg_insert+
+                                    df.iloc[i][epegRNA_spacer]+df.iloc[i][epegRNA_scaffold]+
+                                    df.iloc[i][epegRNA_extension]+
+                                    df.iloc[i][homology_arm_t3]+ df.iloc[i][rev_barcode_t3])
+            elif ngRNA_spacer_nt1=='G':
+                twist_oligos.append(df.iloc[i][fwd_barcode_t5]+df.iloc[i][homology_arm_t5]+
+                                    df.iloc[i][ngRNA_spacer]+gg_insert+
+                                    df.iloc[i][epegRNA_spacer]+'G'+df.iloc[i][epegRNA_scaffold]+
+                                    df.iloc[i][epegRNA_extension]+
+                                    df.iloc[i][homology_arm_t3]+ df.iloc[i][rev_barcode_t3])
+            elif epegRNA_spacer_nt1=='G':
+                twist_oligos.append(df.iloc[i][fwd_barcode_t5]+df.iloc[i][homology_arm_t5]+
+                                    'G'+df.iloc[i][ngRNA_spacer]+gg_insert+
+                                    df.iloc[i][epegRNA_spacer]+df.iloc[i][epegRNA_scaffold]+
+                                    df.iloc[i][epegRNA_extension]+
+                                    df.iloc[i][homology_arm_t3]+ df.iloc[i][rev_barcode_t3])
+            else:
+                twist_oligos.append(df.iloc[i][fwd_barcode_t5]+df.iloc[i][homology_arm_t5]+
+                                    'G'+df.iloc[i][ngRNA_spacer]+gg_insert+
+                                    df.iloc[i][epegRNA_spacer]+'G'+df.iloc[i][epegRNA_scaffold]+
+                                    df.iloc[i][epegRNA_extension]+
+                                    df.iloc[i][homology_arm_t3]+ df.iloc[i][rev_barcode_t3])
     else: # Do not append 5'G to spacer if not already present
-        df['Twist_oligo']=[df.iloc[i]['Forward Barcode']+df.iloc[i]['Homology Arm 5']+df.iloc[i][spacer]+
-                           df.iloc[i][scaffold]+df.iloc[i][extension]+df.iloc[i]['Homology Arm 3']+
-                           df.iloc[i]['Reverse Barcode'] for i in range(len(df[spacer]))]
+        twist_oligos.append(df.iloc[i][fwd_barcode_t5]+df.iloc[i][homology_arm_t5]+
+                            df.iloc[i][ngRNA_spacer]+gg_insert+
+                            df.iloc[i][epegRNA_spacer]+df.iloc[i][epegRNA_scaffold]+
+                            df.iloc[i][epegRNA_extension]+
+                            df.iloc[i][homology_arm_t3]+ df.iloc[i][rev_barcode_t3])
+    df['GG_insert'] = gg_insert
+    df['Twist_oligo'] = twist_oligos
     df['twist_oligo_length']=[len(twist) for twist in df['Twist_oligo']]
+    df['ID'] = [f'{id_pre}.{i+1}' for i in range(len(df))]
 
     return df
 
