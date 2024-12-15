@@ -88,8 +88,8 @@ def convert(in_dir: str, out_dir: str, suffix: str):
             if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.tiff', '.tif', '.bmp', '.webp')):
                 with Image.open(in_path) as img: # Convert and save the image in the target format
                     base_name, _ = os.path.splitext(filename)
-                    destination_path = os.path.join(out_dir, f"{base_name}{suffix.lower()}")
-                    img.convert("RGB").save(destination_path, suffix[1:])
+                    out_path = os.path.join(out_dir, f"{base_name}{suffix.lower()}")
+                    img.convert("RGB").save(out_path, suffix[1:])
                     print(f"Converted {filename} to {suffix[1:]}")
         except Exception as e:
             print(f"Error converting {filename}: {e}")

@@ -234,16 +234,7 @@ def MergePrimeDesignOutput(epegRNAs: dict | pd.DataFrame, ngRNAs: dict | pd.Data
         ngRNA_group_ls.append(ngRNAs_dc[pegRNA_num]%ngRNAs_group_max+1)
         ngRNAs_dc[pegRNA_num]+=1
     epeg_ngRNAs['ngRNA_group']=ngRNA_group_ls
-
-    '''
-    # Assign ngRNA groups
-    ngRNAs_dc = {ngRNA_num:1 for ngRNA_num in list(epeg_ngRNAs['ngRNA_number'].value_counts().keys())}
-    ngRNA_group_ls = []
-    for ngRNA_num in epeg_ngRNAs['ngRNA_number']:
-        ngRNA_group_ls.append(ngRNAs_dc[ngRNA_num])
-        ngRNAs_dc[ngRNA_num]+=1
-    epeg_ngRNAs['ngRNA_group']=ngRNA_group_ls
-    '''
+    
     return epeg_ngRNAs
 
 # pegRNA Methods
