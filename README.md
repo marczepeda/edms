@@ -62,6 +62,7 @@
     conda install conda-forge::adjusttext
     conda install anaconda::pillow
     conda install anaconda::git
+    pip install dna-features-viewer
     ```
 6. Install edms: write the following in a command line terminal...
     ```shell

@@ -33,6 +33,7 @@ setup(
                       'Levenshtein',
                       'ViennaRNA',
                       'adjustText',
-                      'pillow'],
+                      'pillow',
+                      'dna-features-viewer'],
     python_requires='>=3.11'
 )
