@@ -10,9 +10,10 @@ import os
 from ..gen import io
 from ..gen import plot as p
 
-def viewer(pt: str, feature_colors:dict=None, exclude=[], file=None, dir=None, fig_width=10,
+def viewer(pt: str, feature_colors:dict=None, exclude=[], region:tuple=None,
+           file=None, dir=None, fig_width=10,
            title='',title_size=18,title_weight='bold',
-           x_axis='bp',x_axis_size=12,x_axis_weight='bold',
+           x_axis='bp',x_axis_size=12,x_axis_weight='bold',xticks=[],
            legend_title:str=None,legend_title_size=12,legend_bbox_to_anchor=(0.5,-0.25),
            legend_loc='upper center',legend_frame_on=True,legend_ncol=4,
            return_features=False,show=True):
@@ -23,6 +24,7 @@ def viewer(pt: str, feature_colors:dict=None, exclude=[], file=None, dir=None, f
     pt (str): Genbank file path
     feature_colors (dict, optional): dictionary of features and corresponding hexadecimal colors (Default: None; Ex: {'feature':'#000000'})
     exclude (list, optional): list of excluded features/annotations (Default: [])
+    region (tuple, optional): (start, end) coordinates for highlighed region (Default: None)
     file (str, optional): save plot to filename (Default: None)
     dir (str, optional): save plot to directory (Default: None)
     fig_width (int | float, optional): figure width (Default: 10)
@@ -32,6 +34,7 @@ def viewer(pt: str, feature_colors:dict=None, exclude=[], file=None, dir=None, f
     x_axis (str, optional): x-axis name (Default: 'bp')
     x_axis_size (int, optional): x-axis name font size (Default: 12)
     x_axis_weight (str, optional): x-axis name bold, italics, etc. (Default: 'bold')
+    xticks (list, optional): x-axis tick values (Default: [])
     legend_title (str, optional): legend title (Default: None)
     legend_title_size (str, optional): legend title font size (Default: 12)
     legend_bbox_to_anchor (tuple, optional): coordinates for bbox anchor (Default: (0.5,-0.25))
@@ -93,13 +96,23 @@ def viewer(pt: str, feature_colors:dict=None, exclude=[], file=None, dir=None, f
     # Extract features (i.e., annotations) and assign colors based on their type
     features = []
     for feature in record.features: # Iterate through features
-        if feature.type not in exclude: # Check if features should be excluded
-            features.append((feature.type,
-                            GraphicFeature(start=int(feature.location.start), # Get feature information
-                                           end=int(feature.location.end), 
-                                           strand=feature.location.strand, 
-                                           label=feature.qualifiers['label'][0], 
-                                           color=color_scheme.get(feature.type, "#cccccc")))) # Default color (gray)
+        if region is None: # Full sequence
+            if feature.type not in exclude: # Check if features should be excluded
+                features.append((feature.type,
+                                GraphicFeature(start=int(feature.location.start), # Get feature information
+                                               end=int(feature.location.end), 
+                                               strand=feature.location.strand, 
+                                               label=feature.qualifiers['label'][0], 
+                                               color=color_scheme.get(feature.type, "#cccccc")))) # Default color (gray)
+        else: # Specified region
+            if feature.type not in exclude: # Check if features should be excluded
+                if ((int(feature.location.start)>=region[0])&(int(feature.location.start)<=region[1]))|((int(feature.location.end)>=region[0])&(int(feature.location.end)<=region[1])): # Check if start and/or end of the feature is within the region
+                    features.append((feature.type,
+                                    GraphicFeature(start=int(feature.location.start), # Get feature information
+                                                   end=int(feature.location.end), 
+                                                   strand=feature.location.strand, 
+                                                   label=feature.qualifiers['label'][0], 
+                                                   color=color_scheme.get(feature.type, "#cccccc")))) # Default color (gray)
 
     # Create a GraphicRecord for visualization
     graphic_record = GraphicRecord(sequence_length=len(record.seq), features=[feature[1] for feature in features])
@@ -111,6 +124,9 @@ def viewer(pt: str, feature_colors:dict=None, exclude=[], file=None, dir=None, f
     plt.title(title, fontsize=title_size, fontweight=title_weight)
     plt.xlabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight)
     plt.tick_params(axis='x', colors='black')
+    if xticks!=[]: plt.xticks(ticks=xticks,labels=xticks)
+    if region is not None: # Highlight specified region
+        plt.xlim(region[0],region[1])
 
     # Add a legend
     if legend_title is not None:
