@@ -17,6 +17,7 @@
     import edms.bio.pe as pe
     import edms.bio.pegLIT as pegLIT
     import edms.bio.qPCR as qPCR
+    import edms.bio.genbank as gb
     ```
 - dat: interacting with databases.
     ```shell
