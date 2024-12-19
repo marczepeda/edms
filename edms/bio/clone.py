@@ -395,6 +395,16 @@ def generate_sequences(length:int, current_sequence:str=""):
     # Return final list containing all unique molecular identifiers of specified length
     return sequences
 
+def filter_GC(sequences: list, GC_fract: tuple):
+    '''
+    filter_GC: filters sequences based on GC content
+    
+    Parameters:
+    sequences (list): list of sequences (str)
+    GC_fract (tuple): Pair of GC content boundaries written fractions (Ex: (0.4,0.6))
+    '''
+    return [sequence for sequence in sequences if ((len(t.find_all(sequence,'G'))+len(t.find_all(sequence,'C')))/len(sequence)>GC_fract[0])&((len(t.find_all(sequence,'G'))+len(t.find_all(sequence,'C')))/len(sequence)<GC_fract[1])]
+
 def shuffle(ls: list):
     """
     shuffle(): randomly reorganizes a list
@@ -408,7 +418,7 @@ def shuffle(ls: list):
     random.shuffle(ls2)
     return ls2
 
-def pe_twist_oligos(df: pd.DataFrame,id_pre:str,tG=True, make_extension=True,UMI_length:int=8,
+def pe_twist_oligos(df: pd.DataFrame,id_pre:str,tG=True, make_extension=True,UMI_length:int=8,UMI_GC_fract:tuple=(0.4,0.6),
                     fwd_barcode_t5='Forward Barcode',rev_barcode_t3='Reverse Barcode',
                     homology_arm_t5='Homology Arm 5',homology_arm_t3='Homology Arm 3',
                     ngRNA_hU6_gg_insert='GTTTAGAGACGATCGACGTCTCACACC',epegRNA_gg_insert='GTTTAAGAGCAGGTGCTAGACCTGCGTCGGTGC',
@@ -423,7 +433,8 @@ def pe_twist_oligos(df: pd.DataFrame,id_pre:str,tG=True, make_extension=True,UMI
     df (dataframe): Dataframe with sequence information for epegRNAs & corresponding ngRNAs
     id_pre (str): Prefix for ID column
     tG (bool, optional): add 5' G to spacer if needed (Default: True)
-    UMI_length (int, optional): unique molecular identifier length (Default: 8; 4^8=65,536 UMIs; adds 16 nt total)
+    UMI_length (int, optional): unique molecular identifier length (Default: 8; 4^8=65,536 UMIs before GC content filtering; adds 16 nt total)
+    UMI_GC_fract (tuple, optional): unique molecular identifier GC content boundaries written fractions (Default: (0.4,0.6))
     make_extension (bool, optional): concatenate RTT, PBS, and linker to make extension sequence (Default: True)
     fwd_barcode_t5 (bool, optional): forward barcode column name (Default: Forward Barcode)
     rev_barcode_t3 (bool, optional): reverse barcode column name (Default: Reverse Barcode)
@@ -442,7 +453,7 @@ def pe_twist_oligos(df: pd.DataFrame,id_pre:str,tG=True, make_extension=True,UMI
     1. Oligo Template: FWD Barcode - BsaI - mU6 - ngRNA_spacer - ngRNA_scaffold_5nt - Esp3I(R) - random_5nt - Esp3I(F) - hU6 - epegRNA_spacer - epegRNA_scaffold_8nt - BspMI (R) - random_5nt - BspMI - epegRNA_scaffold_8nt - epegRNA_extension - tevopreQ1_motif_5nt - BsaI - REV Barcode
     2. epegRNA motif: tevoPreQ1 (CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA)
     
-    Dependencies: pandas,random,generate_sequences(),shuffle(),pe_pcr1
+    Dependencies: pandas,random,generate_sequences(),filter_GC(),shuffle(),pe_pcr1
     '''
     # Make extension by concatenating RTT, PBS, and linker
     if make_extension==True: df[epegRNA_extension] = df[epegRNA_RTT]+df[epegRNA_PBS]+df[epegRNA_linker]
@@ -459,7 +470,7 @@ def pe_twist_oligos(df: pd.DataFrame,id_pre:str,tG=True, make_extension=True,UMI
     df = pd.merge(left=df,right=pcr1_barcodes,on=[epegRNA_pbs_length,ngRNA_group])
 
     # Assign UMI to each twist oligo
-    UMI_sequences = generate_sequences(length=UMI_length)
+    UMI_sequences = filter_GC(generate_sequences(length=UMI_length),UMI_GC_fract)
     if len(UMI_sequences)<df.shape[0]: KeyError(f'UMI_length={UMI_length} results in {len(UMI_sequences)} UMIs, which is less than {df.shape[0]} twist oligonucleotides!')
     df['Forward UMI']=shuffle(ls=UMI_sequences)[:df.shape[0]]
     df['Reverse UMI']=shuffle(ls=UMI_sequences)[:df.shape[0]]
