@@ -263,3 +263,24 @@ def ls_to_dc(ls: list, sep='.'):
         d[parts[-1]] = value.strip()  # Assign the value, strip any leading/trailing whitespace
 
     return dc
+
+# String methods
+def find_all(string: str, substring: str):
+    """
+    find_all(): Find all indexes of a substring in a string.
+    
+    Parameter:
+    string (str): the string to search within.
+    substring (str): the substring to search for.
+    """
+    indexes = []
+    start = 0
+    
+    while start < len(string):
+        
+        start = string.find(substring, start) # Find the next occurrence of the substring
+        if start == -1: break # If found, add to the list and move start position forward
+        indexes.append(start)
+        start += 1  # Move past the current match to find the next one
+        
+    return indexes

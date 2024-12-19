@@ -5,6 +5,7 @@
 # Import packages
 import pandas as pd
 import numpy as np
+import random
 from Bio.Seq import Seq
 from ..gen import tidy as t
 
@@ -349,26 +350,68 @@ pe_pcr1 = pd.DataFrame({
 ''' RE_typeII: Dataframe of TypeII restriction enzymes
 '''
 RE_typeII = pd.DataFrame({
-    0: {
-    'Name': 'Esp3I',
-    'Sequence_t5': 'N(CGTCTC)N|N',
-    'Sequence_b3': 'N(GCAGAG)NNNNN|N',
-    'Recognition': 'CGTCTC',
-    'Recognition_rc': 'GAGACG'
-    },
-    1: {
-    'Name': 'BsaI',
-    'Sequence_t5': 'N(GGTCTC)N|N',
-    'Sequence_b3': 'N(CCAGAG)NNNNN|N',
-    'Recognition': 'GGTCTC',
-    'Recognition_rc': 'GAGACC'
-    }
+  0: {
+      'Name': 'Esp3I',
+      'Sequence_t5': 'N(CGTCTC)N|N',
+      'Sequence_b3': 'N(GCAGAG)NNNNN|N',
+      'Recognition': 'CGTCTC',
+      'Recognition_rc': 'GAGACG'
+  },
+  1: {
+      'Name': 'BsaI',
+      'Sequence_t5': 'N(GGTCTC)N|N',
+      'Sequence_b3': 'N(CCAGAG)NNNNN|N',
+      'Recognition': 'GGTCTC',
+      'Recognition_rc': 'GAGACC'
+  },
+  2: {
+      'Name': 'BspMI',
+      'Sequence_t5': 'N(ACCTGC)NNNN|N',
+      'Sequence_b3': 'N(TGGACG)NNNNNNNN|N',
+      'Recognition': 'ACCTGC',
+      'Recognition_rc': 'GCAGGT'
+  }
 }).T
 
-def pe_twist_oligos(df: pd.DataFrame,id_pre:str,tG=True, make_extension=True,
+def generate_sequences(length:int, current_sequence:str=""):
+    """
+    generate_sequences(): recursively generates all possible sequences of A, T, C, G of the specified length
+
+    Parameters:
+    length (int): the length of each unique molecular identifier in the list
+    current_sequence (str, recursion): the current sequence being built for the unique molecular identifier
+    
+    Dependencies: generate_sequences()
+    """
+    bases = ['A', 'T', 'C', 'G']
+
+    # Base case: if the current sequence length matches the desired length
+    if len(current_sequence) == length: return [current_sequence]
+
+    # Recursive case: extend the current sequence with each base and recurse
+    sequences = []
+    for base in bases: sequences.extend(generate_sequences(length, current_sequence + base))
+    
+    # Return final list containing all unique molecular identifiers of specified length
+    return sequences
+
+def shuffle(ls: list):
+    """
+    shuffle(): randomly reorganizes a list
+
+    Parameters:
+    ls (list): the list to be shuffled.
+    
+    Dependencies: random
+    """
+    ls2 = ls[:]  # Create a copy of the list to avoid modifying the original
+    random.shuffle(ls2)
+    return ls2
+
+def pe_twist_oligos(df: pd.DataFrame,id_pre:str,tG=True, make_extension=True,UMI_length:int=8,
                     fwd_barcode_t5='Forward Barcode',rev_barcode_t3='Reverse Barcode',
                     homology_arm_t5='Homology Arm 5',homology_arm_t3='Homology Arm 3',
-                    ngRNA_hU6_gg_insert='GTTTAGAGACGNNNNNCGTCTCACACC',epegRNA_gg_insert='GTTTAAGAGCAGGTNNNNNACCTGCGTCGGTGC',
+                    ngRNA_hU6_gg_insert='GTTTAGAGACGATCGACGTCTCACACC',epegRNA_gg_insert='GTTTAAGAGCAGGTGCTAGACCTGCGTCGGTGC',
                     ngRNA_spacer='Spacer_sequence_ngRNA',epegRNA_spacer='Spacer_sequence_epegRNA',
                     epegRNA_extension='Extension_sequence',epegRNA_RTT='RTT_sequence',
                     epegRNA_PBS='PBS_sequence',epegRNA_linker='Linker_sequence',
@@ -377,16 +420,17 @@ def pe_twist_oligos(df: pd.DataFrame,id_pre:str,tG=True, make_extension=True,
     pe_twist_oligos(): makes twist oligonucleotides for prime editing
     
     Parameters:
-    df (dataframe): Dataframe with sequence information for epegRNAs
+    df (dataframe): Dataframe with sequence information for epegRNAs & corresponding ngRNAs
     id_pre (str): Prefix for ID column
     tG (bool, optional): add 5' G to spacer if needed (Default: True)
+    UMI_length (int, optional): unique molecular identifier length (Default: 8; 4^8=65,536 UMIs; adds 16 nt total)
     make_extension (bool, optional): concatenate RTT, PBS, and linker to make extension sequence (Default: True)
     fwd_barcode_t5 (bool, optional): forward barcode column name (Default: Forward Barcode)
     rev_barcode_t3 (bool, optional): reverse barcode column name (Default: Reverse Barcode)
     homology_arm_t5 (bool, optional): homology arm t5 column name (Default: Homology Arm 5)
     homology_arm_t3 (bool, optional): homology arm t5 column name (Default: Homology Arm 3)
-    ngRNA_hU6_gg_insert (str, optional): ngRNA scaffold to hU6 Golden Gate insert sequence (Default:  ngRNA_scafold_5nt - Esp3I(R) - random_nt - Esp3I(F) - hU6; GTTTAGAGACGNNNNNCGTCTCACACC)
-    epegRNA_gg_insert (str, optional): epegRNA scaffold Golden Gate insert sequence (Default: epegRNA_scaffold_8nt - BspMI (R) - random_5nt - BspMI - epegRNA_scaffold_8nt;GTTTAAGAGCAGGTNNNNNACCTGCGTCGGTGC)
+    ngRNA_hU6_gg_insert (str, optional): ngRNA scaffold to hU6 Golden Gate insert sequence (Default:  ngRNA_scafold_5nt - Esp3I(R) - random_nt - Esp3I(F) - hU6; GTTTAGAGACGATCGACGTCTCACACC)
+    epegRNA_gg_insert (str, optional): epegRNA scaffold Golden Gate insert sequence (Default: epegRNA_scaffold_8nt - BspMI (R) - random_5nt - BspMI - epegRNA_scaffold_8nt; GTTTAAGAGCAGGTGCTAGACCTGCGTCGGTGC)
     ngRNA_spacer (str, optional): ngRNA spacer column name (Default: ngRNA_Spacer_sequence)
     epegRNA_spacer (str, optional): epegRNA spacer column name (Default: epegRNA_Spacer_sequence)
     epegRNA_extension (str, optional): epegRNA extension name (Default: Extension_sequence)
@@ -398,7 +442,7 @@ def pe_twist_oligos(df: pd.DataFrame,id_pre:str,tG=True, make_extension=True,
     1. Oligo Template: FWD Barcode - BsaI - mU6 - ngRNA_spacer - ngRNA_scaffold_5nt - Esp3I(R) - random_5nt - Esp3I(F) - hU6 - epegRNA_spacer - epegRNA_scaffold_8nt - BspMI (R) - random_5nt - BspMI - epegRNA_scaffold_8nt - epegRNA_extension - tevopreQ1_motif_5nt - BsaI - REV Barcode
     2. epegRNA motif: tevoPreQ1 (CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA)
     
-    Dependencies: pandas, pe_pcr1
+    Dependencies: pandas,random,generate_sequences(),shuffle(),pe_pcr1
     '''
     # Make extension by concatenating RTT, PBS, and linker
     if make_extension==True: df[epegRNA_extension] = df[epegRNA_RTT]+df[epegRNA_PBS]+df[epegRNA_linker]
@@ -414,52 +458,102 @@ def pe_twist_oligos(df: pd.DataFrame,id_pre:str,tG=True, make_extension=True,
     pcr1_barcodes[ngRNA_group]=ngRNA_groups_ls
     df = pd.merge(left=df,right=pcr1_barcodes,on=[epegRNA_pbs_length,ngRNA_group])
 
+    # Assign UMI to each twist oligo
+    UMI_sequences = generate_sequences(length=UMI_length)
+    if len(UMI_sequences)<df.shape[0]: KeyError(f'UMI_length={UMI_length} results in {len(UMI_sequences)} UMIs, which is less than {df.shape[0]} twist oligonucleotides!')
+    df['Forward UMI']=shuffle(ls=UMI_sequences)[:df.shape[0]]
+    df['Reverse UMI']=shuffle(ls=UMI_sequences)[:df.shape[0]]
+
     # Make twist oligo & determine length
     df = df.sort_values(by=[epegRNA_pbs_length,ngRNA_group]).reset_index(drop=True)
     df[f'{epegRNA_spacer}_nt1']=[s[0] for s in df[epegRNA_spacer]]
     df[f'{ngRNA_spacer}_nt1']=[s[0] for s in df[ngRNA_spacer]]
     twist_oligos = []
-    if tG==True: # Append 5'G to spacer if not already present
-        for i,(epegRNA_spacer_nt1,ngRNA_spacer_nt1) in enumerate(t.zip_cols(df,[f'{epegRNA_spacer}_nt1',f'{ngRNA_spacer}_nt1'])):
+    twist_products = []
+    for i,(epegRNA_spacer_nt1,ngRNA_spacer_nt1) in enumerate(t.zip_cols(df,[f'{epegRNA_spacer}_nt1',f'{ngRNA_spacer}_nt1'])):
+        if tG==True: # Append 5'G to spacer if not already present
             if epegRNA_spacer_nt1=='G' and ngRNA_spacer_nt1=='G':
-                twist_oligos.append(df.iloc[i][fwd_barcode_t5]+df.iloc[i][homology_arm_t5]+
+                twist_oligos.append(df.iloc[i]['Forward UMI']+
+                                    df.iloc[i][fwd_barcode_t5]+df.iloc[i][homology_arm_t5]+
                                     df.iloc[i][ngRNA_spacer]+ngRNA_hU6_gg_insert+
                                     df.iloc[i][epegRNA_spacer]+epegRNA_gg_insert+
                                     df.iloc[i][epegRNA_extension]+
-                                    df.iloc[i][homology_arm_t3]+ df.iloc[i][rev_barcode_t3])
+                                    df.iloc[i][homology_arm_t3]+df.iloc[i][rev_barcode_t3]+
+                                    df.iloc[i]['Reverse UMI'])
+                twist_products.append(df.iloc[i][homology_arm_t5]+
+                                      df.iloc[i][ngRNA_spacer]+ngRNA_hU6_gg_insert+
+                                      df.iloc[i][epegRNA_spacer]+epegRNA_gg_insert+
+                                      df.iloc[i][epegRNA_extension]+
+                                      df.iloc[i][homology_arm_t3])
             elif ngRNA_spacer_nt1=='G':
-                twist_oligos.append(df.iloc[i][fwd_barcode_t5]+df.iloc[i][homology_arm_t5]+
+                twist_oligos.append(df.iloc[i]['Forward UMI']+
+                                    df.iloc[i][fwd_barcode_t5]+df.iloc[i][homology_arm_t5]+
                                     df.iloc[i][ngRNA_spacer]+ngRNA_hU6_gg_insert+
                                     'G'+df.iloc[i][epegRNA_spacer]+epegRNA_gg_insert+
                                     df.iloc[i][epegRNA_extension]+
-                                    df.iloc[i][homology_arm_t3]+ df.iloc[i][rev_barcode_t3])
+                                    df.iloc[i][homology_arm_t3]+df.iloc[i][rev_barcode_t3]+
+                                    df.iloc[i]['Reverse UMI'])
+                twist_products.append(df.iloc[i][homology_arm_t5]+
+                                      df.iloc[i][ngRNA_spacer]+ngRNA_hU6_gg_insert+
+                                      'G'+df.iloc[i][epegRNA_spacer]+epegRNA_gg_insert+
+                                      df.iloc[i][epegRNA_extension]+
+                                      df.iloc[i][homology_arm_t3])
             elif epegRNA_spacer_nt1=='G':
-                twist_oligos.append(df.iloc[i][fwd_barcode_t5]+df.iloc[i][homology_arm_t5]+
+                twist_oligos.append(df.iloc[i]['Forward UMI']+
+                                    df.iloc[i][fwd_barcode_t5]+df.iloc[i][homology_arm_t5]+
                                     'G'+df.iloc[i][ngRNA_spacer]+ngRNA_hU6_gg_insert+
                                     df.iloc[i][epegRNA_spacer]+epegRNA_gg_insert+
                                     df.iloc[i][epegRNA_extension]+
-                                    df.iloc[i][homology_arm_t3]+ df.iloc[i][rev_barcode_t3])
+                                    df.iloc[i][homology_arm_t3]+df.iloc[i][rev_barcode_t3]+
+                                    df.iloc[i]['Reverse UMI'])
+                twist_products.append(df.iloc[i][homology_arm_t5]+
+                                      'G'+df.iloc[i][ngRNA_spacer]+ngRNA_hU6_gg_insert+
+                                      df.iloc[i][epegRNA_spacer]+epegRNA_gg_insert+
+                                      df.iloc[i][epegRNA_extension]+
+                                      df.iloc[i][homology_arm_t3])
             else:
-                twist_oligos.append(df.iloc[i][fwd_barcode_t5]+df.iloc[i][homology_arm_t5]+
+                twist_oligos.append(df.iloc[i]['Forward UMI']+
+                                    df.iloc[i][fwd_barcode_t5]+df.iloc[i][homology_arm_t5]+
                                     'G'+df.iloc[i][ngRNA_spacer]+ngRNA_hU6_gg_insert+
                                     'G'+df.iloc[i][epegRNA_spacer]+epegRNA_gg_insert+
                                     df.iloc[i][epegRNA_extension]+
-                                    df.iloc[i][homology_arm_t3]+ df.iloc[i][rev_barcode_t3])
-    else: # Do not append 5'G to spacer if not already present
-        twist_oligos.append(df.iloc[i][fwd_barcode_t5]+df.iloc[i][homology_arm_t5]+
-                            df.iloc[i][ngRNA_spacer]+ngRNA_hU6_gg_insert+
-                            df.iloc[i][epegRNA_spacer]+epegRNA_gg_insert+
-                            df.iloc[i][epegRNA_extension]+
-                            df.iloc[i][homology_arm_t3]+ df.iloc[i][rev_barcode_t3])
+                                    df.iloc[i][homology_arm_t3]+df.iloc[i][rev_barcode_t3]+
+                                    df.iloc[i]['Reverse UMI'])
+                twist_products.append(df.iloc[i][homology_arm_t5]+
+                                      'G'+df.iloc[i][ngRNA_spacer]+ngRNA_hU6_gg_insert+
+                                      'G'+df.iloc[i][epegRNA_spacer]+epegRNA_gg_insert+
+                                      df.iloc[i][epegRNA_extension]+
+                                      df.iloc[i][homology_arm_t3])
+        else: # Do not append 5'G to spacer if not already present
+            twist_oligos.append(df.iloc[i]['Forward UMI']+
+                                df.iloc[i][fwd_barcode_t5]+df.iloc[i][homology_arm_t5]+
+                                df.iloc[i][ngRNA_spacer]+ngRNA_hU6_gg_insert+
+                                df.iloc[i][epegRNA_spacer]+epegRNA_gg_insert+
+                                df.iloc[i][epegRNA_extension]+
+                                df.iloc[i][homology_arm_t3]+df.iloc[i][rev_barcode_t3]+
+                                df.iloc[i]['Reverse UMI'])
+            twist_products.append(df.iloc[i][homology_arm_t5]+
+                                  df.iloc[i][ngRNA_spacer]+ngRNA_hU6_gg_insert+
+                                  df.iloc[i][epegRNA_spacer]+epegRNA_gg_insert+
+                                  df.iloc[i][epegRNA_extension]+
+                                  df.iloc[i][homology_arm_t3])
     df['ngRNA_hU6_GG_insert'] = ngRNA_hU6_gg_insert
     df['epegRNA_GG_insert'] = epegRNA_gg_insert
     df['Twist_oligo'] = twist_oligos
-    df['twist_oligo_length']=[len(twist) for twist in df['Twist_oligo']]
+    df['Twist_oligo_length']=[len(twist) for twist in df['Twist_oligo']]
     df['ID'] = [f'{id_pre}.{i+1}' for i in range(len(df))]
 
+    # Check for 2 recognition sites per enzyme
+    for (enzyme,recognition,recognition_rc) in t.zip_cols(df=RE_typeII,cols=['Name','Recognition','Recognition_rc']):
+        enzyme_sites = [len(t.find_all(twist_product,recognition)) + # Check forward direction
+                        len(t.find_all(twist_product,recognition_rc)) # Check reverse direction
+                        for twist_product in twist_products] # Iterate through Twist product
+        df[enzyme] = enzyme_sites
+        print(f"{enzyme} does not have 2 reconition sites for {[id for (id,enzyme_site) in t.zip_cols(df=df,cols=['ID',enzyme]) if enzyme_site!=2]}")
+    
     return df
 
-# PCR methods
+# Master Mix methods
 def pcr_mm(primers: pd.Series, template_uL: int, template='1-2 ng/uL template',
            Q5_mm_x_stock=5,dNTP_mM_stock=10,fwd_uM_stock=10,rev_uM_stock=10,Q5_U_uL_stock=2,
            Q5_mm_x_desired=1,dNTP_mM_desired=0.2,fwd_uM_desired=0.5,rev_uM_desired=0.5,Q5_U_uL_desired=0.02,
@@ -511,6 +605,7 @@ def pcr_mm(primers: pd.Series, template_uL: int, template='1-2 ng/uL template',
                                                      })
     return pcr_mm_dc
 
+# Simulation Methods
 def pcr_sim(df: pd.DataFrame,template_col: str, fwd_bind_col: str, rev_bind_col: str,
             fwd_ext_col: str=None, rev_ext_col: str=None, product_col='PCR Product'):
     '''
@@ -571,3 +666,33 @@ def pcr_sim(df: pd.DataFrame,template_col: str, fwd_bind_col: str, rev_bind_col:
             
     df[product_col]=pcr_product_ls
     return df
+
+def digest_sim(df: pd.DataFrame, input: str, enzyme: str | list, circular: bool):
+    '''
+    digest_sim(): returns dataframe with simulated RE digest product(s)
+    
+    Parameters:
+    df (dataframe): dataframe with input sequence
+    input (str): input sequence column name
+    enzyme (str | list): restriction enzyme name
+    circular (bool): is the input sequence circular?
+    
+    Dependencies: pandas
+    '''
+    # Identify input
+
+    return
+
+def ligate_sim():
+    '''
+    ligate_sim(): returns dataframe with simulated ligation product
+
+    Parameters:
+    df (dataframe): dataframe with input sequence
+    inputs (list): list of input sequence column names
+
+    Dependencies: pandas
+    '''
+    #
+
+    return
