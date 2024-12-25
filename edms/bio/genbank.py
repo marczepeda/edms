@@ -1,7 +1,13 @@
-### genbank.py ###
-# Author: Marc Zepeda
-# Date: 2024-12-15
+''' 
+Module: genbank.py
+Author: Marc Zepeda
+Created: 2024-12-15
+Description: Genbank visualization
 
+Usage:
+[Visualize]
+- viewer(): visualize genbank file
+'''
 # Import packages
 from dna_features_viewer import GraphicFeature, GraphicRecord
 from Bio import SeqIO
@@ -10,6 +16,7 @@ import os
 from ..gen import io
 from ..gen import plot as p
 
+# Visualize
 def viewer(pt: str, feature_colors:dict=None, exclude=[], region:tuple=None,
            file=None, dir=None, fig_width=10,
            title='',title_size=18,title_weight='bold',

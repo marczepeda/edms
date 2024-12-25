@@ -1,6 +1,31 @@
-### plot.py ###
-# Author: Marc Zepeda
-# Date: 2024-08-05
+''' 
+Module: plot.py
+Author: Marc Zepeda
+Created: 2024-08-05
+Description: Plot generation
+
+Usage:
+[Supporting methods]
+- re_un_cap(): replace underscores with spaces and capitalizes each word for a given string
+- round_up_pow_10(): rounds up a given number to the nearest power of 10
+- round_down_pow_10: rounds down a given number to the nearest power of 10
+- log10: returns log10 of maximum value from series or 0
+- move_dis_legend(): moves legend for distribution graphs
+- extract_pivots(): returns a dictionary of pivot-formatted dataframes from tidy-formatted dataframe
+- formatter(): formats, displays, and saves plots
+
+[Graph methods]
+- scat(): creates scatter plot related graphs
+- cat(): creates category dependent graphs
+- dist(): creates distribution graphs
+- heat(): creates heat plot related graphs
+- stack(): creates stacked bar plot
+- vol(): creates volcano plot
+
+[Color display methods]
+- matplotlib_cmaps(): view all matplotlib color maps
+- seaborn_palettes(): view all seaborn color palettes
+'''
 
 # Import packages
 import os
@@ -74,7 +99,7 @@ def log10(series):
 
 def move_dist_legend(ax, legend_loc: str,legend_title_size: int,legend_size: int, legend_bbox_to_anchor: tuple, legend_ncol: tuple):
     ''' 
-    move_dis_legend(): moves legend for distribution graphs.
+    move_dis_legend(): moves legend for distribution graphs
     
     Paramemters:
     ax: matplotlib axis
@@ -119,7 +144,7 @@ def formatter(typ:str,ax,df:pd.DataFrame,x:str,y:str,cols:str,file:str,dir:str,p
               y_axis:str,y_axis_size:int,y_axis_weight:str,y_axis_scale:str,y_axis_dims:tuple,y_ticks_rot:int,yticks:list,
               legend_title:str,legend_title_size:int,legend_size:int,legend_bbox_to_anchor:tuple,legend_loc:str,legend_items:tuple,legend_ncol:int,show:bool):
     ''' 
-    formatter(): formats, displays, and saves plots.
+    formatter(): formats, displays, and saves plots
 
     Parameters:
     typ (str): plot type
@@ -226,7 +251,7 @@ def scat(typ: str,df: pd.DataFrame,x: str,y: str,cols=None,cols_ord=None,stys=No
          legend_title='',legend_title_size=12,legend_size=9,legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_items=(0,0),legend_ncol=1,show=True,
          **kwargs):
     ''' 
-    scat(): creates scatter plot related graphs.
+    scat(): creates scatter plot related graphs
 
     Parameters:
     typ (str): plot type (scat, line, line_scat)
@@ -341,7 +366,7 @@ def cat(typ:str,df:pd.DataFrame,x='',y='',cols=None,cols_ord=None,cols_exclude=N
         legend_title='',legend_title_size=12,legend_size=9,legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_items=(0,0),legend_ncol=1,show=True, 
         **kwargs):
     ''' 
-    cat(): creates category dependent graphs.
+    cat(): creates category dependent graphs
 
     Parameters:
     typ (str): plot type (bar, box, violin, swarm, strip, point, count, bar_swarm, box_swarm, violin_swarm)
@@ -515,7 +540,7 @@ def dist(typ: str,df: pd.DataFrame,x: str,cols=None,cols_ord=None,cols_exclude=N
         legend_title='',legend_title_size=12,legend_size=9,legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_items=(0,0),legend_ncol=1,show=True, 
         **kwargs):
     ''' 
-    dist(): creates distribution graphs.
+    dist(): creates distribution graphs
 
     Parameters:
     typ (str): plot type (hist, kde, hist_kde, rid)
@@ -663,7 +688,7 @@ def heat(df: pd.DataFrame, x: str, y: str, vars='variable', vals='value',vals_di
          y_axis='',y_axis_size=12,y_axis_weight='bold',y_ticks_rot=0,
          show=True,**kwargs):
     '''
-    heat(): creates heat plot related graphs.
+    heat(): creates heat plot related graphs
 
     Parameters:
     df (dataframe): pandas dataframe
@@ -947,4 +972,80 @@ def vol(df: pd.DataFrame,x: str,y: str,stys:str=None, size:str=None,size_dims:tu
         io.mkdir(dir) # Make output directory if it does not exist
         plt.savefig(fname=os.path.join(dir, file), dpi=600, bbox_inches='tight', format=f'{file.split(".")[-1]}')
     if show: plt.show()
-    if return_df: return df     
+    if return_df: return df
+
+# Color display methods
+def matplotlib_cmaps():
+    ''' 
+    matplotlib_cmaps(): view all matplotlib color maps
+    
+    Dependencies: matplotlib & numpy
+    '''
+    # Get the list of all available colormaps
+    cmaps = plt.colormaps()
+
+    # Create some data to display the colormaps
+    gradient = np.linspace(0, 1, 256)
+    gradient = np.vstack((gradient, gradient))
+
+    # Define how many colormaps to show per row
+    n_col = 4
+    n_row = len(cmaps) // n_col + 1
+
+    # Create a figure to display the colormaps
+    fig, axes = plt.subplots(n_row, n_col, figsize=(12, 15))
+    axes = axes.flatten()
+
+    # Loop through all colormaps and display them
+    for i, cmap in enumerate(cmaps):
+        ax = axes[i]
+        ax.imshow(gradient, aspect='auto', cmap=plt.get_cmap(cmap))
+        ax.set_title(cmap, fontsize=8)
+        ax.axis('off')
+
+    # Turn off any unused subplots
+    for j in range(i+1, len(axes)):
+        axes[j].axis('off')
+
+    # Display plot
+    plt.tight_layout()
+    plt.show()
+
+def seaborn_palettes():
+    ''' 
+    seaborn_palettes(): view all seaborn color palettes
+    
+    Dependencies: matplotlib & seaborn
+    '''
+    # List of common Seaborn palettes
+    palettes = [
+        "deep", "muted", "bright", "pastel", "dark", "colorblind",
+        "husl", "hsv", "Paired", "Set1", "Set2", "Set3", "tab10", "tab20"
+    ]
+    
+    # Create a figure to display the color palettes
+    n_col = 2  # Palettes per row
+    n_row = len(palettes) // n_col + 1
+    fig, axes = plt.subplots(n_row, n_col, figsize=(10, 8))
+    axes = axes.flatten()
+
+    # Loop through the palettes and display them
+    for i, palette in enumerate(palettes):
+        ax = axes[i]
+        colors = sns.color_palette(palette, 10)  # Get the palette with 10 colors
+        # Plot the colors as a series of rectangles (like palplot)
+        for j, color in enumerate(colors):
+            ax.add_patch(plt.Rectangle((j, 0), 1, 1, color=color))
+        
+        ax.set_xlim(0, len(colors))
+        ax.set_ylim(0, 1)
+        ax.set_title(palette, fontsize=12)
+        ax.axis('off')
+
+    # Turn off any unused subplots
+    for j in range(i + 1, len(axes)):
+        axes[j].axis('off')
+
+    # Display plot
+    plt.tight_layout()
+    plt.show()

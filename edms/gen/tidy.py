@@ -1,8 +1,31 @@
-### tidy.py ###
-# Author: Marc Zepeda
-# Date: 2024-08-03
+'''
+Module: tidy.py
+Author: Marc Zepeda
+Created: 2024-08-03
+Description:
 
-# Import methods
+Usage:
+[Dataframe methods]
+- reorder_cols(): returns dataframe with columns reorganized 
+- zip_cols(): returns zip(dataframe[cols[0]],dataframe[cols[1]],...) for tuple loops
+- missing_cols(): returns values from a list if they are not dataframe columns
+- merge(): adds metadata columns to data dataframe using metadata dataframe
+
+[Methods for dictionary containing dataframes]
+- split_by(): splits elements of list, set, or series by specified seperator
+- isolate(): isolate rows in dataframes based specified value(s)
+- modify(): Returns dictionary containing dataframes new or updated column with specified value(s) or function
+- join(): returns a single dataframe from a dictionary of dataframes
+- split(): returns from a dictionary of dataframes from a single dataframe
+
+[Methods for interconverting dictionaries and lists]
+- dc_to_ls(): convert a dictionary containing several subdictionaries into a list with all the key value relationships stored as individual values
+- ls_to_dc(): convert a list with all the key value relationships stored as individual values into a dictionary containing several subdictionaries
+
+[String methods]
+- find_all(): Find all indexes of a substring in a string
+'''
+# Import packages
 import pandas as pd
 import re
 
@@ -45,7 +68,30 @@ def missing_cols(df: pd.DataFrame, cols: list):
     '''
     return [col for col in cols if col not in df.columns]
 
-# Methods for dictionary containing dataframes.
+def merge(data: pd.DataFrame, meta: pd.DataFrame, id, cols: list):
+    ''' 
+    merge(): adds metadata columns to data dataframe using metadata dataframe
+    
+    Parameters:
+    data (dataframe): data dataframe
+    meta (dataframe): metadata dataframe
+    id: id(s) column name(s) [str: both, list: data & meta]
+    cols (list): list of column names in metadata dataframe
+    
+    Dependencies: pandas
+    '''
+    if type(id)==str:
+        for c in cols: 
+            id_c = dict(zip(meta[id],meta[c]))
+            data[c] = [id_c[i] for i in data[id]]
+    elif (type(id)==list)&(len(id)==2):
+        for c in cols: 
+            id_c = dict(zip(meta[id[1]],meta[c]))
+            data[c] = [id_c[i] for i in data[id[0]]]
+    else: print("Error: id needs to be string or list of 2 strings")
+    return data
+
+# Methods for dictionary containing dataframes
 def split_by(series, by=', '):
     ''' 
     split_by(): splits elements of list, set, or series by specified seperator
@@ -196,29 +242,6 @@ def split(df: pd.DataFrame, key: str):
 '''
     return {k:df[df[key]==k] for k in list(df[key].value_counts().keys())} 
 
-def merge(data: pd.DataFrame, meta: pd.DataFrame, id, cols: list):
-    ''' 
-    merge(): adds metadata columns to data dataframe using metadata dataframe
-    
-    Parameters:
-    data (dataframe): data dataframe
-    meta (dataframe): metadata dataframe
-    id: id(s) column name(s) [str: both, list: data & meta]
-    cols (list): list of column names in metadata dataframe
-    
-    Dependencies: pandas
-    '''
-    if type(id)==str:
-        for c in cols: 
-            id_c = dict(zip(meta[id],meta[c]))
-            data[c] = [id_c[i] for i in data[id]]
-    elif (type(id)==list)&(len(id)==2):
-        for c in cols: 
-            id_c = dict(zip(meta[id[1]],meta[c]))
-            data[c] = [id_c[i] for i in data[id[0]]]
-    else: print("Error: id needs to be string or list of 2 strings")
-    return data
-
 # Methods for interconverting dictionaries and lists
 def dc_to_ls(dc: dict,sep='.'):
     ''' 
@@ -267,11 +290,11 @@ def ls_to_dc(ls: list, sep='.'):
 # String methods
 def find_all(string: str, substring: str):
     """
-    find_all(): Find all indexes of a substring in a string.
+    find_all(): Find all indexes of a substring in a string
     
     Parameter:
-    string (str): the string to search within.
-    substring (str): the substring to search for.
+    string (str): the string to search within
+    substring (str): the substring to search for
     """
     indexes = []
     start = 0

@@ -1,17 +1,28 @@
-### cosmic.py ###
-# Author: Marc Zepeda
-# Date: 2024-09-16
+''' 
+Module: cosmic.py
+Author: Marc Zepeda
+Created: 2024-09-16
+Description: Catalogue Of Somatic Mutations In Cancer
 
+Usage:
+[COSMIC database]
+- mutations(): returns COSMIC mutations dataframe for a given gene
+- prevalence(): returns list of mutations sorted by prevalence on COSMIC
+
+[Prime editing]
+- priority_muts: returns the shared sequences library dataframe with priority mutations
+- priority_edits(): returns a dataframe with the most clinically-relevant prime edits to prioritize from the shared sequences library
+'''
 # Import packages
 import pandas as pd
 import re
 import ast
 from ..gen import io
 
-# COSMIC database methods
+# COSMIC database
 def mutations(pt:str):
     ''' 
-    mutations(): returns COSMIC mutations dataframe for a given gene.
+    mutations(): returns COSMIC mutations dataframe for a given gene
     
     Parameters:
     pt (str): path to COSMIC csv file
@@ -50,7 +61,7 @@ def prevalence(gene: pd.DataFrame):
     '''
     return list(gene['AA_mut'].value_counts().keys())
 
-# Prime editing methods
+# Prime editing
 def priority_muts(pegRNAs: pd.DataFrame, pegRNAs_shared: pd.DataFrame, pt: str):
     ''' 
     priority_muts: returns the shared sequences library dataframe with priority mutations

@@ -1,7 +1,20 @@
-### stat.py ###
-# Author: Marc Zepeda
-# Date: 2024-08-26
+''' 
+Module: stat.py
+Author: Marc Zepeda
+Created: 2024-08-26
+Description: Statistics
 
+Usage:
+[Statistics]
+- describe(): returns descriptive statistics for numerical columns in a DataFrame
+- difference(): computes the appropriate statistical test(s) and returns the p-value(s)
+- correlation(): returns a correlation matrix
+
+[Comparison]
+- compare(): computes FC, pval, and log transformations relative to a specified condition
+'''
+
+# Import packages
 import itertools
 import pandas as pd
 import numpy as np
@@ -11,7 +24,7 @@ from statsmodels.stats.anova import AnovaRM
 from statsmodels.stats.multitest import multipletests
 from ..gen import tidy as t
 
-# Statistics methods
+# Statistics
 def describe(df: pd.DataFrame, cols=[], group=''):
     ''' 
     describe(): returns descriptive statistics for numerical columns in a DataFrame
@@ -47,7 +60,7 @@ def describe(df: pd.DataFrame, cols=[], group=''):
 
 def difference(df: pd.DataFrame,data_col: str,compare_col: str,compare: list,same=False,para=True,alpha=0.05,within_cols=[],method='holm'):
     ''' 
-    difference(): computes the appropriate statistical test(s) and returns the p-value(s).
+    difference(): computes the appropriate statistical test(s) and returns the p-value(s)
     
     Parameters:
     df: tidy DataFrame
@@ -234,7 +247,7 @@ def correlation(df: pd.DataFrame, var_cols=[], value_cols=[], method='pearson',n
     elif len(value_cols)>=1: df = df[value_cols] # Isolate specified columns for non-tidy dataframe
     return df.corr(method=method,numeric_only=numeric_only) # Correlation matrix with specified method
 
-# Comparison methods
+# Comparison
 def compare(df: pd.DataFrame, sample: str, cond: str, cond_comp: str, var: str, count: str, psuedocount=1):
     ''' 
     compare(): computes FC, pval, and log transformations relative to a specified condition

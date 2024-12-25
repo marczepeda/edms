@@ -1,6 +1,37 @@
-### pe.py ###
-# Author: Marc Zepeda
-# Date: 2024-08-31
+''' 
+Module: pe.py
+Author: Marc Zepeda
+Created: 2024-08-31
+Description: Prime Editing
+
+Usage:
+[Biological Dictionaries]
+- dna_aa_codon_table: DNA to AA codon table
+- aa_dna_codon_table: AA to DNA codon table
+
+[PrimeDesign]
+- PrimeDesignInput(): creates PrimeDesign input file
+- PrimeDesign(): run PrimeDesign using Docker (NEED TO BE RUNNING DESKTOP APP)
+- PrimeDesignOutput(): splits peg/ngRNAs from PrimeDesign output & finishes annotations
+- MergePrimeDesignOutput(): rejoins epeg/ngRNAs from PrimeDesign output & creates ngRNA_groups
+
+[pegRNA]
+- epegRNA_linkers(): generate epegRNA linkers between PBS and 3' hairpin motif & finish annotations
+- shared_sequences(): Reduce PE library into shared spacers and PBS sequences
+- get_codons(): returns all codons within a specified frame for a nucleotide sequence
+- get_codon_frames(): returns all codon frames for a nucleotide sequence
+- is_sublist_in_order(): returns if each element in the sub list appears in the correct order in the main list
+- RTT_designer(): design all possible RTT for given spacer & PBS (WT, single insertions, & single deletions)
+- compare_RTTs(): compares RTT outcome to WT RTT outcome and returns observed it
+- pegRNAs_tester(): confirm that pegRNAs should create the predicted edit
+
+[Comparing pegRNA libraries]
+- print_shared_sequences(): prints spacer and PBS sequences from dictionary of shared_sequences libraries
+- print_shared_sequences_mutant(): prints spacer and PBS sequences as well as priority mutant from dictionary of shared_sequences libraries
+
+[Comparing pegRNAs]
+- group_pe(): returns a dataframe containing groups of (epegRNA,ngRNA) pairs that share spacers and have similar PBS and performs pairwise alignment for RTT  
+'''
 
 # Import packages
 import pandas as pd
@@ -15,6 +46,7 @@ from ..gen import tidy as t
 from ..gen import plot as p
 
 # Biological Dictionaries
+''' dna_aa_codon_table: DNA to AA codon table'''
 dna_aa_codon_table = {
     "TTT": "F", "TTC": "F", "TTA": "L", "TTG": "L",
     "TCT": "S", "TCC": "S", "TCA": "S", "TCG": "S",
@@ -34,6 +66,7 @@ dna_aa_codon_table = {
     "GGT": "G", "GGC": "G", "GGA": "G", "GGG": "G"
 }
 
+''' aa_dna_codon_table: AA to DNA codon table'''
 aa_dna_codon_table = {
     "F": ["TTT", "TTC"],
     "L": ["TTA", "TTG", "CTT", "CTC", "CTA", "CTG"],
@@ -58,10 +91,10 @@ aa_dna_codon_table = {
     "G": ["GGT", "GGC", "GGA", "GGG"]
 }
 
-# PrimeDesign Methods
+# PrimeDesign
 def PrimeDesignInput(target_name: str, target_sequence: str, dir: str='.', file: str='PrimeDesignInput.csv'):
     ''' 
-    PrimeDesignInput(): creates PrimeDesign input file.
+    PrimeDesignInput(): creates PrimeDesign input file
     
     Parameters:
     target_name (str): name of target
@@ -237,7 +270,7 @@ def MergePrimeDesignOutput(epegRNAs: dict | pd.DataFrame, ngRNAs: dict | pd.Data
     
     return epeg_ngRNAs
 
-# pegRNA Methods
+# pegRNA
 def epegRNA_linkers(pegRNAs: pd.DataFrame, epegRNA_motif_sequence: str='CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA',
                     checkpoint_dir: str=None, checkpoint_file=None, checkpoint_pt: str=''):
     ''' 
@@ -280,7 +313,7 @@ def epegRNA_linkers(pegRNAs: pd.DataFrame, epegRNA_motif_sequence: str='CGCGGTTC
 
 def shared_sequences(pegRNAs: pd.DataFrame, hist_plot:bool=True, hist_dir: str=None, hist_file: str=None, **kwargs):
     ''' 
-    shared_sequences(): Reduce PE library into shared spacers and PBS sequences.
+    shared_sequences(): Reduce PE library into shared spacers and PBS sequences
     
     Parameters:
     pegRNAs (dataframe): pegRNAs DataFrame
@@ -694,7 +727,7 @@ def RTT_designer(pegRNAs: pd.DataFrame, file: str, aa_index: int=1, rtt_length: 
 
 def compare_RTTs(rtt_prot,rtt_prot_indexes: list,rtt_wt_prot, rtt_wt_prot_indexes: list,annotation: str,strand: str):
     ''' 
-    compare_RTTs(): compares RTT outcome to WT RTT outcome and returns observed it.
+    compare_RTTs(): compares RTT outcome to WT RTT outcome and returns observed it
     
     Parameters:
     rtt_prot: RTT outcome, which is AA sequence
@@ -1069,7 +1102,7 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame, file: str, aa_index: int=1):
     pegRNAs['Edit_matches_explain']=edit_matches_explain
     return pegRNAs
 
-# Comparing pegRNA libraries methods
+# Comparing pegRNA libraries
 def print_shared_sequences(dc: dict):
     ''' 
     print_shared_sequences(): prints spacer and PBS sequences from dictionary of shared_sequences libraries

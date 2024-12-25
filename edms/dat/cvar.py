@@ -1,6 +1,18 @@
-### cvar.py ###
-# Author: Marc Zepeda
-# Date: 2024-09-16
+''' 
+Module: cvar.py
+Author: Marc Zepeda
+Created: 2024-09-16
+Description: ClinVar
+
+Usage:
+[ClinVar database]
+- mutations(): returns ClinVar mutations dataframe for a given gene
+- prevalence(): returns list of mutations sorted by prevalence on ClinVar
+
+[Prime editing]
+- priority_muts: returns the shared sequences library dataframe with priority mutations
+- priority_edits(): returns a dataframe with the most clinically-relevant prime edits to prioritize from the shared sequences library
+'''
 
 # Import packages
 import pandas as pd
@@ -8,7 +20,7 @@ import re
 import ast
 from ..gen import io
 
-# ClinVar database methods
+# ClinVar database
 def mutations(gene_name:str,pt:str,typ:str='tsv'):
     ''' 
     mutations: returns ClinVar mutations dataframe for a given gene.
@@ -51,7 +63,7 @@ def prevalence(gene: pd.DataFrame):
 '''
     return list(gene['Protein change'].value_counts().keys())
 
-# Prime editing methods
+# Prime editing
 def priority_muts(pegRNAs: pd.DataFrame, pegRNAs_shared: pd.DataFrame, pt: str):
     ''' 
     priority_muts: returns the shared sequences library dataframe with priority mutations

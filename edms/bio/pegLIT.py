@@ -1,4 +1,4 @@
-# From: https://www.nature.com/articles/s41587-021-01039-7
+''' From: https://www.nature.com/articles/s41587-021-01039-7 '''
 from math import prod
 import random
 import heapq

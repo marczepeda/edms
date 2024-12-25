@@ -1,6 +1,31 @@
-### clone.py ###
-# Author: Marc Zepeda
-# Date: 2024-05-29
+'''
+Module: clone.py
+Author: Marc Zepeda
+Created: 2024-05-29 
+Description: Molecular cloning 
+
+Usage:
+[Individual GG Cloning]
+- ord_form(): Sigma Alrich ordering formatter
+- tb(): designs top & bottom oligonucleotides
+- sgRNAs(): design GG cloning oligonucleotides for cutting and base editing sgRNAs
+- epegRNAs(): design GG cloning oligonucleotides for prime editing epegRNAs
+- ngRNAs(): design GG cloning oligonucleotides for prime editing ngRNAs
+
+[Library GG Cloning]
+- pe_pcr1: Dataframe of PE library PCR1 primers
+- RE_typeIIS: Dataframe of TypeIIS restriction enzymes
+- generate_sequences(): recursively generates all possible sequences of A, T, C, G of the specified length
+- filter_GC(): filters sequences based on GC content
+- shuffle(): randomly reorganizes a list
+- pe_twist_oligos(): makes twist oligonucleotides for prime editing
+
+[Master Mix]
+- pcr_mm(): NEB Q5 PCR master mix calculations
+
+[Simulation]
+- pcr_sim(): returns dataframe with simulated pcr product 
+'''
 
 # Import packages
 import pandas as pd
@@ -9,7 +34,7 @@ import random
 from Bio.Seq import Seq
 from ..gen import tidy as t
 
-# Supporting Methods
+# Individual GG cloning
 def ord_form(df:pd.DataFrame,id:str,seq:str,suf:str,pre:str):
     ''' 
     ord_form(): Sigma Alrich ordering formatter
@@ -69,7 +94,6 @@ def tb(df:pd.DataFrame,id:str,seq:str,t5:str,t3:str,b5:str,b3:str,tG:bool,pre:st
     
     return df
 
-# Individual GG cloning
 def sgRNAs(df:pd.DataFrame,id:str,spacer='Spacer_sequence',t5='CACC',t3='',b5='AAAC',b3='',tG=True,order=True):
     ''' 
     sgRNAs(): design GG cloning oligonucleotides for cutting and base editing sgRNAs
@@ -137,7 +161,7 @@ def epegRNAs(df: pd.DataFrame,id: str,tG=True, order=True,make_extension=True,
 def ngRNAs(df: pd.DataFrame,id: str,tG=True, order=True,
            spacer='Spacer_sequence',ngRNA_sp_t5='CACC',ngRNA_sp_t3='GTTTAAGAGC',ngRNA_sp_b5='',ngRNA_sp_b3=''):
     ''' 
-    ngRNAs: design GG cloning oligonucleotides for prime editing ngRNAs
+    ngRNAs(): design GG cloning oligonucleotides for prime editing ngRNAs
     
     Parameters:
     df (dataframe): Dataframe with spacers
@@ -347,9 +371,9 @@ pe_pcr1 = pd.DataFrame({
   }
 }).T
 
-''' RE_typeII: Dataframe of TypeII restriction enzymes
+''' RE_typeIIS: Dataframe of TypeIIS restriction enzymes
 '''
-RE_typeII = pd.DataFrame({
+RE_typeIIS = pd.DataFrame({
   0: {
       'Name': 'Esp3I',
       'Sequence_t5': 'N(CGTCTC)N|N',
@@ -397,7 +421,7 @@ def generate_sequences(length:int, current_sequence:str=""):
 
 def filter_GC(sequences: list, GC_fract: tuple):
     '''
-    filter_GC: filters sequences based on GC content
+    filter_GC(): filters sequences based on GC content
     
     Parameters:
     sequences (list): list of sequences (str)
@@ -555,7 +579,7 @@ def pe_twist_oligos(df: pd.DataFrame,id_pre:str,tG=True, make_extension=True,UMI
     df['ID'] = [f'{id_pre}.{i+1}' for i in range(len(df))]
 
     # Check for 2 recognition sites per enzyme
-    for (enzyme,recognition,recognition_rc) in t.zip_cols(df=RE_typeII,cols=['Name','Recognition','Recognition_rc']):
+    for (enzyme,recognition,recognition_rc) in t.zip_cols(df=RE_typeIIS,cols=['Name','Recognition','Recognition_rc']):
         enzyme_sites = [len(t.find_all(twist_product,recognition)) + # Check forward direction
                         len(t.find_all(twist_product,recognition_rc)) # Check reverse direction
                         for twist_product in twist_products] # Iterate through Twist product
@@ -564,13 +588,13 @@ def pe_twist_oligos(df: pd.DataFrame,id_pre:str,tG=True, make_extension=True,UMI
     
     return df
 
-# Master Mix methods
+# Master Mix
 def pcr_mm(primers: pd.Series, template_uL: int, template='1-2 ng/uL template',
            Q5_mm_x_stock=5,dNTP_mM_stock=10,fwd_uM_stock=10,rev_uM_stock=10,Q5_U_uL_stock=2,
            Q5_mm_x_desired=1,dNTP_mM_desired=0.2,fwd_uM_desired=0.5,rev_uM_desired=0.5,Q5_U_uL_desired=0.02,
            total_uL=25,mm_x=1.1):
     '''
-    pcr_mm:
+    pcr_mm(): NEB Q5 PCR master mix calculations
     
     Parameters:
     primers (Series): value_counts() for primers
@@ -616,7 +640,7 @@ def pcr_mm(primers: pd.Series, template_uL: int, template='1-2 ng/uL template',
                                                      })
     return pcr_mm_dc
 
-# Simulation Methods
+# Simulation
 def pcr_sim(df: pd.DataFrame,template_col: str, fwd_bind_col: str, rev_bind_col: str,
             fwd_ext_col: str=None, rev_ext_col: str=None, product_col='PCR Product'):
     '''
@@ -677,33 +701,3 @@ def pcr_sim(df: pd.DataFrame,template_col: str, fwd_bind_col: str, rev_bind_col:
             
     df[product_col]=pcr_product_ls
     return df
-
-def digest_sim(df: pd.DataFrame, input: str, enzyme: str | list, circular: bool):
-    '''
-    digest_sim(): returns dataframe with simulated RE digest product(s)
-    
-    Parameters:
-    df (dataframe): dataframe with input sequence
-    input (str): input sequence column name
-    enzyme (str | list): restriction enzyme name
-    circular (bool): is the input sequence circular?
-    
-    Dependencies: pandas
-    '''
-    # Identify input
-
-    return
-
-def ligate_sim():
-    '''
-    ligate_sim(): returns dataframe with simulated ligation product
-
-    Parameters:
-    df (dataframe): dataframe with input sequence
-    inputs (list): list of input sequence column names
-
-    Dependencies: pandas
-    '''
-    #
-
-    return

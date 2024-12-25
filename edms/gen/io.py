@@ -1,6 +1,31 @@
-### io.py ###
-# Author: Marc Zepeda
-# Date: 2024-05-20
+'''
+Module: io.py
+Author: Marc Zepeda
+Created: 2024-05-20
+Description: Input/Output
+
+Usage:
+[Parsing Python literals]
+- try_parse(): try to parse a string as a Python literal; if not possible, return the original value
+- recursive_parse(): recursively parse nested structures
+- df_try_parse(): apply try_parse() to dataframe columns and return dataframe
+
+[Input]
+- get(): returns pandas dataframe from a file
+- get_dir(): returns python dictionary of dataframe from files within a directory
+
+[Output]
+- mkdir(): make directory if it does not exist (including parent directories)
+- save(): save .csv file to a specified output directory from obj
+- save_dir(): save .csv files to a specified output directory from dictionary of objs
+
+[Input/Output]
+- excel_csvs(): exports excel file to .csv files in specified directory
+- df_to_dc_txt(): returns pandas DataFrame as a printed text that resembles a Python dictionary
+- dc_txt_to_df(): returns a pandas DataFrame from text that resembles a Python dictionary
+- echo(): write message to slurm output file using echo
+- print_relative_paths(): prints relative paths for all files in a directory including subfolders
+'''
 
 # Import packages
 import pandas as pd
@@ -9,10 +34,10 @@ import ast
 import csv
 import subprocess
 
-# Parsing Python literals methods
+# Parsing Python literals
 def try_parse(value):
     """
-    try_parse(): try to parse a string as a Python literal; if not possible, return the original value.
+    try_parse(): try to parse a string as a Python literal; if not possible, return the original value
     
     Parameters:
     value: value of any type (looking for strings)
@@ -33,7 +58,7 @@ def try_parse(value):
 
 def recursive_parse(data):
     """
-    recursive_parse(): recursively parse nested structures.
+    recursive_parse(): recursively parse nested structures
     
     Parameters:
     data: data of any type (looking for dict, list, set, or tuple)
@@ -64,7 +89,7 @@ def df_try_parse(df: pd.DataFrame):
         df[col] = df[col].apply(try_parse)
     return df
 
-# Input methods
+# Input
 def get(pt: str,literal_eval=False,**kwargs):
     ''' 
     get(): returns pandas dataframe from a file
@@ -99,7 +124,7 @@ def get(pt: str,literal_eval=False,**kwargs):
     
 def get_dir(dir: str,suf='.csv',literal_eval=False,**kwargs):
     ''' 
-    get_dir(): returns python dictionary of dataframe from files within a directory.
+    get_dir(): returns python dictionary of dataframe from files within a directory
     
     Parameters:
     dir (str): directory path with files
@@ -114,7 +139,7 @@ def get_dir(dir: str,suf='.csv',literal_eval=False,**kwargs):
     files = [file for file in os.listdir(dir) if file[-len(suf):]==suf]
     return {file[:-len(suf)]:get(os.path.join(dir,file),literal_eval,**kwargs) for file in files}
 
-# Output methods
+# Output
 def mkdir(dir: str, sep='/'):
     '''
     mkdir(): make directory if it does not exist (including parent directories)
@@ -189,10 +214,10 @@ def save_dir(dir: str, file_suffix: str, dc: dict, **kwargs):
     '''
     for key,val in dc.items(): save(dir=dir,file=key+file_suffix,obj=val,**kwargs)
 
-# Input/Output Methods
+# Input/Output
 def excel_csvs(pt: str,dir='',**kwargs):
     ''' 
-    excel_csvs(): exports excel file to .csv files in specified directory.    
+    excel_csvs(): exports excel file to .csv files in specified directory    
     
     Parameters:
     pt (str): excel file path
@@ -208,7 +233,7 @@ def excel_csvs(pt: str,dir='',**kwargs):
 
 def df_to_dc_txt(df: pd.DataFrame):
     ''' 
-    df_to_dc_txt(): returns pandas DataFrame as a printed text that resembles a Python dictionary.
+    df_to_dc_txt(): returns pandas DataFrame as a printed text that resembles a Python dictionary
     
     Parameters:
     df (dataframe): pandas dataframe
@@ -230,7 +255,7 @@ def df_to_dc_txt(df: pd.DataFrame):
 
 def dc_txt_to_df(dc_txt: str, transpose=True):
     ''' 
-    dc_txt_to_df(): returns a pandas DataFrame from text that resembles a Python dictionary.
+    dc_txt_to_df(): returns a pandas DataFrame from text that resembles a Python dictionary
     
     Parameters:
     dc_txt (str): text that resembles a Python dictionary

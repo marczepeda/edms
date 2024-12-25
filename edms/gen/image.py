@@ -1,6 +1,18 @@
-### image.py ###
-# Author: Marc Zepeda
-# Date: 2024-12-09
+''' 
+Module: image.py
+Author: Marc Zepeda
+Created: 2024-12-09
+Description: Batch image processing
+
+Usage:
+[Image processing]
+- crop(): crop all photos in a input directory and save them to new directory
+- convert(): convert image file types of all photos in a input directory and save them to new directory
+- combine(): combine all images in a folder into a single PDF file
+
+[Image information]
+- info(): Extract information from images in a directory as a dataframe
+'''
 
 # Import packages
 import os
@@ -8,10 +20,10 @@ from PIL import Image
 import pandas as pd
 from ..gen import io
 
-# Image processing methods
+# Image processing
 def crop(in_dir: str, out_dir: str, box_dims: tuple=None, box_fracs: tuple=None):
     """
-    crop(): crop all photos in a input directory and save them to new directory.
+    crop(): crop all photos in a input directory and save them to new directory
     
     Parameters:
     in_dir (str): Path to the input directory containing images.
@@ -68,7 +80,7 @@ def crop(in_dir: str, out_dir: str, box_dims: tuple=None, box_fracs: tuple=None)
 
 def convert(in_dir: str, out_dir: str, suffix: str):
     """
-    convert(): convert image file types of all photos in a input directory and save them to new directory.
+    convert(): convert image file types of all photos in a input directory and save them to new directory
     
     Parameters:
     in_dir (str): Path to the folder containing the original images.
@@ -96,7 +108,7 @@ def convert(in_dir: str, out_dir: str, suffix: str):
 
 def combine(in_dir: str, out_dir: str, out_file: str):
     """
-    combine(): combine all images in a folder into a single PDF file.
+    combine(): combine all images in a folder into a single PDF file
     
     Parameters:
     in_dir (str): Path to the folder containing images.
@@ -132,10 +144,10 @@ def combine(in_dir: str, out_dir: str, out_file: str):
     except Exception as e:
         print(f"Error creating PDF: {e}")
 
-# Image information methods
+# Image information
 def info(dir: str):
     """
-    info(): Extract information from images in a directory as a dataframe.
+    info(): Extract information from images in a directory as a dataframe
     
     Parameters:
     dir (str): Path to the directory containing images.

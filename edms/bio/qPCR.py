@@ -1,14 +1,21 @@
-### qPCR.py ###
-# Author: Marc Zepeda
-# Date: 2024-09-06
+''' 
+Module: qPCR.py
+Author: Marc Zepeda
+Created: 2024-09-06
+Description: quantative Polymerase Chain Reaction
 
+Usage:
+[qPCR data retrieval and analysis]
+- cfx_Cq(): retrieve RT-qPCR data from CFX Cq csv
+- ddCq(): computes ΔΔCq mean and error for all samples holding target pairs constant
+'''
 # Import packages
 import itertools
 import pandas as pd
 import numpy as np
 from ..gen import io as io
 
-# qPCR data retrieval and analysis methods
+# qPCR data retrieval and analysis
 def cfx_Cq(pt: str, sample_col:str='Sample', cols=['Well','Fluor','Target','Sample','Cq']):
     ''' 
     cfx_Cq(): retrieve RT-qPCR data from CFX Cq csv

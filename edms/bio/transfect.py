@@ -1,6 +1,14 @@
-### transfect.py ###
-# Author: Marc Zepeda
-# Date: 2024-11-07
+'''
+Module: transfect.py
+Author: Marc Zepeda
+Created: 2024-11-07
+Description: Transfection
+
+Usage:
+[Transfection calculation]
+- PE3(): generates PE3 transfection plan for HEK293T cells (Default: 96-well plate in triplicate using L2000)
+- virus(): generates transfection plan for virus production from HEK293T cells (Default: 6-well plate using L3000)
+'''
 
 # Import packages
 import pandas as pd
@@ -11,7 +19,7 @@ from ..gen import io
 import warnings
 warnings.filterwarnings("ignore")
 
-# Transfection calculation methods
+# Transfection calculation
 def PE3(plasmids: pd.DataFrame, epegRNAs: pd.DataFrame, ngRNAs: pd.DataFrame,
         dir:str=None, file:str=None, 
         pegRNA_number_col='pegRNA_number',epegRNAs_name_col='Name',ngRNAs_name_col='Name',

@@ -1,7 +1,14 @@
-### ngs.py ###
-# Author: Marc Zepeda
-# Date: 2024-11-12
+'''
+Module: ngs.py
+Author: Marc Zepeda
+Created: 2024-11-12
+Description: Next generation sequencing
 
+Usage:
+[NGS PCR calculation]
+- pcr_mm(): NEB Q5 PCR master mix calculations
+- pcrs(): generates NGS PCR plan automatically (Default: 96-well plates including outer wells)
+''' 
 # Import Packages
 import numpy as np
 import pandas as pd
@@ -10,13 +17,13 @@ from ..gen import io
 import warnings
 warnings.filterwarnings("ignore")
 
-# NGS PCR calculation methods
+# NGS PCR calculation
 def pcr_mm(primers: pd.Series, template: str, template_uL: int,
            Q5_mm_x_stock=5,dNTP_mM_stock=10,fwd_uM_stock=10,rev_uM_stock=10,Q5_U_uL_stock=2,
            Q5_mm_x_desired=1,dNTP_mM_desired=0.2,fwd_uM_desired=0.5,rev_uM_desired=0.5,Q5_U_uL_desired=0.02,
            total_uL=20,mm_x=1.1):
     '''
-    pcr_mm:
+    pcr_mm(): NEB Q5 PCR master mix calculations
     
     Parameters:
     primers (Series): value_counts() for primers
@@ -185,7 +192,4 @@ def pcrs(samples: pd.DataFrame, dir:str=None, file:str=None, gDNA_id_col='ID',
                 pcr2_mm.to_excel(writer,sheet_name='_'.join(key)) # Pivot per sheet
                 sr += pcr2_mm.shape[0]+2 # Skip 2 lines after each pivot
             
-    
     return pivots,pcr1_mms,pcr2_mms
-        
-        
