@@ -11,6 +11,10 @@ Usage:
 - missing_cols(): returns values from a list if they are not dataframe columns
 - merge(): adds metadata columns to data dataframe using metadata dataframe
 
+[Dictionary methods]
+- filter_kwargs(): filter **kwargs by specified keywords
+- comb_dcs(): Combine a list of dictionaries with the same keys into a single dictionary where keys map to a list of values.
+
 [Methods for dictionary containing dataframes]
 - split_by(): splits elements of list, set, or series by specified seperator
 - isolate(): isolate rows in dataframes based specified value(s)
@@ -90,6 +94,31 @@ def merge(data: pd.DataFrame, meta: pd.DataFrame, id, cols: list):
             data[c] = [id_c[i] for i in data[id[0]]]
     else: print("Error: id needs to be string or list of 2 strings")
     return data
+
+# Dictionary methods
+def filter_kwargs(keywords: list, **kwargs):
+    '''
+    filter_kwargs(): filter **kwargs by specified keywords
+
+    Parameters:
+    keywords (list): list of keywords to retain
+    **kwargs: keyword = arguments to be filtered
+    '''
+    return {kw:arg for kw,arg in kwargs.items() if kw in keywords and arg is not None}
+
+def comb_dcs(ls: list):
+    """
+    comb_dcs(): Combine a list of dictionaries with the same keys into a single dictionary where keys map to a list of values.
+
+    Parameters:
+    ls (list): A list of dictionaries with the same keys.
+    
+    """
+    combined = {}
+    for dc in ls:
+        for key, value in dc.items():
+            combined.setdefault(key, []).append(value)
+    return combined
 
 # Methods for dictionary containing dataframes
 def split_by(series, by=', '):

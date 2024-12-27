@@ -22,7 +22,7 @@ from scipy.stats import skew, kurtosis, ttest_ind, ttest_rel, f_oneway, ttest_in
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
 from statsmodels.stats.anova import AnovaRM
 from statsmodels.stats.multitest import multipletests
-from ..gen import tidy as t
+from . import tidy as t
 
 # Statistics
 def describe(df: pd.DataFrame, cols=[], group=''):

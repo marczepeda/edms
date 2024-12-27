@@ -20,6 +20,7 @@ Usage:
 # Import Packages
 import json
 import os
+import edms.gen.io as io
 
 # Supporting
 def str_dc(dc):
@@ -37,7 +38,9 @@ def str_dc(dc):
     else: TypeError(f"{dc} was not a string")
 
 # CONFIG_FILE
-CONFIG_FILE = os.path.expanduser("~/.config.json") # Define the path for the configuration file
+dir = os.path.expanduser("~/.config/edms") # Make directory for configuration file
+io.mkdir(dir)
+CONFIG_FILE = os.path.join(dir,".config.json") # Define the path for the configuration file
 
 def load_config():
     """
@@ -75,7 +78,7 @@ def get_info(id: str):
 
     # Report on information status
     if info: print(f"Got {id}: {info}")
-    else: print(f"No information found for {id}.\nUse set_info() before retrieval.")
+    else: print(f"No information found for {id}")
     return info
 
 def set_info(id: str, info: str | dict):
@@ -96,7 +99,6 @@ def set_info(id: str, info: str | dict):
 
     # (Over)write information to configuration file
     config = load_config()
-    if id in set(config.keys()): print(f"Updating {id} information. Prevoiusly,\n{id}: {config[id]}")
     config[id] = info
     save_config(config)
     print(f"Set {id}: {info}")

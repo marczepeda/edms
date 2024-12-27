@@ -18,7 +18,7 @@ Usage:
 import os
 from PIL import Image
 import pandas as pd
-from ..gen import io
+from . import io
 
 # Image processing
 def crop(in_dir: str, out_dir: str, box_dims: tuple=None, box_fracs: tuple=None):
