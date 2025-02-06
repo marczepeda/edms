@@ -23,6 +23,7 @@
     ```shell
     import edms.dat.cosmic as co
     import edms.dat.cvar as cv
+    import edms.dat.ncbi as ncbi
     ```
 
 ## Examples

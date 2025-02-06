@@ -39,22 +39,23 @@ def describe(df: pd.DataFrame, cols=[], group=''):
     if group!='': df = df.pivot(columns=group) # Splits tidy dataframe
     if len(cols)>0: df = df[cols] # Isolate specified columns
 
-    descriptive = pd.DataFrame()    
-    descriptive['mean'] = df.mean() # Mean
-    descriptive['median'] = df.median() # Median
-    descriptive['variance'] = df.var() # Variance
-    descriptive['std_dev'] = df.std() # Standard Deviation
-    descriptive['mad'] = df.apply(lambda x: np.median(np.abs(x - x.median()))) # Median Absolute Deviation
-    descriptive['min'] = df.min() # Minimum
-    descriptive['max'] = df.max() # Maximum
-    descriptive['range'] = df.max() - df.min() # Range
-    descriptive['skewness'] = df.apply(lambda x: skew(x, nan_policy='omit')) # Skewness
-    descriptive['kurtosis'] = df.apply(lambda x: kurtosis(x, nan_policy='omit')) # Kurtosis
-    descriptive['count'] = df.count() # Count (non-missing observations)
-    descriptive['sum'] = df.sum() # Sum
-    descriptive['25%'] = df.quantile(0.25)  # Quantiles (25%, 50%, 75%)
-    descriptive['50%'] = df.quantile(0.50)
-    descriptive['75%'] = df.quantile(0.75)
+    descriptive = pd.DataFrame()
+    if group !='': descriptive[group] = [multindex[-1] for multindex in df.mean().keys()] # Group
+    descriptive['mean'] = df.mean().reset_index(drop=True) # Mean
+    descriptive['median'] = df.median().reset_index(drop=True) # Median
+    descriptive['variance'] = df.var().reset_index(drop=True) # Variance
+    descriptive['std_dev'] = df.std().reset_index(drop=True) # Standard Deviation
+    descriptive['mad'] = df.apply(lambda x: np.median(np.abs(x - x.median()))).reset_index(drop=True) # Median Absolute Deviation
+    descriptive['min'] = df.min().reset_index(drop=True) # Minimum
+    descriptive['max'] = df.max().reset_index(drop=True) # Maximum
+    descriptive['range'] = [ma - mi for ma,mi in t.zip_cols(descriptive,['max','min'])] # Range
+    descriptive['skewness'] = df.apply(lambda x: skew(x, nan_policy='omit')).reset_index(drop=True) # Skewness
+    descriptive['kurtosis'] = df.apply(lambda x: kurtosis(x, nan_policy='omit')).reset_index(drop=True) # Kurtosis
+    descriptive['count'] = df.count().reset_index(drop=True) # Count (non-missing observations)
+    descriptive['sum'] = df.sum().reset_index(drop=True) # Sum
+    descriptive['25%'] = df.quantile(0.25).reset_index(drop=True)  # Quantiles (25%, 50%, 75%)
+    descriptive['50%'] = df.quantile(0.50).reset_index(drop=True)
+    descriptive['75%'] = df.quantile(0.75).reset_index(drop=True)
 
     return descriptive
 

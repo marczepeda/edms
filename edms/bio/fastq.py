@@ -2047,7 +2047,7 @@ def heat(df: pd.DataFrame, cond: str,x='number',y='after',vals='fraction_avg',va
     if show: plt.show()
 
 def vol(df: pd.DataFrame,x: str,y: str,size:str=None,size_dims:tuple=None,include_wt=False,
-        file=None,dir=None,palette_or_cmap='YlOrRd',edgecol='black',
+        file=None,dir=None,color='lightgray',alpha=0.5,edgecol='black',
         figsize=(10,6),title='',title_size=18,title_weight='bold',
         x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_dims=(0,0),x_ticks_rot=0,xticks=[],
         y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_dims=(0,0),y_ticks_rot=0,yticks=[],
@@ -2067,7 +2067,8 @@ def vol(df: pd.DataFrame,x: str,y: str,size:str=None,size_dims:tuple=None,includ
     include_wt (bool, optional): include wildtype (Default: False)
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
-    palette_or_cmap (str, optional): seaborn color palette or matplotlib color map
+    color (str, optional): matplotlib color for nonsignificant values
+    alpha (float, optional): transparency for nonsignificant values (Default: 0.5)
     edgecol (str, optional): point edge color
     figsize (tuple, optional): figure size
     title (str, optional): plot title
@@ -2114,7 +2115,7 @@ def vol(df: pd.DataFrame,x: str,y: str,size:str=None,size_dims:tuple=None,includ
         elif (np.abs(log2FC)>1)&(log10P<=-np.log10(0.05)): signif.append('FC')
         else: signif.append('NS')
     df['Significance']=signif
-    signif_order = ['NS','FC','p-value','FC & p-value']
+    #signif_order = ['NS','FC','p-value','FC & p-value']
 
     # Organize data by conservation (changed from)
     basic = ['R','K', 'H']
@@ -2158,11 +2159,24 @@ def vol(df: pd.DataFrame,x: str,y: str,size:str=None,size_dims:tuple=None,includ
     
     # with data
     if display_size==False: size=None
-    sns.scatterplot(data=df, x=f'{log2}({x})', y=f'-{log10}({y})', 
-                    hue='Significance', hue_order=signif_order, 
-                    edgecolor=edgecol, palette=palette_or_cmap, style='Change',
-                    style_order=sty_order,markers=mark_order,size=size,
-                    sizes=sizes,
+    sns.scatterplot(data=df[df['Significance']!='FC & p-value'], x=f'{log2}({x})', y=f'-{log10}({y})', 
+                    edgecolor=edgecol, color=color, alpha=alpha, style='Change',
+                    style_order=sty_order, markers=mark_order, 
+                    size=size, sizes=sizes,
+                    ax=ax, **kwargs)
+    sns.scatterplot(data=df[(df['Significance']=='FC & p-value')&(df[f'{log2}({x})']<0)], 
+                    x=f'{log2}({x})', y=f'-{log10}({y})', 
+                    hue=f'{log2}({x})',
+                    edgecolor=edgecol, palette='Blues_r', style='Change',
+                    style_order=sty_order, markers=mark_order,
+                    size=size, sizes=sizes, legend=False,
+                    ax=ax, **kwargs)
+    sns.scatterplot(data=df[(df['Significance']=='FC & p-value')&(df[f'{log2}({x})']>0)], 
+                    x=f'{log2}({x})', y=f'-{log10}({y})', 
+                    hue=f'{log2}({x})',
+                    edgecolor=edgecol, palette='Reds', style='Change',
+                    style_order=sty_order, markers=mark_order,
+                    size=size, sizes=sizes, legend=False,
                     ax=ax, **kwargs)
     
     # with labels

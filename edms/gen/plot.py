@@ -834,7 +834,7 @@ def stack(df: pd.DataFrame,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord=[],
     if show: plt.show()
 
 def vol(df: pd.DataFrame,x: str,y: str,stys:str=None, size:str=None,size_dims:tuple=None,label:str=None,
-        FC_threshold=2, pval_threshold=0.05, file=None,dir=None,palette_or_cmap='YlOrRd',edgecol='black',
+        FC_threshold=2, pval_threshold=0.05, file=None,dir=None,color='lightgray',alpha=0.5,edgecol='black',
         figsize=(10,6),title='',title_size=18,title_weight='bold',
         x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_dims=(0,0),x_ticks_rot=0,xticks=[],
         y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_dims=(0,0),y_ticks_rot=0,yticks=[],
@@ -848,8 +848,7 @@ def vol(df: pd.DataFrame,x: str,y: str,stys:str=None, size:str=None,size_dims:tu
     df (dataframe): pandas dataframe
     x (str): x-axis column name
     y (str): y-axis column name
-    cols (str, optional): color column name
-    sty (str, optional): sty column name
+    stys (str, optional): style column name
     size (str, optional): size column name
     size_dims (tuple, optional): (minimum,maximum) values in size column (Default: None)
     label (str, optional): label column name
@@ -857,7 +856,8 @@ def vol(df: pd.DataFrame,x: str,y: str,stys:str=None, size:str=None,size_dims:tu
     pval_threshold (float, optional): p-value threshold (Default: 0.05; -log10(0.05)=1.3)
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
-    palette_or_cmap (str, optional): seaborn color palette or matplotlib color map
+    color (str, optional): matplotlib color for nonsignificant values
+    alpha (float, optional): transparency for nonsignificant values (Default: 0.5)
     edgecol (str, optional): point edge color
     figsize (tuple, optional): figure size
     title (str, optional): plot title
@@ -904,7 +904,7 @@ def vol(df: pd.DataFrame,x: str,y: str,stys:str=None, size:str=None,size_dims:tu
         elif (np.abs(log2FC)>=np.log10(FC_threshold)/np.log10(2))&(log10P<-np.log10(pval_threshold)): signif.append('FC')
         else: signif.append('NS')
     df['Significance']=signif
-    signif_order = ['NS','FC','p-value','FC & p-value']
+    #signif_order = ['NS','FC','p-value','FC & p-value']
 
     # Organize data by abundance
     sizes=(1,100)
@@ -924,12 +924,25 @@ def vol(df: pd.DataFrame,x: str,y: str,stys:str=None, size:str=None,size_dims:tu
     
     # with data
     if display_size==False: size=None
-    sns.scatterplot(data=df, x=f'{log2}({x})', y=f'-{log10}({y})', 
-                    hue='Significance', hue_order=signif_order, 
-                    edgecolor=edgecol, palette=palette_or_cmap, style=stys,
+    sns.scatterplot(data=df[df['Significance']!='FC & p-value'], x=f'{log2}({x})', y=f'-{log10}({y})', 
+                    color=color, alpha=alpha,
+                    edgecolor=edgecol, style=stys,
                     size=size, sizes=sizes,
                     ax=ax, **kwargs)
-    
+    sns.scatterplot(data=df[(df['Significance']=='FC & p-value')&(df[f'{log2}({x})']<0)], 
+                    x=f'{log2}({x})', y=f'-{log10}({y})', 
+                    hue=f'{log2}({x})',
+                    edgecolor=edgecol, palette='Blues_r', style=stys,
+                    size=size, sizes=sizes, legend=False,
+                    ax=ax, **kwargs)
+    sns.scatterplot(data=df[(df['Significance']=='FC & p-value')&(df[f'{log2}({x})']>0)], 
+                    x=f'{log2}({x})', y=f'-{log10}({y})', 
+                    hue=f'{log2}({x})',
+                    edgecolor=edgecol, palette='Reds', style=stys,
+                    size=size, sizes=sizes, legend=False,
+                    ax=ax, **kwargs)
+
+
     # with labels
     if (display_labels==True) and label is not None:
         df_signif = df[df['Significance']=='FC & p-value']
