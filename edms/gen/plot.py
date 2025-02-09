@@ -754,10 +754,10 @@ def heat(df: pd.DataFrame, x: str, y: str, vars='variable', vals='value',vals_di
     if show: plt.show()
 
 def stack(df: pd.DataFrame,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord=[],
-          file=None,dir=None,cmap='Set2',errcap=4,
+          file=None,dir=None,cmap='Set2',errcap=4,vertical=True,
           figsize=(10,6),title='',title_size=18,title_weight='bold',
-          x_axis='',x_axis_size=12,x_axis_weight='bold',x_ticks_rot=45,x_ticks_ha='right',
-          y_axis='',y_axis_size=12,y_axis_weight='bold',y_ticks_rot=0,
+          x_axis='',x_axis_size=12,x_axis_weight='bold',x_ticks_rot:int=None,x_ticks_ha:str=None,
+          y_axis='',y_axis_size=12,y_axis_weight='bold',y_ticks_rot:int=None,y_ticks_ha:str=None,
           legend_title='',legend_title_size=12,legend_size=12,
           legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_ncol=1,show=True,**kwargs):
     ''' 
@@ -775,6 +775,7 @@ def stack(df: pd.DataFrame,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord=[],
     dir (str, optional): save plot to directory
     cmap (str, optional): matplotlib color map
     errcap (int, optional): error bar cap line width
+    vertical (bool, optional): vertical orientation; otherwise horizontal (Default: True)
     figsize (tuple, optional): figure size
     title (str, optional): plot title
     title_size (int, optional): plot title font size
@@ -788,6 +789,7 @@ def stack(df: pd.DataFrame,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord=[],
     y_axis_size (int, optional): y-axis name font size
     y_axis_weight (str, optional): y-axis name bold, italics, etc.
     y_ticks_rot (int, optional): y-axis ticks rotation
+    y_ticks_ha (str, optional): y-axis ticks horizontal alignment
     yticks (list, optional): y-axis tick values
     legend_title (str, optional): legend title
     legend_title_size (str, optional): legend title font size
@@ -806,22 +808,44 @@ def stack(df: pd.DataFrame,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord=[],
     if x_ord!=[]: df_pivot=df_pivot.reindex(x_ord)
 
     # Make stacked barplot
-    df_pivot.plot(kind='bar',yerr=df_pivot_err,capsize=errcap, figsize=figsize,colormap=cmap,stacked=True,**kwargs)
+    if vertical: # orientation
+        df_pivot.plot(kind='bar',yerr=df_pivot_err,capsize=errcap, figsize=figsize,colormap=cmap,stacked=True,**kwargs)
+        
+        # Set x axis
+        if x_axis=='': x_axis=re_un_cap(x)
+        plt.xlabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight)
+        if x_ticks_rot is None: x_ticks_rot=45
+        if x_ticks_ha is None: x_ticks_ha='right'
+        plt.xticks(rotation=x_ticks_rot, ha=x_ticks_ha)
+        
+        # Set y axis
+        if y_axis=='': y_axis=re_un_cap(y)
+        plt.ylabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight)
+        if y_ticks_rot is None: y_ticks_rot=0
+        if y_ticks_ha is None: y_ticks_ha='right'
+        plt.yticks(rotation=y_ticks_rot,ha=y_ticks_ha)
 
+    else: # Horizontal orientation
+        df_pivot.plot(kind='barh',yerr=df_pivot_err,capsize=errcap, figsize=figsize,colormap=cmap,stacked=True,**kwargs)
+
+        # Set y axis
+        if x_axis=='': x_axis=re_un_cap(x)
+        if x_ticks_rot is None: x_ticks_rot=0
+        if x_ticks_ha is None: x_ticks_ha='right'
+        plt.ylabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight)
+        plt.yticks(rotation=x_ticks_rot, ha=x_ticks_ha)
+        
+        # Set x axis
+        if y_axis=='': y_axis=re_un_cap(y)
+        if y_ticks_rot is None: y_ticks_rot=0
+        if y_ticks_ha is None: y_ticks_ha='center'
+        plt.xlabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight)
+        plt.xticks(rotation=y_ticks_rot,ha=y_ticks_ha)
+        
     # Set title
     if title=='' and file is not None: title=re_un_cap(".".join(file.split(".")[:-1]))
     plt.title(title, fontsize=title_size, fontweight=title_weight)
     
-    # Set x axis
-    if x_axis=='': x_axis=re_un_cap(x)
-    plt.xlabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight)
-    plt.xticks(rotation=x_ticks_rot, ha=x_ticks_ha)
-    
-    # Set y axis
-    if y_axis=='': y_axis=re_un_cap(y)
-    plt.ylabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight)
-    plt.yticks(rotation=y_ticks_rot)
-
     # Set legend
     if legend_title=='': legend_title=re_un_cap(cols)
     plt.legend(title=legend_title, title_fontsize=legend_title_size, fontsize=legend_size, 
@@ -834,7 +858,7 @@ def stack(df: pd.DataFrame,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord=[],
     if show: plt.show()
 
 def vol(df: pd.DataFrame,x: str,y: str,stys:str=None, size:str=None,size_dims:tuple=None,label:str=None,
-        FC_threshold=2, pval_threshold=0.05, file=None,dir=None,color='lightgray',alpha=0.5,edgecol='black',
+        FC_threshold=2,pval_threshold=0.05,file=None,dir=None,color='lightgray',alpha=0.5,edgecol='black',vertical=True,
         figsize=(10,6),title='',title_size=18,title_weight='bold',
         x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_dims=(0,0),x_ticks_rot=0,xticks=[],
         y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_dims=(0,0),y_ticks_rot=0,yticks=[],
@@ -846,8 +870,8 @@ def vol(df: pd.DataFrame,x: str,y: str,stys:str=None, size:str=None,size_dims:tu
     
     Parameters:
     df (dataframe): pandas dataframe
-    x (str): x-axis column name
-    y (str): y-axis column name
+    x (str): x-axis column name (FC)
+    y (str): y-axis column name (pval)
     stys (str, optional): style column name
     size (str, optional): size column name
     size_dims (tuple, optional): (minimum,maximum) values in size column (Default: None)
@@ -859,6 +883,7 @@ def vol(df: pd.DataFrame,x: str,y: str,stys:str=None, size:str=None,size_dims:tu
     color (str, optional): matplotlib color for nonsignificant values
     alpha (float, optional): transparency for nonsignificant values (Default: 0.5)
     edgecol (str, optional): point edge color
+    vertical (bool, optional): vertical orientation; otherwise horizontal (Default: True)
     figsize (tuple, optional): figure size
     title (str, optional): plot title
     title_size (int, optional): plot title font size
@@ -917,59 +942,109 @@ def vol(df: pd.DataFrame,x: str,y: str,stys:str=None, size:str=None,size_dims:tu
     # Generate figure
     fig, ax = plt.subplots(figsize=figsize)
     
-    # with significance boundraries
-    plt.vlines(x=-np.log10(FC_threshold)/np.log10(2), ymin=y_axis_dims[0], ymax=y_axis_dims[1], colors='k', linestyles='dashed', linewidth=1)
-    plt.vlines(x=np.log10(FC_threshold)/np.log10(2), ymin=y_axis_dims[0], ymax=y_axis_dims[1], colors='k', linestyles='dashed', linewidth=1)
-    plt.hlines(y=-np.log10(pval_threshold), xmin=x_axis_dims[0], xmax=x_axis_dims[1], colors='k', linestyles='dashed', linewidth=1)
+    if vertical: # orientation
+        # with significance boundraries
+        plt.vlines(x=-np.log10(FC_threshold)/np.log10(2), ymin=y_axis_dims[0], ymax=y_axis_dims[1], colors='k', linestyles='dashed', linewidth=1)
+        plt.vlines(x=np.log10(FC_threshold)/np.log10(2), ymin=y_axis_dims[0], ymax=y_axis_dims[1], colors='k', linestyles='dashed', linewidth=1)
+        plt.hlines(y=-np.log10(pval_threshold), xmin=x_axis_dims[0], xmax=x_axis_dims[1], colors='k', linestyles='dashed', linewidth=1)
     
-    # with data
-    if display_size==False: size=None
-    sns.scatterplot(data=df[df['Significance']!='FC & p-value'], x=f'{log2}({x})', y=f'-{log10}({y})', 
-                    color=color, alpha=alpha,
-                    edgecolor=edgecol, style=stys,
-                    size=size, sizes=sizes,
-                    ax=ax, **kwargs)
-    sns.scatterplot(data=df[(df['Significance']=='FC & p-value')&(df[f'{log2}({x})']<0)], 
-                    x=f'{log2}({x})', y=f'-{log10}({y})', 
-                    hue=f'{log2}({x})',
-                    edgecolor=edgecol, palette='Blues_r', style=stys,
-                    size=size, sizes=sizes, legend=False,
-                    ax=ax, **kwargs)
-    sns.scatterplot(data=df[(df['Significance']=='FC & p-value')&(df[f'{log2}({x})']>0)], 
-                    x=f'{log2}({x})', y=f'-{log10}({y})', 
-                    hue=f'{log2}({x})',
-                    edgecolor=edgecol, palette='Reds', style=stys,
-                    size=size, sizes=sizes, legend=False,
-                    ax=ax, **kwargs)
+        # with data
+        if display_size==False: size=None
+        sns.scatterplot(data=df[df['Significance']!='FC & p-value'], x=f'{log2}({x})', y=f'-{log10}({y})', 
+                        color=color, alpha=alpha,
+                        edgecolor=edgecol, style=stys,
+                        size=size, sizes=sizes,
+                        ax=ax, **kwargs)
+        sns.scatterplot(data=df[(df['Significance']=='FC & p-value')&(df[f'{log2}({x})']<0)], 
+                        x=f'{log2}({x})', y=f'-{log10}({y})', 
+                        hue=f'{log2}({x})',
+                        edgecolor=edgecol, palette='Blues_r', style=stys,
+                        size=size, sizes=sizes, legend=False,
+                        ax=ax, **kwargs)
+        sns.scatterplot(data=df[(df['Significance']=='FC & p-value')&(df[f'{log2}({x})']>0)], 
+                        x=f'{log2}({x})', y=f'-{log10}({y})', 
+                        hue=f'{log2}({x})',
+                        edgecolor=edgecol, palette='Reds', style=stys,
+                        size=size, sizes=sizes, legend=False,
+                        ax=ax, **kwargs)
+        
+        # with labels
+        if display_labels:
+            df_signif = df[df['Significance']=='FC & p-value']
+            adjust_text([plt.text(x=df_signif.iloc[i][f'{log2}({x})'], 
+                                  y=df_signif.iloc[i][f'-{log10}({y})'],
+                                  s=edit) for i,edit in enumerate(df_signif['edit'])])
+        
+        # Set x axis
+        if x_axis=='': x_axis=f'{log2}({x})'
+        plt.xlabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight)
+        if xticks==[]: 
+            if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(rotation=x_ticks_rot,ha='center')
+            else: plt.xticks(rotation=x_ticks_rot,ha='right')
+        else: 
+            if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(ticks=xticks,labels=xticks,rotation=x_ticks_rot, ha='center')
+            else: plt.xticks(ticks=xticks,labels=xticks,rotation=x_ticks_rot,ha='right')
 
+        # Set y axis
+        if y_axis=='': y_axis=f'-{log10}({y})'
+        plt.ylabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight)
 
-    # with labels
-    if (display_labels==True) and label is not None:
-        df_signif = df[df['Significance']=='FC & p-value']
-        adjust_text([plt.text(x=df_signif.iloc[i][f'{log2}({x})'], 
-                              y=df_signif.iloc[i][f'-{log10}({y})'],
-                              s=lab) for i,lab in enumerate(df_signif[label])])
+        if yticks==[]: plt.yticks(rotation=y_ticks_rot)
+        else: plt.yticks(ticks=yticks,labels=yticks,rotation=y_ticks_rot)
+
+    else: # Horizontal orientation
+        # with significance boundraries
+        plt.hlines(y=-np.log10(FC_threshold)/np.log10(2), xmin=y_axis_dims[0], xmax=y_axis_dims[1], colors='k', linestyles='dashed', linewidth=1)
+        plt.hlines(y=np.log10(FC_threshold)/np.log10(2), xmin=y_axis_dims[0], xmax=y_axis_dims[1], colors='k', linestyles='dashed', linewidth=1)
+        plt.vlines(x=-np.log10(pval_threshold), ymin=x_axis_dims[0], ymax=x_axis_dims[1], colors='k', linestyles='dashed', linewidth=1)
+
+        # with data
+        if display_size==False: size=None
+        sns.scatterplot(data=df[df['Significance']!='FC & p-value'], y=f'{log2}({x})', x=f'-{log10}({y})', 
+                        color=color, alpha=alpha,
+                        edgecolor=edgecol, style=stys,
+                        size=size, sizes=sizes,
+                        ax=ax, **kwargs)
+        sns.scatterplot(data=df[(df['Significance']=='FC & p-value')&(df[f'{log2}({x})']<0)], 
+                        y=f'{log2}({x})', x=f'-{log10}({y})', 
+                        hue=f'{log2}({x})',
+                        edgecolor=edgecol, palette='Blues_r', style=stys,
+                        size=size, sizes=sizes, legend=False,
+                        ax=ax, **kwargs)
+        sns.scatterplot(data=df[(df['Significance']=='FC & p-value')&(df[f'{log2}({x})']>0)], 
+                        y=f'{log2}({x})', x=f'-{log10}({y})', 
+                        hue=f'{log2}({x})',
+                        edgecolor=edgecol, palette='Reds', style=stys,
+                        size=size, sizes=sizes, legend=False,
+                        ax=ax, **kwargs)
+        
+        # with labels
+        if display_labels:
+            df_signif = df[df['Significance']=='FC & p-value']
+            adjust_text([plt.text(y=df_signif.iloc[i][f'{log2}({x})'], 
+                                  x=df_signif.iloc[i][f'-{log10}({y})'],
+                                  s=edit) for i,edit in enumerate(df_signif['edit'])])
+        
+        # Set x axis
+        if y_axis=='': y_axis=f'-{log10}({y})'
+        plt.xlabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight)
+        if yticks==[]: 
+            if (y_ticks_rot==0)|(y_ticks_rot==90): plt.xticks(rotation=y_ticks_rot,ha='center')
+            else: plt.xticks(rotation=y_ticks_rot,ha='right')
+        else: 
+            if (y_ticks_rot==0)|(y_ticks_rot==90): plt.xticks(ticks=yticks,labels=yticks,rotation=y_ticks_rot, ha='center')
+            else: plt.xticks(ticks=yticks,labels=yticks,rotation=y_ticks_rot,ha='right')
+
+        # Set y axis
+        if x_axis=='': x_axis=f'{log2}({x})'
+        plt.ylabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight)
+
+        if xticks==[]: plt.yticks(rotation=x_ticks_rot)
+        else: plt.yticks(ticks=xticks,labels=xticks,rotation=x_ticks_rot)
 
     # Set title
-    if title=='' and file is not None: title=re_un_cap(file[-4])
+    if title=='' and file is not None: title=p.re_un_cap(".".join(file.split(".")[:-1]))
     plt.title(title, fontsize=title_size, fontweight=title_weight)
-    
-    # Set x axis
-    if x_axis=='': x_axis=f'{log2}({x})'
-    plt.xlabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight)
-    if xticks==[]: 
-        if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(rotation=x_ticks_rot,ha='center')
-        else: plt.xticks(rotation=x_ticks_rot,ha='right')
-    else: 
-        if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(ticks=xticks,labels=xticks,rotation=x_ticks_rot, ha='center')
-        else: plt.xticks(ticks=xticks,labels=xticks,rotation=x_ticks_rot,ha='right')
-
-    # Set y axis
-    if y_axis=='': y_axis=f'-{log10}({y})'
-    plt.ylabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight)
-
-    if yticks==[]: plt.yticks(rotation=y_ticks_rot)
-    else: plt.yticks(ticks=yticks,labels=yticks,rotation=y_ticks_rot)
 
     # Move legend to the right of the graph
     if legend_items==(0,0): ax.legend(title=legend_title,title_fontsize=legend_title_size,fontsize=legend_size,
