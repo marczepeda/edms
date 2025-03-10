@@ -1352,17 +1352,24 @@ def region(fastqs: dict, pt='', flank5='', flank3='', save=True, masks=False):
 
     # Remove fastq records that do not have flanks
     fastqs_1=dict()
+    missing_flank5s = []
+    missing_flank3s = []
     for file,fastq in fastqs.items():
-        missing_flank = []
+        missing_flank5 = set()
+        missing_flank3 = set()
         for i,seq in enumerate(fastq['seq']):
-            if (seq.find(flank5)==-1)|(seq.find(flank3)==-1): 
-                missing_flank.append(i)
+            if (seq.find(flank5)==-1):
+                missing_flank5.add(i)
+            if (seq.find(flank3)==-1): 
+                missing_flank3.add(i)
 
-        fastqs_1[file] = fastq.drop(missing_flank).reset_index(drop=True)
+        fastqs_1[file] = fastq.drop(sorted(missing_flank5.union(missing_flank3))).reset_index(drop=True)
+        missing_flank5s.append(len(missing_flank5))
+        missing_flank3s.append(len(missing_flank3))
      
     # Obtain nucleotide and AA sequences within flanks; remove fastq records with phred scores within flanks
     if save == True: out = pd.DataFrame()
-    for file,fastq in fastqs_1.items():
+    for j,(file,fastq) in enumerate(fastqs_1.items()):
         nuc=[]
         prot=[]
         if masks==True:
@@ -1382,11 +1389,14 @@ def region(fastqs: dict, pt='', flank5='', flank3='', save=True, masks=False):
             fastqs_1[file]['nucN']=nuc
             fastqs_1[file]['protN']=protN
         
-        print(f'{file}:\t{len(fastqs[file])} reads\t=>\t{len(fastqs_1[file])} reads')
+        print(f'{file}:\t{len(fastqs[file])} reads\t=>\t{len(fastqs_1[file])} reads;\tmissing {missing_flank5s[j]} flank5;\tmissing {missing_flank3s[j]} flank3')
         if save==True: out = pd.concat([out,
                                         pd.DataFrame({'file': [file],
                                                       'reads_filtered': [len(fastqs[file])],
-                                                      'reads_w_flanks': [len(fastqs_1[file])]})])
+                                                      'reads_w_flanks': [len(fastqs_1[file])],
+                                                      'reads_wo_flank5': [missing_flank5s[j]],
+                                                      'reads_wo_flank3': [missing_flank3s[j]]})
+                                        ])
     
     if save==True: io.save(dir='.',file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_region.csv',obj=out)
     
@@ -1976,7 +1986,7 @@ def heat(df: pd.DataFrame, cond: str,x='number',y='after',vals='fraction_avg',va
          title='',title_size=12,title_weight='bold',figsize=(20,7),
          x_axis='',x_axis_size=12,x_axis_weight='bold',x_ticks_rot=45,
          y_axis='',y_axis_size=12,y_axis_weight='bold',y_ticks_rot=0,
-         show=True,**kwargs):
+         show=True,space_capitalize=True,**kwargs):
     ''' 
     heat(): creates heatmap
     
@@ -2005,6 +2015,7 @@ def heat(df: pd.DataFrame, cond: str,x='number',y='after',vals='fraction_avg',va
     y_axis_weight (str, optional): y-axis name bold, italics, etc.
     y_ticks_rot (int, optional): y-axis ticks rotation
     show (bool, optional): show plot (Default: True)
+    space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     
     Dependencies: matplotlib, seaborn, pandas, & aa_props
     '''
@@ -2031,9 +2042,13 @@ def heat(df: pd.DataFrame, cond: str,x='number',y='after',vals='fraction_avg',va
         sns.heatmap(dc2[key],annot=annot,cmap=cmap,ax=ax,linecolor=edgecol,linewidths=lw,cbar=cbar,square=sq,vmin=vmin,vmax=vmax, **kwargs)
         if len(list(dc2.keys()))>1: ax.set_title(key,fontsize=title_size,fontweight=title_weight)  # Add title to subplot
         else: ax.set_title(title,fontsize=title_size,fontweight=title_weight)
-        if x_axis=='': ax.set_xlabel(p.re_un_cap(x),fontsize=x_axis_size,fontweight=x_axis_weight) # Add x axis label
+        if x_axis=='': 
+            if space_capitalize: ax.set_xlabel(p.re_un_cap(x),fontsize=x_axis_size,fontweight=x_axis_weight) # Add x axis label
+            else: ax.set_xlabel(x,fontsize=x_axis_size,fontweight=x_axis_weight) # Add x axis label
         else: ax.set_xlabel(x_axis,fontsize=x_axis_size,fontweight=x_axis_weight)
-        if y_axis=='': ax.set_ylabel(p.re_un_cap(y),fontsize=y_axis_size,fontweight=y_axis_weight) # Add y axis label
+        if y_axis=='': 
+            if space_capitalize: ax.set_ylabel(p.re_un_cap(y),fontsize=y_axis_size,fontweight=y_axis_weight) # Add y axis label
+            else: ax.set_ylabel(y,fontsize=y_axis_size,fontweight=y_axis_weight) # Add y axis label
         else: ax.set_ylabel(y_axis,fontsize=y_axis_size,fontweight=y_axis_weight)
         ax.set_xticklabels(subscript(dc[key])['label'].to_list()) # Change x ticks to have subscript format
         plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, va='center', ha="right",rotation_mode="anchor") # Format x ticks
@@ -2052,7 +2067,7 @@ def vol(df: pd.DataFrame,x: str,y: str,size:str=None,size_dims:tuple=None,includ
         x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_dims=(0,0),x_ticks_rot=0,xticks=[],
         y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_dims=(0,0),y_ticks_rot=0,yticks=[],
         legend_title='',legend_title_size=12,legend_size=9,legend_bbox_to_anchor=(1,1),legend_loc='upper left',
-        legend_items=(0,0),legend_ncol=1,display_size=True,display_labels=True,return_df=True,show=True,
+        legend_items=(0,0),legend_ncol=1,display_size=True,display_labels=True,return_df=True,show=True,space_capitalize=True,
         **kwargs):
     ''' 
     vol(): creates volcano plot
@@ -2099,6 +2114,7 @@ def vol(df: pd.DataFrame,x: str,y: str,size:str=None,size_dims:tuple=None,includ
     display_labels (bool, optional): display labels for significant values (Default: True)
     return_df (bool, optional): return dataframe (Default: True)
     show (bool, optional): show plot (Default: True)
+    space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     
     Dependencies: os, matplotlib, seaborn, pandas, & edit_1()
     '''
@@ -2260,7 +2276,9 @@ def vol(df: pd.DataFrame,x: str,y: str,size:str=None,size_dims:tuple=None,includ
         else: plt.yticks(ticks=xticks,labels=xticks,rotation=x_ticks_rot)
 
     # Set title
-    if title=='' and file is not None: title=p.re_un_cap(".".join(file.split(".")[:-1]))
+    if title=='' and file is not None: 
+        if space_capitalize: title=p.re_un_cap(".".join(file.split(".")[:-1]))
+        else: ".".join(file.split(".")[:-1])
     plt.title(title, fontsize=title_size, fontweight=title_weight)
 
     # Move legend to the right of the graph

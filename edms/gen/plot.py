@@ -142,7 +142,7 @@ def formatter(typ:str,ax,df:pd.DataFrame,x:str,y:str,cols:str,file:str,dir:str,p
               title:str,title_size:int,title_weight:str,
               x_axis:str,x_axis_size:int,x_axis_weight:str,x_axis_scale:str,x_axis_dims:tuple,x_ticks_rot:int,xticks:list,
               y_axis:str,y_axis_size:int,y_axis_weight:str,y_axis_scale:str,y_axis_dims:tuple,y_ticks_rot:int,yticks:list,
-              legend_title:str,legend_title_size:int,legend_size:int,legend_bbox_to_anchor:tuple,legend_loc:str,legend_items:tuple,legend_ncol:int,show:bool):
+              legend_title:str,legend_title_size:int,legend_size:int,legend_bbox_to_anchor:tuple,legend_loc:str,legend_items:tuple,legend_ncol:int,show:bool,space_capitalize:bool):
     ''' 
     formatter(): formats, displays, and saves plots
 
@@ -180,7 +180,8 @@ def formatter(typ:str,ax,df:pd.DataFrame,x:str,y:str,cols:str,file:str,dir:str,p
     legend_loc (str): legend location
     legend_ncol (tuple, optional): # of columns
     show (bool, optional): show plot (Default: True)
-    
+    space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
+
     Dependencies: os, matplotlib, seaborn, io, re_un_cap(), & round_up_pow_10()
     '''
     # Define plot types
@@ -191,11 +192,15 @@ def formatter(typ:str,ax,df:pd.DataFrame,x:str,y:str,cols:str,file:str,dir:str,p
         
     if typ not in heats:
         # Set title
-        if title=='' and file is not None: title=re_un_cap(".".join(file.split(".")[:-1]))
+        if title=='' and file is not None: 
+            if space_capitalize: title=re_un_cap(".".join(file.split(".")[:-1]))
+            else: title=".".join(file.split(".")[:-1])
         plt.title(title, fontsize=title_size, fontweight=title_weight)
         
         # Set x axis
-        if x_axis=='': x_axis=re_un_cap(x)
+        if x_axis=='': 
+            if space_capitalize: x_axis=re_un_cap(x)
+            else: x_axis=x
         plt.xlabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight)
         if x!='':
             if df[x].apply(lambda row: isinstance(row, (int, float))).all()==True: # Check that x column is numeric
@@ -211,7 +216,9 @@ def formatter(typ:str,ax,df:pd.DataFrame,x:str,y:str,cols:str,file:str,dir:str,p
             else: plt.xticks(ticks=xticks,labels=xticks,rotation=x_ticks_rot,ha='right')
 
         # Set y axis
-        if y_axis=='': y_axis=re_un_cap(y)
+        if y_axis=='': 
+            if space_capitalize: y_axis=re_un_cap(y)
+            else: y_axis=y
         plt.ylabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight)
         if y!='':
             if df[y].apply(lambda row: isinstance(row, (int, float))).all()==True: # Check that y column is numeric
@@ -248,7 +255,7 @@ def scat(typ: str,df: pd.DataFrame,x: str,y: str,cols=None,cols_ord=None,stys=No
          figsize=(10,6),title='',title_size=18,title_weight='bold',
          x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_scale='linear',x_axis_dims=(0,0),x_ticks_rot=0,xticks=[],
          y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_scale='linear',y_axis_dims=(0,0),y_ticks_rot=0,yticks=[],
-         legend_title='',legend_title_size=12,legend_size=9,legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_items=(0,0),legend_ncol=1,show=True,
+         legend_title='',legend_title_size=12,legend_size=9,legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_items=(0,0),legend_ncol=1,show=True, space_capitalize=True, 
          **kwargs):
     ''' 
     scat(): creates scatter plot related graphs
@@ -291,6 +298,7 @@ def scat(typ: str,df: pd.DataFrame,x: str,y: str,cols=None,cols_ord=None,stys=No
     legend_loc (str): legend location
     legend_ncol (tuple, optional): # of columns
     show (bool, optional): show plot (Default: True)
+    space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     
     Dependencies: os, matplotlib, seaborn, formatter(), re_un_cap(), & round_up_pow_10()
     '''
@@ -356,14 +364,14 @@ def scat(typ: str,df: pd.DataFrame,x: str,y: str,cols=None,cols_ord=None,stys=No
               title,title_size,title_weight,
               x_axis,x_axis_size,x_axis_weight,x_axis_scale,x_axis_dims,x_ticks_rot,xticks,
               y_axis,y_axis_size,y_axis_weight,y_axis_scale,y_axis_dims,y_ticks_rot,yticks,
-              legend_title,legend_title_size,legend_size,legend_bbox_to_anchor,legend_loc,legend_items,legend_ncol,show)
+              legend_title,legend_title_size,legend_size,legend_bbox_to_anchor,legend_loc,legend_items,legend_ncol,show,space_capitalize)
 
 def cat(typ:str,df:pd.DataFrame,x='',y='',cols=None,cols_ord=None,cols_exclude=None,
         file=None,dir=None,palette_or_cmap='colorblind',edgecol='black',lw=1,errorbar='sd',errwid=1,errcap=0.1,
         figsize=(10,6),title='',title_size=18,title_weight='bold',
         x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_scale='linear',x_axis_dims=(0,0),x_ticks_rot=0,xticks=[],
         y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_scale='linear',y_axis_dims=(0,0),y_ticks_rot=0,yticks=[],
-        legend_title='',legend_title_size=12,legend_size=9,legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_items=(0,0),legend_ncol=1,show=True, 
+        legend_title='',legend_title_size=12,legend_size=9,legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_items=(0,0),legend_ncol=1,show=True,space_capitalize=True, 
         **kwargs):
     ''' 
     cat(): creates category dependent graphs
@@ -409,6 +417,7 @@ def cat(typ:str,df:pd.DataFrame,x='',y='',cols=None,cols_ord=None,cols_exclude=N
     legend_loc (str): legend location
     legend_ncol (tuple, optional): # of columns
     show (bool, optional): show plot (Default: True)
+    space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     
     Dependencies: os, matplotlib, seaborn, formatter(), re_un_cap(), & round_up_pow_10()
     '''
@@ -530,14 +539,14 @@ def cat(typ:str,df:pd.DataFrame,x='',y='',cols=None,cols_ord=None,cols_exclude=N
               title,title_size,title_weight,
               x_axis,x_axis_size,x_axis_weight,x_axis_scale,x_axis_dims,x_ticks_rot,xticks,
               y_axis,y_axis_size,y_axis_weight,y_axis_scale,y_axis_dims,y_ticks_rot,yticks,
-              legend_title,legend_title_size,legend_size,legend_bbox_to_anchor,legend_loc,legend_items,legend_ncol,show)
+              legend_title,legend_title_size,legend_size,legend_bbox_to_anchor,legend_loc,legend_items,legend_ncol,show,space_capitalize)
 
 def dist(typ: str,df: pd.DataFrame,x: str,cols=None,cols_ord=None,cols_exclude=None,bins=40,log10_low=0,
         file=None,dir=None,palette_or_cmap='colorblind',edgecol='black',lw=1,ht=1.5,asp=5,tp=.8,hs=0,des=False,
         figsize=(10,6),title='',title_size=18,title_weight='bold',
         x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_scale='linear',x_axis_dims=(0,0),x_ticks_rot=0,xticks=[],
         y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_scale='linear',y_axis_dims=(0,0),y_ticks_rot=0,yticks=[],
-        legend_title='',legend_title_size=12,legend_size=9,legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_items=(0,0),legend_ncol=1,show=True, 
+        legend_title='',legend_title_size=12,legend_size=9,legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_items=(0,0),legend_ncol=1,show=True,space_capitalize=True, 
         **kwargs):
     ''' 
     dist(): creates distribution graphs
@@ -586,6 +595,7 @@ def dist(typ: str,df: pd.DataFrame,x: str,cols=None,cols_ord=None,cols_exclude=N
     legend_loc (str): legend location
     legend_ncol (tuple, optional): # of columns
     show (bool, optional): show plot (Default: True)
+    space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     
     Dependencies: os, matplotlib, seaborn, io, formatter(), re_un_cap(), & round_up_pow_10()
     
@@ -609,7 +619,7 @@ def dist(typ: str,df: pd.DataFrame,x: str,cols=None,cols_ord=None,cols_exclude=N
                   title,title_size,title_weight,
                   x_axis,x_axis_size,x_axis_weight,x_axis_scale,x_axis_dims,x_ticks_rot,xticks,
                   y_axis,y_axis_size,y_axis_weight,y_axis_scale,y_axis_dims,y_ticks_rot,yticks,
-                  legend_title,legend_title_size,legend_size,legend_bbox_to_anchor,legend_loc,legend_items,legend_ncol,show)
+                  legend_title,legend_title_size,legend_size,legend_bbox_to_anchor,legend_loc,legend_items,legend_ncol,show,space_capitalize)
     elif typ=='kde': 
         fig, ax = plt.subplots(figsize=figsize)
         if x_axis_scale=='log':
@@ -624,7 +634,7 @@ def dist(typ: str,df: pd.DataFrame,x: str,cols=None,cols_ord=None,cols_exclude=N
                   title,title_size,title_weight,
                   x_axis,x_axis_size,x_axis_weight,x_axis_scale,x_axis_dims,x_ticks_rot,xticks,
                   y_axis,y_axis_size,y_axis_weight,y_axis_scale,y_axis_dims,y_ticks_rot,yticks,
-                  legend_title,legend_title_size,legend_size,legend_bbox_to_anchor,legend_loc,legend_items,legend_ncol,show)
+                  legend_title,legend_title_size,legend_size,legend_bbox_to_anchor,legend_loc,legend_items,legend_ncol,show,space_capitalize)
     elif typ=='hist_kde':
         fig, ax = plt.subplots(figsize=figsize)
         if x_axis_scale=='log':
@@ -643,7 +653,7 @@ def dist(typ: str,df: pd.DataFrame,x: str,cols=None,cols_ord=None,cols_exclude=N
                   title,title_size,title_weight,
                   x_axis,x_axis_size,x_axis_weight,x_axis_scale,x_axis_dims,x_ticks_rot,xticks,
                   y_axis,y_axis_size,y_axis_weight,y_axis_scale,y_axis_dims,y_ticks_rot,yticks,
-                  legend_title,legend_title_size,legend_size,legend_bbox_to_anchor,legend_loc,legend_items,legend_ncol,show)
+                  legend_title,legend_title_size,legend_size,legend_bbox_to_anchor,legend_loc,legend_items,legend_ncol,show,space_capitalize)
     elif typ=='rid':
         # Set color scheme
         color_palettes = ["deep", "muted", "bright", "pastel", "dark", "colorblind", "husl", "hsv", "Paired", "Set1", "Set2", "Set3", "tab10", "tab20"] # List of common Seaborn palettes
@@ -665,7 +675,9 @@ def dist(typ: str,df: pd.DataFrame,x: str,cols=None,cols_ord=None,cols_exclude=N
             ax.set_xlabel(x_axis,fontsize=x_axis_size,fontweight=x_axis_weight)
         g.set(yticks=yticks, ylabel=y_axis)
         g.set_titles("")
-        if title=='' and file is not None: title=re_un_cap(".".join(file.split(".")[:-1]))
+        if title=='' and file is not None: 
+            if space_capitalize: title=re_un_cap(".".join(file.split(".")[:-1]))
+            else: ".".join(file.split(".")[:-1])
         g.figure.suptitle(title, fontsize=title_size, fontweight=title_weight)
         g.figure.subplots_adjust(top=tp,hspace=hs)
         if des==False: g.despine(top=False,right=False)
@@ -686,7 +698,7 @@ def heat(df: pd.DataFrame, x: str, y: str, vars='variable', vals='value',vals_di
          title='',title_size=18,title_weight='bold',figsize=(10,6),
          x_axis='',x_axis_size=12,x_axis_weight='bold',x_ticks_rot=0,
          y_axis='',y_axis_size=12,y_axis_weight='bold',y_ticks_rot=0,
-         show=True,**kwargs):
+         show=True,space_capitalize=True,**kwargs):
     '''
     heat(): creates heat plot related graphs
 
@@ -718,6 +730,7 @@ def heat(df: pd.DataFrame, x: str, y: str, vars='variable', vals='value',vals_di
     y_axis_weight (str, optional): y-axis name bold, italics, etc.
     y_ticks_rot (int, optional): y-axis ticks rotation
     show (bool, optional): show plot (Default: True)
+    space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     
     Dependencies: os, matplotlib, seaborn, formatter(), re_un_cap(), & round_up_pow_10()
     '''
@@ -739,9 +752,13 @@ def heat(df: pd.DataFrame, x: str, y: str, vars='variable', vals='value',vals_di
         sns.heatmap(dc[key],annot=annot,cmap=cmap,ax=ax,linecolor=edgecol,linewidths=lw,cbar=cbar,square=sq,vmin=vmin,vmax=vmax, **kwargs)
         if len(list(dc.keys()))>1: ax.set_title(key,fontsize=title_size,fontweight=title_weight)  # Add title to subplot
         else: ax.set_title(title,fontsize=title_size,fontweight=title_weight)
-        if x_axis=='': ax.set_xlabel(re_un_cap(x),fontsize=x_axis_size,fontweight=x_axis_weight) # Add x axis label
+        if x_axis=='': 
+            if space_capitalize: ax.set_xlabel(re_un_cap(x),fontsize=x_axis_size,fontweight=x_axis_weight) # Add x axis label
+            else: ax.set_xlabel(x,fontsize=x_axis_size,fontweight=x_axis_weight) # Add x axis label
         else: ax.set_xlabel(x_axis,fontsize=x_axis_size,fontweight=x_axis_weight)
-        if y_axis=='': ax.set_ylabel(re_un_cap(y),fontsize=y_axis_size,fontweight=y_axis_weight) # Add y axis label
+        if y_axis=='': 
+            if space_capitalize: ax.set_ylabel(re_un_cap(y),fontsize=y_axis_size,fontweight=y_axis_weight) # Add y axis label
+            else: ax.set_ylabel(y,fontsize=y_axis_size,fontweight=y_axis_weight) # Add y axis label
         else: ax.set_ylabel(y_axis,fontsize=y_axis_size,fontweight=y_axis_weight)
         plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, va='center', ha="right",rotation_mode="anchor") # Format x ticks
         plt.setp(ax.get_yticklabels(), rotation=y_ticks_rot, va='center', ha="right",rotation_mode="anchor") # Format y ticks
@@ -759,7 +776,7 @@ def stack(df: pd.DataFrame,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord=[],
           x_axis='',x_axis_size=12,x_axis_weight='bold',x_ticks_rot:int=None,x_ticks_ha:str=None,
           y_axis='',y_axis_size=12,y_axis_weight='bold',y_ticks_rot:int=None,y_ticks_ha:str=None,
           legend_title='',legend_title_size=12,legend_size=12,
-          legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_ncol=1,show=True,**kwargs):
+          legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_ncol=1,show=True,space_capitalize=True,**kwargs):
     ''' 
     stack(): creates stacked bar plot
 
@@ -797,6 +814,8 @@ def stack(df: pd.DataFrame,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord=[],
     legend_bbox_to_anchor (tuple, optional): coordinates for bbox anchor
     legend_loc (str): legend location
     legend_ncol (tuple, optional): # of columns
+    show (bool, optional): show plot (Default: True)
+    space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     
     Dependencies: re, os, pandas, numpy, matplotlib.pyplot, & io
     '''
@@ -812,14 +831,18 @@ def stack(df: pd.DataFrame,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord=[],
         df_pivot.plot(kind='bar',yerr=df_pivot_err,capsize=errcap, figsize=figsize,colormap=cmap,stacked=True,**kwargs)
         
         # Set x axis
-        if x_axis=='': x_axis=re_un_cap(x)
+        if x_axis=='': 
+            if space_capitalize: x_axis=re_un_cap(x)
+            else: x_axis=x
         plt.xlabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight)
         if x_ticks_rot is None: x_ticks_rot=45
         if x_ticks_ha is None: x_ticks_ha='right'
         plt.xticks(rotation=x_ticks_rot, ha=x_ticks_ha)
         
         # Set y axis
-        if y_axis=='': y_axis=re_un_cap(y)
+        if y_axis=='': 
+            if space_capitalize: y_axis=re_un_cap(y)
+            else: y_axis=y
         plt.ylabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight)
         if y_ticks_rot is None: y_ticks_rot=0
         if y_ticks_ha is None: y_ticks_ha='right'
@@ -829,14 +852,18 @@ def stack(df: pd.DataFrame,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord=[],
         df_pivot.plot(kind='barh',yerr=df_pivot_err,capsize=errcap, figsize=figsize,colormap=cmap,stacked=True,**kwargs)
 
         # Set y axis
-        if x_axis=='': x_axis=re_un_cap(x)
+        if x_axis=='': 
+            if space_capitalize: x_axis=re_un_cap(x)
+            else: x_axis=x
         if x_ticks_rot is None: x_ticks_rot=0
         if x_ticks_ha is None: x_ticks_ha='right'
         plt.ylabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight)
         plt.yticks(rotation=x_ticks_rot, ha=x_ticks_ha)
         
         # Set x axis
-        if y_axis=='': y_axis=re_un_cap(y)
+        if y_axis=='': 
+            if space_capitalize: y_axis=re_un_cap(y)
+            else: y_axis=y
         if y_ticks_rot is None: y_ticks_rot=0
         if y_ticks_ha is None: y_ticks_ha='center'
         plt.xlabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight)
@@ -847,7 +874,9 @@ def stack(df: pd.DataFrame,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord=[],
     plt.title(title, fontsize=title_size, fontweight=title_weight)
     
     # Set legend
-    if legend_title=='': legend_title=re_un_cap(cols)
+    if legend_title=='': 
+        if space_capitalize: legend_title=re_un_cap(cols)
+        else: legend_title=cols
     plt.legend(title=legend_title, title_fontsize=legend_title_size, fontsize=legend_size, 
                bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol)
     
@@ -863,7 +892,7 @@ def vol(df: pd.DataFrame,x: str,y: str,stys:str=None, size:str=None,size_dims:tu
         x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_dims=(0,0),x_ticks_rot=0,xticks=[],
         y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_dims=(0,0),y_ticks_rot=0,yticks=[],
         legend_title='',legend_title_size=12,legend_size=9,legend_bbox_to_anchor=(1,1),legend_loc='upper left',
-        legend_items=(0,0),legend_ncol=1,display_size=True,display_labels=True,return_df=True,show=True,
+        legend_items=(0,0),legend_ncol=1,display_size=True,display_labels=True,return_df=True,show=True,space_capitalize=True,
         **kwargs):
     ''' 
     vol(): creates volcano plot
@@ -910,6 +939,7 @@ def vol(df: pd.DataFrame,x: str,y: str,stys:str=None, size:str=None,size_dims:tu
     display_labels (bool, optional): display labels for significant values (Default: True)
     return_df (bool, optional): return dataframe (Default: True)
     show (bool, optional): show plot (Default: True)
+    space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     
     Dependencies: os, matplotlib, seaborn, pandas, & edit_1()
     '''
@@ -1043,7 +1073,9 @@ def vol(df: pd.DataFrame,x: str,y: str,stys:str=None, size:str=None,size_dims:tu
         else: plt.yticks(ticks=xticks,labels=xticks,rotation=x_ticks_rot)
 
     # Set title
-    if title=='' and file is not None: title=p.re_un_cap(".".join(file.split(".")[:-1]))
+    if title=='' and file is not None: 
+        if space_capitalize: title=re_un_cap(".".join(file.split(".")[:-1]))
+        else: ".".join(file.split(".")[:-1])
     plt.title(title, fontsize=title_size, fontweight=title_weight)
 
     # Move legend to the right of the graph
