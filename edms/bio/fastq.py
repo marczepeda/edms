@@ -16,6 +16,7 @@ Usage:
 - count_spacers_pbs(): count spacers and PBS in library
 - count_spacers_pbs_linkers(): count spacers and PBS + linkers in library
 - count_region(): returns dataframe with sequence region abundance for every fastq file in a directory
+- count_motif(): returns dataframe with sequence motif abundance for every fastq file in a directory
 - count_alignments(): get fastq files from directory and store records in dataframes in a dictionary
 - plot_alignments(): plot fastq alignments dictionary output from count_alignments()
 
@@ -993,6 +994,53 @@ def count_region(fastq_dir: str, end_i: int, start_i:int=0,
     
     df = t.join(dc=sequences_dc,col='fastq_file') # Join fastq files into single dataframe
     df = df[['fastq_file','region','count','fraction']] # Change column order
+
+    if out_dir is not None and out_file is not None: # Save dataframe (optional)
+        io.mkdir(out_dir) # Make output directory if it does not exist
+        io.save(dir=out_dir,file=out_file,obj=df)
+
+    return df
+
+def count_motif(fastq_dir: str, seq: str, motif:str="motif", out_dir:str=None, out_file:str=None):
+    ''' 
+    count_motif(): returns dataframe with sequence motif abundance for every fastq file in a directory
+
+    Parameters:
+    fastq_dir (str): path to fastq directory
+    seq (str): search for this sequence motif 
+    motif (str, optional): motif name (Default: motif)
+    out_dir (str, optional): path to save directory (Default: None)
+    out_file (str, optional): save file name (Default: None)
+
+    Dependencies: pandas,gzip,os,
+    '''
+    df = pd.DataFrame() # Create a dataframe to store motif abundance
+    for fastq_file in os.listdir(fastq_dir): # Find all .fastq.gz & .fastq files in the fastq directory
+        print(f"Processing {fastq_file}...") # Keep track of sequence motifs & reads
+        motif_reads = 0 
+        reads = 0 
+
+        if fastq_file.endswith(".fastq.gz"): # Compressed fastq
+            with gzip.open(os.path.join(fastq_dir,fastq_file), 'rt') as handle:
+                for r,record in enumerate(SeqIO.parse(handle, "fastq")): # Parse reads
+                    reads=r+1
+                    if Seq(seq) in record.seq: motif_reads+=1 # Motif found in read
+                 
+        elif fastq_file.endswith(".fastq"): # Uncompressed fastq
+            with open(os.path.join(fastq_dir,fastq_file), 'r') as handle:
+                for r,record in enumerate(SeqIO.parse(handle, "fastq")): # Parse reads    
+                    reads=r+1
+                    if Seq(seq) in record.seq: motif_reads+=1 # Motif found in read
+
+        print(f'Completed {reads} reads') # Append motif abundances to the dataframe
+        df = pd.concat([df,
+                        pd.DataFrame({'fastq_file':[fastq_file],
+                                    'motif':[motif],
+                                    'sequence':[seq],
+                                    'reads':[reads],
+                                    'motif_reads':[motif_reads],
+                                    'fraction':[motif_reads/reads]})
+                        ]).reset_index(drop=True)
 
     if out_dir is not None and out_file is not None: # Save dataframe (optional)
         io.mkdir(out_dir) # Make output directory if it does not exist
