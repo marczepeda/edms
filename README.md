@@ -6,7 +6,8 @@
     import edms.gen.tidy as t
     import edms.gen.plot as p
     import edms.gen.stat as st
-    import emds.gen.image as im
+    import edms.gen.image as im
+    import edms.gen.com as com
     ```
 - bio: molecular biology & tissue culture workflows.
     ```shell
