@@ -1959,7 +1959,7 @@ def stack(df: pd.DataFrame,x='sample',y='fraction',cols='edit',cutoff=0.01,cols_
           x_axis='',x_axis_size=12,x_axis_weight='bold',x_ticks_rot:int=None,x_ticks_ha:str=None,
           y_axis='',y_axis_size=12,y_axis_weight='bold',y_ticks_rot:int=None,y_ticks_ha:str=None,
           legend_title='',legend_title_size=12,legend_size=12,
-          legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_ncol=1,show=True,**kwargs):
+          legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_ncol=1,show=True,space_capitalize=True,**kwargs):
     ''' 
     stack(): creates stacked bar plot
 
@@ -1996,6 +1996,7 @@ def stack(df: pd.DataFrame,x='sample',y='fraction',cols='edit',cutoff=0.01,cols_
     legend_loc (str): legend location
     legend_ncol (tuple, optional): # of columns
     show (bool, optional): show plot (Default: True)
+    space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     
     Dependencies: re, os, pandas, numpy, matplotlib.pyplot & plot
     '''
@@ -2027,7 +2028,7 @@ def stack(df: pd.DataFrame,x='sample',y='fraction',cols='edit',cutoff=0.01,cols_
             x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_ticks_rot=x_ticks_rot,x_ticks_ha=x_ticks_ha,
             y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_ticks_rot=y_ticks_rot,y_ticks_ha=y_ticks_ha,
             legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,
-            legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_ncol=legend_ncol,show=show,**kwargs)
+            legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_ncol=legend_ncol,show=show,space_capitalize=space_capitalize,**kwargs)
 
 def heat(df: pd.DataFrame, cond: str,x='number',y='after',vals='fraction_avg',vals_dims:tuple=None,
          file=None,dir=None,edgecol='black',lw=1,annot=False,cmap="bone_r",sq=True,cbar=True,
