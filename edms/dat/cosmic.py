@@ -8,16 +8,22 @@ Usage:
 [COSMIC database]
 - mutations(): returns COSMIC mutations dataframe for a given gene
 - prevalence(): returns list of mutations sorted by prevalence on COSMIC
+- cds_group(): plot COSMIC mutations histogram with CDS regions highlighted in different colors
 
 [Prime editing]
 - priority_muts: returns the shared sequences library dataframe with priority mutations
 - priority_edits(): returns a dataframe with the most clinically-relevant prime edits to prioritize from the shared sequences library
+
+[Base & prime editing accessible mutations]
+- editor_mutations(): returns and plots editor accessible COSMIC mutations
 '''
 # Import packages
 import pandas as pd
 import re
 import ast
 from ..gen import io
+from ..gen import tidy as t
+from ..gen import plot as p
 
 # COSMIC database
 def mutations(pt:str):
@@ -60,6 +66,41 @@ def prevalence(gene: pd.DataFrame):
     Dependencies: pandas
     '''
     return list(gene['AA_mut'].value_counts().keys())
+
+
+def cds_group(cosmic_pt: str,cds_pt: str, out_dir: str=None, **hist_kwargs):
+    '''
+    cds_group(): plot COSMIC mutations histogram with CDS regions highlighted in different colors
+
+    Parameters:
+    cosmic_pt (str): COSMIC mutations file path
+    cds_pt (str): CDS file path (Required columns: gene,CDS,start,end)
+    out_dir (str, optional): path to output directory
+    **hist_kwargs: histogram keyword arguments
+
+    Dependencies: io,plot,os,pandas
+    '''
+    # Get file inputs and drop silent COSMIC mutations
+    cds_file = io.get(cds_pt)
+    cosmic_file = io.get(cosmic_pt)
+    cosmic_file = cosmic_file[(cosmic_file['Type']!='Substitution - coding silent')].reset_index(drop=True)
+
+    # Group COSMIC mutations by CDS region
+    regions = []
+    for pos in cosmic_file['AA_position']:
+        for i,(region,start,end) in enumerate(t.zip_cols(df=cds_file,cols=['CDS','start','end'])):
+            if (pos>=start)&(pos<=end): 
+                regions.append(region)
+                break
+            if i==len(cds_file['CDS'])-1: # check for errors
+                regions.append(0)
+    cosmic_file['CDS']=regions
+
+    # Plot histogram
+    p.dist(typ='hist',df=cosmic_file,x='AA_position',bins=cds_file.iloc[-1]['end'],cols='CDS',edgecol=None,
+           title='COSMIC Mutations',x_axis='Position (AA)',y_axis=f"{cds_file.iloc[0]['gene']}",
+           dir=out_dir,file=f"{cds_file.iloc[0]['gene']}_CDS_group.pdf",
+           **hist_kwargs)
 
 # Prime editing
 def priority_muts(pegRNAs: pd.DataFrame, pegRNAs_shared: pd.DataFrame, pt: str):
@@ -134,3 +175,92 @@ def priority_edits(pegRNAs: pd.DataFrame, pegRNAs_shared: pd.DataFrame, pt: str)
     pegRNAs_priority['COSMIC_count'] = [gene['AA_mut'].value_counts()[edit] if edit in gene['AA_mut'].to_list() else 0 for edit in pegRNAs_priority['Edit']]
 
     return pegRNAs_priority
+
+# Base & prime editing accessible mutations
+def editor_mutations(df_cosmic: pd.DataFrame, df_bescan: pd.DataFrame, out_dir: str=None, **plot_kwargs):
+    '''
+    editor_mutations(): returns and plots editor accessible COSMIC mutations
+
+    Parameters:
+    df_cosmic (dataframe): COSMIC mutations
+    df_bescan (dataframe): BESCAN sgRNA library
+    out_dir (str, optional): path to output directory
+    **plot_kwargs (optional): Plot keyword arguments
+
+    Dependencies: pandas, plot
+    '''
+    # Get BE (ABE & CBE) mutations
+    abe = list(df_bescan['AtoG_mutations'].value_counts().keys())
+    cbe = list(df_bescan['CtoT_mutations'].value_counts().keys())
+
+    # Retain all unique BE mutations
+    abe_set = set()
+    for a in abe:
+        abe_set.update(re.split(r'[;/]',a))
+    cbe_set = set()
+    for a in cbe:
+        cbe_set.update(re.split(r'[;/]',a))
+
+    # Combine ABE and CBE mutations
+    if '' in abe_set: abe_set.remove('')
+    if '' in cbe_set: cbe_set.remove('')
+    be_set = abe_set.union(cbe_set)
+
+    # Sort mutations numerically
+    abe_list = sorted(list(abe_set), key=lambda x: int(re.search(r'\d+', x).group()))
+    cbe_list = sorted(list(cbe_set), key=lambda x: int(re.search(r'\d+', x).group()))
+    be_list = sorted(list(be_set), key=lambda x: int(re.search(r'\d+', x).group()))
+
+    # Save BE mutations
+    df_bescan2 = pd.DataFrame({'gene': [df_bescan.iloc[0]['gene']],
+                               'ABE': [abe_list],
+                               'CBE': [cbe_list],
+                               'BE': [be_list]})
+
+    # Isolate COSMIC BE mutations
+    cosmic_mut_list = list(df_cosmic['AA_mut'])
+    abe_cosmic_list = [mut for mut in df_bescan2.iloc[0]['ABE'] if mut in cosmic_mut_list]
+    cbe_cosmic_list = [mut for mut in df_bescan2.iloc[0]['CBE'] if mut in cosmic_mut_list]
+    be_cosmic_list = [mut for mut in df_bescan2.iloc[0]['BE'] if mut in cosmic_mut_list]
+
+    # Save COSMIC BE mutations
+    df_bescan2['ABE_COMSIC']= [abe_cosmic_list]
+    df_bescan2['CBE_COMSIC']= [cbe_cosmic_list]
+    df_bescan2['BE_COMSIC']= [be_cosmic_list]
+    if out_dir is not None:
+        io.save(dir=out_dir,
+                file=f"{df_bescan.iloc[0]['gene']}_BE_COSMIC.csv",
+                obj=df_bescan2)
+
+
+    # Quantify BE and PE COSMIC mutations 
+    cosmic_nodup = df_cosmic.drop_duplicates(subset='AA_mut')
+    cosmic_nodup_change = cosmic_nodup[cosmic_nodup['Type']!='Substitution - coding silent']
+    cosmic_nodup_change_BE = len(cosmic_nodup_change[[aa_mut in be_cosmic_list for aa_mut in cosmic_nodup_change['AA_mut']]])
+
+    cosmic_nodup_change_type = cosmic_nodup_change['Type'].value_counts()
+    cosmic_nodup_change_PE_sub = cosmic_nodup_change_type['Substitution - Missense']+cosmic_nodup_change_type['Substitution - Nonsense']-cosmic_nodup_change_BE
+    cosmic_nodup_change_PE_indel = cosmic_nodup_change_type['Insertion - Frameshift']+cosmic_nodup_change_type['Insertion - In frame']+cosmic_nodup_change_type['Deletion - Frameshift']+cosmic_nodup_change_type['Deletion - In frame']
+
+    cosmic_nodup_change_type_complex = len(cosmic_nodup_change['Type'])-cosmic_nodup_change_BE-cosmic_nodup_change_PE_sub-cosmic_nodup_change_PE_indel
+
+    # Save and plot editor accessibly COSMIC mutations 
+    df_editor_cosmic = pd.DataFrame({'mutation': ['Substitution (ABE/CBE)','Substitution (PE)','Indel (PE)','Complex'],
+                                     'COSMIC': [cosmic_nodup_change_BE,cosmic_nodup_change_PE_sub,cosmic_nodup_change_PE_indel,cosmic_nodup_change_type_complex]})
+    df_editor_cosmic['fraction']=df_editor_cosmic['COSMIC']/sum(df_editor_cosmic['COSMIC'])
+    df_editor_cosmic['gene']=df_bescan.iloc[0]['gene']
+    
+    if out_dir is not None:
+        io.save(dir=out_dir,
+                file=f"{df_bescan.iloc[0]['gene']}_COSMIC_types.csv",
+                obj=cosmic_nodup_change_type.reset_index(drop=False))
+        io.save(dir=out_dir,
+                file=f"{df_bescan.iloc[0]['gene']}_editor_COSMIC.csv",
+                obj=df_editor_cosmic)
+
+        p.stack(df=df_editor_cosmic,x='gene',y='fraction',cols='mutation',
+                cols_ord=['Substitution (ABE/CBE)','Substitution (PE)','Indel (PE)','Complex'],
+                x_ticks_rot=0,x_ticks_ha='center',x_axis='COSMIC',
+                title=df_bescan.iloc[0]['gene'],
+                figsize=(1,5),dir=out_dir,
+                file=f"{df_bescan.iloc[0]['gene']}_editor_COSMIC.pdf")

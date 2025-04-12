@@ -598,22 +598,34 @@ def dist(typ: str,df: pd.DataFrame,x: str,cols=None,cols_ord=None,cols_exclude=N
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     
     Dependencies: os, matplotlib, seaborn, io, formatter(), re_un_cap(), & round_up_pow_10()
-    
-    Note: cannot set palette or cmap?
     '''
     # Omit excluded data
     if type(cols_exclude)==list: 
         for exclude in cols_exclude: df=df[df[cols]!=exclude]
     elif type(cols_exclude)==str: df=df[df[cols]!=cols_exclude]
 
+    # Set color scheme (Needs to be moved into individual plotting functions)
+    color_palettes = ["deep", "muted", "bright", "pastel", "dark", "colorblind", "husl", "hsv", "Paired", "Set1", "Set2", "Set3", "tab10", "tab20"] # List of common Seaborn palettes
+    if palette_or_cmap in color_palettes: palette = palette_or_cmap
+    elif palette_or_cmap in plt.colormaps(): 
+        if cols is not None: # Column specified
+            cmap = cm.get_cmap(palette_or_cmap,len(df[cols].value_counts()))
+            palette = sns.color_palette([cmap(i) for i in range(cmap.N)])
+        else:
+            print('Cols not specified. Used seaborn colorblind.')
+            palette = 'colorblind'
+    else: 
+        print('Seaborn color palette or matplotlib color map not specified. Used seaborn colorblind.')
+        palette = 'colorblind'
+
     if typ=='hist':
         fig, ax = plt.subplots(figsize=figsize)
         if isinstance(bins, int):
             if x_axis_scale=='log': bins = np.logspace(log10(df[x]).min(), log10(df[x]).max(), bins + 1)
             else: bins = np.linspace(df[x].min(), df[x].max(), bins + 1)
-        sns.histplot(data=df, x=x, kde=False, bins=bins, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, ax=ax, **kwargs)
+        sns.histplot(data=df, x=x, kde=False, bins=bins, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
         y=''
-        y_axis='Count'
+        if y_axis=='': y_axis='Count'
         ax.yaxis.set_major_locator(MaxNLocator(integer=True))
         formatter(typ,ax,df,x,y,cols,file,dir,palette_or_cmap,
                   title,title_size,title_weight,
@@ -624,12 +636,12 @@ def dist(typ: str,df: pd.DataFrame,x: str,cols=None,cols_ord=None,cols_exclude=N
         fig, ax = plt.subplots(figsize=figsize)
         if x_axis_scale=='log':
             df[f'log10({x})']=np.maximum(np.log10(df[x]),log10_low)
-            sns.kdeplot(data=df, x=f'log10({x})', hue=cols, hue_order=cols_ord, linewidth=lw, ax=ax, **kwargs)
+            sns.kdeplot(data=df, x=f'log10({x})', hue=cols, hue_order=cols_ord, linewidth=lw, palette=palette, ax=ax, **kwargs)
             x_axis_scale='linear'
             if x_axis=='': x_axis=f'log10({x})'
         else: sns.kdeplot(data=df, x=x, hue=cols, hue_order=cols_ord, linewidth=lw, ax=ax, **kwargs)
         y=''
-        y_axis='Density'
+        if y_axis=='': y_axis='Density'
         formatter(typ,ax,df,x,y,cols,file,dir,palette_or_cmap,
                   title,title_size,title_weight,
                   x_axis,x_axis_size,x_axis_weight,x_axis_scale,x_axis_dims,x_ticks_rot,xticks,
@@ -640,14 +652,14 @@ def dist(typ: str,df: pd.DataFrame,x: str,cols=None,cols_ord=None,cols_exclude=N
         if x_axis_scale=='log':
             df[f'log10({x})']=np.maximum(np.log10(df[x]),log10_low)
             bins = np.logspace(log10(df[x]).min(), log10(df[x]).max(), bins + 1)
-            sns.histplot(data=df, x=f'log10({x})', kde=True, bins=bins, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, ax=ax, **kwargs)
+            sns.histplot(data=df, x=f'log10({x})', kde=True, bins=bins, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
             x_axis_scale='linear'
             if x_axis=='': x_axis=f'log10({x})'
         else:
             bins = np.linspace(df[x].min(), df[x].max(), bins + 1) 
-            sns.histplot(data=df, x=x, kde=True, bins=bins, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, ax=ax, **kwargs)
+            sns.histplot(data=df, x=x, kde=True, bins=bins, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
         y=''
-        y_axis='Count'
+        if y_axis=='': y_axis='Count'
         ax.yaxis.set_major_locator(MaxNLocator(integer=True))
         formatter(typ,ax,df,x,y,cols,file,dir,palette_or_cmap,
                   title,title_size,title_weight,
@@ -673,6 +685,7 @@ def dist(typ: str,df: pd.DataFrame,x: str,cols=None,cols_ord=None,cols_exclude=N
         for ax in g.axes.flatten():
             if x_axis_dims!=(0,0): ax.set_xlim(x_axis_dims[0],x_axis_dims[1]) # This could be an issue with the (0,0) default (Figure out later...)
             ax.set_xlabel(x_axis,fontsize=x_axis_size,fontweight=x_axis_weight)
+        if y_axis=='': y_axis='Density'
         g.set(yticks=yticks, ylabel=y_axis)
         g.set_titles("")
         if title=='' and file is not None: 
