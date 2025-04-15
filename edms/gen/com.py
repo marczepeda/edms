@@ -8,7 +8,7 @@ Usage:
 [Common commands for fastq files]
 - expand_subs(): delete subdirectories and move their files to the parent directory
 - split_paired_reads(): split paired reads into new R1 and R2 subdirectories at the parent directory
-
+- smaller_fastq(): create new subdirectory containing fastqs with the # of reads limited
 '''
 
 # Import packages
@@ -46,12 +46,12 @@ def split_paired_reads(pt: str):
     '''
     # Run command in the directory
     command = 'mkdir R1 R2 && mv *_R1_* R1 && mv *_R2_* R2'
-    print(f"Terminal:\ncd {pt}\n{command}")
+    print(f"terminal:\ncd {pt}\n{command}")
     result = subprocess.run(f"{command}", shell=True, cwd=pt, capture_output=True, text=True)
 
     # Print output
-    if result.stdout: print(f"Output:\n{result.stdout}")
-    if result.stderr: print(f"Errors:\n{result.stderr}")
+    if result.stdout: print(f"output:\n{result.stdout}")
+    if result.stderr: print(f"errors:\n{result.stderr}")
 
 def smaller_fastq(pt: str, reads: int, suf: str='.fastq.gz'):
     '''
@@ -73,7 +73,7 @@ def smaller_fastq(pt: str, reads: int, suf: str='.fastq.gz'):
     io.mkdir(out_dir)
 
     # Run commands in the directory
-    print(f"Terminal:\ncd {pt}")
+    print(f"terminal:\ncd {pt}")
     if suf=='.fastq.gz': # gzipped fastq files
         for fastq_file in fastq_files: # Iterate through fastqs
 
@@ -83,8 +83,8 @@ def smaller_fastq(pt: str, reads: int, suf: str='.fastq.gz'):
             result = subprocess.run(f"{command}", shell=True, cwd=pt, capture_output=True, text=True)
             
             # Print output/errors
-            if result.stdout: print(f"Output:\n{result.stdout}")
-            if result.stderr: print(f"Errors:\n{result.stderr}")
+            if result.stdout: print(f"output:\n{result.stdout}")
+            if result.stderr: print(f"errors:\n{result.stderr}")
 
     else: # unzipped fastq files
         for fastq_file in fastq_files: # Iterate through fastqs
@@ -94,5 +94,5 @@ def smaller_fastq(pt: str, reads: int, suf: str='.fastq.gz'):
             result = subprocess.run(f"{command}", shell=True, cwd=pt, capture_output=True, text=True)
             
             # Print output/errors
-            if result.stdout: print(f"Output:\n{result.stdout}")
-            if result.stderr: print(f"Errors:\n{result.stderr}")
+            if result.stdout: print(f"output:\n{result.stdout}")
+            if result.stderr: print(f"errors:\n{result.stderr}")

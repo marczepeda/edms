@@ -9,6 +9,11 @@ setup(
     name='edms',
     version='0.0.1',
     packages=find_packages(),
+    entry_points={
+        'console_scripts': [
+            'edms = edms.main:main',
+        ],
+    },
     description='Endogenous Deep Mutational Scans',
     long_description=long_description,
     long_description_content_type='text/markdown',

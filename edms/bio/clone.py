@@ -32,6 +32,7 @@ import pandas as pd
 import numpy as np
 import random
 from Bio.Seq import Seq
+from ..gen import io
 from ..gen import tidy as t
 
 # Individual GG cloning
@@ -94,12 +95,12 @@ def tb(df:pd.DataFrame,id:str,seq:str,t5:str,t3:str,b5:str,b3:str,tG:bool,pre:st
     
     return df
 
-def sgRNAs(df:pd.DataFrame,id:str,spacer='Spacer_sequence',t5='CACC',t3='',b5='AAAC',b3='',tG=True,order=True):
+def sgRNAs(df:pd.DataFrame | str,id:str,spacer='Spacer_sequence',t5='CACC',t3='',b5='AAAC',b3='',tG=True,order=True):
     ''' 
     sgRNAs(): design GG cloning oligonucleotides for cutting and base editing sgRNAs
     
     Parameters:
-    df (dataframe): Dataframe with sequence information for epegRNAs
+    df (dataframe | str): Dataframe with sequence information for sgRNAs (or file path)
     id (str): id column name
     spacer (str): spacer column name (Default: Spacer_sequence)
     t5 (str): top oligonucleotide 5' overhang
@@ -109,21 +110,24 @@ def sgRNAs(df:pd.DataFrame,id:str,spacer='Spacer_sequence',t5='CACC',t3='',b5='A
     tG (bool): add 5' G to spacer if needed (Default: True)
     order (bool): order format
     
-    Dependencies: pandas, top_bot(), & ord_form()
+    Dependencies: pandas, io, top_bot(), & ord_form()
     '''
+    if type(df)==str: # Get sgRNAs dataframe from file path if needed
+        df = io.get(pt=df)
+
     df=tb(df=df,id=id,seq=spacer,t5=t5,t3=t3,b5=b5,b3=b3,tG=tG,pre='o') # Make top and bottom oligos for spacer inserts
     if order==True: return pd.concat([ord_form(df=df,id=id,seq=spacer,suf='_t',pre='o'), # Sigma order format
                                       ord_form(df=df,id=id,seq=spacer,suf='_b',pre='o')]).reset_index(drop=True)
     else: return df # Original dataframe with top and bottom oligos
 
-def epegRNAs(df: pd.DataFrame,id: str,tG=True, order=True,make_extension=True,
+def epegRNAs(df: pd.DataFrame | str,id: str,tG=True, order=True,make_extension=True,
              spacer='Spacer_sequence',spacer_t5='CACC',spacer_t3='GTTTAAGAGC',spacer_b5='',spacer_b3='',
              extension='Extension_sequence',RTT='RTT_sequence',PBS='PBS_sequence',linker='Linker_sequence',extension_t5='',extension_t3='',extension_b5='CGCG',extension_b3='GCACCGACTC'):
     ''' 
     epegRNAs(): design GG cloning oligonucleotides for prime editing epegRNAs
     
     Parameters:
-    df (dataframe): Dataframe with sequence information for epegRNAs
+    df (dataframe | str): Dataframe with sequence information for epegRNAs (or file path)
     id (str): id column name
     tG (bool, optional): add 5' G to spacer if needed (Default: True)
     order (bool, optional): order format (Default: True)
@@ -147,7 +151,10 @@ def epegRNAs(df: pd.DataFrame,id: str,tG=True, order=True,make_extension=True,
     2. epegRNA motif: tevoPreQ1 (CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA)
     
     Dependencies: pandas, top_bot(), & ord_form()
-    ''' 
+    '''
+    if type(df)==str: # Get epegRNAs dataframe from file path if needed
+        df = io.get(pt=df)
+    
     if make_extension==True: df[extension] = df[RTT]+df[PBS]+df[linker] # Make extension by concatenating RTT, PBS, and linker
     else: print(f'Warning: Did not make extension sequence!\nMake sure "{extension}" column includes RTT+PBS+linker for epegRNAs.')
     df=tb(df=df,id=id,seq=spacer,t5=spacer_t5,t3=spacer_t3,b5=spacer_b5,b3=spacer_b3,tG=tG,pre='ps_') # Make top and bottom oligos for spacer inserts
@@ -158,13 +165,13 @@ def epegRNAs(df: pd.DataFrame,id: str,tG=True, order=True,make_extension=True,
                                       ord_form(df=df,id=id,seq=extension,suf='_b',pre='pe_')]).reset_index(drop=True)
     else: return df # Original dataframe with top and bottom oligos
 
-def ngRNAs(df: pd.DataFrame,id: str,tG=True, order=True,
+def ngRNAs(df: pd.DataFrame | str,id: str,tG=True, order=True,
            spacer='Spacer_sequence',ngRNA_sp_t5='CACC',ngRNA_sp_t3='GTTTAAGAGC',ngRNA_sp_b5='',ngRNA_sp_b3=''):
     ''' 
     ngRNAs(): design GG cloning oligonucleotides for prime editing ngRNAs
     
     Parameters:
-    df (dataframe): Dataframe with spacers
+    df (dataframe | str): Dataframe with spacers (or file path)
     id (str): id column
     tG (bool, optional): add 5' G to spacer if needed (Default: True)
     order (bool, optional): order format (Default: True)
@@ -178,7 +185,10 @@ def ngRNAs(df: pd.DataFrame,id: str,tG=True, order=True,
     1. ngRNA scaffold: GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC
     
     Dependencies: pandas, top_bot(), & ord_form()
-'''
+    '''
+    if type(df)==str: # Get ngRNAs dataframe from file path if needed
+        df = io.get(pt=df)
+    
     df=tb(df=df,id=id,seq=spacer,t5=ngRNA_sp_t5,t3=ngRNA_sp_t3,b5=ngRNA_sp_b5,b3=ngRNA_sp_b3,tG=tG,pre='ns_') # Make top and bottom oligos for spacer inserts
     if order==True: return pd.concat([ord_form(df=df,id=id,seq=spacer,suf='_t',pre='ns_'), # Sigma order format
                                       ord_form(df=df,id=id,seq=spacer,suf='_b',pre='ns_')]).reset_index(drop=True)
@@ -442,7 +452,7 @@ def shuffle(ls: list):
     random.shuffle(ls2)
     return ls2
 
-def pe_twist_oligos(df: pd.DataFrame,id_pre:str,tG=True, make_extension=True,UMI_length:int=8,UMI_GC_fract:tuple=(0.4,0.6),
+def pe_twist_oligos(df: pd.DataFrame | str,id_pre:str,tG=True, make_extension=True,UMI_length:int=8,UMI_GC_fract:tuple=(0.4,0.6),
                     fwd_barcode_t5='Forward Barcode',rev_barcode_t3='Reverse Barcode',
                     homology_arm_t5='Homology Arm 5',homology_arm_t3='Homology Arm 3',
                     ngRNA_hU6_gg_insert='GTTTAGAGACGATCGACGTCTCACACC',epegRNA_gg_insert='GTTTAAGAGCAGGTGCTAGACCTGCGTCGGTGC',
@@ -454,7 +464,7 @@ def pe_twist_oligos(df: pd.DataFrame,id_pre:str,tG=True, make_extension=True,UMI
     pe_twist_oligos(): makes twist oligonucleotides for prime editing
     
     Parameters:
-    df (dataframe): Dataframe with sequence information for epegRNAs & corresponding ngRNAs
+    df (dataframe | str): Dataframe with sequence information for epegRNAs & corresponding ngRNAs (or file path)
     id_pre (str): Prefix for ID column
     tG (bool, optional): add 5' G to spacer if needed (Default: True)
     UMI_length (int, optional): unique molecular identifier length (Default: 8; 4^8=65,536 UMIs before GC content filtering; adds 16 nt total)
@@ -479,6 +489,9 @@ def pe_twist_oligos(df: pd.DataFrame,id_pre:str,tG=True, make_extension=True,UMI
     
     Dependencies: pandas,random,generate_sequences(),filter_GC(),shuffle(),pe_pcr1
     '''
+    if type(df)==str: # Get epeg/ngRNAs dataframe from file path if needed
+        df = io.get(pt=df)
+
     # Make extension by concatenating RTT, PBS, and linker
     if make_extension==True: df[epegRNA_extension] = df[epegRNA_RTT]+df[epegRNA_PBS]+df[epegRNA_linker]
     else: print(f'Warning: Did not make extension sequence!\nMake sure "{epegRNA_extension}" column includes RTT+PBS+linker for epegRNAs.')
@@ -641,13 +654,13 @@ def pcr_mm(primers: pd.Series, template_uL: int, template='1-2 ng/uL template',
     return pcr_mm_dc
 
 # Simulation
-def pcr_sim(df: pd.DataFrame,template_col: str, fwd_bind_col: str, rev_bind_col: str,
+def pcr_sim(df: pd.DataFrame | str,template_col: str, fwd_bind_col: str, rev_bind_col: str,
             fwd_ext_col: str=None, rev_ext_col: str=None, product_col='PCR Product'):
     '''
     pcr_sim(): returns dataframe with simulated pcr product 
     
     Parameters:
-    df (dataframe): dataframe with template & primers
+    df (dataframe | str): dataframe with template & primers (or file path)
     template_col (str): template column name
     fwd_bind_col (str): fwd primer binding region column name 
     rev_bind_col (str): rev primer binding region column name 
@@ -657,6 +670,9 @@ def pcr_sim(df: pd.DataFrame,template_col: str, fwd_bind_col: str, rev_bind_col:
 
     Dependencies: pandas,Bio.Seq,tidy
     '''
+    if type(df)==str: # Get template & primers dataframe from file path if needed
+        df = io.get(pt=df)
+
     pcr_product_ls = []
 
     if fwd_ext_col is not None and rev_ext_col is not None: # FWD & REV primers have extension regions

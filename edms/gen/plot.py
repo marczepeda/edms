@@ -250,8 +250,8 @@ def formatter(typ:str,ax,df:pd.DataFrame,x:str,y:str,cols:str,file:str,dir:str,p
     if show: plt.show()
 
 # Graph methods
-def scat(typ: str,df: pd.DataFrame,x: str,y: str,cols=None,cols_ord=None,stys=None,cols_exclude=None,
-         file=None,dir=None,palette_or_cmap='colorblind',edgecol='black',
+def scat(typ: str,df: pd.DataFrame | str,x: str,y: str,cols: str=None,cols_ord: list=None,stys: str=None,cols_exclude: list=None,
+         file: str=None,dir: str=None,palette_or_cmap='colorblind',edgecol='black',
          figsize=(10,6),title='',title_size=18,title_weight='bold',
          x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_scale='linear',x_axis_dims=(0,0),x_ticks_rot=0,xticks=[],
          y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_scale='linear',y_axis_dims=(0,0),y_ticks_rot=0,yticks=[],
@@ -262,7 +262,7 @@ def scat(typ: str,df: pd.DataFrame,x: str,y: str,cols=None,cols_ord=None,stys=No
 
     Parameters:
     typ (str): plot type (scat, line, line_scat)
-    df (dataframe): pandas dataframe
+    df (dataframe | str): pandas dataframe (or file path)
     x (str): x-axis column name
     y (str): y-axis column name
     cols (str, optional): color column name
@@ -302,6 +302,10 @@ def scat(typ: str,df: pd.DataFrame,x: str,y: str,cols=None,cols_ord=None,stys=No
     
     Dependencies: os, matplotlib, seaborn, formatter(), re_un_cap(), & round_up_pow_10()
     '''
+    # Get dataframe from file path if needed
+    if type(df)==str:
+        df = io.get(pt=df)
+
     # Omit excluded data
     if type(cols_exclude)==list: 
         for exclude in cols_exclude: df=df[df[cols]!=exclude]
@@ -366,8 +370,8 @@ def scat(typ: str,df: pd.DataFrame,x: str,y: str,cols=None,cols_ord=None,stys=No
               y_axis,y_axis_size,y_axis_weight,y_axis_scale,y_axis_dims,y_ticks_rot,yticks,
               legend_title,legend_title_size,legend_size,legend_bbox_to_anchor,legend_loc,legend_items,legend_ncol,show,space_capitalize)
 
-def cat(typ:str,df:pd.DataFrame,x='',y='',cols=None,cols_ord=None,cols_exclude=None,
-        file=None,dir=None,palette_or_cmap='colorblind',edgecol='black',lw=1,errorbar='sd',errwid=1,errcap=0.1,
+def cat(typ:str,df:pd.DataFrame | str,x='',y='',cols: str=None,cols_ord: list=None,cols_exclude: list=None,
+        file: str=None,dir: str=None,palette_or_cmap='colorblind',edgecol='black',lw=1,errorbar='sd',errwid=1,errcap=0.1,
         figsize=(10,6),title='',title_size=18,title_weight='bold',
         x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_scale='linear',x_axis_dims=(0,0),x_ticks_rot=0,xticks=[],
         y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_scale='linear',y_axis_dims=(0,0),y_ticks_rot=0,yticks=[],
@@ -378,7 +382,7 @@ def cat(typ:str,df:pd.DataFrame,x='',y='',cols=None,cols_ord=None,cols_exclude=N
 
     Parameters:
     typ (str): plot type (bar, box, violin, swarm, strip, point, count, bar_swarm, box_swarm, violin_swarm)
-    df (dataframe): pandas dataframe
+    df (dataframe | str): pandas dataframe (or file path)
     x (str, optional): x-axis column name
     y (str, optional): y-axis column name
     cols (str, optional): color column name
@@ -421,6 +425,10 @@ def cat(typ:str,df:pd.DataFrame,x='',y='',cols=None,cols_ord=None,cols_exclude=N
     
     Dependencies: os, matplotlib, seaborn, formatter(), re_un_cap(), & round_up_pow_10()
     '''
+    # Get dataframe from file path if needed
+    if type(df)==str:
+        df = io.get(pt=df)
+    
     # Omit excluded data
     if type(cols_exclude)==list: 
         for exclude in cols_exclude: df=df[df[cols]!=exclude]
@@ -541,8 +549,8 @@ def cat(typ:str,df:pd.DataFrame,x='',y='',cols=None,cols_ord=None,cols_exclude=N
               y_axis,y_axis_size,y_axis_weight,y_axis_scale,y_axis_dims,y_ticks_rot,yticks,
               legend_title,legend_title_size,legend_size,legend_bbox_to_anchor,legend_loc,legend_items,legend_ncol,show,space_capitalize)
 
-def dist(typ: str,df: pd.DataFrame,x: str,cols=None,cols_ord=None,cols_exclude=None,bins=40,log10_low=0,
-        file=None,dir=None,palette_or_cmap='colorblind',edgecol='black',lw=1,ht=1.5,asp=5,tp=.8,hs=0,des=False,
+def dist(typ: str,df: pd.DataFrame | str,x: str,cols: str=None,cols_ord: list=None,cols_exclude: list=None,bins=40,log10_low=0,
+        file: str=None,dir: str=None,palette_or_cmap='colorblind',edgecol='black',lw=1,ht=1.5,asp=5,tp=.8,hs=0,des=False,
         figsize=(10,6),title='',title_size=18,title_weight='bold',
         x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_scale='linear',x_axis_dims=(0,0),x_ticks_rot=0,xticks=[],
         y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_scale='linear',y_axis_dims=(0,0),y_ticks_rot=0,yticks=[],
@@ -553,7 +561,7 @@ def dist(typ: str,df: pd.DataFrame,x: str,cols=None,cols_ord=None,cols_exclude=N
 
     Parameters:
     typ (str): plot type (hist, kde, hist_kde, rid)
-    df (dataframe): pandas dataframe
+    df (dataframe | str): pandas dataframe (or file path)
     x (str): x-axis column name
     cols (str, optional): color column name
     cols_ord (list, optional): color column values order
@@ -599,6 +607,10 @@ def dist(typ: str,df: pd.DataFrame,x: str,cols=None,cols_ord=None,cols_exclude=N
     
     Dependencies: os, matplotlib, seaborn, io, formatter(), re_un_cap(), & round_up_pow_10()
     '''
+    # Get dataframe from file path if needed
+    if type(df)==str:
+        df = io.get(pt=df)
+    
     # Omit excluded data
     if type(cols_exclude)==list: 
         for exclude in cols_exclude: df=df[df[cols]!=exclude]
@@ -706,8 +718,8 @@ def dist(typ: str,df: pd.DataFrame,x: str,cols=None,cols_ord=None,cols_exclude=N
         print('Invalid type! hist, kde, hist_kde, rid')
         return
 
-def heat(df: pd.DataFrame, x: str, y: str, vars='variable', vals='value',vals_dims:tuple=None,
-         file=None,dir=None,edgecol='black',lw=1,annot=False,cmap="Reds",sq=True,cbar=True,
+def heat(df: pd.DataFrame | str, x: str, y: str, vars='variable', vals='value',vals_dims:tuple=None,
+         file: str=None,dir: str=None,edgecol='black',lw=1,annot=False,cmap="Reds",sq=True,cbar=True,
          title='',title_size=18,title_weight='bold',figsize=(10,6),
          x_axis='',x_axis_size=12,x_axis_weight='bold',x_ticks_rot=0,
          y_axis='',y_axis_size=12,y_axis_weight='bold',y_ticks_rot=0,
@@ -716,7 +728,7 @@ def heat(df: pd.DataFrame, x: str, y: str, vars='variable', vals='value',vals_di
     heat(): creates heat plot related graphs
 
     Parameters:
-    df (dataframe): pandas dataframe
+    df (dataframe | str): pandas dataframe (or file path)
     x (str): x-axis column name
     y (str): y-axis column name
     vars (str, optional): variable column name
@@ -747,6 +759,10 @@ def heat(df: pd.DataFrame, x: str, y: str, vars='variable', vals='value',vals_di
     
     Dependencies: os, matplotlib, seaborn, formatter(), re_un_cap(), & round_up_pow_10()
     '''
+    # Get dataframe from file path if needed
+    if type(df)==str:
+        df = io.get(pt=df)
+
     # Find min and max values in the dataset for normalization
     if vals_dims is None:
         vmin = df[vals].values.min()
@@ -783,8 +799,8 @@ def heat(df: pd.DataFrame, x: str, y: str, vars='variable', vals='value',vals_di
         plt.savefig(fname=os.path.join(dir, file), dpi=600, bbox_inches='tight', format=f'{file.split(".")[-1]}')
     if show: plt.show()
 
-def stack(df: pd.DataFrame,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord=[],
-          file=None,dir=None,cmap='Set2',errcap=4,vertical=True,
+def stack(df: pd.DataFrame | str,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord=[],
+          file: str=None,dir: str=None,cmap='Set2',errcap=4,vertical=True,
           figsize=(10,6),title='',title_size=18,title_weight='bold',
           x_axis='',x_axis_size=12,x_axis_weight='bold',x_ticks_rot:int=None,x_ticks_ha:str=None,
           y_axis='',y_axis_size=12,y_axis_weight='bold',y_ticks_rot:int=None,y_ticks_ha:str=None,
@@ -794,7 +810,7 @@ def stack(df: pd.DataFrame,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord=[],
     stack(): creates stacked bar plot
 
     Parameters:
-    df (dataframe): pandas dataframe
+    df (dataframe | str): pandas dataframe (or file path)
     x (str, optional): x-axis column name
     y (str, optional): y-axis column name
     cols (str, optional): color column name
@@ -832,6 +848,10 @@ def stack(df: pd.DataFrame,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord=[],
     
     Dependencies: re, os, pandas, numpy, matplotlib.pyplot, & io
     '''
+    # Get dataframe from file path if needed
+    if type(df)==str:
+        df = io.get(pt=df)
+
     # Make pivot table
     df_cut=df[df[y]>=cutoff]
     df_pivot=pd.pivot_table(df_cut, index=x, columns=cols, values=y, aggfunc=np.mean)
@@ -899,8 +919,8 @@ def stack(df: pd.DataFrame,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord=[],
         plt.savefig(fname=os.path.join(dir, file), dpi=600, bbox_inches='tight', format=f'{file.split(".")[-1]}')
     if show: plt.show()
 
-def vol(df: pd.DataFrame,x: str,y: str,stys:str=None, size:str=None,size_dims:tuple=None,label:str=None,
-        FC_threshold=2,pval_threshold=0.05,file=None,dir=None,color='lightgray',alpha=0.5,edgecol='black',vertical=True,
+def vol(df: pd.DataFrame | str,x: str,y: str,stys:str=None, size:str=None,size_dims:tuple=None,label:str=None,
+        FC_threshold=2,pval_threshold=0.05,file: str=None,dir: str=None,color='lightgray',alpha=0.5,edgecol='black',vertical=True,
         figsize=(10,6),title='',title_size=18,title_weight='bold',
         x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_dims=(0,0),x_ticks_rot=0,xticks=[],
         y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_dims=(0,0),y_ticks_rot=0,yticks=[],
@@ -911,7 +931,7 @@ def vol(df: pd.DataFrame,x: str,y: str,stys:str=None, size:str=None,size_dims:tu
     vol(): creates volcano plot
     
     Parameters:
-    df (dataframe): pandas dataframe
+    df (dataframe | str): pandas dataframe (or file path)
     x (str): x-axis column name (FC)
     y (str): y-axis column name (pval)
     stys (str, optional): style column name
@@ -954,8 +974,12 @@ def vol(df: pd.DataFrame,x: str,y: str,stys:str=None, size:str=None,size_dims:tu
     show (bool, optional): show plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     
-    Dependencies: os, matplotlib, seaborn, pandas, & edit_1()
+    Dependencies: os, matplotlib, seaborn, & pandas
     '''
+    # Get dataframe from file path if needed
+    if type(df)==str:
+        df = io.get(pt=df)
+
     # Strings with subscripts
     log2 = 'log\u2082'
     log10 = 'log\u2081\u2080'
@@ -1012,11 +1036,11 @@ def vol(df: pd.DataFrame,x: str,y: str,stys:str=None, size:str=None,size_dims:tu
                         ax=ax, **kwargs)
         
         # with labels
-        if display_labels:
+        if display_labels and label is not None:
             df_signif = df[df['Significance']=='FC & p-value']
-            adjust_text([plt.text(x=df_signif.iloc[i][f'{log2}({x})'], 
-                                  y=df_signif.iloc[i][f'-{log10}({y})'],
-                                  s=edit) for i,edit in enumerate(df_signif['edit'])])
+            adjust_text([plt.text(y=df_signif.iloc[i][f'{log2}({x})'], 
+                                  x=df_signif.iloc[i][f'-{log10}({y})'],
+                                  s=l) for i,l in enumerate(df_signif[label])])
         
         # Set x axis
         if x_axis=='': x_axis=f'{log2}({x})'
@@ -1062,11 +1086,11 @@ def vol(df: pd.DataFrame,x: str,y: str,stys:str=None, size:str=None,size_dims:tu
                         ax=ax, **kwargs)
         
         # with labels
-        if display_labels:
+        if display_labels and label is not None:
             df_signif = df[df['Significance']=='FC & p-value']
             adjust_text([plt.text(y=df_signif.iloc[i][f'{log2}({x})'], 
                                   x=df_signif.iloc[i][f'-{log10}({y})'],
-                                  s=edit) for i,edit in enumerate(df_signif['edit'])])
+                                  s=l) for i,l in enumerate(df_signif[label])])
         
         # Set x axis
         if y_axis=='': y_axis=f'-{log10}({y})'
