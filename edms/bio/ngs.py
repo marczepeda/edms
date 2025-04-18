@@ -71,7 +71,7 @@ def pcr_mm(primers: pd.Series, template: str, template_uL: int,
                                                                  round(template_uL*primers.iloc[i]*mm_x,2),
                                                                  round(Q5_U_uL_desired/Q5_U_uL_stock*total_uL*primers.iloc[i]*mm_x,2),
                                                                  round(total_uL*primers.iloc[i]*mm_x,2)]
-                                                     })
+                                                     },index=pd.Index(list(np.arange(1,9)), name=f"{pcr1_fwd}_{pcr1_rev}"))
     return pcr_mm_dc
                                             
 
@@ -203,6 +203,7 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col='ID',
             
     return pivots,pcr1_mms,pcr2_mms
 
+# Hamming distance calculation
 def hamming_distance(seq1: str | Seq, seq2: str | Seq):
     """
     hamming_distance(): returns the Hamming distance between two sequences

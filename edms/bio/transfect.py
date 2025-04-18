@@ -20,7 +20,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # Transfection calculation
-def PE3(plasmids: pd.DataFrame, epegRNAs: pd.DataFrame, ngRNAs: pd.DataFrame,
+def PE3(plasmids: pd.DataFrame | str, epegRNAs: pd.DataFrame | str, ngRNAs: pd.DataFrame | str,
         dir:str=None, file:str=None, 
         pegRNA_number_col='pegRNA_number',epegRNAs_name_col='Name',ngRNAs_name_col='Name',
         plasmid_col='Plasmid',description_col='Description',colony_col='Colony',ng_uL_col='ng/uL',
@@ -29,9 +29,9 @@ def PE3(plasmids: pd.DataFrame, epegRNAs: pd.DataFrame, ngRNAs: pd.DataFrame,
     PE3(): generates PE3 transfection plan for HEK293T cells (Default: 96-well plate in triplicate using L2000)
 
     Parameters:
-    plasmids (DataFrame): all nanodrop concentrations (Default: google sheets format) 
-    epegRNAs (DataFrame): epegRNAs from PrimeDesign
-    ngRNAs (DataFrame): ngRNAs from PrimeDesign
+    plasmids (DataFrame | str): all nanodrop concentrations (Default: google sheets format) 
+    epegRNAs (DataFrame | str): epegRNAs from PrimeDesign
+    ngRNAs (DataFrame | str): ngRNAs from PrimeDesign
     dir (optional): save directory
     file (optional): save file
     pegRNA_number_col (str, optional): pegRNA_number column name from PrimeDesign (Default: 'pegRNA_number')
@@ -51,7 +51,14 @@ def PE3(plasmids: pd.DataFrame, epegRNAs: pd.DataFrame, ngRNAs: pd.DataFrame,
 
     Dependencies: pandas,numpy,os,io
     '''
-
+    # Get dataframes from file path if needed
+    if type(plasmids)==str:
+        plasmids = io.get(pt=plasmids)
+    if type(epegRNAs)==str:
+        epegRNAs = io.get(pt=epegRNAs)
+    if type(ngRNAs)==str:
+        ngRNAs = io.get(pt=ngRNAs)
+    
     # Determine transfection conditions (Tube As)
     tube_A = pd.DataFrame()
     for (pegRNA_number,epegRNA) in zip(epegRNAs[pegRNA_number_col],epegRNAs[epegRNAs_name_col]): # Retrieve epegRNA name & #
@@ -142,9 +149,10 @@ def PE3(plasmids: pd.DataFrame, epegRNAs: pd.DataFrame, ngRNAs: pd.DataFrame,
                 sr += len(pivot)+2 # Skip 2 lines after each pivot
     return pivots
 
-def virus(plasmids: pd.DataFrame, plasmid_col='Plasmid',description_col='Description',colony_col='Colony',
+def virus(plasmids: pd.DataFrame | str, plasmid_col='Plasmid',description_col='Description',colony_col='Colony',
           ng_uL_col='ng/uL',VSVG_plasmid='pMUZ26.6',GagPol_plasmid='pMUZ26.7',
-          reps=1,mm_x=1.1,VSVG_ng=750,GagPol_ng=1500,transfer_ng=750,well_uL=500):
+          reps=1,mm_x=1.1,VSVG_ng=750,GagPol_ng=1500,transfer_ng=750,well_uL=500,
+          dir:str=None,file:str=None):
     '''
     virus(): generates transfection plan for virus production from HEK293T cells (Default: 6-well plate using L3000)
 
@@ -162,6 +170,8 @@ def virus(plasmids: pd.DataFrame, plasmid_col='Plasmid',description_col='Descrip
     GagPol_ng (int, optional): ngRNA ngs per well (Default: 1500)
     transfer_ng (int, optional): PE ngs per well (Default: 750)
     well_uL (int, optional): uL transfection mix per well (Default: 500)
+    dir (optional): save directory
+    file (optional): save file
 
     Dependencies: pandas,re
     '''
@@ -197,20 +207,24 @@ def virus(plasmids: pd.DataFrame, plasmid_col='Plasmid',description_col='Descrip
     plasmids['Tube'] = tube_ls
     plasmids['Order'] = order_ls
     
-    return pd.concat([pd.DataFrame({plasmid_col: ['N/A','N/A'],
-                                    description_col: ['Optimem','P3000 Enhancer'],
-                                    colony_col: ['N/A','N/A'],
-                                    ng_uL_col: ['N/A','N/A'],
-                                    'ng': ['N/A','N/A'],
-                                    'uL': [optimem_uL,P3000_uL],
-                                    'Tube': ['A','A'],
-                                    'Order': [1,1]}),
-                      plasmids.sort_values(by=['Order',plasmid_col]),
-                      pd.DataFrame({plasmid_col: ['N/A','N/A'],
-                                    description_col: ['Optimem','L3000'],
-                                    colony_col: ['N/A','N/A'],
-                                    ng_uL_col: ['N/A','N/A'],
-                                    'ng': ['N/A','N/A'],
-                                    'uL': [optimem_uL,L3000_uL],
-                                    'Tube': ['B','B'],
-                                    'Order': [3,3]})]).reset_index(drop=True)
+    # Save & return virus dataframe
+    df_virus = pd.concat([pd.DataFrame({plasmid_col: ['N/A','N/A'],
+                                        description_col: ['Optimem','P3000 Enhancer'],
+                                        colony_col: ['N/A','N/A'],
+                                        ng_uL_col: ['N/A','N/A'],
+                                        'ng': ['N/A','N/A'],
+                                        'uL': [optimem_uL,P3000_uL],
+                                        'Tube': ['A','A'],
+                                        'Order': [1,1]}),
+                          plasmids.sort_values(by=['Order',plasmid_col]),
+                          pd.DataFrame({plasmid_col: ['N/A','N/A'],
+                                        description_col: ['Optimem','L3000'],
+                                        colony_col: ['N/A','N/A'],
+                                        ng_uL_col: ['N/A','N/A'],
+                                        'ng': ['N/A','N/A'],
+                                        'uL': [optimem_uL,L3000_uL],
+                                        'Tube': ['B','B'],
+                                        'Order': [3,3]})]).reset_index(drop=True)
+    if dir is not None and file is not None:
+        io.save(dir=dir,file=file,obj=df_virus,id=True) 
+    return df_virus

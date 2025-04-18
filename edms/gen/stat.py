@@ -22,23 +22,31 @@ from scipy.stats import skew, kurtosis, ttest_ind, ttest_rel, f_oneway, ttest_in
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
 from statsmodels.stats.anova import AnovaRM
 from statsmodels.stats.multitest import multipletests
+from . import io
 from . import tidy as t
 
 # Statistics
-def describe(df: pd.DataFrame, cols=[], group=''):
+def describe(df: pd.DataFrame | str, cols:list=[], group:str='', dir:str=None, file:str=None):
     ''' 
     describe(): returns descriptive statistics for numerical columns in a DataFrame
     
     Parameters:
-    df (dataframe): pandas dataframe
+    df (dataframe | str): pandas dataframe (or file path)
     cols (list, optional): list of numerical columns to compute statistics
     group (str, optional): column name to split tidy dataframes
+    dir (str, optional): save directory
+    file (str, optional): save file
     
-    Dependencies: pandas, numpy, & scipy.stats
+    Dependencies: pandas, numpy, scipy.stats, & io
     '''
+    # Get dataframe from file path if needed
+    if type(df)==str:
+        df = io.get(pt=df)
+    
     if group!='': df = df.pivot(columns=group) # Splits tidy dataframe
     if len(cols)>0: df = df[cols] # Isolate specified columns
 
+    # Compute descriptive statistics
     descriptive = pd.DataFrame()
     if group !='': descriptive[group] = [multindex[-1] for multindex in df.mean().keys()] # Group
     descriptive['mean'] = df.mean().reset_index(drop=True) # Mean
@@ -57,26 +65,36 @@ def describe(df: pd.DataFrame, cols=[], group=''):
     descriptive['50%'] = df.quantile(0.50).reset_index(drop=True)
     descriptive['75%'] = df.quantile(0.75).reset_index(drop=True)
 
+    # Save & return descriptive statistics
+    if dir is not None and file is not None:
+        io.save(dir=dir,file=file,obj=descriptive)  
     return descriptive
 
-def difference(df: pd.DataFrame,data_col: str,compare_col: str,compare: list,same=False,para=True,alpha=0.05,within_cols=[],method='holm'):
+def difference(df: pd.DataFrame | str,data_col: str,compare_col: str,compare: list,
+               same=False,para=True,alpha=0.05,within_cols:list=[],method:str='holm',
+               dir:str=None, file:str=None):
     ''' 
     difference(): computes the appropriate statistical test(s) and returns the p-value(s)
     
     Parameters:
-    df: tidy DataFrame
-    data_col: data column name
-    compare_col: comparisons column name
-    compare: list of comparisons
-    same: same (True) or different (False) subjects
-    compare: list of comparisons
-    para: parameteric (True) or nonparametric (False)
-    alpha: significance level for the test (Default: 0.05)
-    within_cols: list of column names corresponding to different conditions or time points with the same subject (optional; para=True, same=True)
-    method: multiple hypothesis testing correction method (Default: holm)
+    df (dataframe | str): tidy dataframe (or file path)
+    data_col (str): data column name
+    compare_col (str): comparisons column name
+    compare (list): list of comparisons
+    same (bool, optional): same (True) or different (False) subjects
+    para (bool, optional): parameteric (True) or nonparametric (False)
+    alpha (float, optional): significance level for the test (Default: 0.05)
+    within_cols (list, optional): list of column names corresponding to different conditions or time points with the same subject (optional; para=True, same=True)
+    method (str, optional): multiple hypothesis testing correction method (Default: holm)
+    dir (str, optional): save directory
+    file (str, optional): save file
 
-    Dependencies: pandas, scipy.stats, & statsmodels.stats
+    Dependencies: pandas, scipy.stats, statsmodels.stats & io
     '''
+    # Get dataframe from file path if needed
+    if type(df)==str:
+        df = io.get(pt=df)
+
     if not same: # Different samples
 
         if para==True: # Data that follows a normal distribution
@@ -92,8 +110,6 @@ def difference(df: pd.DataFrame,data_col: str,compare_col: str,compare: list,sam
                                           'comparison': [','.join(compare)], 
                                           'p_value': [p_value],
                                           'null_hypothesis':[null]})
-                
-                return inference
             
             elif len(compare)>2: # Comparing more than 2 samples
                 
@@ -133,8 +149,6 @@ def difference(df: pd.DataFrame,data_col: str,compare_col: str,compare: list,sam
                                                         'comparison': comparisons, 
                                                         'p_value': p_values,
                                                         'null_hypothesis':['reject' if corrected_p_value else 'fail to reject' for corrected_p_value in corrected_p_values]})]).reset_index(drop=True)
-
-                return inference
             
             else: print('Error: Invalid compare. List needs to contain 2 or more stings')
         
@@ -156,8 +170,6 @@ def difference(df: pd.DataFrame,data_col: str,compare_col: str,compare: list,sam
                                         'p_value': p_values,
                                         'null_hypothesis':['reject' if corrected_p_value else 'fail to reject' for corrected_p_value in corrected_p_values]})
 
-            return inference
-
     else: # Same sample
 
         if para==True:  # Data that follows a normal distribution
@@ -173,8 +185,6 @@ def difference(df: pd.DataFrame,data_col: str,compare_col: str,compare: list,sam
                                             'comparison': [','.join(compare)], 
                                             'p_value': [p_value],
                                             'null_hypothesis':[null]})
-                
-                return inference
 
             elif len(compare)>2: # Comparing 2 or more related (paired) samples
                 
@@ -206,8 +216,6 @@ def difference(df: pd.DataFrame,data_col: str,compare_col: str,compare: list,sam
                                                             'comparison': comparisons, 
                                                             'p_value': p_values,
                                                             'null_hypothesis':['reject' if corrected_p_value else 'fail to reject' for corrected_p_value in corrected_p_values]})]).reset_index(drop=True)
-                
-                return inference
 
             else: print('Error: Invalid compare. List needs to contain 2 or more stings')
 
@@ -228,42 +236,64 @@ def difference(df: pd.DataFrame,data_col: str,compare_col: str,compare: list,sam
                                         'comparison': comparisons, 
                                         'p_value': p_values,
                                         'null_hypothesis':['reject' if corrected_p_value else 'fail to reject' for corrected_p_value in corrected_p_values]})
-            
-            return inference
+    
+    # Save & return descriptive statistics
+    if dir is not None and file is not None:
+        io.save(dir=dir,file=file,obj=inference)  
+    return inference
 
-def correlation(df: pd.DataFrame, var_cols=[], value_cols=[], method='pearson',numeric_only=True):
+def correlation(df: pd.DataFrame | str, var_cols=[], value_cols=[], method='pearson',numeric_only=True,
+                dir:str=None, file:str=None):
     ''' 
     correlation(): returns a correlation matrix
     
     Parameters:
-    df (dataframe): pandas dataframe
+    df (dataframe | str): pandas dataframe (or file path)
     var_cols (list, optional): list of 2 variable column names for tidy dataframe (optional; pivot table index & column)
     value_cols (list, optional): list of numerical column names to compute statistics; single column name for tidy dataframe (optional)
     method (str, optional): pearson, spearman, or kendall (Default: pearson)
     numeric_only (bool, optional): only calculates correlations for numeric columns (Default: True)
+    dir (str, optional): save directory
+    file (str, optional): save file
     
-    Depedencies: pandas
+    Depedencies: pandas, io
     '''
+    # Get dataframe from file path if needed
+    if type(df)==str:
+        df = io.get(pt=df)
+
     if (len(var_cols)==2)&(len(value_cols)==1): df = df.pivot(index=var_cols[0],columns=var_cols[1],values=value_cols[0]) # Splits tidy dataframe
     elif len(value_cols)>=1: df = df[value_cols] # Isolate specified columns for non-tidy dataframe
-    return df.corr(method=method,numeric_only=numeric_only) # Correlation matrix with specified method
+    df_corr = df.corr(method=method,numeric_only=numeric_only) # Correlation matrix with specified method
+
+    # Save & return correlation matrix
+    if dir is not None and file is not None:
+        io.save(dir=dir,file=file,obj=df_corr,id=True) 
+    return df_corr
 
 # Comparison
-def compare(df: pd.DataFrame, sample: str, cond: str, cond_comp: str, var: str, count: str, psuedocount=1):
+def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str, var: str, count: str, psuedocount=1, 
+            dir:str=None, file:str=None):
     ''' 
     compare(): computes FC, pval, and log transformations relative to a specified condition
 
     Parameters:
-    df (dataframe): tidy dataframe
+    df (dataframe | str): tidy dataframe (or file path)
     sample (str): sample column name
     cond (str): condition column name
     cond_comp (str): condition for comparison group
     var (str): variable column name
     count (str): count column name
     psuedocount (int, optional): psuedocount to avoid log(0) & /0 (Default: 1)
+    dir (str, optional): save directory
+    file (str, optional): save file
     
-    Dependencies: Bio.Seq.Seq, pandas, numpy, tidy, edit_1(), dms_cond(), & aa_props
+    Dependencies: Bio.Seq.Seq, pandas, numpy, io, tidy, edit_1(), dms_cond(), & aa_props
     '''
+    # Get dataframe from file path if needed
+    if type(df)==str:
+        df = io.get(pt=df)
+
     # Get metadata
     meta_cols = list(df.columns)
     meta_cols.remove(count)
@@ -320,5 +350,9 @@ def compare(df: pd.DataFrame, sample: str, cond: str, cond_comp: str, var: str, 
         df_other_edit['tstat'] = [ttest[0] for ttest in ttests]
         df_stat = pd.concat([df_stat,df_other_edit])
     df_stat['compare'] = [cond_comp]*df_stat.shape[0]
+    df_stat = df_stat.sort_values(by=[cond,var]).reset_index(drop=True)
 
-    return df_stat.sort_values(by=[cond,var]).reset_index(drop=True) 
+    # Save & return statistics dataframe
+    if dir is not None and file is not None:
+        io.save(dir=dir,file=file,obj=df_stat,id=True) 
+    return df_stat

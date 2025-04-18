@@ -18,9 +18,15 @@ Usage:
 '''
 # Import packages
 import argparse
+
 from .gen import plot as p
-from .gen import com
+from .gen import stat as st
+from .gen import cli
+
 from .bio import ngs
+from .bio import transfect as tf
+from .bio import qPCR
+from .bio import clone as cl
 
 # Supporting methods
 '''
@@ -460,10 +466,73 @@ def main():
     - difference(): computes the appropriate statistical test(s) and returns the p-value(s)
     - correlation(): returns a correlation matrix
     - compare(): computes FC, pval, and log transformations relative to a specified condition
-    NEED TO ADD IO.SAVE CONDITIONAL WITH DIR AND FILE
     '''
+    parser_stat = subparsers.add_parser("stat", help="Statistics")
+    subparsers_stat = parser_stat.add_subparsers()
+    
+    # describe(): returns descriptive statistics for numerical columns in a DataFrame
+    parser_stat_describe = subparsers_stat.add_parser("describe", help="Compute descriptive statistics")
 
+    parser_stat_describe.add_argument("--df", type=str, help="Input file path", required=True)
 
+    parser_stat_describe.add_argument("--dir", type=str, help="Output directory",default='.')
+    parser_stat_describe.add_argument("--file", type=str, help="Output file name",default='descriptive.csv')
+    
+    parser_stat_describe.add_argument("--cols", nargs="+", help="List of numerical columns to describe")
+    parser_stat_describe.add_argument("--group", type=str, help="Column name to group by")
+    
+    parser_stat_describe.set_defaults(func=st.describe)
+
+    # difference(): computes the appropriate statistical test(s) and returns the p-value(s)
+    parser_stat_difference = subparsers_stat.add_parser("difference", help="Compute statistical difference between groups")
+
+    parser_stat_difference.add_argument("--df", type=str, help="Input file path",required=True)
+    parser_stat_difference.add_argument("--data_col", type=str, help="Name of column containing numerical data",required=True)
+    parser_stat_difference.add_argument("--compare_col", type=str, help="Name of column used for grouping/comparisons",required=True)
+    parser_stat_difference.add_argument("--compare", nargs="+", help="List of groups to compare (e.g. A B)",required=True)
+
+    parser_stat_difference.add_argument("--dir", type=str, help="Output directory",default='.')
+    parser_stat_difference.add_argument("--file", type=str, help="Output file name",default='difference.csv')
+
+    parser_stat_difference.add_argument("--same", action="store_true", help="Same subjects (paired test)")
+    parser_stat_difference.add_argument("--para", action="store_true", help="Use parametric test (default: True)")
+    parser_stat_difference.add_argument("--alpha", type=float, default=0.05, help="Significance level (default: 0.05)")
+    parser_stat_difference.add_argument("--within_cols", nargs="+", help="Columns for repeated measures (used if same=True and para=True)")
+    parser_stat_difference.add_argument("--method", type=str, default="holm", help="Correction method for multiple comparisons")
+
+    parser_stat_difference.set_defaults(func=st.difference)
+
+    # correlation(): returns a correlation matrix
+    parser_stat_correlation = subparsers_stat.add_parser("correlation", help="Compute correlation matrix")
+
+    parser_stat_correlation.add_argument("--df", type=str, help="Input file path",required=True)
+
+    parser_stat_correlation.add_argument("--dir", type=str, help="Output directory",default='.')
+    parser_stat_correlation.add_argument("--file", type=str, help="Output file name",default='correlation.csv')
+
+    parser_stat_correlation.add_argument("--var_cols", nargs="+", help="List of 2 variable columns for tidy format")
+    parser_stat_correlation.add_argument("--value_cols", nargs="+", help="List of numerical columns to correlate")
+    parser_stat_correlation.add_argument("--method", type=str, default="pearson", choices=["pearson", "spearman", "kendall"],
+                                         help="Correlation method to use (default: pearson)")
+    parser_stat_correlation.add_argument("--numeric_only", action="store_true", help="Only use numeric columns (default: True)")
+
+    parser_stat_correlation.set_defaults(func=st.correlation)
+
+    # compare(): computes FC, pval, and log transformations relative to a specified condition
+    parser_stat_compare = subparsers_stat.add_parser("compare", help="Compare conditions using FC, p-values, and log transforms")
+
+    parser_stat_compare.add_argument("--df", type=str, help="Input file path",required=True)
+    parser_stat_compare.add_argument("--sample", type=str, help="Sample column name",required=True)
+    parser_stat_compare.add_argument("--cond", type=str, help="Condition column name",required=True)
+    parser_stat_compare.add_argument("--cond_comp", type=str, help="Condition to compare against",required=True)
+    parser_stat_compare.add_argument("--var", type=str, help="Variable column name",required=True)
+    parser_stat_compare.add_argument("--count", type=str, help="Count column name",required=True)
+
+    parser_stat_compare.add_argument("--psuedocount", type=int, default=1, help="Pseudocount to avoid log(0) or divide-by-zero errors")
+    parser_stat_compare.add_argument("--dir", type=str, help="Output directory",default='.')
+    parser_stat_compare.add_argument("--file", type=str, help="Output file name",default='compare.csv')
+
+    parser_stat_compare.set_defaults(func=st.compare)
 
     '''
     edms.gen.com:
@@ -471,33 +540,35 @@ def main():
     - split_paired_reads(): split paired reads into new R1 and R2 subdirectories at the parent directory
     - smaller_fastq(): create new subdirectory containing fastqs with the # of reads limited
     '''
-    parser_com = subparsers.add_parser("com", help="Command Line Interaction")
-    subparsers_com = parser_com.add_subparsers()
+    parser_cli = subparsers.add_parser("cli", help="Command Line Interaction")
+    subparsers_cli = parser_cli.add_subparsers()
     
     # Create subparsers for commands
-    parser_com_expand_subs = subparsers_com.add_parser("expand_subs", help="Delete subdirectories and move their files to the parent directory")
-    parser_com_split_paired_reads = subparsers_com.add_parser("split_paired_reads", help="Split paired reads into new R1 and R2 subdirectories at the parent directory")
-    parser_com_smaller_fastq = subparsers_com.add_parser("smaller_fastq", help="Ccreate new subdirectory containing fastqs with the # of reads limited")
+    parser_cli_expand_subs = subparsers_cli.add_parser("expand_subs", help="Delete subdirectories and move their files to the parent directory")
+    parser_cli_split_paired_reads = subparsers_cli.add_parser("split_paired_reads", help="Split paired reads into new R1 and R2 subdirectories at the parent directory")
+    parser_cli_smaller_fastq = subparsers_cli.add_parser("smaller_fastq", help="Ccreate new subdirectory containing fastqs with the # of reads limited")
     
     # Add common arguments
-    for parser_com_common in [parser_com_expand_subs, parser_com_split_paired_reads, parser_com_smaller_fastq]:
-        parser_com_common.add_argument("--pt", help="Path to parent directory", type=str, required=True)
+    for parser_cli_common in [parser_cli_expand_subs, parser_cli_split_paired_reads, parser_cli_smaller_fastq]:
+        parser_cli_common.add_argument("--pt", help="Path to parent directory", type=str, required=True)
     
     # Smaller_fastq arguments
-    parser_com_smaller_fastq.add_argument("--reads", help="# of reads per fastq file", type=int, required=True) 
-    parser_com_smaller_fastq.add_argument("--suf", help="Fastq file suffix", type=int, default=".fastq.gz") 
+    parser_cli_smaller_fastq.add_argument("--reads", help="# of reads per fastq file", type=int, required=True) 
+    parser_cli_smaller_fastq.add_argument("--suf", help="Fastq file suffix", type=int, default=".fastq.gz") 
     
     # Call command functions
-    parser_com_expand_subs.set_defaults(func=com.expand_subs)
-    parser_com_split_paired_reads.set_defaults(func=com.split_paired_reads)
-    parser_com_smaller_fastq.set_defaults(func=com.smaller_fastq)
+    parser_cli_expand_subs.set_defaults(func=cli.expand_subs)
+    parser_cli_split_paired_reads.set_defaults(func=cli.split_paired_reads)
+    parser_cli_smaller_fastq.set_defaults(func=cli.smaller_fastq)
 
     '''
     edms.dat.cosmic:
+    need to figure out pd.Dataframe | str
     '''
 
     '''
     edms.dat.cvar:
+    need to figure out pd.Dataframe | str
     '''
 
     '''
@@ -505,7 +576,6 @@ def main():
     - pcrs(): generates NGS PCR plan automatically (Default: 96-well plates including outer wells)
     - compute_distance_matrix(): compute pairwise Hamming distance matrix for a list of sequences stored in a dataframe
     '''
-
     parser_ngs = subparsers.add_parser("ngs", help="Next generation sequencing")
     subparsers_ngs = parser_ngs.add_subparsers()
 
@@ -526,18 +596,177 @@ def main():
     
     '''
     edms.bio.clone
+    - sgRNAs(): design GG cloning oligonucleotides for cutting and base editing sgRNAs
+    - epegRNAs(): design GG cloning oligonucleotides for prime editing epegRNAs
+    - ngRNAs(): design GG cloning oligonucleotides for prime editing ngRNAs
+    - pe_twist_oligos(): makes twist oligonucleotides for prime editing
+    Need to make save
+    - pcr_mm(): NEB Q5 PCR master mix calculations
+    Need to make excel save (and figure out pd.Series)
+    - pcr_sim(): returns dataframe with simulated pcr product 
+    Need to make save
     '''
+    parser_clone = subparsers.add_parser("clone", help="Molecular cloning")
+    subparsers_clone = parser_clone.add_subparsers()
+
+    # sgRNAs(): design GG cloning oligonucleotides for cutting and base editing sgRNAs
+    parser_clone_sgRNAs = subparsers_clone.add_parser("sgRNAs", help="Design GG oligos for sgRNAs (cutting or BE)")
+    
+    parser_clone_sgRNAs.add_argument("--df", type=str, help="Input file path",required=True)
+    parser_clone_sgRNAs.add_argument("--id", type=str, help="Column name for unique sgRNA identifier",required=True)
+
+    parser_clone_sgRNAs.add_argument("--dir", type=str, help="Output directory", default='.')
+    parser_clone_sgRNAs.add_argument("--file", type=str, help="Output file name", default='sgRNAs.csv')
+
+    parser_clone_sgRNAs.add_argument("--tG", action="store_true", help="Add 5' G to spacer if needed")
+    parser_clone_sgRNAs.add_argument("--order", action="store_true", help="Format output for ordering oligos")
+    parser_clone_sgRNAs.add_argument("--spacer", type=str, default="Spacer_sequence", help="Column name for spacer sequence")
+    parser_clone_sgRNAs.add_argument("--t5", type=str, default="CACC", help="Top oligo 5' overhang")
+    parser_clone_sgRNAs.add_argument("--t3", type=str, default="", help="Top oligo 3' overhang")
+    parser_clone_sgRNAs.add_argument("--b5", type=str, default="AAAC", help="Bottom oligo 5' overhang (revcom)")
+    parser_clone_sgRNAs.add_argument("--b3", type=str, default="", help="Bottom oligo 3' overhang (revcom)")
+
+    parser_clone_sgRNAs.set_defaults(func=cl.sgRNAs)
+
+    # epegRNAs(): design GG cloning oligonucleotides for prime editing epegRNAs
+    parser_clone_epegRNAs = subparsers_clone.add_parser("epegRNAs", help="Design GG oligos for epegRNAs")
+
+    parser_clone_epegRNAs.add_argument("--df", type=str, help="Input file path", required=True)
+    parser_clone_epegRNAs.add_argument("--id", type=str, help="Column name for unique sequence identifier",required=True)
+
+    parser_clone_epegRNAs.add_argument("--dir", help="Output directory path", type=str, default='.')
+    parser_clone_epegRNAs.add_argument("--file", help="Output file name", type=str, default='epegRNAs.csv')
+
+    parser_clone_epegRNAs.add_argument("--tG", action="store_true", help="Add 5' G to spacer if needed")
+    parser_clone_epegRNAs.add_argument("--order", action="store_true", help="Format output for ordering oligos")
+    parser_clone_epegRNAs.add_argument("--make_extension", action="store_true", help="Build extension from RTT, PBS, and linker")
+    parser_clone_epegRNAs.add_argument("--spacer", type=str, default="Spacer_sequence", help="Column name for spacer sequence")
+    parser_clone_epegRNAs.add_argument("--spacer_t5", type=str, default="CACC", help="Top 5' overhang for spacer")
+    parser_clone_epegRNAs.add_argument("--spacer_t3", type=str, default="GTTTAAGAGC", help="Top 3' overhang for spacer")
+    parser_clone_epegRNAs.add_argument("--spacer_b5", type=str, default="", help="Bottom 5' overhang for spacer")
+    parser_clone_epegRNAs.add_argument("--spacer_b3", type=str, default="", help="Bottom 3' overhang for spacer")
+    parser_clone_epegRNAs.add_argument("--extension", type=str, default="Extension_sequence", help="Column name for extension sequence")
+    parser_clone_epegRNAs.add_argument("--extension_t5", type=str, default="", help="Top 5' overhang for extension")
+    parser_clone_epegRNAs.add_argument("--extension_t3", type=str, default="", help="Top 3' overhang for extension")
+    parser_clone_epegRNAs.add_argument("--extension_b5", type=str, default="CGCG", help="Bottom 5' overhang for extension")
+    parser_clone_epegRNAs.add_argument("--extension_b3", type=str, default="GCACCGACTC", help="Bottom 3' overhang for extension")
+    parser_clone_epegRNAs.add_argument("--RTT", type=str, default="RTT_sequence", help="Column name for RTT (reverse transcriptase template)")
+    parser_clone_epegRNAs.add_argument("--PBS", type=str, default="PBS_sequence", help="Column name for PBS (primer binding site)")
+    parser_clone_epegRNAs.add_argument("--linker", type=str, default="Linker_sequence", help="Column name for linker")
+
+    parser_clone_epegRNAs.set_defaults(func=cl.epegRNAs)
+    
+    # ngRNAs(): design GG cloning oligonucleotides for prime editing ngRNAs
+    parser_clone_ngRNAs = subparsers_clone.add_parser("ngRNAs", help="Design GG oligos for ngRNAs")
+
+    parser_clone_ngRNAs.add_argument("--df", type=str, help="Input file path", required=True)
+    parser_clone_ngRNAs.add_argument("--id", type=str, help="Column name for unique sequence identifier",required=True)
+
+    parser_clone_ngRNAs.add_argument("--dir", help="Output directory path", type=str, default='.')
+    parser_clone_ngRNAs.add_argument("--file", help="Output file name", type=str, default='epegRNAs.csv')
+    
+    parser_clone_ngRNAs.add_argument("--tG", action="store_true", help="Add 5' G to spacer if needed")
+    parser_clone_ngRNAs.add_argument("--order", action="store_true", help="Format output for oligo ordering")
+    parser_clone_ngRNAs.add_argument("--spacer", type=str, default="Spacer_sequence", help="Column name for spacer sequence")
+    parser_clone_ngRNAs.add_argument("--ngRNA_sp_t5", type=str, default="CACC", help="Top strand 5' overhang")
+    parser_clone_ngRNAs.add_argument("--ngRNA_sp_t3", type=str, default="GTTTAAGAGC", help="Top strand 3' overhang")
+    parser_clone_ngRNAs.add_argument("--ngRNA_sp_b5", type=str, default="", help="Bottom strand 5' overhang")
+    parser_clone_ngRNAs.add_argument("--ngRNA_sp_b3", type=str, default="", help="Bottom strand 3' overhang")
+
+    parser_clone_ngRNAs.set_defaults(func=cl.ngRNAs)
+
+    # pe_twist_oligos(): makes twist oligonucleotides for prime editing
+    # Need to make save
+    
+    # pcr_mm(): NEB Q5 PCR master mix calculations
+    # Need to make excel save (and figure out pd.Series)
+    
+    
+    # pcr_sim(): returns dataframe with simulated pcr product 
+    # Need to make save
 
     '''
     edms.bio.transfect
+    - PE3(): generates PE3 transfection plan for HEK293T cells (Default: 96-well plate in triplicate using L2000)
+    - virus(): generates transfection plan for virus production from HEK293T cells (Default: 6-well plate using L3000)
     '''
+    parser_transfect = subparsers.add_parser("transfect", help="Transfection")
+    subparsers_transfect = parser_transfect.add_subparsers()
+
+    # PE3(): generates PE3 transfection plan for HEK293T cells (Default: 96-well plate in triplicate using L2000)
+    parser_transfect_PE3 = subparsers_transfect.add_parser("PE3", help="Plan PE3 transfection")
+    
+    parser_transfect_PE3.add_argument("--plasmids", type=str, help="Path to plasmids file", required=True)
+    parser_transfect_PE3.add_argument("--epegRNAs", type=str, help="Path to epegRNAs file", required=True)
+    parser_transfect_PE3.add_argument("--ngRNAs", type=str, help="Path to ngRNAs file", required=True)
+
+    parser_transfect_PE3.add_argument("--dir", type=str, help="Output directory", default='.')
+    parser_transfect_PE3.add_argument("--file", type=str, help="Output file name", default='transfect_PE3.csv')
+
+    parser_transfect_PE3.add_argument("--pegRNA_number_col", type=str, default="pegRNA_number", help="Column name for pegRNA number")
+    parser_transfect_PE3.add_argument("--epegRNAs_name_col", type=str, default="Name", help="Column name for epegRNA name")
+    parser_transfect_PE3.add_argument("--ngRNAs_name_col", type=str, default="Name", help="Column name for ngRNA name")
+    parser_transfect_PE3.add_argument("--plasmid_col", type=str, default="Plasmid", help="Column name for plasmid name")
+    parser_transfect_PE3.add_argument("--description_col", type=str, default="Description", help="Column name for plasmid description")
+    parser_transfect_PE3.add_argument("--colony_col", type=str, default="Colony", help="Column name for colony name")
+    parser_transfect_PE3.add_argument("--ng_uL_col", type=str, default="ng/uL", help="Column name for ng/uL concentration")
+    parser_transfect_PE3.add_argument("--PE_plasmid", type=str, default="pMUZ86.7", help="Name of PE plasmid to search for")
+    parser_transfect_PE3.add_argument("--reps", type=int, default=3, help="Number of replicates")
+    parser_transfect_PE3.add_argument("--mm_x", type=float, default=1.1, help="Master mix multiplier")
+    parser_transfect_PE3.add_argument("--epegRNA_ng", type=int, default=66, help="ng of epegRNA per well")
+    parser_transfect_PE3.add_argument("--ngRNA_ng", type=int, default=22, help="ng of ngRNA per well")
+    parser_transfect_PE3.add_argument("--PE_ng", type=int, default=200, help="ng of PE plasmid per well")
+    parser_transfect_PE3.add_argument("--well_uL", type=int, default=10, help="Total uL per well")
+
+    parser_transfect_PE3.set_defaults(func=tf.PE3)
+
+    # virus(): generates transfection plan for virus production from HEK293T cells (Default: 6-well plate using L3000)
+    parser_transfect_virus = subparsers_transfect.add_parser("virus", help="Plan virus transfection")
+
+    parser_transfect_virus.add_argument("--plasmids", type=str, help="Path to plasmids file", required=True)
+
+    parser_transfect_virus.add_argument("--dir", type=str, help="Output directory", default='.')
+    parser_transfect_virus.add_argument("--file", type=str, help="Output file name", default='transfect_virus.csv')
+
+    parser_transfect_virus.add_argument("--plasmid_col", type=str, default="Plasmid", help="Column name for plasmid name")
+    parser_transfect_virus.add_argument("--description_col", type=str, default="Description", help="Column name for plasmid description")
+    parser_transfect_virus.add_argument("--colony_col", type=str, default="Colony", help="Column name for colony")
+    parser_transfect_virus.add_argument("--ng_uL_col", type=str, default="ng/uL", help="Column name for ng/uL concentration")
+    parser_transfect_virus.add_argument("--VSVG_plasmid", type=str, default="pMUZ26.6", help="Name of VSVG plasmid")
+    parser_transfect_virus.add_argument("--GagPol_plasmid", type=str, default="pMUZ26.7", help="Name of GagPol plasmid")
+    parser_transfect_virus.add_argument("--reps", type=int, default=1, help="Number of replicates")
+    parser_transfect_virus.add_argument("--mm_x", type=float, default=1.1, help="Master mix multiplier")
+    parser_transfect_virus.add_argument("--VSVG_ng", type=int, default=750, help="VSVG ng per well")
+    parser_transfect_virus.add_argument("--GagPol_ng", type=int, default=1500, help="GagPol ng per well")
+    parser_transfect_virus.add_argument("--transfer_ng", type=int, default=750, help="Transfer plasmid ng per well")
+    parser_transfect_virus.add_argument("--well_uL", type=int, default=500, help="Total uL per well")
+
+    parser_transfect_virus.set_defaults(func=tf.virus)
 
     '''
     edms.bio.qPCR:
+    - ddCq(): computes ΔΔCq mean and error for all samples holding target pairs constant
     '''
+    # ddCq(): computes ΔΔCq mean and error for all samples holding target pairs constant
+    parser_ddcq = subparsers.add_parser("ddCq", help="Compute ΔΔCq values for RT-qPCR data")
     
+    parser_ddcq.add_argument("--data", type=str, help="Input Cq file from CFX instrument",required=True)
+
+    parser_ddcq.add_argument("--dir", type=str, help="Output directory",default='.')
+    parser_ddcq.add_argument("--file", type=str, help="Output file name",default='qPCR_ddCq.csv')
+
+    parser_ddcq.add_argument("--sample_col", type=str, default="Sample", help="Column name for sample ID")
+    parser_ddcq.add_argument("--target_col", type=str, default="Target", help="Column name for target gene ID")
+    parser_ddcq.add_argument("--Cq_col", type=str, default="Cq", help="Column name for Cq values")
+
+    parser_ddcq.set_defaults(func=qPCR.ddCq)
+
     '''
     edms.bio.fastq:
+    - revcom_fastqs(): write reverse complement of fastqs to a new directory
+    - unzip_fastqs(): Unzip gzipped fastqs and write to a new directory
+    - comb_fastqs(): Combines one or more (un)compressed fastqs files into a single (un)compressed fastq file
+    probably more; for genotyping and stuff
     '''
 
     # Parse all arguments

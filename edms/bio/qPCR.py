@@ -31,18 +31,25 @@ def cfx_Cq(pt: str, sample_col:str='Sample', cols=['Well','Fluor','Target','Samp
     data[sample_col] = [int(cDNA) if type(cDNA)==float else cDNA for cDNA in data[sample_col]]
     return data
 
-def ddCq(data: pd.DataFrame, sample_col:str='Sample', target_col:str='Target', Cq_col:str='Cq'):
+def ddCq(data: pd.DataFrame | str, sample_col:str='Sample', target_col:str='Target', Cq_col:str='Cq',
+         dir:str=None, file:str=None):
     ''' 
     ddCq(): computes ΔΔCq mean and error for all samples holding target pairs constant
     
     Parameters:
-    df (dataframe): Cq pandas dataframe
+    data (dataframe | str): Cq pandas dataframe (or file path)
     sample_col (str, optional): column name with cDNA sample identifier (Default: Sample)
     target_col (str, optional): column name with target identifier (Default: Target)
     Cq_col (str, optional): column name with Cq value (Default: Cq)
-    
+    dir (str, optional): save directory
+    file (str, optional): save file
+
     Dependencies: pandas, numpy, & itertools
     '''
+    # Get dataframe from file path if needed
+    if type(data)==str:
+        data = cfx_Cq(pt=data,sample_col=sample_col,cols=[sample_col,target_col,Cq_col])
+
     # Get sample and target lists
     sample_ls = list(data[sample_col].value_counts().keys())
     target_ls = list(data[target_col].value_counts().keys())
@@ -101,4 +108,9 @@ def ddCq(data: pd.DataFrame, sample_col:str='Sample', target_col:str='Target', C
                 ddCq_errs.append(np.sqrt(temp2.iloc[j]['dCq_err']**2+temp.iloc[i]['dCq_err']**2))
                 RQ_means.append(2**(-ddCq_means[-1]))
                 RQ_errs.append(np.abs(ddCq_means[-1]*np.log(2)*ddCq_errs[-1]))
-    return pd.DataFrame({'Samples':samples_pairs,'Sample 1':sample1s,'Sample 2': sample2s,'Targets':target_pairs,'Target 1':target1s,'Target 2':target2s,'ddCq_mean':ddCq_means,'ddCq_err':ddCq_errs,'RQ_mean':RQ_means,'RQ_err':RQ_errs})
+    data4 = pd.DataFrame({'Samples':samples_pairs,'Sample 1':sample1s,'Sample 2': sample2s,'Targets':target_pairs,'Target 1':target1s,'Target 2':target2s,'ddCq_mean':ddCq_means,'ddCq_err':ddCq_errs,'RQ_mean':RQ_means,'RQ_err':RQ_errs})
+
+    # Save & return analyzed qPCR data
+    if dir is not None and file is not None:
+        io.save(dir=dir,file=file,obj=data4) 
+    return data4
