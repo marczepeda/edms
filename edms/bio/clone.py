@@ -482,7 +482,8 @@ def pe_twist_oligos(df: pd.DataFrame | str,id_pre:str,tG=True, make_extension=Tr
                     ngRNA_spacer='Spacer_sequence_ngRNA',epegRNA_spacer='Spacer_sequence_epegRNA',
                     epegRNA_extension='Extension_sequence',epegRNA_RTT='RTT_sequence',
                     epegRNA_PBS='PBS_sequence',epegRNA_linker='Linker_sequence',
-                    epegRNA_pbs_length='PBS_length',ngRNA_group='ngRNA_group'):
+                    epegRNA_pbs_length='PBS_length',ngRNA_group='ngRNA_group',
+                    dir:str=None, file:str=None):
     ''' 
     pe_twist_oligos(): makes twist oligonucleotides for prime editing
     
@@ -505,7 +506,9 @@ def pe_twist_oligos(df: pd.DataFrame | str,id_pre:str,tG=True, make_extension=Tr
     epegRNA_RTT (str, optional): epegRNA reverse transcripase template column name (Default: RTT_sequence)
     epegRNA_PBS (str, optional): epegRNA primer binding site column name (Default: PBS_sequence)
     epegRNA_linker (str, optional): epegRNA linker column name (Default: Linker_sequence)
-    
+    dir (str, optional): save directory
+    file (str, optional): save file
+
     Assumptions:
     1. Oligo Template: FWD Barcode - BsaI - mU6 - ngRNA_spacer - ngRNA_scaffold_5nt - Esp3I(R) - random_5nt - Esp3I(F) - hU6 - epegRNA_spacer - epegRNA_scaffold_8nt - BspMI (R) - random_5nt - BspMI - epegRNA_scaffold_8nt - epegRNA_extension - tevopreQ1_motif_5nt - BsaI - REV Barcode
     2. epegRNA motif: tevoPreQ1 (CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA)
@@ -622,6 +625,9 @@ def pe_twist_oligos(df: pd.DataFrame | str,id_pre:str,tG=True, make_extension=Tr
         df[enzyme] = enzyme_sites
         print(f"{enzyme} does not have 2 reconition sites for {[id for (id,enzyme_site) in t.zip_cols(df=df,cols=['ID',enzyme]) if enzyme_site!=2]}")
     
+    # Save & return dataframe
+    if dir is not None and file is not None:
+        io.save(dir=dir,file=file,obj=df) 
     return df
 
 # Master Mix
@@ -678,7 +684,8 @@ def pcr_mm(primers: pd.Series, template_uL: int, template='1-2 ng/uL template',
 
 # Simulation
 def pcr_sim(df: pd.DataFrame | str,template_col: str, fwd_bind_col: str, rev_bind_col: str,
-            fwd_ext_col: str=None, rev_ext_col: str=None, product_col='PCR Product'):
+            fwd_ext_col: str=None, rev_ext_col: str=None, product_col='PCR Product',
+            dir:str=None, file:str=None):
     '''
     pcr_sim(): returns dataframe with simulated pcr product 
     
@@ -690,6 +697,8 @@ def pcr_sim(df: pd.DataFrame | str,template_col: str, fwd_bind_col: str, rev_bin
     fwd_ext_col (str, optional): fwd primer extension region column name (Default: None)
     rev_ext_col (str, optional): rev primer extension region column name (Default: None)
     product_col (str, optional): pcr product column name (Default: 'PCR Product')
+    dir (str, optional): save directory
+    file (str, optional): save file
 
     Dependencies: pandas,Bio.Seq,tidy
     '''
@@ -739,4 +748,8 @@ def pcr_sim(df: pd.DataFrame | str,template_col: str, fwd_bind_col: str, rev_bin
                                   rc_rev) # reverse complement of reverse primer
             
     df[product_col]=pcr_product_ls
+
+    # Save & return dataframe
+    if dir is not None and file is not None:
+        io.save(dir=dir,file=file,obj=df) 
     return df

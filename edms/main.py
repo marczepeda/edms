@@ -23,10 +23,14 @@ from .gen import plot as p
 from .gen import stat as st
 from .gen import cli
 
+from .dat import cosmic as co 
+from .dat import cvar
+
 from .bio import ngs
 from .bio import transfect as tf
 from .bio import qPCR
 from .bio import clone as cl
+from .bio import fastq as f
 
 # Supporting methods
 '''
@@ -536,6 +540,7 @@ def main():
 
     '''
     edms.gen.com:
+    - access(): make all files and subdirectories accessible on Harvard FASRC
     - expand_subs(): delete subdirectories and move their files to the parent directory
     - split_paired_reads(): split paired reads into new R1 and R2 subdirectories at the parent directory
     - smaller_fastq(): create new subdirectory containing fastqs with the # of reads limited
@@ -544,12 +549,13 @@ def main():
     subparsers_cli = parser_cli.add_subparsers()
     
     # Create subparsers for commands
+    parser_cli_access = subparsers_cli.add_parser("access", help="Make all files and subdirectories accessible on Harvard FASRC")
     parser_cli_expand_subs = subparsers_cli.add_parser("expand_subs", help="Delete subdirectories and move their files to the parent directory")
     parser_cli_split_paired_reads = subparsers_cli.add_parser("split_paired_reads", help="Split paired reads into new R1 and R2 subdirectories at the parent directory")
     parser_cli_smaller_fastq = subparsers_cli.add_parser("smaller_fastq", help="Ccreate new subdirectory containing fastqs with the # of reads limited")
     
     # Add common arguments
-    for parser_cli_common in [parser_cli_expand_subs, parser_cli_split_paired_reads, parser_cli_smaller_fastq]:
+    for parser_cli_common in [parser_cli_access,parser_cli_expand_subs, parser_cli_split_paired_reads, parser_cli_smaller_fastq]:
         parser_cli_common.add_argument("--pt", help="Path to parent directory", type=str, required=True)
     
     # Smaller_fastq arguments
@@ -557,19 +563,117 @@ def main():
     parser_cli_smaller_fastq.add_argument("--suf", help="Fastq file suffix", type=int, default=".fastq.gz") 
     
     # Call command functions
+    parser_cli_access.set_defaults(func=cli.access)
     parser_cli_expand_subs.set_defaults(func=cli.expand_subs)
     parser_cli_split_paired_reads.set_defaults(func=cli.split_paired_reads)
     parser_cli_smaller_fastq.set_defaults(func=cli.smaller_fastq)
 
     '''
     edms.dat.cosmic:
-    need to figure out pd.Dataframe | str
+    - mutations(): returns COSMIC mutations dataframe for a given gene
+    - cds_group(): plot COSMIC mutations histogram with CDS regions highlighted in different colors
+    - priority_muts(): returns the shared sequences library dataframe with priority mutations
+    - priority_edits(): returns a dataframe with the most clinically-relevant prime edits to prioritize from the shared sequences library
+    - editor_mutations(): returns and plots editor accessible COSMIC mutations
     '''
+    parser_cosmic = subparsers.add_parser("cosmic", help="COSMIC Database")
+    subparsers_cosmic = parser_cosmic.add_subparsers()
+
+    # mutations(): returns COSMIC mutations dataframe for a given gene
+    parser_cosmic_mutations = subparsers_cosmic.add_parser("mutations", help="Extract COSMIC mutations")
+
+    parser_cosmic_mutations.add_argument("--df", type=str, help="Input file path", required=True)
+
+    parser_cosmic_mutations.add_argument("--dir", type=str, help="Output directory",default='.')
+    parser_cosmic_mutations.add_argument("--file", type=str, help="Output file name",default='cosmic_mutations.csv')
+
+    parser_cosmic_mutations.set_defaults(func=co.mutations)
+    
+    # cds_group(): plot COSMIC mutations histogram with CDS regions highlighted in different colors
+    parser_cds_group = subparsers.add_parser("cds_group", help="Plot COSMIC mutation histogram with CDS regions highlighted")
+
+    parser_cds_group.add_argument("--df_cosmic", type=str, help="COSMIC mutations() file path", required=True)
+    parser_cds_group.add_argument("--df_cds", type=str, help="CDS region file path (with columns: gene, CDS, start, end)", required=True)
+
+    parser_cds_group.add_argument("--out_dir", type=str, help="Output directory for plot",default='.')
+
+    parser_cds_group.set_defaults(func=co.cds_group)
+
+    # priority_muts: returns the shared sequences library dataframe with priority mutations
+    parser_cosmic_priority_muts = subparsers_cosmic.add_parser("priority_muts", help="Identify priority mutations in shared pegRNA library")
+
+    parser_cosmic_priority_muts.add_argument("--pegRNAs_shared", type=str, help="Shared pegRNAs library dataframe file path", required=True)
+    parser_cosmic_priority_muts.add_argument("--df_cosmic", type=str, help="COSMIC mutations() dataframe file path",required=True)
+
+    parser_cosmic_priority_muts.add_argument("--dir", type=str, help="Output directory",default='.')
+    parser_cosmic_priority_muts.add_argument("--file", type=str, help="Output file name",default='pegRNAs_shared_mutations.csv')
+
+    parser_cosmic_priority_muts.set_defaults(func=co.priority_muts)
+
+    # priority_edits(): returns a dataframe with the most clinically-relevant prime edits to prioritize from the shared sequences library
+    parser_cosmic_priority_edits = subparsers_cosmic.add_parser("priority_edits", help="Identify clinically-relevant prime edits from shared pegRNA sequences")
+
+    parser_cosmic_priority_edits.add_argument("--pegRNAs", type=str, help="pegRNAs library dataframe file path",required=True)
+    parser_cosmic_priority_edits.add_argument("--pegRNAs_shared", type=str, help="Shared pegRNAs library dataframe file path",required=True)
+    parser_cosmic_priority_edits.add_argument("--df_cosmic", type=str, help="COSMIC mutations() dataframe file path",required=True)
+    
+    parser_cosmic_priority_edits.add_argument("--dir", type=str, help="Output directory",default='.')
+    parser_cosmic_priority_edits.add_argument("--file", type=str, help="Output file name",default='pegRNAs_priority.csv')
+
+    parser_cosmic_priority_edits.set_defaults(func=co.priority_edits)
+
+    # editor_mutations(): returns and plots editor accessible COSMIC mutations
+    parser_editor_muts = subparsers.add_parser("editor_mutations", help="Plot editor-accessible COSMIC mutations using BESCAN library")
+
+    parser_editor_muts.add_argument("--df_cosmic", type=str, help="COSMIC mutations() dataframe file path",required=True)
+    parser_editor_muts.add_argument("--df_bescan", type=str, help="BESCAN sgRNA library dataframe file path",required=True)
+
+    parser_editor_muts.add_argument("--out_dir", type=str, help="Output directory for plots or results",default='.')
+
+    parser_editor_muts.set_defaults(func=co.editor_mutations)
 
     '''
     edms.dat.cvar:
-    need to figure out pd.Dataframe | str
+    - mutations(): returns ClinVar mutations dataframe for a given gene
+    - priority_muts: returns the shared sequences library dataframe with priority mutations
+    - priority_edits(): returns a dataframe with the most clinically-relevant prime edits to prioritize from the shared sequences library
     '''
+    parser_cvar = subparsers.add_parser("cvar", help="ClinVar Database")
+    subparsers_cvar = parser_cvar.add_subparsers()
+
+    # mutations(): returns ClinVar mutations dataframe for a given gene
+    parser_cvar_mutations = subparsers_cvar.add_parser("mutations", help="Extract ClinVar mutations")
+
+    parser_cvar_mutations.add_argument("--df", type=str, help="Input file path", required=True)
+    parser_cvar_mutations.add_argument("--gene_name", type=str, help="Gene name", required=True)
+
+    parser_cvar_mutations.add_argument("--dir", type=str, help="Output directory",default='.')
+    parser_cvar_mutations.add_argument("--file", type=str, help="Output file name",default='cvar_mutations.csv')
+
+    parser_cvar_mutations.set_defaults(func=cvar.mutations)
+
+    # priority_muts: returns the shared sequences library dataframe with priority mutations
+    parser_cvar_priority_muts = subparsers_cvar.add_parser("priority_muts", help="Identify priority mutations in shared pegRNA library")
+
+    parser_cvar_priority_muts.add_argument("--pegRNAs_shared", type=str, help="Shared pegRNAs library dataframe file path", required=True)
+    parser_cvar_priority_muts.add_argument("--df_clinvar", type=str, help="ClinVar mutations() dataframe file path",required=True)
+
+    parser_cvar_priority_muts.add_argument("--dir", type=str, help="Output directory",default='.')
+    parser_cvar_priority_muts.add_argument("--file", type=str, help="Output file name",default='pegRNAs_shared_mutations.csv')
+
+    parser_cvar_priority_muts.set_defaults(func=cvar.priority_muts)
+
+    # priority_edits(): returns a dataframe with the most clinically-relevant prime edits to prioritize from the shared sequences library
+    parser_cvar_priority_edits = subparsers_cvar.add_parser("priority_edits", help="Identify clinically-relevant prime edits from shared pegRNA sequences")
+
+    parser_cvar_priority_edits.add_argument("--pegRNAs", type=str, help="pegRNAs library dataframe file path",required=True)
+    parser_cvar_priority_edits.add_argument("--pegRNAs_shared", type=str, help="Shared pegRNAs library dataframe file path",required=True)
+    parser_cvar_priority_edits.add_argument("--df_clinvar", type=str, help="ClinVar mutations() dataframe file path",required=True)
+
+    parser_cvar_priority_edits.add_argument("--dir", type=str, help="Output directory",default='.')
+    parser_cvar_priority_edits.add_argument("--file", type=str, help="Output file name",default='pegRNAs_priority.csv')
+
+    parser_cvar_priority_edits.set_defaults(func=cvar.priority_edits)
 
     '''
     edms.bio.ngs:
@@ -581,30 +685,33 @@ def main():
 
     # pcrs(): generates NGS PCR plan automatically (Default: 96-well plates including outer wells)
     parser_ngs_pcrs = subparsers_ngs.add_parser("pcrs", help="Plan NGS PCRs")
+    
     parser_ngs_pcrs.add_argument("--df", help="Input file", type=str, required=True)
+    
     parser_ngs_pcrs.add_argument("--dir", help="Output directory path", type=str, default='.')
     parser_ngs_pcrs.add_argument("--file", help="Output file name (.xlsx)", type=str, default='NGS_plan.xlsx')
+    
     parser_ngs_pcrs.set_defaults(func=ngs.pcrs)
     
     # hamming_distance_matrix(): compute pairwise Hamming distance matrix for a list of sequences stored in a dataframe
     parser_ngs_hamming = subparsers_ngs.add_parser("hamming", help="Compute pairwise Hamming distance matrix")
+    
     parser_ngs_hamming.add_argument("--df", help="Input file", type=str, required=True)
     parser_ngs_hamming.add_argument("--id", help="ID column name", type=str, required=True)
     parser_ngs_hamming.add_argument("--seqs", help="Sequences column name", type=str, required=True)
+    
     parser_ngs_hamming.add_argument("--dir", help="Output directory path", type=str, default='.')
     parser_ngs_hamming.add_argument("--file", help="Output file name", type=str, default='hamming.csv')
     
+    parser_ngs_hamming.set_defaults(func=ngs.hamming_distance_matrix)
+
     '''
     edms.bio.clone
     - sgRNAs(): design GG cloning oligonucleotides for cutting and base editing sgRNAs
     - epegRNAs(): design GG cloning oligonucleotides for prime editing epegRNAs
     - ngRNAs(): design GG cloning oligonucleotides for prime editing ngRNAs
     - pe_twist_oligos(): makes twist oligonucleotides for prime editing
-    Need to make save
-    - pcr_mm(): NEB Q5 PCR master mix calculations
-    Need to make excel save (and figure out pd.Series)
     - pcr_sim(): returns dataframe with simulated pcr product 
-    Need to make save
     '''
     parser_clone = subparsers.add_parser("clone", help="Molecular cloning")
     subparsers_clone = parser_clone.add_subparsers()
@@ -676,14 +783,52 @@ def main():
     parser_clone_ngRNAs.set_defaults(func=cl.ngRNAs)
 
     # pe_twist_oligos(): makes twist oligonucleotides for prime editing
-    # Need to make save
+    parser_clone_pe_twist = subparsers_clone.add_parser("pe_twist", help="Design Twist oligos for PE constructs")
     
-    # pcr_mm(): NEB Q5 PCR master mix calculations
-    # Need to make excel save (and figure out pd.Series)
-    
+    parser_clone_pe_twist.add_argument("--df", type=str, help="Input file path", required=True)
+    parser_clone_pe_twist.add_argument("--id_pre", type=str, help="Prefix for ID column", required=True)
+
+    parser_clone_pe_twist.add_argument("--dir", type=str, help="Output directory", default='.')
+    parser_clone_pe_twist.add_argument("--file", type=str, help="Output file name", default='pe_twist.csv')
+
+    parser_clone_pe_twist.add_argument("--tG", action="store_true", help="Add 5' G to spacers if needed")
+    parser_clone_pe_twist.add_argument("--make_extension", action="store_true", help="Build extension from RTT, PBS, and linker")
+    parser_clone_pe_twist.add_argument("--UMI_length", type=int, default=8, help="Length of UMI (default: 8)")
+    parser_clone_pe_twist.add_argument("--UMI_GC_fract", nargs=2, type=float, default=(0.4, 0.6), help="Tuple for GC content bounds (e.g. 0.4 0.6)")
+    parser_clone_pe_twist.add_argument("--fwd_barcode_t5", type=str, default="Forward Barcode", help="Forward barcode column name")
+    parser_clone_pe_twist.add_argument("--rev_barcode_t3", type=str, default="Reverse Barcode", help="Reverse barcode column name")
+    parser_clone_pe_twist.add_argument("--homology_arm_t5", type=str, default="Homology Arm 5", help="Homology arm 5' column name")
+    parser_clone_pe_twist.add_argument("--homology_arm_t3", type=str, default="Homology Arm 3", help="Homology arm 3' column name")
+    parser_clone_pe_twist.add_argument("--ngRNA_hU6_gg_insert", type=str, default="GTTTAGAGACGATCGACGTCTCACACC", help="Insert sequence for hU6 Golden Gate ngRNA")
+    parser_clone_pe_twist.add_argument("--epegRNA_gg_insert", type=str, default="GTTTAAGAGCAGGTGCTAGACCTGCGTCGGTGC", help="Insert sequence for Golden Gate epegRNA")
+    parser_clone_pe_twist.add_argument("--ngRNA_spacer", type=str, default="Spacer_sequence_ngRNA", help="ngRNA spacer column")
+    parser_clone_pe_twist.add_argument("--epegRNA_spacer", type=str, default="Spacer_sequence_epegRNA", help="epegRNA spacer column")
+    parser_clone_pe_twist.add_argument("--epegRNA_extension", type=str, default="Extension_sequence", help="epegRNA extension column")
+    parser_clone_pe_twist.add_argument("--epegRNA_RTT", type=str, default="RTT_sequence", help="RTT column name")
+    parser_clone_pe_twist.add_argument("--epegRNA_PBS", type=str, default="PBS_sequence", help="PBS column name")
+    parser_clone_pe_twist.add_argument("--epegRNA_linker", type=str, default="Linker_sequence", help="Linker column name")
+    parser_clone_pe_twist.add_argument("--epegRNA_pbs_length", type=str, default="PBS_length", help="PBS length column name")
+    parser_clone_pe_twist.add_argument("--ngRNA_group", type=str, default="ngRNA_group", help="Group column name for ngRNAs")
+
+    parser_clone_pe_twist.set_defaults(func=cl.pe_twist_oligos) 
     
     # pcr_sim(): returns dataframe with simulated pcr product 
-    # Need to make save
+    parser_clone_pcrsim = subparsers_clone.add_parser("pcr_sim", help="Simulate PCR product from template and primer sequences")
+
+    parser_clone_pcrsim.add_argument("--df", type=str, help="Input dataframe or file path containing template and primers", required=True)
+    parser_clone_pcrsim.add_argument("--template_col", type=str, help="Column name for template sequence", required=True)
+    parser_clone_pcrsim.add_argument("--fwd_bind_col", type=str, help="Column name for forward primer binding region", required=True)
+    parser_clone_pcrsim.add_argument("--rev_bind_col", type=str, help="Column name for reverse primer binding region", required=True)
+
+    parser_clone_pcrsim.add_argument("--dir", type=str, help="Output directory", default='.')
+    parser_clone_pcrsim.add_argument("--file", type=str, help="Output file name", default='pcr_sim.csv')
+
+
+    parser_clone_pcrsim.add_argument("--fwd_ext_col", type=str, help="Column name for forward primer extension region")
+    parser_clone_pcrsim.add_argument("--rev_ext_col", type=str, help="Column name for reverse primer extension region")
+    parser_clone_pcrsim.add_argument("--product_col", type=str, default="PCR Product", help="Column name for output PCR product")
+    
+    parser_clone_pcrsim.set_defaults(func=cl.pcr_sim)
 
     '''
     edms.bio.transfect
@@ -766,8 +911,30 @@ def main():
     - revcom_fastqs(): write reverse complement of fastqs to a new directory
     - unzip_fastqs(): Unzip gzipped fastqs and write to a new directory
     - comb_fastqs(): Combines one or more (un)compressed fastqs files into a single (un)compressed fastq file
-    probably more; for genotyping and stuff
+####- genotyping(): getfastqs through outcomes workflow
+####- library_quant(): epeg/ngRNA abundances workflow
     '''
+    parser_fastq = subparsers.add_parser("fastq", help="FASTQ files")
+    subparsers_fastq = parser_fastq.add_subparsers()
+
+    # revcom_fastqs(): write reverse complement of fastqs to a new directory
+    # unzip_fastqs(): Unzip gzipped fastqs and write to a new directory
+    # comb_fastqs(): Combines one or more (un)compressed fastqs files into a single (un)compressed fastq file
+    parser_fastq_revcom = subparsers_fastq.add_parser("revcom", help="Reverse complement all FASTQ files in a directory")
+    parser_fastq_unzip = subparsers_fastq.add_parser("unzip", help="Unzip gzipped FASTQ files to a new directory")
+    parser_fastq_comb = subparsers_fastq.add_parser("comb", help="Combine multiple FASTQ files into a single FASTQ (.fastq or .fastq.gz)")
+
+    # Add common arguments
+    for parser_fastq_common in [parser_fastq_revcom,parser_fastq_unzip,parser_fastq_comb]:
+        parser_fastq_common.add_argument("--in_dir", type=str, help="Input directory containing FASTQ files",default='.')
+        parser_fastq_common.add_argument("--out_dir", type=str, help="Output directory",default = f'./out')
+
+    # Add specific arguments
+    parser_fastq_comb.add_argument("--out_file", type=str, help="Name of output FASTQ file (.fastq or .fastq.gz)", default='comb.fastq.gz')
+
+    parser_fastq_revcom.set_defaults(func=f.revcom_fastqs)
+    parser_fastq_unzip.set_defaults(func=f.unzip_fastqs)
+    parser_fastq_comb.set_defaults(func=f.comb_fastqs)
 
     # Parse all arguments
     args = parser.parse_args()

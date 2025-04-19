@@ -6,6 +6,7 @@ Description: Command Line Interaction
 
 Usage:
 [Common commands for fastq files]
+- access(): make all files and subdirectories accessible on Harvard FASRC
 - expand_subs(): delete subdirectories and move their files to the parent directory
 - split_paired_reads(): split paired reads into new R1 and R2 subdirectories at the parent directory
 - smaller_fastq(): create new subdirectory containing fastqs with the # of reads limited
@@ -18,6 +19,24 @@ import os
 from . import io
 
 # Common commands for fastq files
+def access(pt: str):
+    ''' 
+    access(): make all files and subdirectories accessible on Harvard FASRC
+    
+    Parameters:
+    pt (str): path to parent directory
+
+    Dependencies: subprocess
+    '''
+    # Run command in the directory
+    command = 'chmod g+r . ; chmod g+rwxs -R . ; chmod g+x .'
+    print(f"terminal:\ncd {pt}\n{command}")
+    result = subprocess.run(f"{command}", shell=True, cwd=pt, capture_output=True, text=True)
+    
+    # Print output
+    if result.stdout: print(f"output:\n{result.stdout}")
+    if result.stderr: print(f"errors:\n{result.stderr}")
+
 def expand_subs(pt: str):
     ''' 
     expand_subs(): delete subdirectories and move their files to the parent directory
@@ -29,12 +48,12 @@ def expand_subs(pt: str):
     '''
     # Run command in the directory
     command = 'find . -not -type d -print0 | xargs -0J % mv -f % . ; find . -type d -depth -print0 | xargs -0 rm -rf'
-    print(f"Terminal:\ncd {pt}\n{command}")
+    print(f"terminal:\ncd {pt}\n{command}")
     result = subprocess.run(f"{command}", shell=True, cwd=pt, capture_output=True, text=True)
     
     # Print output
-    if result.stdout: print(f"Output:\n{result.stdout}")
-    if result.stderr: print(f"Errors:\n{result.stderr}")
+    if result.stdout: print(f"output:\n{result.stdout}")
+    if result.stderr: print(f"errors:\n{result.stderr}")
 
 def split_paired_reads(pt: str):
     ''' split_paired_reads(): split paired reads into new R1 and R2 subdirectories at the parent directory
