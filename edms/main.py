@@ -228,12 +228,12 @@ def add_common_plot_heat_args(subparser):
     
     # Required arguments
     subparser.add_argument("--df", help="Input file", type=str, required=True)
-    subparser.add_argument("--x", type=str, help="X-axis column", required=True)
-    subparser.add_argument("--y", type=str, help="Y-axis column", required=True)
-
+    
     # Optional arguments
-    subparser.add_argument("--vars", type=str, default="variable", help="Name of variable column")
-    subparser.add_argument("--vals", type=str, default="value", help="Name of value column")
+    subparser.add_argument("--x", type=str, help="X-axis column name to split tidy-formatted dataframe into a dictionary pivot-formatted dataframes")
+    subparser.add_argument("--y", type=str, help="Y-axis column name to split tidy-formatted dataframe into a dictionary pivot-formatted dataframes")
+    subparser.add_argument("--vars", type=str, help="Variable column name to split tidy-formatted dataframe into a dictionary pivot-formatted dataframes")
+    subparser.add_argument("--vals", type=str, help="Value column name to split tidy-formatted dataframe into a dictionary pivot-formatted dataframes")
     subparser.add_argument("--vals_dims", nargs=2, type=float, help="Min/max for values (vmin vmax)")
 
     subparser.add_argument("--file", type=str, help="Output filename")
@@ -301,15 +301,15 @@ def add_common_plot_stack_args(subparser):
     subparser.add_argument("--x_axis", type=str, default="")
     subparser.add_argument("--x_axis_size", type=int, default=12)
     subparser.add_argument("--x_axis_weight", type=str, default="bold")
+    subparser.add_argument("--x_axis_dims", nargs=2, type=float, default=(0,0))
     subparser.add_argument("--x_ticks_rot", type=int, help="X-axis tick rotation")
-    subparser.add_argument("--x_ticks_ha", type=str, help="X-axis tick horizontal alignment")
 
     # Y-axis formatting
     subparser.add_argument("--y_axis", type=str, default="")
     subparser.add_argument("--y_axis_size", type=int, default=12)
     subparser.add_argument("--y_axis_weight", type=str, default="bold")
+    subparser.add_argument("--y_axis_dims", nargs=2, type=float, default=(0,0))
     subparser.add_argument("--y_ticks_rot", type=int, help="Y-axis tick rotation")
-    subparser.add_argument("--y_ticks_ha", type=str, help="Y-axis tick horizontal alignment")
     subparser.add_argument("--yticks", nargs="+", help="Custom y-axis tick values")
 
     # Legend options
@@ -556,10 +556,10 @@ def main():
     
     # Add common arguments
     for parser_cli_common in [parser_cli_access,parser_cli_expand_subs, parser_cli_split_paired_reads, parser_cli_smaller_fastq]:
-        parser_cli_common.add_argument("--pt", help="Path to parent directory", type=str, required=True)
+        parser_cli_common.add_argument("--pt", help="Path to parent directory", type=str, default='.')
     
     # Smaller_fastq arguments
-    parser_cli_smaller_fastq.add_argument("--reads", help="# of reads per fastq file", type=int, required=True) 
+    parser_cli_smaller_fastq.add_argument("--reads", help="# of reads per fastq file", type=int, default='100000') 
     parser_cli_smaller_fastq.add_argument("--suf", help="Fastq file suffix", type=int, default=".fastq.gz") 
     
     # Call command functions
@@ -935,6 +935,11 @@ def main():
     parser_fastq_revcom.set_defaults(func=f.revcom_fastqs)
     parser_fastq_unzip.set_defaults(func=f.unzip_fastqs)
     parser_fastq_comb.set_defaults(func=f.comb_fastqs)
+
+    '''
+    Add pe.py
+    - ...
+    '''
 
     # Parse all arguments
     args = parser.parse_args()

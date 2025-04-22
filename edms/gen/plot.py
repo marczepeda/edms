@@ -718,7 +718,7 @@ def dist(typ: str,df: pd.DataFrame | str,x: str,cols: str=None,cols_ord: list=No
         print('Invalid type! hist, kde, hist_kde, rid')
         return
 
-def heat(df: pd.DataFrame | str, x: str, y: str, vars='variable', vals='value',vals_dims:tuple=None,
+def heat(df: pd.DataFrame | str, x: str=None, y: str=None, vars: str=None, vals: str=None,vals_dims:tuple=None,
          file: str=None,dir: str=None,edgecol='black',lw=1,annot=False,cmap="Reds",sq=True,cbar=True,
          title='',title_size=18,title_weight='bold',figsize=(10,6),
          x_axis='',x_axis_size=12,x_axis_weight='bold',x_ticks_rot=0,
@@ -729,11 +729,11 @@ def heat(df: pd.DataFrame | str, x: str, y: str, vars='variable', vals='value',v
 
     Parameters:
     df (dataframe | str): pandas dataframe (or file path)
-    x (str): x-axis column name
-    y (str): y-axis column name
-    vars (str, optional): variable column name
-    vals (str, optional): value column name
-    vals_dims (tuple, optional): vals minimum and maximum formatted (vmin, vmax; Default: None)
+    x (str, optional): x-axis column name to split tidy-formatted dataframe into a dictionary pivot-formatted dataframes (Default: None)
+    y (str, optional): y-axis column name to split tidy-formatted dataframe into a dictionary pivot-formatted dataframes (Default: None)
+    vars (str, optional): variable column name to split tidy-formatted dataframe into a dictionary pivot-formatted dataframes (Default: None)
+    vals (str, optional): value column name to split tidy-formatted dataframe into a dictionary pivot-formatted dataframes (Default: None)
+    vals_dims (tuple, optional): value column minimum and maximum formatted (vmin, vmax; Default: None)
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     edgecol (str, optional): point edge color
@@ -763,16 +763,34 @@ def heat(df: pd.DataFrame | str, x: str, y: str, vars='variable', vals='value',v
     if type(df)==str:
         df = io.get(pt=df)
 
-    # Find min and max values in the dataset for normalization
-    if vals_dims is None:
-        vmin = df[vals].values.min()
-        vmax = df[vals].values.max()
-    else:
-        vmin = vals_dims[0]
-        vmax = vals_dims[1]
+    # Determine dataframe type
+    if x is None or y is None or vars is None or vals is None: # Pivot-formatted
 
-    # Extract pivots
-    dc = extract_pivots(df=df,x=x,y=y,vars=vars,vals=vals)
+        # Find min and max values in the dataset for normalization
+        if vals_dims is None:
+            vmin = df.min().min()
+            vmax = df.max().max()
+        else:
+            vmin = vals_dims[0]
+            vmax = vals_dims[1]
+
+        # Create dictionary of pivot-formatted dataframes
+        dc = {'Pivot Table': df}
+        x = df.index.name
+        y = df.columns.name
+
+    else: # Tidy-formatted
+        
+        # Find min and max values in the dataset for normalization
+        if vals_dims is None:
+            vmin = df[vals].values.min()
+            vmax = df[vals].values.max()
+        else:
+            vmin = vals_dims[0]
+            vmax = vals_dims[1]
+
+        # Create dictionary of pivot-formatted dataframes
+        dc = extract_pivots(df=df,x=x,y=y,vars=vars,vals=vals)
 
     # Create a single figure with multiple heatmap subplots
     fig, axes = plt.subplots(nrows=len(list(dc.keys())),ncols=1,figsize=(figsize[0],figsize[1]*len(list(dc.keys()))),sharex=False,sharey=True)
@@ -802,8 +820,8 @@ def heat(df: pd.DataFrame | str, x: str, y: str, vars='variable', vals='value',v
 def stack(df: pd.DataFrame | str,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord=[],
           file: str=None,dir: str=None,cmap='Set2',errcap=4,vertical=True,
           figsize=(10,6),title='',title_size=18,title_weight='bold',
-          x_axis='',x_axis_size=12,x_axis_weight='bold',x_ticks_rot:int=None,x_ticks_ha:str=None,
-          y_axis='',y_axis_size=12,y_axis_weight='bold',y_ticks_rot:int=None,y_ticks_ha:str=None,
+          x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_dims=(0,0),x_ticks_rot=0,
+          y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_dims=(0,0),y_ticks_rot=0,
           legend_title='',legend_title_size=12,legend_size=12,
           legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_ncol=1,show=True,space_capitalize=True,**kwargs):
     ''' 
@@ -830,12 +848,10 @@ def stack(df: pd.DataFrame | str,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord
     x_axis_size (int, optional): x-axis name font size
     x_axis_weight (str, optional): x-axis name bold, italics, etc.
     x_ticks_rot (int, optional): x-axis ticks rotation
-    x_ticks_ha (str, optional): x-axis ticks horizontal alignment
     y_axis (str, optional): y-axis name
     y_axis_size (int, optional): y-axis name font size
     y_axis_weight (str, optional): y-axis name bold, italics, etc.
     y_ticks_rot (int, optional): y-axis ticks rotation
-    y_ticks_ha (str, optional): y-axis ticks horizontal alignment
     yticks (list, optional): y-axis tick values
     legend_title (str, optional): legend title
     legend_title_size (str, optional): legend title font size
@@ -868,18 +884,18 @@ def stack(df: pd.DataFrame | str,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord
             if space_capitalize: x_axis=re_un_cap(x)
             else: x_axis=x
         plt.xlabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight)
-        if x_ticks_rot is None: x_ticks_rot=45
-        if x_ticks_ha is None: x_ticks_ha='right'
-        plt.xticks(rotation=x_ticks_rot, ha=x_ticks_ha)
+        if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(rotation=x_ticks_rot,ha='center')
+        else: plt.xticks(rotation=x_ticks_rot,ha='right')
         
         # Set y axis
         if y_axis=='': 
             if space_capitalize: y_axis=re_un_cap(y)
             else: y_axis=y
         plt.ylabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight)
-        if y_ticks_rot is None: y_ticks_rot=0
-        if y_ticks_ha is None: y_ticks_ha='right'
-        plt.yticks(rotation=y_ticks_rot,ha=y_ticks_ha)
+        plt.yticks(rotation=y_ticks_rot)
+
+        if y_axis_dims==(0,0): print('Default y axis dimensions.')
+        else: plt.ylim(y_axis_dims[0],y_axis_dims[1])
 
     else: # Horizontal orientation
         df_pivot.plot(kind='barh',yerr=df_pivot_err,capsize=errcap, figsize=figsize,colormap=cmap,stacked=True,**kwargs)
@@ -888,19 +904,19 @@ def stack(df: pd.DataFrame | str,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord
         if x_axis=='': 
             if space_capitalize: x_axis=re_un_cap(x)
             else: x_axis=x
-        if x_ticks_rot is None: x_ticks_rot=0
-        if x_ticks_ha is None: x_ticks_ha='right'
         plt.ylabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight)
-        plt.yticks(rotation=x_ticks_rot, ha=x_ticks_ha)
+        plt.yticks(rotation=x_ticks_rot)
         
         # Set x axis
         if y_axis=='': 
             if space_capitalize: y_axis=re_un_cap(y)
             else: y_axis=y
-        if y_ticks_rot is None: y_ticks_rot=0
-        if y_ticks_ha is None: y_ticks_ha='center'
         plt.xlabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight)
-        plt.xticks(rotation=y_ticks_rot,ha=y_ticks_ha)
+        if (y_ticks_rot==0)|(y_ticks_rot==90): plt.xticks(rotation=y_ticks_rot,ha='center')
+        else: plt.xticks(rotation=y_ticks_rot,ha='right')
+
+        if x_axis_dims==(0,0): print('Default x axis dimensions.')
+        else: plt.xlim(x_axis_dims[0],x_axis_dims[1])
         
     # Set title
     if title=='' and file is not None: title=re_un_cap(".".join(file.split(".")[:-1]))

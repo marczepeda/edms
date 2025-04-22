@@ -10,7 +10,7 @@ Usage:
 - aa_dna_codon_table: AA to DNA codon table
 
 [PrimeDesign]
-- PrimeDesignInput(): creates PrimeDesign input file
+- PrimeDesignInput(): creates and checks PrimeDesign saturation mutagenesis input file
 - PrimeDesign(): run PrimeDesign using Docker (NEED TO BE RUNNING DESKTOP APP)
 - PrimeDesignOutput(): splits peg/ngRNAs from PrimeDesign output & finishes annotations
 - MergePrimeDesignOutput(): rejoins epeg/ngRNAs from PrimeDesign output & creates ngRNA_groups
@@ -92,13 +92,17 @@ aa_dna_codon_table = {
 }
 
 # PrimeDesign
-def PrimeDesignInput(target_name: str, target_sequence: str, dir: str='.', file: str='PrimeDesignInput.csv'):
+def PrimeDesignInput(target_name: str, flank5_sequence: str, 
+                     target_sequence: str, flank3_sequence: str,
+                     dir: str='.', file: str='PrimeDesignInput.csv'):
     ''' 
-    PrimeDesignInput(): creates PrimeDesign input file
+    PrimeDesignInput(): creates and checks PrimeDesign saturation mutagenesis input file
     
     Parameters:
     target_name (str): name of target
-    target_sequence (str): in-frame nucleotide sequence with flank5(saturation mutagensis region)flank3
+    flank5_sequence: in-frame nucleotide sequence with 5' of saturation mutagensis region (length must be divisible by 3)
+    target_sequence (str): in-frame nucleotide sequence for the saturation mutagensis region (length must be divisible by 3)
+    flank3_sequence: in-frame nucleotide sequence with 3' of saturation mutagensis region (length must be divisible by 3)
     dir (str, optional): name of the output directory 
     file (str, optional): name of the output file
     
@@ -106,7 +110,15 @@ def PrimeDesignInput(target_name: str, target_sequence: str, dir: str='.', file:
     
     Reference: https://github.com/pinellolab/PrimeDesign/tree/master/PrimeDesign
     '''
-    io.save(dir=dir,file=file,obj=pd.DataFrame({'target_name': [target_name],'target_sequence': [target_sequence]}))
+    # Check PrimeDesign saturation mutagenesis input file
+    if len(flank5_sequence)%3 != 0: raise(ValueError(f"Length of flank5_sequence ({len(flank5_sequence)}) must divisible by 3."))
+    if len(target_sequence)%3 != 0: raise(ValueError(f"Length of target_sequence ({len(target_sequence)}) must divisible by 3."))
+    if len(flank5_sequence)%3 != 0: raise(ValueError(f"Length of flank3_sequence ({len(flank3_sequence)}) must divisible by 3."))
+
+    # Create PrimeDesign saturation mutagenesis input file
+    io.save(dir=dir,
+            file=file,
+            obj=pd.DataFrame({'target_name': [target_name],'target_sequence': [f"{flank5_sequence}({target_sequence}){flank3_sequence}"]}))
 
 def PrimeDesign(file: str,pbs_length_list: list = [],rtt_length_list: list = [],nicking_distance_minimum: int = 0,
                 nicking_distance_maximum: int = 100,filter_c1_extension: bool = False,silent_mutation: bool = False,

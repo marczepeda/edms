@@ -1956,8 +1956,8 @@ def cat(typ: str,df: pd.DataFrame,x: str,y: str,errorbar=None,cols=None,cols_ord
 def stack(df: pd.DataFrame,x='sample',y='fraction',cols='edit',cutoff=0.01,cols_ord=[],x_ord=[],
           file=None,dir=None,cmap='Set2',errcap=4,vertical=True,
           figsize=(10,6),title='Editing Outcomes',title_size=18,title_weight='bold',
-          x_axis='',x_axis_size=12,x_axis_weight='bold',x_ticks_rot:int=None,x_ticks_ha:str=None,
-          y_axis='',y_axis_size=12,y_axis_weight='bold',y_ticks_rot:int=None,y_ticks_ha:str=None,
+          x_axis='',x_axis_size=12,x_axis_weight='bold',x_ticks_rot=0,
+          y_axis='',y_axis_size=12,y_axis_weight='bold',y_ticks_rot=0,
           legend_title='',legend_title_size=12,legend_size=12,
           legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_ncol=1,show=True,space_capitalize=True,**kwargs):
     ''' 
@@ -1983,7 +1983,6 @@ def stack(df: pd.DataFrame,x='sample',y='fraction',cols='edit',cutoff=0.01,cols_
     x_axis_size (int, optional): x-axis name font size
     x_axis_weight (str, optional): x-axis name bold, italics, etc.
     x_ticks_rot (int, optional): x-axis ticks rotation
-    x_ticks_ha (str, optional): x-axis ticks horizontal alignment
     y_axis (str, optional): y-axis name
     y_axis_size (int, optional): y-axis name font size
     y_axis_weight (str, optional): y-axis name bold, italics, etc.
@@ -2025,8 +2024,8 @@ def stack(df: pd.DataFrame,x='sample',y='fraction',cols='edit',cutoff=0.01,cols_
     p.stack(df=df_cut,x=x,y=y,cols=cols,cutoff=0,cols_ord=cols_ord,x_ord=x_ord,
             file=file,dir=dir,cmap=cmap,errcap=errcap,vertical=vertical,
             figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,
-            x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_ticks_rot=x_ticks_rot,x_ticks_ha=x_ticks_ha,
-            y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_ticks_rot=y_ticks_rot,y_ticks_ha=y_ticks_ha,
+            x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_ticks_rot=x_ticks_rot,
+            y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_ticks_rot=y_ticks_rot,
             legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,
             legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_ncol=legend_ncol,show=show,space_capitalize=space_capitalize,**kwargs)
 
