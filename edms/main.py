@@ -911,30 +911,46 @@ def main():
     - revcom_fastqs(): write reverse complement of fastqs to a new directory
     - unzip_fastqs(): Unzip gzipped fastqs and write to a new directory
     - comb_fastqs(): Combines one or more (un)compressed fastqs files into a single (un)compressed fastq file
-####- genotyping(): getfastqs through outcomes workflow
+    - genotyping(): quantify edit outcomes workflow
 ####- library_quant(): epeg/ngRNA abundances workflow
     '''
     parser_fastq = subparsers.add_parser("fastq", help="FASTQ files")
     subparsers_fastq = parser_fastq.add_subparsers()
 
-    # revcom_fastqs(): write reverse complement of fastqs to a new directory
-    # unzip_fastqs(): Unzip gzipped fastqs and write to a new directory
-    # comb_fastqs(): Combines one or more (un)compressed fastqs files into a single (un)compressed fastq file
     parser_fastq_revcom = subparsers_fastq.add_parser("revcom", help="Reverse complement all FASTQ files in a directory")
     parser_fastq_unzip = subparsers_fastq.add_parser("unzip", help="Unzip gzipped FASTQ files to a new directory")
     parser_fastq_comb = subparsers_fastq.add_parser("comb", help="Combine multiple FASTQ files into a single FASTQ (.fastq or .fastq.gz)")
+    parser_fastq_genotyping = subparsers_fastq.add_parser("genotyping", help="Quantify edit outcomes from sequencing data")
 
-    # Add common arguments
-    for parser_fastq_common in [parser_fastq_revcom,parser_fastq_unzip,parser_fastq_comb]:
+    # Add common arguments: revcom_fastqs(), unzip_fastqs(), comb_fastqs(), and genotyping()
+    for parser_fastq_common in [parser_fastq_revcom,parser_fastq_unzip,parser_fastq_comb,parser_fastq_genotyping]:
         parser_fastq_common.add_argument("--in_dir", type=str, help="Input directory containing FASTQ files",default='.')
         parser_fastq_common.add_argument("--out_dir", type=str, help="Output directory",default = f'./out')
 
-    # Add specific arguments
+    # Add specific arguments: comb_fastqs()
     parser_fastq_comb.add_argument("--out_file", type=str, help="Name of output FASTQ file (.fastq or .fastq.gz)", default='comb.fastq.gz')
+
+    # Add specific arguments: genotyping()
+    parser_fastq_genotyping.add_argument("--out_file", type=str, help="Name of output file", default='outcomes.csv')
+    
+    parser_fastq_genotyping.add_argument("--sequence", type=str, help="Formatted sequence: flank5(genotype region)flank3", required=True)
+    parser_fastq_genotyping.add_argument("--res", type=int, help="First amino acid number in genotype region",required=True)
+
+    parser_fastq_genotyping.add_argument("--suf", type=str, help="File suffix to match (.fastq or .fastq.gz)", default='.fastq.gz')
+    parser_fastq_genotyping.add_argument("--qall", type=int, help="Minimum Phred quality score for all bases")
+    parser_fastq_genotyping.add_argument("--qtrim", type=int, help="Phred quality threshold for end trimming")
+    parser_fastq_genotyping.add_argument("--qavg", type=int, help="Minimum average Phred quality score")
+    parser_fastq_genotyping.add_argument("--qmask", type=int, help="Phred quality threshold for masking to N")
+
+    parser_fastq_genotyping.add_argument("--save", action="store_true", help="Save read statistics file")
+    parser_fastq_genotyping.add_argument("--masks", action="store_true", help="Include masked sequence and translation")
+    parser_fastq_genotyping.add_argument("--keepX", action="store_true", help="Keep unknown translation (X) in output")
+
 
     parser_fastq_revcom.set_defaults(func=f.revcom_fastqs)
     parser_fastq_unzip.set_defaults(func=f.unzip_fastqs)
     parser_fastq_comb.set_defaults(func=f.comb_fastqs)
+    parser_fastq_genotyping.set_defaults(func=f.genotyping)
 
     '''
     Add pe.py

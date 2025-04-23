@@ -807,8 +807,11 @@ def heat(df: pd.DataFrame | str, x: str=None, y: str=None, vars: str=None, vals:
             if space_capitalize: ax.set_ylabel(re_un_cap(y),fontsize=y_axis_size,fontweight=y_axis_weight) # Add y axis label
             else: ax.set_ylabel(y,fontsize=y_axis_size,fontweight=y_axis_weight) # Add y axis label
         else: ax.set_ylabel(y_axis,fontsize=y_axis_size,fontweight=y_axis_weight)
-        plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, va='center', ha="right",rotation_mode="anchor") # Format x ticks
-        plt.setp(ax.get_yticklabels(), rotation=y_ticks_rot, va='center', ha="right",rotation_mode="anchor") # Format y ticks
+        # Format x ticks
+        if (x_ticks_rot==0)|(x_ticks_rot==90): plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, ha="center",rotation_mode="anchor") 
+        else: plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, ha="right",rotation_mode="anchor") 
+        # Format y ticks
+        plt.setp(ax.get_yticklabels(), rotation=y_ticks_rot, va='center', ha="right",rotation_mode="anchor")
         ax.set_facecolor('white')  # Set background to transparent
     
     # Save & show fig
