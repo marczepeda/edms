@@ -5,17 +5,23 @@ Created: 2024-08-05
 Description: Fastq processing and analysis 
 
 Usage:
+[Supporting methods for sequences]
+- fuzzy_substring_search: retuns a dataframe containing all substrings in 'text' that resemble 'pattern' within the Levenshtein 'max_distance'.
+
 [Input/Output]
 - revcom_fastqs(): write reverse complement of fastqs to a new directory
 - unzip_fastqs(): Unzip gzipped fastqs and write to a new directory
 - comb_fastqs(): Combines one or more (un)compressed fastqs files into a single (un)compressed fastq file
 
-[Quantify epegRNA abundance]
+[Quantify epeg/ngRNA abundance]
+### Probably get rid of or modify ### Start 
 - count_spacers(): count spacers in library
 - count_spacers_pbs(): count spacers and PBS in library
 - count_spacers_pbs_linkers(): count spacers and PBS + linkers in library
 - count_region(): returns dataframe with sequence region abundance for every fastq file in a directory
-- count_motif(): returns dataframe with sequence motif abundance for every fastq file in a directory
+### Probably get rid of or modify ### End
+- count_motif(): returns a dataframe with the sequence motif location per read and abundance for every fastq file in a directory
+- plot_motif(): generate plots highlighting motif mismatches, locations, and sequences
 - count_alignments(): get fastq files from directory and store records in dataframes in a dictionary
 - plot_alignments(): plot fastq alignments dictionary output from count_alignments()
 
@@ -59,6 +65,7 @@ from adjustText import adjust_text
 from collections import Counter
 from pathlib import Path
 from scipy.stats import ttest_ind
+import Levenshtein
 
 from ..gen import io
 from ..gen import tidy as t
@@ -67,6 +74,42 @@ from ..gen import plot as p
 # Get rid of warnings
 import warnings
 warnings.filterwarnings("ignore")
+
+# Supporting methods for sequences
+def fuzzy_substring_search(text: str, pattern: str, max_distance: int):
+    """
+    fuzzy_substring_search: retuns a dataframe containing all substrings in 'text' that resemble 'pattern' within the Levenshtein 'max_distance'.
+    
+    Parameters:
+    text (str): text to search within
+    pattern (str): text to search for
+    max_distance (int): maximum Levenshtein distance of 'pattern' in text substring
+
+    Dependencies: Levenshtein, pandas
+    """
+    # Initialize lists that will be stored in the output dataframe
+    windows = []
+    distances = []
+    starts_i = []
+    ends_i = []
+
+    # Iterate through 'text' using windows with equal length to 'pattern'
+    len_pat = len(pattern)
+    for i in range(len(text) - len_pat + 1):
+        window = text[i:i + len_pat]
+        distance = Levenshtein.distance(window, pattern)
+        if distance <= max_distance: # Save windows that resemble 'pattern' within the Levenshtein 'max_distance'
+            windows.append(window)
+            distances.append(distance)
+            starts_i.append(int(i))
+            ends_i.append(int(i + len_pat))
+
+    # Return final dataframe
+    return pd.DataFrame({'pattern': [pattern]*len(windows),
+                         'window': windows,
+                         'distance': distances,
+                         'start_i': starts_i,
+                         'end_i': ends_i})
 
 # Input/Output
 def revcom_fastqs(in_dir: str, out_dir: str):
@@ -170,7 +213,8 @@ def comb_fastqs(in_dir: str, out_dir: str, out_file: str):
 
     else: print('out_file needs .fastq or .fastq.gz suffix')
 
-# Quantify epegRNA abundance
+# Quantify epeg/ngRNA abundance
+### Probably get rid of or modify ### Start
 def count_spacers(sample_sheet: str, annotated_lib: str, fastq_dir: str, KEY_INTERVAL=(10,80), 
                   KEY_FLANK5='CGAAACACC', KEY_FLANK3='GTTTAAGA', spacer_col='Spacer_sequence', 
                   dont_trim_G=False, out_dir='', out_file='library_count_spacers.csv', save=True, 
@@ -940,7 +984,7 @@ def count_spacers_pbs_linkers(sample_sheet: str, annotated_lib: str, fastq_R1_di
     print('Count reads completed')
     if return_df:
         return df_ref
-
+ 
 def count_region(fastq_dir: str, end_i: int, start_i:int=0, 
                  out_dir:str=None, out_file:str=None):
     ''' 
@@ -985,51 +1029,208 @@ def count_region(fastq_dir: str, end_i: int, start_i:int=0,
 
     return df
 
-def count_motif(fastq_dir: str, seq: str, motif:str="motif", out_dir:str=None, out_file:str=None):
+### Probably get rid of or modify ### End
+   
+def count_motif(fastq_dir: str, pattern: str, motif:str="motif", 
+                max_distance:int=0, max_reads:int=0, meta: pd.DataFrame | str=None,
+                out_dir:str=None, out_file:str=None):
     ''' 
-    count_motif(): returns dataframe with sequence motif abundance for every fastq file in a directory
+    count_motif(): returns a dataframe with the sequence motif location per read and abundance for every fastq file in a directory
 
     Parameters:
     fastq_dir (str): path to fastq directory
-    seq (str): search for this sequence motif 
-    motif (str, optional): motif name (Default: motif)
+    pattern (str): search for this sequence motif
+    motif (str, optional): motif name (Default: 'motif')
+    max_distance (int, optional): max Levenstein distance for seq in fastq read (Default: 0)
+    meta (DataFrame | str, optional): meta dataframe (or file path) must have 'fastq_file' column (Default: None)
     out_dir (str, optional): path to save directory (Default: None)
     out_file (str, optional): save file name (Default: None)
 
-    Dependencies: pandas,gzip,os,
+    Dependencies: pandas,gzip,os,Bio
     '''
-    df = pd.DataFrame() # Create a dataframe to store motif abundance
+    df = pd.DataFrame(columns=['fastq_file','read','motif','pattern','window','start_i','end_i','distance']) # Create a dataframe to store motif abundance
     for fastq_file in os.listdir(fastq_dir): # Find all .fastq.gz & .fastq files in the fastq directory
+        
         print(f"Processing {fastq_file}...") # Keep track of sequence motifs & reads
-        motif_reads = 0 
-        reads = 0 
+        reads = pd.DataFrame() 
 
         if fastq_file.endswith(".fastq.gz"): # Compressed fastq
             with gzip.open(os.path.join(fastq_dir,fastq_file), 'rt') as handle:
                 for r,record in enumerate(SeqIO.parse(handle, "fastq")): # Parse reads
-                    reads=r+1
-                    if Seq(seq) in record.seq: motif_reads+=1 # Motif found in read
+                    
+                    # Find all substrings that resemble 'pattern' within the Levenshtein 'max_distance'.
+                    read = fuzzy_substring_search(text=str(record.seq),pattern=pattern,max_distance=max_distance)
+                    
+                    # Retain the substring with the smallest Levenshtein distance to 'pattern'. 
+                    if len(read)==0: # No substring
+                        read.loc[0] = [pattern, "N"*len(pattern), -1, -1, -1]
+                    else: # Found substring(s)
+                        read = read[read['distance']==min(read['distance'])]
+                        read = read.iloc[:1]
+                    read['read'] = [r+1]
+                    reads = pd.concat([reads,read]).reset_index(drop=True)
+
+                    # Processing status and down sample to reduce computation
+                    if len(reads)%10000==0: print(f"Processed {len(reads)} reads")
+                    if (len(reads)+1>max_reads) & (max_reads!=0): break
                  
         elif fastq_file.endswith(".fastq"): # Uncompressed fastq
             with open(os.path.join(fastq_dir,fastq_file), 'r') as handle:
-                for r,record in enumerate(SeqIO.parse(handle, "fastq")): # Parse reads    
-                    reads=r+1
-                    if Seq(seq) in record.seq: motif_reads+=1 # Motif found in read
+                for r,record in enumerate(SeqIO.parse(handle, "fastq")): # Parse reads 
 
-        print(f'Completed {reads} reads') # Append motif abundances to the dataframe
-        df = pd.concat([df,
-                        pd.DataFrame({'fastq_file':[fastq_file],
-                                    'motif':[motif],
-                                    'sequence':[seq],
-                                    'reads':[reads],
-                                    'motif_reads':[motif_reads],
-                                    'fraction':[motif_reads/reads]})
-                        ]).reset_index(drop=True)
+                    # Find all substrings that resemble 'pattern' within the Levenshtein 'max_distance'.
+                    read = fuzzy_substring_search(text=str(record.seq),pattern=pattern,max_distance=max_distance)
+                    
+                    # Retain the substring with the smallest Levenshtein distance to 'pattern'. 
+                    if len(read)==0: # No substring
+                        read.loc[0] = [pattern, "N"*len(pattern), -1, -1, -1]
+                    else: # Found substring(s)
+                        read = read[read['distance']==min(read['distance'])] # smallest Levenshtein distance
+                        if len(read)>1: read = read.iloc[:1] # Isolate first instance 
+                    read['read'] = [r+1] # Add read index
+                    reads = pd.concat([reads,read]).reset_index(drop=True)
+
+                    # Processing status and down sample to reduce computation
+                    if len(reads)%10000==0: print(f"Processed {len(reads)} reads")
+                    if (len(reads)+1>max_reads) & (max_reads!=0): break
+                 
+
+        print(f'Completed {len(reads)} reads') # Append metadata
+        reads['fastq_file'] = [fastq_file]*len(reads)
+        reads['motif'] = [motif]*len(reads)
+        df = pd.concat([df,reads]).reset_index(drop=True) # save to final dataframe
+    
+    # Improve dataframe column formatting 
+    df = df.astype({'start_i': int,'end_i': int,'read': int,'distance':int})
+    df['mismatches'] = [f">{max_distance}" if d==-1 else int(d) for d in df['distance']]
+    df['location'] = [(start_i,end_i) if start_i!=-1 else "Absent" for (start_i,end_i) in t.zip_cols(df=df,cols=['start_i','end_i'])]
+
+    # Merge with metadata
+    if meta is not None:
+        if type(meta)==str: # Get from file path if needed
+            meta = io.get(pt=meta)
+        if 'fastq_file' not in list(meta.columns): # Check for 'fastq_file' column
+            raise(ValueError(f"meta needs 'fastq_file' column.\nDetected columns: {list(meta.columns)}"))
+        else: # Merge on 'fastq_file' column
+            df = pd.merge(left=meta,right=df,on='fastq_file')
 
     if out_dir is not None and out_file is not None: # Save dataframe (optional)
         io.save(dir=out_dir,file=out_file,obj=df)
 
     return df
+
+def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.pdf',numeric: str='count',
+               id_col: str='fastq_file', id_axis: str='fastq', stack_figsize: tuple=(7,3), heat_figsize: tuple=(7,7),
+               cutoff_frac:float=0.01):
+    '''
+    plot_motif(): generate plots highlighting motif mismatches, locations, and sequences
+    
+    Parameters:
+    df (dataframe | str): count_motif() dataframe (or file path)
+    out_dir (str, optional): output directory
+    plot_suf (str, optional): plot type suffix with '.' (Default: '.pdf')
+    numeric (str, optional): 'count' or 'fraction' can be the numeric column for plots (Default: 'count')
+    id_col (str, optional): id column name (Default: 'fastq_file')
+    id_axis (str, optional): replace id column name on plots (Default: 'fastq')
+    stack_figsize (tuple, optional): stacked bar plot figure size (Default: (7,3))
+    heat_figsize (tuple, optional): heatmap figure size (Default: (7,7))
+    cutoff_frac (float, optional): y-axis values needs be greater than (e.g. 0.01) fraction
+
+    Dependencies: count_motifs(),plot
+    '''
+    # Get dataframe from file path if needed
+    if type(df)==str:
+        df = io.get(pt=df)
+    
+    # Check numeric column
+    if numeric not in ['count','fraction']:
+        raise(ValueError(f"numeric can only be 'count' or 'fraction'; not {numeric}"))
+
+    # Get value_counts() dataframes...
+    # ...remove unwanted columns
+    mismatches_cols = [c for c in list(df.columns) if c not in ['read','window','start_i','end_i','location']]
+    locations_cols = [c for c in list(df.columns) if c not in ['read','window','distance','mismatches']]
+    windows_cols = [c for c in list(df.columns) if c not in ['read','start_i','end_i','distance','mismatches','location']]
+
+    # ...generate dataframes
+    df_mismatches = df[mismatches_cols].value_counts().reset_index()
+    df_locations = df[locations_cols].value_counts().reset_index()
+    df_windows = df[windows_cols].value_counts().reset_index()
+    
+    # ...save (optional)
+    if out_dir is not None:
+        io.save(dir=out_dir,file=f"{df.iloc[0]['motif']}_mismatches.csv",obj=df_mismatches)
+        io.save(dir=out_dir,file=f"{df.iloc[0]['motif']}_locations.csv",obj=df_locations)
+        io.save(dir=out_dir,file=f"{df.iloc[0]['motif']}_windows.csv",obj=df_windows)
+
+    # ...define cut() based on cutoff_frac
+    def cut(df_vc: pd.DataFrame, col: str, off: bool=True):
+        '''
+        cut(): apply cutoff_fraction to value_counts() dataframe grouped by id
+
+        Parameters:
+        df_vc (dataframe): value_counts() dataframe
+        col (str): column name that will be overwritten with cutoff_frac
+        off (bool, optional): apply cutoff (Default: True)
+        '''
+        df_vc_cutoff = pd.DataFrame() # Initialize output dataframe
+        for id in list(df_vc[id_col].value_counts().keys()): # Iterate through ids
+            # Group by id and calculate fraction
+            df_vc_id = df_vc[df_vc[id_col]==id]
+            df_vc_id['fraction'] = df_vc_id['count']/sum(df_vc_id['count'])
+            if off: # Apply cutoff_fract
+                # Append greater than cutoff_frac
+                df_vc_cutoff = pd.concat([df_vc_cutoff,df_vc_id[df_vc_id['fraction']>=cutoff_frac]]).reset_index(drop=True)
+                # Group less than cutoff_frac and append
+                df_vc_id_other = df_vc_id[df_vc_id['fraction']<cutoff_frac].reset_index(drop=True)
+                if df_vc_id_other.empty==False:
+                    df_vc_id_other['count']=sum(df_vc_id_other['count'])
+                    df_vc_id_other[col]=f'<{cutoff_frac*100}%'
+                    df_vc_cutoff = pd.concat([df_vc_cutoff,df_vc_id_other.iloc[:1]]).reset_index(drop=True)
+            else: # Do not apply cutoff_fract
+                df_vc_cutoff = pd.concat([df_vc_cutoff,df_vc_id]).reset_index(drop=True)  
+
+        # Return output dataframe
+        return df_vc_cutoff
+    
+    #...apply cut()
+    df_mismatches = cut(df_vc=df_mismatches,col='mismatches',off=False)
+    df_locations = cut(df_vc=df_locations,col='location')
+    df_windows = cut(df_vc=df_windows,col='window')
+
+    # Plots
+    if numeric=='count':
+        p.stack(df=df_mismatches,x=id_col,y=numeric,cols='mismatches', y_axis='Reads',
+                title=f"{df.iloc[0]['motif']}: {df.iloc[0]['pattern']}", x_axis=id_axis,
+                vertical=False,figsize=stack_figsize,cmap='tab20',
+                dir=out_dir,file=f"{df.iloc[0]['motif']}_mismatches{plot_suf}")
+        
+        p.stack(df=df_locations,x=id_col,y=numeric,cols='location', y_axis='Reads',
+                title=f"{df.iloc[0]['motif']}: {df.iloc[0]['pattern']}", x_axis=id_axis,
+                vertical=False,figsize=stack_figsize,cmap='tab20',
+                dir=out_dir,file=f"{df.iloc[0]['motif']}_locations{plot_suf}")
+        
+        p.heat(df=df_windows,x=id_col,y='window',vars='motif',vals=numeric,x_axis=id_axis,y_ticks_font='Courier New',
+               figsize=heat_figsize,x_ticks_rot=45,title=f"{df.iloc[0]['motif']}: {df.iloc[0]['pattern']}",
+               dir=out_dir,file=f"{df.iloc[0]['motif']}_locations{plot_suf}")
+    
+    else: # fraction
+        p.stack(df=df_mismatches,x=id_col,y=numeric,cols='mismatches', y_axis='Reads fraction',
+                title=f"{df.iloc[0]['motif']}: {df.iloc[0]['pattern']}", x_axis=id_axis,
+                vertical=False,figsize=stack_figsize,cmap='tab20',
+                dir=out_dir,file=f"{df.iloc[0]['motif']}_mismatches{plot_suf}")
+        
+        p.stack(df=df_locations,x=id_col,y=numeric,cols='location', y_axis='Reads fraction',
+                title=f"{df.iloc[0]['motif']}: {df.iloc[0]['pattern']}", x_axis=id_axis,
+                vertical=False,figsize=stack_figsize,cmap='tab20',
+                dir=out_dir,file=f"{df.iloc[0]['motif']}_locations{plot_suf}")
+        
+        p.heat(df=df_windows,x=id_col,y='window',vars='motif',vals=numeric,x_axis=id_axis,y_ticks_font='Courier New',
+               figsize=heat_figsize,x_ticks_rot=45,title=f"{df.iloc[0]['motif']}: {df.iloc[0]['pattern']}",
+               dir=out_dir,file=f"{df.iloc[0]['motif']}_locations{plot_suf}",vals_dims=(0,1)) 
+    
+    # Return value_counts() dataframes
+    return (df_mismatches,df_locations,df_windows)
 
 def count_alignments(annotated_lib: str, align_col: str, id_col: str, fastq_dir: str, 
                      out_dir: str, fastq_suf='.fastq.gz', match_score=1, mismatch_score=-4,
@@ -1809,9 +2010,9 @@ def subscript(df: pd.DataFrame,tick='before',tick_sub='number'):
 # Plot methods
 def scat(typ: str,df: pd.DataFrame,x: str,y: str,cols=None,cols_ord=None,stys=None,cutoff=0.01,cols_exclude=None,
          file=None,dir=None,palette_or_cmap='colorblind',edgecol='black',
-         figsize=(10,6),title='',title_size=18,title_weight='bold',
-         x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_scale='linear',x_axis_dims=(0,100),x_ticks_rot=0,xticks=[],
-         y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_scale='linear',y_axis_dims=(0,100),y_ticks_rot=0,yticks=[],
+         figsize=(10,6),title='',title_size=18,title_weight='bold',title_font='Arial',
+         x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_font='Arial',x_axis_scale='linear',x_axis_dims=(0,100),x_ticks_rot=0,x_ticks_font='Arial',x_ticks=[],
+         y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_font='Arial',y_axis_scale='linear',y_axis_dims=(0,100),y_ticks_rot=0,y_ticks_font='Arial',y_ticks=[],
          legend_title='',legend_title_size=12,legend_size=9,legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_items=(0,0),show=True,
          **kwargs):
     '''
@@ -1825,7 +2026,7 @@ def scat(typ: str,df: pd.DataFrame,x: str,y: str,cols=None,cols_ord=None,stys=No
     cols (str, optional): color column name
     cols_ord (list, optional): color column values order
     stys (str, optional): styles column name
-    cols_exclude (list, optional): color column values exclude
+    cols_exclude (list | str, optional): color column values exclude
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     palette_or_cmap (str, optional): seaborn color palette or matplotlib color map
@@ -1834,20 +2035,25 @@ def scat(typ: str,df: pd.DataFrame,x: str,y: str,cols=None,cols_ord=None,stys=No
     title (str, optional): plot title
     title_size (int, optional): plot title font size
     title_weight (str, optional): plot title bold, italics, etc.
+    title_font (str, optional): plot title font
     x_axis (str, optional): x-axis name
     x_axis_size (int, optional): x-axis name font size
     x_axis_weight (str, optional): x-axis name bold, italics, etc.
+    x_axis_font (str, optional): x-axis font
     x_axis_scale (str, optional): x-axis scale linear, log, etc.
     x_axis_dims (tuple, optional): x-axis dimensions (start, end)
     x_ticks_rot (int, optional): x-axis ticks rotation
-    xticks (list, optional): x-axis tick values
+    x_ticks_font (str, optional): x-ticks font
+    x_ticks (list, optional): x-axis tick values
     y_axis (str, optional): y-axis name
     y_axis_size (int, optional): y-axis name font size
     y_axis_weight (str, optional): y-axis name bold, italics, etc.
+    y_axis_font (str, optional): y-axis font
     y_axis_scale (str, optional): y-axis scale linear, log, etc.
     y_axis_dims (tuple, optional): y-axis dimensions (start, end)
     y_ticks_rot (int, optional): y-axis ticks rotation
-    yticks (list, optional): y-axis tick values
+    y_ticks_font (str, optional): y_ticks font
+    y_ticks (list, optional): y-axis tick values
     legend_title (str, optional): legend title
     legend_title_size (str, optional): legend title font size
     legend_size (str, optional): legend font size
@@ -1884,19 +2090,19 @@ def scat(typ: str,df: pd.DataFrame,x: str,y: str,cols=None,cols_ord=None,stys=No
                                'genotypes':genotypes})
         cols_ord = list(assign.sort_values(by='positions')['genotypes'])
 
-    p.scat(typ=typ,df=df_cut,x=x,y=y,cols=cols,cols_ord=cols_ord,cols_exclude=None,
+    p.scat(typ=typ,df=df_cut,x=x,y=y,cols=cols,cols_ord=cols_ord,cols_exclude=cols_exclude,
            file=file,dir=dir,palette_or_cmap=palette_or_cmap,edgecol=edgecol,
-           figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,
-           x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_ticks_rot=x_ticks_rot,xticks=xticks,
-           y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_scale=y_axis_scale,y_axis_dims=y_axis_dims,y_ticks_rot=y_ticks_rot,yticks=yticks,
+           figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
+           x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,x_ticks=x_ticks,
+           y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_scale=y_axis_scale,y_axis_dims=y_axis_dims,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,y_ticks=y_ticks,
            legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_items=legend_items,show=show, 
            **kwargs)
 
 def cat(typ: str,df: pd.DataFrame,x: str,y: str,errorbar=None,cols=None,cols_ord=None,cutoff=0.01,cols_exclude=None,
         file=None,dir=None,palette_or_cmap='colorblind',edgecol='black',lw=1,
-        figsize=(10,6),title='',title_size=18,title_weight='bold',
-        x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_scale='linear',x_axis_dims=(0,1),x_ticks_rot=0,xticks=[],
-        y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_scale='linear',y_axis_dims=(0,1),y_ticks_rot=0,yticks=[],
+        figsize=(10,6),title='',title_size=18,title_weight='bold',title_font='Arial',
+        x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_font='Arial',x_axis_scale='linear',x_axis_dims=(0,1),x_ticks_rot=0,x_ticks_font='Arial',x_ticks=[],
+        y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_font='Arial',y_axis_scale='linear',y_axis_dims=(0,1),y_ticks_rot=0,y_ticks_font='Arial',y_ticks=[],
         legend_title='',legend_title_size=12,legend_size=9,legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_items=(0,0),show=True,
         **kwargs):
     ''' 
@@ -1909,7 +2115,7 @@ def cat(typ: str,df: pd.DataFrame,x: str,y: str,errorbar=None,cols=None,cols_ord
     y (str, optional): y-axis column name
     cols (str, optional): color column name
     cols_ord (list, optional): color column values order
-    cols_exclude (list, optional): color column values exclude
+    cols_exclude (list | str, optional): color column values exclude
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     palette_or_cmap (str, optional): seaborn color palette or matplotlib color map
@@ -1922,20 +2128,25 @@ def cat(typ: str,df: pd.DataFrame,x: str,y: str,errorbar=None,cols=None,cols_ord
     title (str, optional): plot title
     title_size (int, optional): plot title font size
     title_weight (str, optional): plot title bold, italics, etc.
+    title_font (str, optional): plot title font
     x_axis (str, optional): x-axis name
     x_axis_size (int, optional): x-axis name font size
     x_axis_weight (str, optional): x-axis name bold, italics, etc.
+    x_axis_font (str, optional): x-axis font
     x_axis_scale (str, optional): x-axis scale linear, log, etc.
     x_axis_dims (tuple, optional): x-axis dimensions (start, end)
     x_ticks_rot (int, optional): x-axis ticks rotation
-    xticks (list, optional): x-axis tick values
+    x_ticks_font (str, optional): x-ticks font
+    x_ticks (list, optional): x-axis tick values
     y_axis (str, optional): y-axis name
     y_axis_size (int, optional): y-axis name font size
     y_axis_weight (str, optional): y-axis name bold, italics, etc.
+    y_axis_font (str, optional): y-axis font
     y_axis_scale (str, optional): y-axis scale linear, log, etc.
     y_axis_dims (tuple, optional): y-axis dimensions (start, end)
     y_ticks_rot (int, optional): y-axis ticks rotation
-    yticks (list, optional): y-axis tick values
+    y_ticks_font (str, optional): y_ticks font
+    y_ticks (list, optional): y-axis tick values
     legend_title (str, optional): legend title
     legend_title_size (str, optional): legend title font size
     legend_size (str, optional): legend font size
@@ -1972,19 +2183,19 @@ def cat(typ: str,df: pd.DataFrame,x: str,y: str,errorbar=None,cols=None,cols_ord
                                'genotypes':genotypes})
         cols_ord = list(assign.sort_values(by='positions')['genotypes'])
 
-    p.cat(typ=typ,df=df_cut,x=x,y=y,errorbar=errorbar,cols=cols,cols_ord=cols_ord,cols_exclude=None,
+    p.cat(typ=typ,df=df_cut,x=x,y=y,errorbar=errorbar,cols=cols,cols_ord=cols_ord,cols_exclude=cols_exclude,
           file=file,dir=dir,palette_or_cmap=palette_or_cmap,edgecol=edgecol,lw=lw,
-          figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,
-          x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_ticks_rot=x_ticks_rot,xticks=xticks,
-          y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_scale=y_axis_scale,y_axis_dims=y_axis_dims,y_ticks_rot=y_ticks_rot,yticks=yticks,
+          figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
+          x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,x_ticks=x_ticks,
+          y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_scale=y_axis_scale,y_axis_dims=y_axis_dims,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,y_ticks=y_ticks,
           legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_items=legend_items,show=show, 
           **kwargs)
 
 def stack(df: pd.DataFrame,x='sample',y='fraction',cols='edit',cutoff=0.01,cols_ord=[],x_ord=[],
           file=None,dir=None,cmap='Set2',errcap=4,vertical=True,
-          figsize=(10,6),title='Editing Outcomes',title_size=18,title_weight='bold',
-          x_axis='',x_axis_size=12,x_axis_weight='bold',x_ticks_rot=0,
-          y_axis='',y_axis_size=12,y_axis_weight='bold',y_ticks_rot=0,
+          figsize=(10,6),title='Editing Outcomes',title_size=18,title_weight='bold',title_font='Arial',
+          x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_font='Arial',x_ticks_rot=0,x_ticks_font='Arial',
+          y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_font='Arial',y_ticks_rot=0,y_ticks_font='Arial',
           legend_title='',legend_title_size=12,legend_size=12,
           legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_ncol=1,show=True,space_capitalize=True,**kwargs):
     ''' 
@@ -1995,9 +2206,8 @@ def stack(df: pd.DataFrame,x='sample',y='fraction',cols='edit',cutoff=0.01,cols_
     x (str, optional): x-axis column name
     y (str, optional): y-axis column name
     cols (str, optional): color column name
-    cutoff (float, optional): y-axis values needs be greater than (e.g. 1%)
+    cutoff (float, optional): y-axis values needs be greater than (e.g. 0.01)
     cols_ord (list, optional): color column values order
-    cols_exclude (list, optional): color column values exclude
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     cmap (str, optional): matplotlib color map
@@ -2006,15 +2216,19 @@ def stack(df: pd.DataFrame,x='sample',y='fraction',cols='edit',cutoff=0.01,cols_
     title (str, optional): plot title
     title_size (int, optional): plot title font size
     title_weight (str, optional): plot title bold, italics, etc.
+    title_font (str, optional): plot title font
     x_axis (str, optional): x-axis name
     x_axis_size (int, optional): x-axis name font size
     x_axis_weight (str, optional): x-axis name bold, italics, etc.
+    x_axis_font (str, optional): x-axis font
     x_ticks_rot (int, optional): x-axis ticks rotation
+    x_ticks_font (str, optional): x-ticks font
     y_axis (str, optional): y-axis name
     y_axis_size (int, optional): y-axis name font size
     y_axis_weight (str, optional): y-axis name bold, italics, etc.
+    y_axis_font (str, optional): y-axis font
     y_ticks_rot (int, optional): y-axis ticks rotation
-    yticks (list, optional): y-axis tick values
+    y_ticks_font (str, optional): y-ticks font
     legend_title (str, optional): legend title
     legend_title_size (str, optional): legend title font size
     legend_size (str, optional): legend font size
@@ -2026,14 +2240,14 @@ def stack(df: pd.DataFrame,x='sample',y='fraction',cols='edit',cutoff=0.01,cols_
     
     Dependencies: re, os, pandas, numpy, matplotlib.pyplot & plot
     '''
-    # Omit smaller than cutoff and convert it to other
+    # Omit smaller than cutoff and convert it to <cutoff
     df_cut=df[df[y]>=cutoff]
     df_other=df[df[y]<cutoff]
     for sample in list(df_other['sample'].value_counts().keys()):
         df_temp = df_other[df_other['sample']==sample]
         df_temp['fraction']=sum(df_temp['fraction'])
-        df_temp['edit']='Other'
-        df_cut = pd.concat([df_cut,df_temp.iloc[0].to_frame().T])
+        df_temp['edit']=f'<{cutoff}'
+        df_cut = pd.concat([df_cut,df_temp.iloc[:1]])
 
     # Sort pivot table columns by genotype position
     if cols_ord==[]:
@@ -2050,17 +2264,17 @@ def stack(df: pd.DataFrame,x='sample',y='fraction',cols='edit',cutoff=0.01,cols_
     # Make stacked barplot
     p.stack(df=df_cut,x=x,y=y,cols=cols,cutoff=0,cols_ord=cols_ord,x_ord=x_ord,
             file=file,dir=dir,cmap=cmap,errcap=errcap,vertical=vertical,
-            figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,
-            x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_ticks_rot=x_ticks_rot,
-            y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_ticks_rot=y_ticks_rot,
+            figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
+            x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,
+            y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,
             legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,
             legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_ncol=legend_ncol,show=show,space_capitalize=space_capitalize,**kwargs)
 
 def heat(df: pd.DataFrame, cond: str,x='number',y='after',vals='fraction_avg',vals_dims:tuple=None,
          file=None,dir=None,edgecol='black',lw=1,annot=False,cmap="bone_r",sq=True,cbar=True,
-         title='',title_size=12,title_weight='bold',figsize=(20,7),
-         x_axis='',x_axis_size=12,x_axis_weight='bold',x_ticks_rot=45,
-         y_axis='',y_axis_size=12,y_axis_weight='bold',y_ticks_rot=0,
+         title='',title_size=12,title_weight='bold',title_font='Arial',figsize=(20,7),
+         x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_font='Arial',x_ticks_rot=45,x_ticks_font='Arial',
+         y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_font='Arial',y_ticks_rot=0,y_ticks_font='Arial',
          show=True,space_capitalize=True,**kwargs):
     ''' 
     heat(): creates heatmap
@@ -2080,15 +2294,20 @@ def heat(df: pd.DataFrame, cond: str,x='number',y='after',vals='fraction_avg',va
     title (str, optional): plot title
     title_size (int, optional): plot title font size
     title_weight (str, optional): plot title bold, italics, etc.
+    title_font (str, optional): plot title font
     figsize (tuple, optional): figure size per subplot
     x_axis (str, optional): x-axis name
     x_axis_size (int, optional): x-axis name font size
     x_axis_weight (str, optional): x-axis name bold, italics, etc.
+    x_axis_font (str, optional): x-axis font
     x_ticks_rot (int, optional): x-axis ticks rotation
+    x_ticks_font (str, optional): x-ticks font
     y_axis (str, optional): y-axis name
     y_axis_size (int, optional): y-axis name font size
     y_axis_weight (str, optional): y-axis name bold, italics, etc.
+    y_axis_font (str, optional): y-axis font
     y_ticks_rot (int, optional): y-axis ticks rotation
+    y_ticks_font (str, optional): y-ticks font
     show (bool, optional): show plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     
@@ -2115,22 +2334,22 @@ def heat(df: pd.DataFrame, cond: str,x='number',y='after',vals='fraction_avg',va
     for (ax, key) in zip(axes, list(dc2.keys())):
         print(f'{key}')
         sns.heatmap(dc2[key],annot=annot,cmap=cmap,ax=ax,linecolor=edgecol,linewidths=lw,cbar=cbar,square=sq,vmin=vmin,vmax=vmax, **kwargs)
-        if len(list(dc2.keys()))>1: ax.set_title(key,fontsize=title_size,fontweight=title_weight)  # Add title to subplot
-        else: ax.set_title(title,fontsize=title_size,fontweight=title_weight)
+        if len(list(dc2.keys()))>1: ax.set_title(key,fontsize=title_size,fontweight=title_weight,fontfamily=title_font)  # Add title to subplot
+        else: ax.set_title(title,fontsize=title_size,fontweight=title_weight,fontfamily=title_font)
         if x_axis=='': 
-            if space_capitalize: ax.set_xlabel(p.re_un_cap(x),fontsize=x_axis_size,fontweight=x_axis_weight) # Add x axis label
-            else: ax.set_xlabel(x,fontsize=x_axis_size,fontweight=x_axis_weight) # Add x axis label
-        else: ax.set_xlabel(x_axis,fontsize=x_axis_size,fontweight=x_axis_weight)
+            if space_capitalize: ax.set_xlabel(p.re_un_cap(x),fontsize=x_axis_size,fontweight=x_axis_weight,fontfamily=x_axis_font) # Add x axis label
+            else: ax.set_xlabel(x,fontsize=x_axis_size,fontweight=x_axis_weight,fontfamily=x_axis_font) # Add x axis label
+        else: ax.set_xlabel(x_axis,fontsize=x_axis_size,fontweight=x_axis_weight,fontfamily=x_axis_font)
         if y_axis=='': 
-            if space_capitalize: ax.set_ylabel(p.re_un_cap(y),fontsize=y_axis_size,fontweight=y_axis_weight) # Add y axis label
-            else: ax.set_ylabel(y,fontsize=y_axis_size,fontweight=y_axis_weight) # Add y axis label
-        else: ax.set_ylabel(y_axis,fontsize=y_axis_size,fontweight=y_axis_weight)
+            if space_capitalize: ax.set_ylabel(p.re_un_cap(y),fontsize=y_axis_size,fontweight=y_axis_weight,fontfamily=y_axis_font) # Add y axis label
+            else: ax.set_ylabel(y,fontsize=y_axis_size,fontweight=y_axis_weight,fontfamily=y_axis_font) # Add y axis label
+        else: ax.set_ylabel(y_axis,fontsize=y_axis_size,fontweight=y_axis_weight,fontfamily=y_axis_font)
         ax.set_xticklabels(subscript(dc[key])['label'].to_list()) # Change x ticks to have subscript format
         # Format x ticks
-        if (x_ticks_rot==0)|(x_ticks_rot==90): plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, ha="center",rotation_mode="anchor") 
-        else: plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, ha="right",rotation_mode="anchor") 
+        if (x_ticks_rot==0)|(x_ticks_rot==90): plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, ha="center",rotation_mode="anchor",fontname=x_ticks_font) 
+        else: plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, ha="right",rotation_mode="anchor",fontname=x_ticks_font) 
         # Format y ticks
-        plt.setp(ax.get_yticklabels(), rotation=y_ticks_rot, va='center', ha="right",rotation_mode="anchor")
+        plt.setp(ax.get_yticklabels(), rotation=y_ticks_rot, va='center', ha="right",rotation_mode="anchor",fontname=y_ticks_font)
         ax.set_facecolor('white')  # Set background to transparent
 
     # Save & show fig
@@ -2141,9 +2360,9 @@ def heat(df: pd.DataFrame, cond: str,x='number',y='after',vals='fraction_avg',va
 
 def vol(df: pd.DataFrame,x: str,y: str,size:str=None,size_dims:tuple=None,include_wt=False,
         FC_threshold=2,pval_threshold=0.05,file=None,dir=None,color='lightgray',alpha=0.5,edgecol='black',vertical=True,
-        figsize=(10,6),title='',title_size=18,title_weight='bold',
-        x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_dims=(0,0),x_ticks_rot=0,xticks=[],
-        y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_dims=(0,0),y_ticks_rot=0,yticks=[],
+        figsize=(10,6),title='',title_size=18,title_weight='bold',title_font='Arial',
+        x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_font='Arial',x_axis_dims=(0,0),x_ticks_rot=0,x_ticks_font='Arial',x_ticks=[],
+        y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_font='Arial',y_axis_dims=(0,0),y_ticks_rot=0,y_ticks_font='Arial',y_ticks=[],
         legend_title='',legend_title_size=12,legend_size=9,legend_bbox_to_anchor=(1,1),legend_loc='upper left',
         legend_items=(0,0),legend_ncol=1,display_size=True,display_labels=True,return_df=True,show=True,space_capitalize=True,
         **kwargs):
@@ -2170,18 +2389,23 @@ def vol(df: pd.DataFrame,x: str,y: str,size:str=None,size_dims:tuple=None,includ
     title (str, optional): plot title
     title_size (int, optional): plot title font size
     title_weight (str, optional): plot title bold, italics, etc.
+    title_font (str, optional): plot title font
     x_axis (str, optional): x-axis name
     x_axis_size (int, optional): x-axis name font size
     x_axis_weight (str, optional): x-axis name bold, italics, etc.
+    x_axis_font (str, optional): x-axis font
     x_axis_dims (tuple, optional): x-axis dimensions (start, end)
     x_ticks_rot (int, optional): x-axis ticks rotation
-    xticks (list, optional): x-axis tick values
+    x_axis_font (str, optional): x-axis font
+    x_ticks (list, optional): x-axis tick values
     y_axis (str, optional): y-axis name
     y_axis_size (int, optional): y-axis name font size
     y_axis_weight (str, optional): y-axis name bold, italics, etc.
+    y_axis_font (str, optional): y-axis font
     y_axis_dims (tuple, optional): y-axis dimensions (start, end)
     y_ticks_rot (int, optional): y-axis ticks rotation
-    yticks (list, optional): y-axis tick values
+    y_ticks_font (str, optional): y_ticks font
+    y_ticks (list, optional): y-axis tick values
     legend_title (str, optional): legend title
     legend_title_size (str, optional): legend title font size
     legend_size (str, optional): legend font size
@@ -2286,20 +2510,20 @@ def vol(df: pd.DataFrame,x: str,y: str,size:str=None,size_dims:tuple=None,includ
         
         # Set x axis
         if x_axis=='': x_axis=f'{log2}({x})'
-        plt.xlabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight)
-        if xticks==[]: 
-            if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(rotation=x_ticks_rot,ha='center')
-            else: plt.xticks(rotation=x_ticks_rot,ha='right')
+        plt.xlabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight,fontfamily=x_axis_font)
+        if x_ticks==[]: 
+            if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(rotation=x_ticks_rot,ha='center',fontfamily=x_ticks_font)
+            else: plt.xticks(rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font)
         else: 
-            if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(ticks=xticks,labels=xticks,rotation=x_ticks_rot, ha='center')
-            else: plt.xticks(ticks=xticks,labels=xticks,rotation=x_ticks_rot,ha='right')
+            if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot, ha='center',fontfamily=x_ticks_font)
+            else: plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font)
 
         # Set y axis
         if y_axis=='': y_axis=f'-{log10}({y})'
-        plt.ylabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight)
+        plt.ylabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight,fontfamily=y_axis_font)
 
-        if yticks==[]: plt.yticks(rotation=y_ticks_rot)
-        else: plt.yticks(ticks=yticks,labels=yticks,rotation=y_ticks_rot)
+        if y_ticks==[]: plt.yticks(rotation=y_ticks_rot,fontfamily=y_ticks_font)
+        else: plt.yticks(ticks=y_ticks,labels=y_ticks,rotation=y_ticks_rot,fontfamily=y_ticks_font)
 
     else: # Horizontal orientation
         # with significance boundraries
@@ -2338,26 +2562,26 @@ def vol(df: pd.DataFrame,x: str,y: str,size:str=None,size_dims:tuple=None,includ
         
         # Set x axis
         if y_axis=='': y_axis=f'-{log10}({y})'
-        plt.xlabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight)
-        if yticks==[]: 
-            if (y_ticks_rot==0)|(y_ticks_rot==90): plt.xticks(rotation=y_ticks_rot,ha='center')
-            else: plt.xticks(rotation=y_ticks_rot,ha='right')
+        plt.xlabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight,fontfamily=y_axis_font)
+        if y_ticks==[]: 
+            if (y_ticks_rot==0)|(y_ticks_rot==90): plt.xticks(rotation=y_ticks_rot,ha='center',fontfamily=y_ticks_font)
+            else: plt.xticks(rotation=y_ticks_rot,ha='right',fontfamily=y_ticks_font)
         else: 
-            if (y_ticks_rot==0)|(y_ticks_rot==90): plt.xticks(ticks=yticks,labels=yticks,rotation=y_ticks_rot, ha='center')
-            else: plt.xticks(ticks=yticks,labels=yticks,rotation=y_ticks_rot,ha='right')
+            if (y_ticks_rot==0)|(y_ticks_rot==90): plt.xticks(ticks=y_ticks,labels=y_ticks,rotation=y_ticks_rot, ha='center',fontfamily=y_ticks_font)
+            else: plt.xticks(ticks=y_ticks,labels=y_ticks,rotation=y_ticks_rot,ha='right',fontfamily=y_ticks_font)
 
         # Set y axis
         if x_axis=='': x_axis=f'{log2}({x})'
-        plt.ylabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight)
+        plt.ylabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight,fontfamily=x_axis_font)
 
-        if xticks==[]: plt.yticks(rotation=x_ticks_rot)
-        else: plt.yticks(ticks=xticks,labels=xticks,rotation=x_ticks_rot)
+        if x_ticks==[]: plt.yticks(rotation=x_ticks_rot,fontfamily=x_ticks_font)
+        else: plt.yticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot,fontfamily=x_ticks_font)
 
     # Set title
     if title=='' and file is not None: 
         if space_capitalize: title=p.re_un_cap(".".join(file.split(".")[:-1]))
         else: ".".join(file.split(".")[:-1])
-    plt.title(title, fontsize=title_size, fontweight=title_weight)
+    plt.title(title, fontsize=title_size, fontweight=title_weight, family=title_font)
 
     # Move legend to the right of the graph
     if legend_items==(0,0): ax.legend(title=legend_title,title_fontsize=legend_title_size,fontsize=legend_size,

@@ -59,24 +59,29 @@ def add_common_plot_scat_args(subparser):
     subparser.add_argument("--title", type=str, default="", help="Plot title")
     subparser.add_argument("--title_size", type=int, default=18)
     subparser.add_argument("--title_weight", type=str, default="bold")
+    subparser.add_argument("--title_font", type=str, default="Arial")
 
     # X-axis settings
     subparser.add_argument("--x_axis", type=str, default="", help="X-axis label")
     subparser.add_argument("--x_axis_size", type=int, default=12)
     subparser.add_argument("--x_axis_weight", type=str, default="bold")
+    subparser.add_argument("--x_axis_font", type=str, default="Arial")
     subparser.add_argument("--x_axis_scale", type=str, default="linear")
     subparser.add_argument("--x_axis_dims", nargs=2, type=float, default=(0,0))
     subparser.add_argument("--x_ticks_rot", type=int, default=0)
-    subparser.add_argument("--xticks", nargs="+", help="X-axis ticks")
+    subparser.add_argument("--x_ticks_font", type=str, default="Arial")
+    subparser.add_argument("--x_ticks", nargs="+", help="X-axis ticks")
 
     # Y-axis settings
     subparser.add_argument("--y_axis", type=str, default="", help="Y-axis label")
     subparser.add_argument("--y_axis_size", type=int, default=12)
     subparser.add_argument("--y_axis_weight", type=str, default="bold")
+    subparser.add_argument("--y_axis_font", type=str, default="Arial")
     subparser.add_argument("--y_axis_scale", type=str, default="linear")
     subparser.add_argument("--y_axis_dims", nargs=2, type=float, default=(0,0))
     subparser.add_argument("--y_ticks_rot", type=int, default=0)
-    subparser.add_argument("--yticks", nargs="+", help="Y-axis ticks")
+    subparser.add_argument("--y_ticks_font", type=str, default="Arial")
+    subparser.add_argument("--y_ticks", nargs="+", help="Y-axis ticks")
 
     # Legend settings
     subparser.add_argument("--legend_title", type=str, default="")
@@ -122,24 +127,29 @@ def add_common_plot_cat_args(subparser):
     subparser.add_argument("--title", type=str, default="")
     subparser.add_argument("--title_size", type=int, default=18)
     subparser.add_argument("--title_weight", type=str, default="bold")
+    subparser.add_argument("--title_font", type=str, default="Arial")
 
     # X-axis settings
     subparser.add_argument("--x_axis", type=str, default="")
     subparser.add_argument("--x_axis_size", type=int, default=12)
     subparser.add_argument("--x_axis_weight", type=str, default="bold")
+    subparser.add_argument("--x_axis_font", type=str, default="Arial")
     subparser.add_argument("--x_axis_scale", type=str, default="linear")
     subparser.add_argument("--x_axis_dims", nargs=2, type=float, default=(0, 0))
     subparser.add_argument("--x_ticks_rot", type=int, default=0)
-    subparser.add_argument("--xticks", nargs="+", help="X-axis ticks")
+    subparser.add_argument("--x_ticks_font", type=str, default="Arial")
+    subparser.add_argument("--x_ticks", nargs="+", help="X-axis ticks")
 
     # Y-axis settings
     subparser.add_argument("--y_axis", type=str, default="")
     subparser.add_argument("--y_axis_size", type=int, default=12)
     subparser.add_argument("--y_axis_weight", type=str, default="bold")
+    subparser.add_argument("--y_axis_font", type=str, default="Arial")
     subparser.add_argument("--y_axis_scale", type=str, default="linear")
     subparser.add_argument("--y_axis_dims", nargs=2, type=float, default=(0, 0))
     subparser.add_argument("--y_ticks_rot", type=int, default=0)
-    subparser.add_argument("--yticks", nargs="+", help="Y-axis ticks")
+    subparser.add_argument("--y_ticks_font", type=str, default="Arial")
+    subparser.add_argument("--y_ticks", nargs="+", help="Y-axis ticks")
 
     # Legend settings
     subparser.add_argument("--legend_title", type=str, default="")
@@ -189,24 +199,29 @@ def add_common_plot_dist_args(subparser):
     subparser.add_argument("--title", type=str, default="")
     subparser.add_argument("--title_size", type=int, default=18)
     subparser.add_argument("--title_weight", type=str, default="bold")
+    subparser.add_argument("--title_font", type=str, default="Arial")
 
     # X-axis
     subparser.add_argument("--x_axis", type=str, default="")
     subparser.add_argument("--x_axis_size", type=int, default=12)
     subparser.add_argument("--x_axis_weight", type=str, default="bold")
+    subparser.add_argument("--x_axis_font", type=str, default="Arial")
     subparser.add_argument("--x_axis_scale", type=str, default="linear")
     subparser.add_argument("--x_axis_dims", nargs=2, type=float, default=(0, 0))
     subparser.add_argument("--x_ticks_rot", type=int, default=0)
-    subparser.add_argument("--xticks", nargs="+", help="X-axis tick values")
+    subparser.add_argument("--x_ticks_font", type=str, default="Arial")
+    subparser.add_argument("--x_ticks", nargs="+", help="X-axis tick values")
 
     # Y-axis
     subparser.add_argument("--y_axis", type=str, default="")
     subparser.add_argument("--y_axis_size", type=int, default=12)
     subparser.add_argument("--y_axis_weight", type=str, default="bold")
+    subparser.add_argument("--y_axis_font", type=str, default="Arial")
     subparser.add_argument("--y_axis_scale", type=str, default="linear")
     subparser.add_argument("--y_axis_dims", nargs=2, type=float, default=(0, 0))
     subparser.add_argument("--y_ticks_rot", type=int, default=0)
-    subparser.add_argument("--yticks", nargs="+", help="Y-axis tick values")
+    subparser.add_argument("--y_ticks_font", type=str, default="Arial")
+    subparser.add_argument("--y_ticks", nargs="+", help="Y-axis tick values")
 
     # Legend
     subparser.add_argument("--legend_title", type=str, default="")
@@ -250,19 +265,24 @@ def add_common_plot_heat_args(subparser):
     subparser.add_argument("--title", type=str, default="")
     subparser.add_argument("--title_size", type=int, default=18)
     subparser.add_argument("--title_weight", type=str, default="bold")
+    subparser.add_argument("--title_font", type=str, default="Arial")
     subparser.add_argument("--figsize", nargs=2, type=int, default=(10, 6), help="Figure size (width height)")
 
     # X-axis
     subparser.add_argument("--x_axis", type=str, default="")
     subparser.add_argument("--x_axis_size", type=int, default=12)
     subparser.add_argument("--x_axis_weight", type=str, default="bold")
+    subparser.add_argument("--x_axis_font", type=str, default="Arial")
     subparser.add_argument("--x_ticks_rot", type=int, default=0)
+    subparser.add_argument("--x_ticks_font", type=str, default="Arial")
 
     # Y-axis
     subparser.add_argument("--y_axis", type=str, default="")
     subparser.add_argument("--y_axis_size", type=int, default=12)
     subparser.add_argument("--y_axis_weight", type=str, default="bold")
+    subparser.add_argument("--y_axis_font", type=str, default="Arial")
     subparser.add_argument("--y_ticks_rot", type=int, default=0)
+    subparser.add_argument("--y_ticks_font", type=str, default="Arial")
 
     # Final display
     subparser.add_argument("--show", action="store_true", help="Show the plot")
@@ -296,21 +316,25 @@ def add_common_plot_stack_args(subparser):
     subparser.add_argument("--title", type=str, default="")
     subparser.add_argument("--title_size", type=int, default=18)
     subparser.add_argument("--title_weight", type=str, default="bold")
+    subparser.add_argument("--title_font", type=str, default="Arial")
 
     # X-axis formatting
     subparser.add_argument("--x_axis", type=str, default="")
     subparser.add_argument("--x_axis_size", type=int, default=12)
     subparser.add_argument("--x_axis_weight", type=str, default="bold")
+    subparser.add_argument("--x_axis_font", type=str, default="Arial")
     subparser.add_argument("--x_axis_dims", nargs=2, type=float, default=(0,0))
     subparser.add_argument("--x_ticks_rot", type=int, help="X-axis tick rotation")
+    subparser.add_argument("--x_ticks_font", type=str, default="Arial")
 
     # Y-axis formatting
     subparser.add_argument("--y_axis", type=str, default="")
     subparser.add_argument("--y_axis_size", type=int, default=12)
     subparser.add_argument("--y_axis_weight", type=str, default="bold")
+    subparser.add_argument("--y_axis_font", type=str, default="Arial")
     subparser.add_argument("--y_axis_dims", nargs=2, type=float, default=(0,0))
     subparser.add_argument("--y_ticks_rot", type=int, help="Y-axis tick rotation")
-    subparser.add_argument("--yticks", nargs="+", help="Custom y-axis tick values")
+    subparser.add_argument("--y_ticks_font", type=str, default="Arial")
 
     # Legend options
     subparser.add_argument("--legend_title", type=str, default="")
@@ -358,22 +382,27 @@ def add_common_plot_vol_args(subparser):
     subparser.add_argument("--title", type=str, default="")
     subparser.add_argument("--title_size", type=int, default=18)
     subparser.add_argument("--title_weight", type=str, default="bold")
+    subparser.add_argument("--title_font", type=str, default="Arial")
 
     # X-axis settings
     subparser.add_argument("--x_axis", type=str, default="")
     subparser.add_argument("--x_axis_size", type=int, default=12)
     subparser.add_argument("--x_axis_weight", type=str, default="bold")
+    subparser.add_argument("--x_axis_font", type=str, default="Arial")
     subparser.add_argument("--x_axis_dims", nargs=2, type=float, default=(0, 0))
     subparser.add_argument("--x_ticks_rot", type=int, default=0)
-    subparser.add_argument("--xticks", nargs="+", help="Custom x-axis tick values")
+    subparser.add_argument("--x_ticks_font", type=str, default="Arial")
+    subparser.add_argument("--x_ticks", nargs="+", help="Custom x-axis tick values")
 
     # Y-axis settings
     subparser.add_argument("--y_axis", type=str, default="")
     subparser.add_argument("--y_axis_size", type=int, default=12)
     subparser.add_argument("--y_axis_weight", type=str, default="bold")
+    subparser.add_argument("--y_axis_font", type=str, default="Arial")
     subparser.add_argument("--y_axis_dims", nargs=2, type=float, default=(0, 0))
     subparser.add_argument("--y_ticks_rot", type=int, default=0)
-    subparser.add_argument("--yticks", nargs="+", help="Custom y-axis tick values")
+    subparser.add_argument("--y_ticks_font", type=str, default="Arial")
+    subparser.add_argument("--y_ticks", nargs="+", help="Custom y-axis tick values")
 
     # Legend
     subparser.add_argument("--legend_title", type=str, default="")
