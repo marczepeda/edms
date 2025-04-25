@@ -1185,6 +1185,7 @@ def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.pdf',numeri
                 df_vc_id_other = df_vc_id[df_vc_id['fraction']<cutoff_frac].reset_index(drop=True)
                 if df_vc_id_other.empty==False:
                     df_vc_id_other['count']=sum(df_vc_id_other['count'])
+                    df_vc_id_other['fraction']=sum(df_vc_id_other['fraction'])
                     df_vc_id_other[col]=f'<{cutoff_frac*100}%'
                     df_vc_cutoff = pd.concat([df_vc_cutoff,df_vc_id_other.iloc[:1]]).reset_index(drop=True)
             else: # Do not apply cutoff_fract
@@ -1212,7 +1213,7 @@ def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.pdf',numeri
         
         p.heat(df=df_windows,x=id_col,y='window',vars='motif',vals=numeric,x_axis=id_axis,y_ticks_font='Courier New',
                figsize=heat_figsize,x_ticks_rot=45,title=f"{df.iloc[0]['motif']}: {df.iloc[0]['pattern']}",
-               dir=out_dir,file=f"{df.iloc[0]['motif']}_locations{plot_suf}")
+               dir=out_dir,file=f"{df.iloc[0]['motif']}_windows{plot_suf}")
     
     else: # fraction
         p.stack(df=df_mismatches,x=id_col,y=numeric,cols='mismatches', y_axis='Reads fraction',
@@ -1227,7 +1228,7 @@ def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.pdf',numeri
         
         p.heat(df=df_windows,x=id_col,y='window',vars='motif',vals=numeric,x_axis=id_axis,y_ticks_font='Courier New',
                figsize=heat_figsize,x_ticks_rot=45,title=f"{df.iloc[0]['motif']}: {df.iloc[0]['pattern']}",
-               dir=out_dir,file=f"{df.iloc[0]['motif']}_locations{plot_suf}",vals_dims=(0,1)) 
+               dir=out_dir,file=f"{df.iloc[0]['motif']}_windows{plot_suf}",vals_dims=(0,1)) 
     
     # Return value_counts() dataframes
     return (df_mismatches,df_locations,df_windows)
