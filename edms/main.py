@@ -568,7 +568,7 @@ def main():
     parser_stat_compare.set_defaults(func=st.compare)
 
     '''
-    edms.gen.com:
+    edms.gen.cli:
     - access(): make all files and subdirectories accessible on Harvard FASRC
     - expand_subs(): delete subdirectories and move their files to the parent directory
     - split_paired_reads(): split paired reads into new R1 and R2 subdirectories at the parent directory

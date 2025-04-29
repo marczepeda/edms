@@ -125,7 +125,7 @@ def data(func: str, **kwargs):
     Dependencies: Entrez, tidy
     '''
     # Load NCBI credentials
-    ncbi.get_info()
+    get_info()
 
     # Compute Function
     if func=='efetch':

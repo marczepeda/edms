@@ -249,5 +249,5 @@ def hamming_distance_matrix(df: pd.DataFrame | str, id: str, seqs: str, dir:str=
     # Save & return hamming distance matrix
     df_matrix = pd.DataFrame(matrix,columns=df[id],index=df[seqs])
     if dir is not None and file is not None:
-        io.save(dir=dir,file=file,obj=df_matrix)  
+        io.save(dir=dir,file=file,obj=df_matrix.reset_index(drop=False))  
     return df_matrix

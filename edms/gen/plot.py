@@ -795,8 +795,8 @@ def heat(df: pd.DataFrame | str, x: str=None, y: str=None, vars: str=None, vals:
 
         # Create dictionary of pivot-formatted dataframes
         dc = {'Pivot Table': df}
-        x = df.index.name
-        y = df.columns.name
+        x = df.columns.name
+        y = df.index.name
 
     else: # Tidy-formatted
         

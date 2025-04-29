@@ -7,13 +7,13 @@
     import edms.gen.plot as p
     import edms.gen.stat as st
     import edms.gen.image as im
-    import edms.gen.com as com
+    import edms.gen.cli as cli
     ```
 - bio: molecular biology & tissue culture workflows.
     ```shell
     import edms.bio.transfect as tf
     import edms.bio.ngs as ngs
-    import edms.bio.fastq as f
+    import edms.bio.fastq as fq
     import edms.bio.clone as cl
     import edms.bio.pe as pe
     import edms.bio.pegLIT as pegLIT
@@ -42,10 +42,10 @@
 4. Make environment: write the following in a command line terminal...
     ```shell
     cd ~
-    conda create --name emds_env python=3.11.5
+    conda create --name edms python=3.12.2
     # When conda asks you to proceed, type "y" 
     
-    conda activate edms_env
+    conda activate edms
     mkdir git
     cd git
     ```
@@ -54,16 +54,14 @@
     conda install pip
     conda install conda-forge::biopython
     
-    pip install -U scikit-learn
-    # Also, installs numpy, pandas, matplotlib, seaborn, scipy.
+    pip install -U scikit-learn # Also, installs numpy, pandas, matplotlib, seaborn, scipy.
     
     conda install -c conda-forge statsmodels
     conda install anaconda::requests
     conda install bioconda::viennarna
     conda install conda-forge::python-levenshtein
     conda install conda-forge::adjusttext
-    conda install anaconda::pillow
-    conda install anaconda::git
+    conda install -c conda-forge git
     pip install dna-features-viewer
     ```
 6. Install edms: write the following in a command line terminal...
@@ -83,7 +81,7 @@
     ```shell
     cd ~
     cd git
-    conda activate edms_env
+    conda activate edms
     pip uninstall edms
     # Enter 'Y' when prompted
     
