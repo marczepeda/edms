@@ -964,18 +964,17 @@ def main():
     
     parser_fastq_genotyping.add_argument("--sequence", type=str, help="Formatted sequence: flank5(genotype region)flank3", required=True)
     parser_fastq_genotyping.add_argument("--res", type=int, help="First amino acid number in genotype region",required=True)
-
-    parser_fastq_genotyping.add_argument("--suf", type=str, help="File suffix to match (.fastq or .fastq.gz)", default='.fastq.gz')
+    
+    parser_fastq_genotyping.add_argument("--desired_edits", type=str, nargs='+', help="List of desired edits")
     parser_fastq_genotyping.add_argument("--qall", type=int, help="Minimum Phred quality score for all bases")
     parser_fastq_genotyping.add_argument("--qtrim", type=int, help="Phred quality threshold for end trimming")
     parser_fastq_genotyping.add_argument("--qavg", type=int, help="Minimum average Phred quality score")
     parser_fastq_genotyping.add_argument("--qmask", type=int, help="Phred quality threshold for masking to N")
 
-    parser_fastq_genotyping.add_argument("--save", action="store_true", help="Save read statistics file")
-    parser_fastq_genotyping.add_argument("--masks", action="store_true", help="Include masked sequence and translation")
-    parser_fastq_genotyping.add_argument("--keepX", action="store_true", help="Keep unknown translation (X) in output")
-
-
+    parser_fastq_genotyping.add_argument("--no_saves", action="store_false", help="Don't save read statistics and genotypes files",dest="save",default=True)
+    parser_fastq_genotyping.add_argument("--masks", action="store_true", help="Include masked sequence and translation",default=False)
+    parser_fastq_genotyping.add_argument("--keepX", action="store_true", help="Keep unknown translation (X) in output", default=False)
+    
     parser_fastq_revcom.set_defaults(func=f.revcom_fastqs)
     parser_fastq_unzip.set_defaults(func=f.unzip_fastqs)
     parser_fastq_comb.set_defaults(func=f.comb_fastqs)
