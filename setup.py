@@ -39,6 +39,7 @@ setup(
                       'ViennaRNA',
                       'adjustText',
                       'pillow',
-                      'dna-features-viewer'],
+                      'dna-features-viewer',
+                      'openpyxl'],
     python_requires='>=3.11'
 )

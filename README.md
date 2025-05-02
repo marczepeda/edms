@@ -62,6 +62,7 @@
     conda install conda-forge::python-levenshtein
     conda install conda-forge::adjusttext
     conda install -c conda-forge git
+    conda install conda-forge::openpyxl
     pip install dna-features-viewer
     ```
 6. Install edms: write the following in a command line terminal...

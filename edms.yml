@@ -27,6 +27,7 @@ dependencies:
   - cycler=0.12.1=pyhd8ed1ab_1
   - debugpy=1.8.14=py312hd8f9ff3_0
   - decorator=5.2.1=pyhd8ed1ab_0
+  - et_xmlfile=2.0.0=pyhd8ed1ab_1
   - exceptiongroup=1.2.2=pyhd8ed1ab_1
   - executing=2.2.0=pyhd8ed1ab_0
   - expat=2.7.0=h286801f_0
@@ -91,6 +92,7 @@ dependencies:
   - numpy-base=2.0.1=py312he047099_1
   - openblas=0.3.29=openmp_hea878ba_0
   - openjpeg=2.5.3=h8a3d83b_0
+  - openpyxl=3.1.5=py312hf6e0af7_1
   - openssl=3.5.0=h81ee809_0
   - packaging=25.0=pyh29332c3_1
   - pandas=2.2.3=py312hcb1e3ce_3

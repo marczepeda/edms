@@ -19,7 +19,7 @@ Usage:
     - plot_motif(): generate plots highlighting motif mismatches, locations, and sequences
 - [Region/read alignments: spacer,..., & ngRNA-epegRNA]
     - plot_alignments(): generate line plots from fastq alignments dictionary
-    - count_region(): WIP
+    - count_region(): align read region from fastq directory to annotated library with mismatches; plot and return fastq alignments dictionary
     - count_alignments(): align reads from fastq directory to annotated library with mismatches; plot and return fastq alignments dictionary
 
 [Quantify edit outcomes]
@@ -480,6 +480,11 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_
     **plot_kwargs (optional): plot key word arguments
 
     Dependencies: Bio.SeqIO, gzip, os, pandas, Bio.Seq.Seq, Bio.PairwiseAligner, & plot_alignments()
+
+    #### UPDATE: KEEP TRACK OF READ indices for future comparison #### ALSO DO FOR COUNT_ALIGNMENTS ####
+    #### MAKE MORE MEMORY EFFICIENT AND SAVE COMPUTE ####
+    #### ADD SAVE count_alignment_stats below ####
+    #### Develop reporting standard ####
     '''
     # Intialize the aligner
     aligner = PairwiseAligner()
@@ -645,7 +650,6 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_
     
     # Save and return
     io.save(dir=out_dir,file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_count_region_stats.csv',obj=count_region_stats)
-    io.save(dir=out_dir,file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_count_region.csv',obj=t.reorder_cols(df=t.join(dc=fastqs,col='fastq_file'),cols=['fastq_file']))
     return fastqs
 
 def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_dir: str, 
@@ -785,7 +789,6 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fa
         plot_alignments(fastq_alignments={fastq_name:df_fastq}, align_col=align_col, id_col=id_col,
                         out_dir=out_dir, plot_suf=plot_suf, show=show, **plot_kwargs)
     
-    io.save(dir=out_dir,file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_count_alignments.csv',obj=t.reorder_cols(df=t.join(dc=fastqs,col='fastq_file'),cols=['fastq_file']))
     return fastqs
 
 # Quantify edit outcomes
