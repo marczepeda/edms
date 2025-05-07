@@ -965,11 +965,11 @@ def main():
     parser_fastq_genotyping.add_argument("--sequence", type=str, help="Formatted sequence: flank5(genotype region)flank3", required=True)
     parser_fastq_genotyping.add_argument("--res", type=int, help="First amino acid number in genotype region",required=True)
     
-    parser_fastq_genotyping.add_argument("--desired_edits", type=str, nargs='+', help="List of desired edits")
-    parser_fastq_genotyping.add_argument("--qall", type=int, help="Minimum Phred quality score for all bases")
-    parser_fastq_genotyping.add_argument("--qtrim", type=int, help="Phred quality threshold for end trimming")
-    parser_fastq_genotyping.add_argument("--qavg", type=int, help="Minimum average Phred quality score")
-    parser_fastq_genotyping.add_argument("--qmask", type=int, help="Phred quality threshold for masking to N")
+    parser_fastq_genotyping.add_argument("--desired_edits", type=str, nargs='+', help="List of desired edits", default=argparse.SUPPRESS)
+    parser_fastq_genotyping.add_argument("--qall", type=int, help="Minimum Phred quality score for all bases", default=argparse.SUPPRESS)
+    parser_fastq_genotyping.add_argument("--qtrim", type=int, help="Phred quality threshold for end trimming", default=argparse.SUPPRESS)
+    parser_fastq_genotyping.add_argument("--qavg", type=int, help="Minimum average Phred quality score", default=argparse.SUPPRESS)
+    parser_fastq_genotyping.add_argument("--qmask", type=int, help="Phred quality threshold for masking to N", default=argparse.SUPPRESS)
 
     parser_fastq_genotyping.add_argument("--no_saves", action="store_false", help="Don't save read statistics and genotypes files",dest="save",default=True)
     parser_fastq_genotyping.add_argument("--masks", action="store_true", help="Include masked sequence and translation",default=False)

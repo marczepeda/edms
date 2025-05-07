@@ -40,6 +40,7 @@ setup(
                       'adjustText',
                       'pillow',
                       'dna-features-viewer',
-                      'openpyxl'],
+                      'openpyxl',
+                      'psutil'],
     python_requires='>=3.11'
 )
