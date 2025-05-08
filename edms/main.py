@@ -941,7 +941,6 @@ def main():
     - unzip_fastqs(): Unzip gzipped fastqs and write to a new directory
     - comb_fastqs(): Combines one or more (un)compressed fastqs files into a single (un)compressed fastq file
     - genotyping(): quantify edit outcomes workflow
-####- library_quant(): epeg/ngRNA abundances workflow
     '''
     parser_fastq = subparsers.add_parser("fastq", help="FASTQ files")
     subparsers_fastq = parser_fastq.add_subparsers()

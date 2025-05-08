@@ -23,8 +23,10 @@ Usage:
 - excel_csvs(): exports excel file to .csv files in specified directory
 - df_to_dc_txt(): returns pandas DataFrame as a printed text that resembles a Python dictionary
 - dc_txt_to_df(): returns a pandas DataFrame from text that resembles a Python dictionary
-- echo(): write message to slurm output file using echo
+
+[Directory Methods]
 - print_relative_paths(): prints relative paths for all files in a directory including subfolders
+- sorted_file_names: returns sorted file names in a directory with the specified suffix
 '''
 
 # Import packages
@@ -266,21 +268,6 @@ def dc_txt_to_df(dc_txt: str, transpose=True):
     if transpose==True: return pd.DataFrame(ast.literal_eval(dc_txt)).T
     else: return pd.DataFrame(ast.literal_eval(dc_txt))
 
-def echo(message: str):
-    """
-    echo(): write message to slurm output file using echo
-
-    Parameters:
-    message (str): text that will be written to slurm output file.
-
-    Dependencies: subprocess
-    """
-    try:
-        # Use subprocess to run `echo` and append the message to stdout
-        subprocess.run(['echo', message], check=True)
-    except Exception as e:
-        print(f"Failed to write message: {e}")
-
 # Directory Methods
 def print_relative_paths(root_dir: str):
     ''' 
@@ -296,3 +283,14 @@ def print_relative_paths(root_dir: str):
             # Get the relative path of the file
             relative_path = os.path.relpath(os.path.join(dirpath, filename), root_dir)
             print(relative_path)
+
+def sorted_file_names(dir: str, suf: str='.csv'):
+    '''
+    sorted_file_names: returns sorted file names in a directory with the specified suffix
+
+    dir (str): directory path or relative path
+    suf (str): suffix to parse file names
+
+    Dependencies: os
+    '''
+    return sorted([file for file in os.listdir(dir) if file[-len(suf):]==suf])

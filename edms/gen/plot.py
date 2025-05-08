@@ -42,17 +42,30 @@ from . import io
 from . import tidy as t
 
 # Supporting methods
-def re_un_cap(input_string: str):
+def re_un_cap(input: str):
     ''' 
     re_un_cap(): replace underscores with spaces and capitalizes each word for a given string
         
     Parameters:
-    input_string (str): input string
+    input (str): input string
     
     Dependencies:
     '''
-    output_string = input_string.replace('_', ' ').title()
-    return output_string
+    # Replace underscores with spaces
+    input = input.replace('_', ' ')
+    
+    # Capitalize first letter of each word
+    result = ''
+    capitalize_next = True  # first letter too
+
+    for char in input:
+        if capitalize_next and char.isalpha():
+            result += char.upper()
+            capitalize_next = False
+        else:
+            result += char
+            capitalize_next = (char == ' ')
+    return result
 
 def round_up_pow_10(number):
     ''' 

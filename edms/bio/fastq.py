@@ -19,9 +19,11 @@ Usage:
     - plot_motif(): generate plots highlighting motif mismatches, locations, and sequences
     - motif_search(): analogous to genotyping workflow... WIP
 - [Region/read alignments: spacer,..., & ngRNA-epegRNA]
-    - plot_alignments(): generate line plots from fastq alignments dictionary
-    - count_region(): align read region from fastq directory to annotated library with mismatches; plot and return fastq alignments dictionary
+    - plot_alignments(): generate line & distribution plots from fastq alignments dictionary
+    - count_region(): align read region from fastq directory to the annotated library with mismatches; plot and return fastq alignments dictionary
     - count_alignments(): align reads from fastq directory to annotated library with mismatches; plot and return fastq alignments dictionary
+    - plot_paired(): generate stacked bar plots from paired_regions() dataframe
+    - paired_regions(): quantify, plot, & return (un)paired regions that aligned to theannotated library
 
 [Quantify edit outcomes]
 - trim_filter(): trim and filter fastq sequence based on quality scores
@@ -47,12 +49,6 @@ Usage:
 - vol(): creates volcano plot
 '''
 
-# To Do's
-### paired_regions(): compare READ indices
-### motif_search(): analogous to genotyping workflow... WIP
-### main.py: count_regions(), count_alignments(), & motif_search()
-### stable versions of github repository
-
 # Import packages
 from Bio.Seq import Seq
 from Bio import SeqIO
@@ -70,6 +66,7 @@ from collections import Counter
 from pathlib import Path
 from scipy.stats import ttest_ind
 import Levenshtein
+from typing import Literal
 
 from ..gen import io
 from ..gen import tidy as t
@@ -220,32 +217,39 @@ def comb_fastqs(in_dir: str, out_dir: str, out_file: str):
 
 # Quantify epeg/ngRNA abundance
 ### Motif search: mU6,...
-def count_motif(fastq_dir: str, pattern: str, motif:str="motif", 
+def count_motif(fastq_dir: str, pattern: str, out_dir: str, motif:str="motif", 
                 max_distance:int=0, max_reads:int=0, meta: pd.DataFrame | str=None,
-                out_dir:str=None, out_file:str=None, return_df:bool=True):
+                return_df:bool=False):
     ''' 
     count_motif(): returns a dataframe with the sequence motif location with mismatches per read for every fastq file in a directory
 
     Parameters:
     fastq_dir (str): path to fastq directory
     pattern (str): search for this sequence motif
+    out_dir (str): path to save directory
     motif (str, optional): motif name (Default: 'motif')
     max_distance (int, optional): max Levenstein distance for seq in fastq read (Default: 0)
     meta (DataFrame | str, optional): meta dataframe (or file path) must have 'fastq_file' column (Default: None)
-    out_dir (str, optional): path to save directory (Default: None)
-    out_file (str, optional): save file name (Default: None)
-    return_df (bool, optional): return dataframe (Default: True)
+    return_df (bool, optional): return dataframe (Default: False)
 
-    Dependencies: pandas,gzip,os,Bio
+    Dependencies: pandas, gzip, os, Bio, fuzzy_substring_search() & memory_timer()
     '''
+    # Initialize timer; memory & stats reporting
+    memory_timer(reset=True)
+    memories = []
+    stats = []
+
     # Create a dataframe to store motif abundance
     df = pd.DataFrame(columns=['fastq_file','read','motif','pattern','window','start_i','end_i','distance'])
     for fastq_file in os.listdir(fastq_dir): # Find all .fastq.gz & .fastq files in the fastq directory
         
         print(f"Processing {fastq_file}...") # Keep track of sequence motifs & reads
+        has_motif = 0
+        missing_motif = 0
         reads = pd.DataFrame() 
 
         if fastq_file.endswith(".fastq.gz"): # Compressed fastq
+            fastq_name = fastq_file[:-len(".fastq.gz")] # Get fastq name
             with gzip.open(os.path.join(fastq_dir,fastq_file), 'rt') as handle:
                 for r,record in enumerate(SeqIO.parse(handle, "fastq")): # Parse reads
                     
@@ -254,18 +258,23 @@ def count_motif(fastq_dir: str, pattern: str, motif:str="motif",
                     
                     # Retain the substring with the smallest Levenshtein distance to 'pattern'. 
                     if len(read)==0: # No substring
+                        missing_motif += 1
                         read.loc[0] = [pattern, "N"*len(pattern), -1, -1, -1]
                     else: # Found substring(s)
-                        read = read[read['distance']==min(read['distance'])]
-                        read = read.iloc[:1]
-                    read['read'] = [r+1]
+                        has_motif += 1
+                        read = read[read['distance']==min(read['distance'])] # Smallest Levenshtein distance
+                        read = read.iloc[:1] # Isolate first instance 
+                    read['read'] = [r+1] # Add read index
                     reads = pd.concat([reads,read]).reset_index(drop=True)
 
                     # Processing status and down sample to reduce computation
-                    if len(reads)%10000==0: print(f"Processed {len(reads)} reads")
-                    if (len(reads)+1>max_reads) & (max_reads!=0): break
+                    if len(reads)%10000==0: 
+                        print(f"Processed {len(reads)} reads")
+                    if (len(reads)+1>max_reads) & (max_reads!=0): 
+                        break
                  
         elif fastq_file.endswith(".fastq"): # Uncompressed fastq
+            fastq_name = fastq_file[:-len(".fastq")] # Get fastq name
             with open(os.path.join(fastq_dir,fastq_file), 'r') as handle:
                 for r,record in enumerate(SeqIO.parse(handle, "fastq")): # Parse reads 
 
@@ -274,26 +283,35 @@ def count_motif(fastq_dir: str, pattern: str, motif:str="motif",
                     
                     # Retain the substring with the smallest Levenshtein distance to 'pattern'. 
                     if len(read)==0: # No substring
+                        missing_motif += 1
                         read.loc[0] = [pattern, "N"*len(pattern), -1, -1, -1]
                     else: # Found substring(s)
-                        read = read[read['distance']==min(read['distance'])] # smallest Levenshtein distance
-                        if len(read)>1: read = read.iloc[:1] # Isolate first instance 
+                        has_motif += 1
+                        read = read[read['distance']==min(read['distance'])] # Smallest Levenshtein distance
+                        read = read.iloc[:1] # Isolate first instance 
                     read['read'] = [r+1] # Add read index
                     reads = pd.concat([reads,read]).reset_index(drop=True)
 
                     # Processing status and down sample to reduce computation
-                    if len(reads)%10000==0: print(f"Processed {len(reads)} reads")
-                    if (len(reads)+1>max_reads) & (max_reads!=0): break
+                    if len(reads)%10000==0: 
+                        print(f"Processed {len(reads)} reads")
+                    if (len(reads)+1>max_reads) & (max_reads!=0): 
+                        break
         
         else: # Not a fastq file
             print("Not a fastq file")
             continue         
-
-        print(f'Completed {len(reads)} reads') # Append metadata
+        
+        # Update memories & stats: # of reads with(out) the region
+        print(f'{fastq_name}:\t{len(reads)} reads\t=>\t{has_motif} has motif;\t{missing_motif} missing motif')
+        stats.append((fastq_name,len(reads),has_motif,missing_motif))
+        memories.append(memory_timer(task=f"{fastq_file} (motif)"))
+        
+        # Append metadata
         reads['fastq_file'] = [fastq_file]*len(reads)
         reads['motif'] = [motif]*len(reads)
         df = pd.concat([df,reads]).reset_index(drop=True) # save to final dataframe
-    
+
     # Improve dataframe column formatting 
     df = df.astype({'start_i': int,'end_i': int,'read': int,'distance':int})
     df['mismatches'] = [f">{max_distance}" if d==-1 else int(d) for d in df['distance']]
@@ -308,9 +326,15 @@ def count_motif(fastq_dir: str, pattern: str, motif:str="motif",
         else: # Merge on 'fastq_file' column
             df = pd.merge(left=meta,right=df,on='fastq_file')
 
-    if out_dir is not None and out_file is not None: # Save dataframe (optional)
-        io.save(dir=out_dir,file=out_file,obj=df)
-
+    # Save & return
+    memories.append(memory_timer(task='count_motif()'))
+    io.save(dir=os.path.join(out_dir,f'.count_{motif}'),
+            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_stats.csv',
+            obj=pd.DataFrame(stats, columns=['file','reads','reads_w_motif','reads_wo_motif']))
+    io.save(dir=os.path.join(out_dir,f'.count_{motif}'),
+            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
+            obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+    io.save(dir=out_dir,file=f'{motif}.csv',obj=df)
     if return_df: return df # Return dataframe (optional)
 
 def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.pdf',numeric: str='count',
@@ -331,7 +355,7 @@ def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.pdf',numeri
     cutoff_frac (float, optional): y-axis values needs be greater than (e.g. 0.01) fraction
     return_df (bool, optional): return dataframe (Default: False)
 
-    Dependencies: count_motifs(),plot
+    Dependencies: count_motifs(), plot
     '''
     # Get dataframe from file path if needed
     if type(df)==str:
@@ -428,26 +452,14 @@ def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.pdf',numeri
     # Return value_counts() dataframes (optional)
     if return_df: return (df_mismatches,df_locations,df_windows)
 
-def motif_search():
-    '''
-    motif_search(): analogous to genotyping workflow... WIP
-    - specify: several motifs, sequences, and distance_maxs...
-    - track memory
-    work on this in the future
-    '''
-
-    # Memory reporting
-    memories = []
-    memory_timer(reset=True)
-
 ### Region/read alignments: spacer,..., & ngRNA-epegRNA
-def plot_alignments(fastq_alignments: dict, align_col: str, id_col: str,
+def plot_alignments(fastq_alignments: dict | str, align_col: str, id_col: str,
                     out_dir: str, plot_suf:str='.pdf', show:bool=False, **plot_kwargs):
     ''' 
-    plot_alignments(): generate line plots from fastq alignments dictionary
+    plot_alignments(): generate line & distribution plots from fastq alignments dictionary
     
     Parameters:
-    fastq_alignments (dict): fastq alignments dictionary from count_region() or count_alignments()
+    fastq_alignments (dict | str): fastq alignments dictionary from count_region() or count_alignments()
     align_col (str): align column name in annotated library reference file
     id_col (str): id column name in annotated library reference file
     fastq_dir (str): directory with fastq files
@@ -458,7 +470,11 @@ def plot_alignments(fastq_alignments: dict, align_col: str, id_col: str,
 
     Dependencies: pandas & plot
     '''
-    for fastq_name,df_fastq in fastq_alignments.items():
+    # Get dictionary from directory path if needed
+    if type(fastq_alignments)==str: 
+        fastq_alignments = io.get_dir(fastq_alignments)
+    
+    for fastq_name,df_fastq in fastq_alignments.items(): # Iterate through dictionary
         
         # Plot mismatch position per alignment
         print('Plot mismatch position per alignment')
@@ -493,7 +509,7 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_
                  align_max:int=0, plot_suf:str='.pdf', show:bool=False, return_dc:bool=False,
                  **plot_kwargs):
     ''' 
-    count_region(): align read region from fastq directory to annotated library with mismatches; plot and return fastq alignments dictionary
+    count_region(): align read region from fastq directory to the annotated library with mismatches; plot and return fastq alignments dictionary
 
     Parameters:
     df_ref (dataframe | str): annotated reference library dataframe (or file path)
@@ -512,7 +528,7 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_
     return_dc (bool, optional): return fastqs dictionary (Default: False)
     **plot_kwargs (optional): plot key word arguments
 
-    Dependencies: Bio.SeqIO, gzip, os, pandas, Bio.Seq.Seq, Bio.PairwiseAligner, & plot_alignments()
+    Dependencies: Bio.SeqIO, gzip, os, pandas, Bio.Seq.Seq, Bio.PairwiseAligner, plot_alignments(), & memory_timer()
     '''
     # Initialize timer
     memory_timer(reset=True)
@@ -641,7 +657,7 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_
             continue
         
         # Update memories & stats: # of reads with(out) the region
-        print(f'{fastq_name}:\t{len(seqs)} reads\t=>\t{regions} reads;\tmissing {missing5} motif5;\tmissing {missing3} motif3;\t {overlap53} motif overlaps')
+        print(f'{fastq_name}:\t{len(seqs)} reads\t=>\t{regions} reads;\t{missing5} missing motif5;\t{missing3} missing motif3;\t{overlap53} motif overlaps')
         stats.append((fastq_name,len(seqs),regions,missing5,missing3,overlap53))
         memories.append(memory_timer(task=f"{fastq_file} (region)"))
 
@@ -763,7 +779,7 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fa
     return_dc (bool, optional): return fastqs dictionary (Default: False)
     **plot_kwargs (optional): plot key word arguments
 
-    Dependencies: Bio.SeqIO, gzip, os, pandas, Bio.Seq.Seq, Bio.PairwiseAligner, & plot_alignments()
+    Dependencies: Bio.SeqIO, gzip, os, pandas, Bio.Seq.Seq, Bio.PairwiseAligner, plot_alignments(), & memory_timer()
     '''
     # Initialize timer
     memory_timer(reset=True)
@@ -912,6 +928,175 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fa
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
     if return_dc: return fastqs
+
+def plot_paired(df: pd.DataFrame | str, id_col: str, vals: Literal['count','fraction'], 
+                title: str, out_dir: str, plot_suf: str='.pdf', show: bool=False, 
+                **plot_kwargs):
+    ''' 
+    plot_paired(): generate stacked bar plots from paired_regions() dataframe
+    
+    Parameters:
+    df (dataframe | str): dataframe from paired_regions() or file path
+    id_col (str): id column name in the paired region file
+    read_col (str, optional): aligned_reads column name in the paired region file
+    vals (str, Literal): 'count' or 'fraction' columns
+    title (str): plot title and file name
+    out_dir (str): directory for output files
+    plot_suf (str, optional): plot type suffix with '.' (Default: '.pdf')
+    show (bool, optional): show plots (Default: False)
+    **plot_kwargs (optional): plot key word arguments
+
+    Dependencies: pandas & plot
+    '''
+    # Get dataframe from file path if needed
+    if type(df)==str: 
+        df = io.get(df)
+
+    # Create tidy dataframe
+    df_plot = pd.melt(frame=df,id_vars=id_col,
+                      value_vars=[f'paired_{vals}',f'region1_only_{vals}',f'region2_only_{vals}'],
+                      value_name=vals,var_name='aligned_reads')
+    df_plot['aligned_reads'] = df_plot['aligned_reads'].str.replace('_count', '', regex=False)
+    
+    # Generate stacked barplot
+    p.stack(df=df_plot,x=id_col,y=vals,cols='aligned_reads',
+            vertical=False,title=title,figsize=(5,10),
+            dir=out_dir,file=f'{title}{plot_suf}',
+            show=show,**plot_kwargs)
+
+def paired_regions(region1_dir: str, region2_dir: str, out_dir: str, 
+                   id_col: str, read_col: str='aligned_reads', 
+                   plot_suf: str='.pdf', show: bool=False, return_df: bool=False,
+                   **plot_kwargs):
+    '''
+    paired_regions(): quantify, plot, & return (un)paired regions that aligned to the annotated library
+
+    Parameters:
+    region1_dir (str): directory with region 1 files
+    region2_dir (str): directory with region 2 files
+    out_dir (str): directory for output files
+    id_col (str): id column name in the region files
+    read_col (str, optional): aligned_reads column name in the region files (Default: 'aligned_reads')
+    plot_suf (str, optional): plot type suffix with '.' (Default: '.pdf')
+    show (bool, optional): show plots (Default: False)
+    return_df (bool, optional): return (un)paired regions dataframe (Default: False)
+    **plot_kwargs (optional): plot key word arguments
+
+    Dependencies: Bio.SeqIO, gzip, os, pandas, Bio.Seq.Seq, Bio.PairwiseAligner, & plot_alignments()
+    '''
+    # Initialize timer; memory reporting
+    memory_timer(reset=True)
+    memories = []
+
+    # Get region 1 and 2 file names
+    region1_file_names = io.sorted_file_names(dir=region1_dir)
+    region2_file_names = io.sorted_file_names(dir=region2_dir)
+
+    # Check that files are correctly paired...
+    if len(region1_file_names)!=len(region2_file_names): # Equal # of files
+        raise Exception(f'Unequal # of files in region directories:\nregion1_dir: {region1_dir}\nregion2_dir: {region2_dir}')
+    
+    # ...and obtain mismatch indices (if applicable)
+    file_name_mismatch_ls = [] # Allowed mismatch R"1" & R"2"
+    for region1_file_name,region2_file_name in zip(region1_file_names,region2_file_names):
+        if len(region1_file_name)!=len(region2_file_name):
+            raise ValueError(f"Mispaired files in region directories:\nregion1_dir: {region1_file_name}\nregion2_dir: {region2_file_name}\nFile names are different lengths")
+        
+        file_name_mismatch = [i for i,(a,b) in enumerate(zip(region1_file_name, region2_file_name)) if a!=b]
+        if len(file_name_mismatch)>1:
+            raise Exception(f'Mispaired files in region directories:\nregion1_dir: {region1_file_name}\nregion2_dir: {region2_file_name}\nFile names contain more than 1 mismatch')
+        elif len(file_name_mismatch)==1:
+            file_name_mismatch_ls.extend(file_name_mismatch)
+        else:
+            file_name_mismatch_ls.append(len(region1_file_name))
+
+    # Parse paired regions
+    paired_regions_ls = [] # list of tuples
+    paired_regions_agg_ls = []
+    for i,(region1_file_name,region2_file_name) in enumerate(zip(region1_file_names, region2_file_names)):
+        
+        # Get regions dataframe
+        region1_file_df = io.get(os.path.join(region1_dir,region1_file_name),literal_eval=True)[[id_col,read_col]]
+        region2_file_df = io.get(os.path.join(region2_dir,region2_file_name),literal_eval=True)[[id_col,read_col]]
+        region_file_df = pd.merge(left=region1_file_df,right=region2_file_df,on=id_col,suffixes=("_region1","_region2"))
+        del region1_file_df # save memory
+        del region2_file_df
+        
+        # Quantify (un)paired reads
+        paired_ls = [] # Group
+        region1_ls = []
+        region2_ls = []
+        aligned_set = set() # Total
+        
+        for region1_reads_ls,region2_reads_ls in t.zip_cols(df=region_file_df,cols=[f'{read_col}_region1',f'{read_col}_region2']):
+            region1_reads_set = set(region1_reads_ls) # list to set
+            region2_reads_set = set(region2_reads_ls)
+
+            paired_ls.append(len(region1_reads_set & region2_reads_set)) # Group
+            region1_ls.append(len(region1_reads_set - region2_reads_set))
+            region2_ls.append(len(region2_reads_set - region1_reads_set))
+
+            aligned_set.update(region1_reads_set) # Total
+            aligned_set.update(region2_reads_set)
+        
+        aligned_num = len(aligned_set) # Total
+        del aligned_set # Save memory
+
+        region_file_df['paired_count']=paired_ls # Group (count)
+        region_file_df['region1_only_count']=region1_ls
+        region_file_df['region2_only_count']=region2_ls
+        
+        region_file_df['paired_fraction']=[paired_num/aligned_num for paired_num in paired_ls] # Group (fraction)
+        region_file_df['region1_only_fraction']=[region1_num/aligned_num for region1_num in region1_ls]
+        region_file_df['region2_only_fraction']=[region2_num/aligned_num for region2_num in region2_ls]
+
+        # Memory reporting, save, & plot
+        region_file_name = region1_file_name[:file_name_mismatch_ls[i]] # before mismatch
+        memories.append(memory_timer(task=region_file_name))
+        io.save(dir=os.path.join(out_dir,region_file_name),
+                file='paired_regions.csv',
+                obj=region_file_df)
+        plot_paired(df=region_file_df, id_col=id_col, vals='count', title=region_file_name, 
+                    out_dir=out_dir, plot_suf=plot_suf, show=show, **plot_kwargs)
+        
+        # Append to list of tuples
+        paired_regions_ls.append((region_file_name,
+                                  region_file_df['paired_count'],
+                                  region_file_df['region1_only_count'],
+                                  region_file_df['region2_only_count'],
+                                  region_file_df['paired_fraction'],
+                                  region_file_df['region1_only_fraction'],
+                                  region_file_df['region2_only_fraction']))
+        paired_regions_agg_ls.append((region_file_name,
+                                      sum(region_file_df['paired_count']),
+                                      sum(region_file_df['region1_only_count']),
+                                      sum(region_file_df['region2_only_count']),
+                                      sum(region_file_df['paired_fraction']),
+                                      sum(region_file_df['region1_only_fraction']),
+                                      sum(region_file_df['region2_only_fraction'])))
+
+    # Create final dataframes & plot
+    paired_regions_agg_df = pd.DataFrame(paired_regions_agg_ls,
+                                         columns=['region_file','paired_count','region1_only_count','region2_only_count',
+                                                  'paired_fraction','region1_only_fraction','region2_only_fraction'])
+    paired_regions_df = pd.DataFrame(paired_regions_ls,
+                                     columns=['region_file','paired_count','region1_only_count','region2_only_count',
+                                              'paired_fraction','region1_only_fraction','region2_only_fraction'])
+    plot_paired(df=paired_regions_agg_df, id_col='region_file', vals='fraction', title='Aggregated PE Libraries', 
+                out_dir=out_dir, plot_suf=plot_suf, show=show, **plot_kwargs)
+    
+    # Save & return
+    memories.append(memory_timer(task='paired_regions()'))
+    io.save(dir=os.path.join(out_dir,'.paired_regions'),
+            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
+            obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+    io.save(dir=out_dir,
+            file='paired_regions_agg.csv',
+            obj=paired_regions_agg_df)
+    io.save(dir=out_dir,
+            file='paired_regions.csv',
+            obj=paired_regions_df)
+    if return_df: return paired_regions_agg_df
 
 # Quantify edit outcomes
 def trim_filter(record,qall:int,qavg:int,qtrim:int,qmask:int,alls:int,avgs:int,trims:int,masks:int):

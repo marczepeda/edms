@@ -63,7 +63,7 @@
     cd git
     conda activate edms
     pip uninstall edms # Enter 'Y' when prompted
-    rm -r edms # Enter 'Y' three times to completely remove the folder
+    rm -rf edms
     ```
 2. Clone edms from github and install edms:
     ```shell
