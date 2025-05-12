@@ -338,7 +338,7 @@ def count_motif(fastq_dir: str, pattern: str, out_dir: str, motif:str="motif",
     if return_df: return df # Return dataframe (optional)
 
 def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.pdf',numeric: str='count',
-               id_col: str='fastq_file', id_axis: str='fastq', stack_figsize: tuple=(7,3), heat_figsize: tuple=(7,7),
+               id_col: str='fastq_file', id_axis: str='fastq', stack_figsize: tuple=(7,3), heat_figsize: tuple=None,
                cutoff_frac:float=0.01, return_df:bool=False):
     '''
     plot_motif(): generate plots highlighting motif mismatches, locations, and sequences
@@ -351,7 +351,7 @@ def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.pdf',numeri
     id_col (str, optional): id column name (Default: 'fastq_file')
     id_axis (str, optional): replace id column name on plots (Default: 'fastq')
     stack_figsize (tuple, optional): stacked bar plot figure size (Default: (7,3))
-    heat_figsize (tuple, optional): heatmap figure size (Default: (7,7))
+    heat_figsize (tuple, optional): heatmap figure size (Default: None)
     cutoff_frac (float, optional): y-axis values needs be greater than (e.g. 0.01) fraction
     return_df (bool, optional): return dataframe (Default: False)
 
@@ -418,6 +418,10 @@ def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.pdf',numeri
     df_locations = cut(df_vc=df_locations,col='location')
     df_windows = cut(df_vc=df_windows,col='window')
 
+    # Adjust heat_figsize if not specified
+    if heat_figsize is None:
+        heat_figsize = (len(df_windows[id_col].unique()),len(df_windows['window'].unique()))
+
     # Plots
     if numeric=='count':
         p.stack(df=df_mismatches,x=id_col,y=numeric,cols='mismatches', y_axis='Reads',
@@ -431,7 +435,7 @@ def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.pdf',numeri
                 dir=out_dir,file=f"locations{plot_suf}")
         
         p.heat(df=df_windows,x=id_col,y='window',vars='motif',vals=numeric,x_axis=id_axis,y_ticks_font='Courier New',
-               figsize=heat_figsize,x_ticks_rot=45,title=f"{df.iloc[0]['motif']}: {df.iloc[0]['pattern']}",
+               figsize=heat_figsize,x_ticks_rot=45,title=f"{df.iloc[0]['motif']}: {df.iloc[0]['pattern']}",sq=False,
                dir=out_dir,file=f"windows{plot_suf}")
     
     else: # fraction
@@ -446,7 +450,7 @@ def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.pdf',numeri
                 dir=out_dir,file=f"locations{plot_suf}")
         
         p.heat(df=df_windows,x=id_col,y='window',vars='motif',vals=numeric,x_axis=id_axis,y_ticks_font='Courier New',
-               figsize=heat_figsize,x_ticks_rot=45,title=f"{df.iloc[0]['motif']}: {df.iloc[0]['pattern']}",
+               figsize=heat_figsize,x_ticks_rot=45,title=f"{df.iloc[0]['motif']}: {df.iloc[0]['pattern']}",sq=False,
                dir=out_dir,file=f"windows{plot_suf}",vals_dims=(0,1)) 
     
     # Return value_counts() dataframes (optional)
