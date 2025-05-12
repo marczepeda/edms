@@ -307,25 +307,29 @@ def count_motif(fastq_dir: str, pattern: str, out_dir: str, motif:str="motif",
         stats.append((fastq_name,len(reads),has_motif,missing_motif))
         memories.append(memory_timer(task=f"{fastq_file} (motif)"))
         
-        # Append metadata
+        # Append metadata...
         reads['fastq_file'] = [fastq_file]*len(reads)
         reads['motif'] = [motif]*len(reads)
+         
+        if meta is not None: # ...and merge with meta
+            if type(meta)==str: # Get from file path if needed
+                meta = io.get(pt=meta)
+            
+            if 'fastq_file' not in list(meta.columns): # Check for 'fastq_file' column
+                print(f"Warning: Did not merge with meta.\nmeta needs 'fastq_file' column.\nDetected columns: {list(meta.columns)}")
+            else: # Merge on 'fastq_file' column
+                reads = pd.merge(left=meta,right=reads,on='fastq_file')
+
+        # Improve dataframe column formatting 
+        reads = reads.astype({'start_i': int,'end_i': int,'read': int,'distance':int})
+        reads['mismatches'] = [f">{max_distance}" if d==-1 else int(d) for d in reads['distance']]
+        reads['location'] = [(start_i,end_i) if start_i!=-1 else "Absent" for (start_i,end_i) in t.zip_cols(df=reads,cols=['start_i','end_i'])]
+
+        # Save & append fastq dataframe to final dataframe
+        print('Save & append fastq dataframe to final dataframe')
+        io.save(dir=os.path.join(out_dir,motif),file=f'{fastq_name}.csv',obj=reads) # Save checkpoint
         df = pd.concat([df,reads]).reset_index(drop=True) # save to final dataframe
-
-    # Improve dataframe column formatting 
-    df = df.astype({'start_i': int,'end_i': int,'read': int,'distance':int})
-    df['mismatches'] = [f">{max_distance}" if d==-1 else int(d) for d in df['distance']]
-    df['location'] = [(start_i,end_i) if start_i!=-1 else "Absent" for (start_i,end_i) in t.zip_cols(df=df,cols=['start_i','end_i'])]
-
-    # Merge with metadata
-    if meta is not None:
-        if type(meta)==str: # Get from file path if needed
-            meta = io.get(pt=meta)
-        if 'fastq_file' not in list(meta.columns): # Check for 'fastq_file' column
-            print(f"Warning: Did not merge with meta.\nmeta needs 'fastq_file' column.\nDetected columns: {list(meta.columns)}")
-        else: # Merge on 'fastq_file' column
-            df = pd.merge(left=meta,right=df,on='fastq_file')
-
+    
     # Save & return
     memories.append(memory_timer(task='count_motif()'))
     io.save(dir=os.path.join(out_dir,f'.count_{motif}'),
