@@ -17,8 +17,9 @@ Usage:
 - [Motif search: mU6,...]
     - count_motif(): returns a dataframe with the sequence motif location per read and abundance for every fastq file in a directory
     - plot_motif(): generate plots highlighting motif mismatches, locations, and sequences
-    - motif_search(): analogous to genotyping workflow... WIP
 - [Region/read alignments: spacer,..., & ngRNA-epegRNA]
+    - mismatch_alignments(): compute & save mismatch number and position per alignment; enables checkpoints
+    - perform_alignments(): perform alignments on fastq reads using PairwiseAligner and compute mismatches using mismatch_alignments()
     - plot_alignments(): generate line & distribution plots from fastq alignments dictionary
     - count_region(): align read region from fastq directory to the annotated library with mismatches; plot and return fastq alignments dictionary
     - count_alignments(): align reads from fastq directory to annotated library with mismatches; plot and return fastq alignments dictionary
@@ -231,6 +232,8 @@ def count_motif(fastq_dir: str, pattern: str, out_dir: str, motif:str="motif",
     max_distance (int, optional): max Levenstein distance for seq in fastq read (Default: 0)
     meta (DataFrame | str, optional): meta dataframe (or file path) must have 'fastq_file' column (Default: None)
     return_df (bool, optional): return dataframe (Default: False)
+
+    Future: add better save checkpoints that are similar to count_regions/alignments()
 
     Dependencies: pandas, gzip, os, Bio, fuzzy_substring_search() & memory_timer()
     '''
@@ -461,6 +464,131 @@ def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.pdf',numeri
     if return_df: return (df_mismatches,df_locations,df_windows)
 
 ### Region/read alignments: spacer,..., & ngRNA-epegRNA
+def mismatch_alignments(align_col: str, out_dir: str, fastq_name: str,
+                        fastq_df_ref: pd.DataFrame, dc_alignments: dict, dc_aligned_reads: dict,
+                        dc_alignments_mismatch_pos: dict, dc_alignments_mismatch_num: dict,
+                        return_df: bool=False):
+    '''
+    mismatch_alignments(): Compute & save mismatch number and position per alignment; enables checkpoints
+
+    Parameters:
+    align_col (str): align column name in annotated library reference file
+    out_dir (str): directory for output files
+    fastq_name (str): name of fastq file
+    fastq_df_ref (dataframe): annotated reference library dataframe
+    dc_alignments (dict): dictionary of alignments
+    dc_aligned_reads (dict): dictionary of aligned reads
+    dc_alignments_mismatch_pos (dict): dictionary of mismatch positions
+    dc_alignments_mismatch_num (dict): dictionary of mismatch numbers
+    return_df (bool, optional): return dataframe (Default: False)
+    
+    Dependencies: count_region(), count_alignments(), perform_alignments(), pandas, tidy
+    '''
+    # Merge alignment dictionaries into a fastq dataframe
+    print('Merge alignment dictionaries into a fastq dataframe')
+    df_alignments = pd.DataFrame(dc_alignments.items(),columns=[align_col,'alignments'])
+    df_aligned_reads = pd.DataFrame(dc_aligned_reads.items(),columns=[align_col,'reads_aligned'])
+    df_alignments_mismatch_num = pd.DataFrame(dc_alignments_mismatch_num.items(),columns=[align_col,'mismatch_num'])
+    df_alignments_mismatch_pos = pd.DataFrame(dc_alignments_mismatch_pos.items(),columns=[align_col,'mismatch_pos']) 
+    df_fastq = pd.merge(left=fastq_df_ref,right=df_alignments,on=align_col)
+    df_fastq['alignments_fraction'] = [alignments/reads_processed for (alignments,reads_processed) in t.zip_cols(df=df_fastq,cols=['alignments','reads_processed'])]
+    df_fastq = pd.merge(left=df_fastq,right=df_aligned_reads,on=align_col)
+    df_fastq = pd.merge(left=df_fastq,right=df_alignments_mismatch_num,on=align_col)
+    df_fastq = pd.merge(left=df_fastq,right=df_alignments_mismatch_pos,on=align_col)
+    
+    # Calculate mismatch num & position per alignment
+    print('Calculate mismatch num & position per alignment')
+    mismatch_num_per_alignment_ls = []
+    mismatch_pos_per_alignment_ls = []
+    for (ref,mismatch_pos,mismatch_num,alignments) in t.zip_cols(df=df_fastq,cols=[align_col,'mismatch_pos','mismatch_num','alignments']):
+        if alignments==0:
+            mismatch_num_per_alignment_ls.append(0)
+            mismatch_pos_per_alignment_ls.append({pos:0 for pos in range(1,len(ref)+1)})
+        else:
+            mismatch_num_per_alignment_ls.append(mismatch_num/alignments)
+            mismatch_pos_per_alignment_ls.append({pos:mismatch_pos.count(pos)/alignments for pos in range(1,len(ref)+1)})
+    df_fastq['mismatch_num_per_alignment'] = mismatch_num_per_alignment_ls
+    df_fastq['mismatch_pos_per_alignment'] = mismatch_pos_per_alignment_ls
+    
+    # Save & return fastq dataframe
+    print('Save & return fastq dataframe')
+    io.save(dir=out_dir,file=f'{fastq_name}.csv',obj=df_fastq)
+    if return_df: return df_fastq
+
+def perform_alignments(align_col: str, out_dir: str, fastq_name: str, fastq_df_ref: pd.DataFrame,
+                       aligner: PairwiseAligner, seqs: list, memories: list, align_ckpt: int):
+    '''
+    perform_alignments(): perform alignments on fastq reads using PairwiseAligner and compute mismatches using mismatch_alignments()
+
+    Parameters:
+    align_col (str): align column name in annotated library reference file
+    out_dir (str): directory for output files
+    fastq_name (str): name of fastq file
+    fastq_df_ref (dataframe): annotated reference library dataframe
+    aligner (PairwiseAligner): pairwise aligner object
+    seqs (list): list of sequences to align
+    memories (list): list of memory timers
+    align_ckpt (int): alignment checkpoint interval
+    
+    Dependencies: Bio.SeqIO, gzip, os, pandas, Bio.Seq.Seq, Bio.PairwiseAligner, count_region(), count_alignments(), perform_alignments(), io, tidy
+    '''
+    print('Perform alignments')
+    dc_alignments = {ref:0 for ref in fastq_df_ref[align_col]}
+    dc_aligned_reads = {ref:[] for ref in fastq_df_ref[align_col]}
+    dc_alignments_mismatch_num = {ref:0 for ref in fastq_df_ref[align_col]}
+    dc_alignments_mismatch_pos = {ref:[] for ref in fastq_df_ref[align_col]}
+    
+    for s,seq in enumerate(seqs): # Iterate though sequences
+        if s==0: # Initial alignment status
+            print(f'{s+1} out of {len(seqs)}') 
+        elif s%align_ckpt==0: # Alignment status; save checkpoint
+            print(f'{s+1} out of {len(seqs)}')
+            mismatch_alignments(align_col=align_col, out_dir=out_dir, fastq_name=fastq_name, fastq_df_ref=fastq_df_ref,
+                                dc_alignments=dc_alignments, dc_aligned_reads=dc_aligned_reads,
+                                dc_alignments_mismatch_pos=dc_alignments_mismatch_pos, dc_alignments_mismatch_num=dc_alignments_mismatch_num)
+            memories.append(memory_timer(task=f"{fastq_name} (align {s+1} out of {len(seqs)})"))
+
+        if seq is None: # Missing region (not applicable to count_alignments())
+            continue
+
+        seq_alignments_scores = []
+        seq_alignments_aligned = []
+        for ref in fastq_df_ref[align_col]: # Iterate though reference sequences
+            seq_alignment = aligner.align(ref, seq[0:len(ref)]) # trim ngs sequence to reference sequence & align
+            seq_alignments_scores.append(seq_alignment[0].score) # Save highest alignment score
+            seq_alignments_aligned.append(seq_alignment[0].aligned[0]) # Save alignment matches
+
+        # Isolate maximum score alignment
+        i = seq_alignments_scores.index(max(seq_alignments_scores))
+        ref_i = fastq_df_ref.iloc[i][align_col]
+        aligned_i = seq_alignments_aligned[i]
+        dc_alignments[fastq_df_ref.iloc[i][align_col]] = dc_alignments[ref_i]+1
+        dc_aligned_reads[fastq_df_ref.iloc[i][align_col]].append(s)
+
+        # Find & quantify mismatches (Change zero-indexed to one-indexed)
+        mismatch_pos = []
+        if len(aligned_i) == 1: 
+            (a1,b1) = aligned_i[0]
+            if (a1==0)&(b1==len(ref_i)-1): mismatch_pos.extend([])
+            elif a1==0: mismatch_pos.extend([k+1 for k in range(b1+1,len(ref_i))])
+            elif b1==len(ref_i)-1: mismatch_pos.extend([k+1 for k in range(0,a1-1)])
+            else: mismatch_pos.extend([j+1 for j in range(0,a1-1)] + [k+1 for k in range(b1+1,len(ref_i))])
+        else:
+            for j in range(len(aligned_i)-1):
+                (a1,b1) = aligned_i[j]
+                (a2,b2) = aligned_i[j+1]
+                if (j==0)&(a1!=0): mismatch_pos.extend([k+1 for k in range(0,a1-1)])
+                if (j==len(aligned_i)-2)&(b2!=len(ref_i)-1): mismatch_pos.extend([k+1 for k in range(b2+1,len(ref_i))])
+                mismatch_pos.extend([k+1 for k in range(b1+1,a2-1)])
+        dc_alignments_mismatch_num[ref_i] = dc_alignments_mismatch_num[ref_i] + len(mismatch_pos)
+        dc_alignments_mismatch_pos[ref_i] = dc_alignments_mismatch_pos[ref_i] + mismatch_pos
+
+    # Perform mismatch alignments and return fastq dataframe
+    return mismatch_alignments(align_col=align_col, out_dir=out_dir, fastq_name=fastq_name, fastq_df_ref=fastq_df_ref,
+                               dc_alignments=dc_alignments, dc_aligned_reads=dc_aligned_reads,
+                               dc_alignments_mismatch_pos=dc_alignments_mismatch_pos, dc_alignments_mismatch_num=dc_alignments_mismatch_num,
+                               return_df=True)
+    
 def plot_alignments(fastq_alignments: dict | str, align_col: str, id_col: str,
                     out_dir: str, plot_suf:str='.pdf', show:bool=False, **plot_kwargs):
     ''' 
@@ -513,8 +641,8 @@ def plot_alignments(fastq_alignments: dict | str, align_col: str, id_col: str,
 
 def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_col: str,
                  fastq_dir: str, df_motif5: pd.DataFrame | str, df_motif3: pd.DataFrame | str,
-                 out_dir: str, match_score:int=1, mismatch_score:int=-4,
-                 align_max:int=0, plot_suf:str='.pdf', show:bool=False, return_dc:bool=False,
+                 out_dir: str, match_score: int=1, mismatch_score: int=-4, align_dims: tuple=(0,0),
+                 align_ckpt: int=10000, plot_suf: str='.pdf', show: bool=False, return_dc: bool=False,
                  **plot_kwargs):
     ''' 
     count_region(): align read region from fastq directory to the annotated library with mismatches; plot and return fastq alignments dictionary
@@ -530,13 +658,14 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_
     out_dir (str): directory for output files
     match_score (int, optional): match score for pairwise alignment (Default: 1)
     mismatch_score (int, optional): mismatch score for pairwise alignment (Default: -4)
-    align_max (int, optional): max alignments per fastq file to save compute (Default: 0)
+    align_dims (tuple, optional): (start_i, end_i) alignments per fastq file to save compute (Default: None)
+    align_ckpt (int, optional): save checkpoints for alignments (Default: 10000)
     plot_suf (str, optional): plot type suffix with '.' (Default: '.pdf')
     show (bool, optional): show plots (Default: False)
     return_dc (bool, optional): return fastqs dictionary (Default: False)
     **plot_kwargs (optional): plot key word arguments
 
-    Dependencies: Bio.SeqIO, gzip, os, pandas, Bio.Seq.Seq, Bio.PairwiseAligner, plot_alignments(), & memory_timer()
+    Dependencies: Bio.SeqIO, gzip, os, pandas, Bio.Seq.Seq, Bio.PairwiseAligner, mismatch_alignments(), perform_alignments(), plot_alignments(), memory_timer(), io, tidy
     '''
     # Initialize timer
     memory_timer(reset=True)
@@ -576,6 +705,21 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_
     if 'start_i' not in df_motif3.columns.tolist():
         raise Exception('Missing column in df_motif3: start_i') 
 
+    # Check if align_dims is a tuple of length 2 with start_i greater than end_i
+    if align_dims is None:
+        align_dims=(0,0)
+    elif not isinstance(align_dims, tuple) or len(align_dims) != 2:
+        raise ValueError(f"align_dims={align_dims} was not a tuple of length 2")
+    else:
+        if align_dims[0]<0 or align_dims[1]<0:
+            raise ValueError(f"align_dims={align_dims} needs to be greater than 0")
+        if align_dims[1]<align_dims[0]:
+            raise ValueError(f"align_dims={align_dims} needs to be in the form (start_i, end_i)")
+
+    # Check if align_ckpt is a positive integer
+    if not isinstance(align_ckpt, int) or align_ckpt <= 0:
+        raise ValueError(f"align_ckpt={align_ckpt} needs to be a positive integer")
+    
     # Memory & stats reporting
     memories = []
     stats = []
@@ -597,6 +741,13 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_
             fastq_df_ref = df_ref[df_ref[fastq_col]==fastq_file].reset_index(drop=True) # Isolate fastq reference library info
             with gzip.open(os.path.join(fastq_dir,fastq_file), "rt") as handle:
                 for i,record in enumerate(SeqIO.parse(handle, "fastq")): # Parse reads & isolate region between motifs
+                    
+                    # Get # of reads in fastq file; skip reads that are not in the alignment range
+                    reads = i
+                    if (align_dims[0]!=0)&(align_dims[0]>i):
+                        continue
+                    elif (align_dims[1]!=0)&(align_dims[1]<=i):
+                        continue
 
                     # Obtain motif boundaries that define region
                     start_i = fastq_motif5.iloc[i]["end_i"]
@@ -619,11 +770,9 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_
                         missing3 += 1 
                         seqs.append(None)
 
-                    # Processing status and down sample to reduce computation
-                    if len(seqs)%10000==0: 
+                    # Processing status
+                    if len(seqs)%align_ckpt==0: 
                         print(f"Processed {len(seqs)} reads")
-                    if (len(seqs)+1>align_max) & (align_max!=0): 
-                        break
         
         elif fastq_file.endswith(".fastq"): # Uncompressed fastq
             fastq_name = fastq_file[:-len(".fastq")] # Get fastq name
@@ -633,6 +782,13 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_
             with open(os.path.join(fastq_dir,fastq_file), "r") as handle:    
                 for i,record in enumerate(SeqIO.parse(handle, "fastq")): # Parse reads & isolate region between motifs
                     
+                    # Get # of reads in fastq file; skip reads that are not in the alignment range
+                    reads = i
+                    if (align_dims[0]!=0)&(align_dims[0]>i):
+                        continue
+                    elif (align_dims[1]!=0)&(align_dims[1]<=i):
+                        continue
+
                     # Obtain motif boundaries that define region
                     start_i = fastq_motif5.iloc[i]["end_i"]
                     end_i = fastq_motif3.iloc[i]["start_i"] 
@@ -654,11 +810,9 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_
                         missing3 += 1 
                         seqs.append(None)
 
-                    # Processing status and down sample to reduce computation
-                    if len(seqs)%10000==0: 
+                    # Processing status
+                    if len(seqs)%align_ckpt==0: 
                         print(f"Processed {len(seqs)} reads")
-                    if (len(seqs)+1>align_max) & (align_max!=0): 
-                        break
         
         else: # Not a fastq file
             print("Not a fastq file")
@@ -666,90 +820,22 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_
         
         # Update memories & stats: # of reads with(out) the region
         print(f'{fastq_name}:\t{len(seqs)} reads\t=>\t{regions} reads;\t{missing5} missing motif5;\t{missing3} missing motif3;\t{overlap53} motif overlaps')
-        stats.append((fastq_name,len(seqs),regions,missing5,missing3,overlap53))
+        stats.append((fastq_name,reads,len(seqs),regions,missing5,missing3,overlap53))
         memories.append(memory_timer(task=f"{fastq_file} (region)"))
 
-        # Perform alignments
-        print('Perform alignments')
-        dc_alignments = {ref:0 for ref in fastq_df_ref[align_col]}
-        dc_aligned_reads = {ref:[] for ref in fastq_df_ref[align_col]}
-        dc_alignments_mismatch_num = {ref:0 for ref in fastq_df_ref[align_col]}
-        dc_alignments_mismatch_pos = {ref:[] for ref in fastq_df_ref[align_col]}
-        
-        for s,seq in enumerate(seqs): # Iterate though sequences
-            if align_max!=0:
-                if s+1>align_max: break
-            if s%10000==0: 
-                print(f'{s+1} out of {len(seqs)}') # Alignment status
-            if seq is None: # Missing region
-                continue
-            seq_alignments_scores = []
-            seq_alignments_aligned = []
-            for ref in fastq_df_ref[align_col]: # Iterate though reference sequences
-                seq_alignment = aligner.align(ref, seq[0:len(ref)]) # trim ngs sequence to reference sequence & align
-                seq_alignments_scores.append(seq_alignment[0].score) # Save highest alignment score
-                seq_alignments_aligned.append(seq_alignment[0].aligned[0]) # Save alignment matches
+        # Append # of reads & alignment range to fastq_df_ref
+        fastq_df_ref['reads_total']= [reads]*len(fastq_df_ref)
+        fastq_df_ref['reads_processed']= [len(seqs)]*len(fastq_df_ref)
+        if align_dims==(0,0): 
+            fastq_df_ref['align_dims']= [(0,reads)]*len(fastq_df_ref)
+        else:
+            fastq_df_ref['align_dims']= [(align_dims[0],align_dims[1])] * len(fastq_df_ref)
 
-            # Isolate maximum score alignment
-            i = seq_alignments_scores.index(max(seq_alignments_scores))
-            ref_i = fastq_df_ref.iloc[i][align_col]
-            aligned_i = seq_alignments_aligned[i]
-            dc_alignments[fastq_df_ref.iloc[i][align_col]] = dc_alignments[ref_i]+1
-            dc_aligned_reads[fastq_df_ref.iloc[i][align_col]].append(s)
-
-            # Find & quantify mismatches (Change zero-indexed to one-indexed)
-            mismatch_pos = []
-            if len(aligned_i) == 1: 
-                (a1,b1) = aligned_i[0]
-                if (a1==0)&(b1==len(ref_i)-1): mismatch_pos.extend([])
-                elif a1==0: mismatch_pos.extend([k+1 for k in range(b1+1,len(ref_i))])
-                elif b1==len(ref_i)-1: mismatch_pos.extend([k+1 for k in range(0,a1-1)])
-                else: mismatch_pos.extend([j+1 for j in range(0,a1-1)] + [k+1 for k in range(b1+1,len(ref_i))])
-            else:
-                for j in range(len(aligned_i)-1):
-                    (a1,b1) = aligned_i[j]
-                    (a2,b2) = aligned_i[j+1]
-                    if (j==0)&(a1!=0): mismatch_pos.extend([k+1 for k in range(0,a1-1)])
-                    if (j==len(aligned_i)-2)&(b2!=len(ref_i)-1): mismatch_pos.extend([k+1 for k in range(b2+1,len(ref_i))])
-                    mismatch_pos.extend([k+1 for k in range(b1+1,a2-1)])
-            dc_alignments_mismatch_num[ref_i] = dc_alignments_mismatch_num[ref_i] + len(mismatch_pos)
-            dc_alignments_mismatch_pos[ref_i] = dc_alignments_mismatch_pos[ref_i] + mismatch_pos
-
-        # Calculate mismatch position fraction of alignments
-        dc_alignments_mismatch_pos_fraction = dict()
-        for (ref,mismatch_pos) in dc_alignments_mismatch_pos.items():
-            dc_alignments_mismatch_pos_fraction[ref] = {pos:mismatch_pos.count(pos) for pos in range(1,len(ref)+1)}
-
-        # Merge alignment dictionaries into a fastq dataframe
-        print('Merge alignment dictionaries into a fastq dataframe')
-        df_alignments = pd.DataFrame(dc_alignments.items(),columns=[align_col,'alignments'])
-        df_aligned_reads = pd.DataFrame(dc_aligned_reads.items(),columns=[align_col,'aligned_reads'])
-        df_alignments_mismatch_num = pd.DataFrame(dc_alignments_mismatch_num.items(),columns=[align_col,'mismatch_num'])
-        df_alignments_mismatch_pos = pd.DataFrame(dc_alignments_mismatch_pos.items(),columns=[align_col,'mismatch_pos']) 
-        df_fastq = pd.merge(left=fastq_df_ref,right=df_alignments,on=align_col)
-        df_fastq = pd.merge(left=df_fastq,right=df_aligned_reads,on=align_col)
-        df_fastq = pd.merge(left=df_fastq,right=df_alignments_mismatch_num,on=align_col)
-        df_fastq = pd.merge(left=df_fastq,right=df_alignments_mismatch_pos,on=align_col)
-        
-        # Calculate mismatch num & position per alignment
-        print('Calculate mismatch num & position per alignment')
-        mismatch_num_per_alignment_ls = []
-        mismatch_pos_per_alignment_ls = []
-        for (ref,mismatch_pos,mismatch_num,alignments) in t.zip_cols(df=df_fastq,cols=[align_col,'mismatch_pos','mismatch_num','alignments']):
-            if alignments==0:
-                mismatch_num_per_alignment_ls.append(0)
-                mismatch_pos_per_alignment_ls.append({pos:0 for pos in range(1,len(ref)+1)})
-            else:
-                mismatch_num_per_alignment_ls.append(mismatch_num/alignments)
-                mismatch_pos_per_alignment_ls.append({pos:mismatch_pos.count(pos)/alignments for pos in range(1,len(ref)+1)})
-        df_fastq['mismatch_num_per_alignment'] = mismatch_num_per_alignment_ls
-        df_fastq['mismatch_pos_per_alignment'] = mismatch_pos_per_alignment_ls
-        
-        # Save & append fastq dataframe to fastq dictionary
-        print('Save & append fastq dataframe to fastq dictionary')
-        io.save(dir=out_dir,file=f'{fastq_name}.csv',obj=df_fastq)
+        # Perform alignments, compute mismatches, & append to fastq dataframe to dictionary
+        df_fastq = perform_alignments(align_col=align_col, out_dir=out_dir, fastq_name=fastq_name, fastq_df_ref=fastq_df_ref,
+                                      aligner=aligner, seqs=seqs, memories=memories, align_ckpt=align_ckpt)
         if return_dc: fastqs[fastq_name]=df_fastq
-        memories.append(memory_timer(task=f"{fastq_name} (align)"))
+        memories.append(memory_timer(task=f"{fastq_name} (aligned)"))
 
         # Plot mismatch position per alignment
         plot_alignments(fastq_alignments={fastq_name:df_fastq}, align_col=align_col, id_col=id_col,
@@ -759,15 +845,15 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_
     memories.append(memory_timer(task='count_region()'))
     io.save(dir=os.path.join(out_dir,'.count_region'),
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_stats.csv',
-            obj=pd.DataFrame(stats, columns=['file','reads','reads_w_region','reads_wo_motif5','reads_wo_motif3','reads_w_motif_overlap']))
+            obj=pd.DataFrame(stats, columns=['file','reads_total','reads_processed','reads_w_region','reads_wo_motif5','reads_wo_motif3','reads_w_motif_overlap']))
     io.save(dir=os.path.join(out_dir,'.count_region'),
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
     if return_dc: return fastqs
 
 def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_col: str,
-                     fastq_dir: str, out_dir: str, match_score:int=1, mismatch_score:int=-4,
-                     align_max:int=0, plot_suf:str='.pdf', show:bool=False, return_dc:bool=False,
+                     fastq_dir: str, out_dir: str, match_score: int=1, mismatch_score: int=-4,
+                     align_dims: tuple=(0,0), align_ckpt: int=10000, plot_suf: str='.pdf', show: bool=False, return_dc: bool=False,
                      **plot_kwargs):
     ''' 
     count_alignments(): align reads from fastq directory to annotated library with mismatches; plot and return fastq alignments dictionary
@@ -781,13 +867,13 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fa
     out_dir (str): directory for output files
     match_score (int, optional): match score for pairwise alignment (Default: 1)
     mismatch_score (int, optional): mismatch score for pairwise alignment (Default: -4)
-    align_max (int, optional): max alignments per fastq file to save compute (Default: 0)
-    plot_suf (str, optional): plot type suffix with '.' (Default: '.pdf')
+    align_dims (tuple, optional): (start_i, end_i) alignments per fastq file to save compute (Default: None)
+    align_ckpt (int, optional): save checkpoints for alignments (Default: 10000)    plot_suf (str, optional): plot type suffix with '.' (Default: '.pdf')
     show (bool, optional): show plots (Default: False)
     return_dc (bool, optional): return fastqs dictionary (Default: False)
     **plot_kwargs (optional): plot key word arguments
 
-    Dependencies: Bio.SeqIO, gzip, os, pandas, Bio.Seq.Seq, Bio.PairwiseAligner, plot_alignments(), & memory_timer()
+    Dependencies: Bio.SeqIO, gzip, os, pandas, Bio.Seq.Seq, Bio.PairwiseAligner, mismatch_alignments(), perform_alignments(), plot_alignments(), memory_timer(), io, tidy
     '''
     # Initialize timer
     memory_timer(reset=True)
@@ -822,106 +908,69 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fa
     for fastq_file in os.listdir(fastq_dir): # Iterate through fastq files
         
         print(f"Processing {fastq_file}...") # Get reads
+        seqs = [] # Store alignment sequences
         if fastq_file.endswith(".fastq.gz"): # Compressed fastq
             fastq_name = fastq_file[:-len(".fastq.gz")] # Get fastq name
             fastq_df_ref = df_ref[df_ref[fastq_col]==fastq_file].reset_index(drop=True) # Isolate fastq reference library info
-            with gzip.open(os.path.join(fastq_dir,fastq_file), "rt") as handle: # Parse reads
-                seqs=[record.seq for record in SeqIO.parse(handle, "fastq") if (len(seqs)+1>align_max) & (align_max!=0)] 
-                reads = len(seqs)
+            with gzip.open(os.path.join(fastq_dir,fastq_file), "rt") as handle:
+                for i,record in enumerate(SeqIO.parse(handle, "fastq")): # Parse reads
+                    
+                    # Get # of reads in fastq file; skip reads that are not in the alignment range
+                    reads = i
+                    if (align_dims[0]!=0)&(align_dims[0]>i):
+                        continue
+                    elif (align_dims[1]!=0)&(align_dims[1]<=i):
+                        continue
+                    
+                    # Append sequence
+                    seqs.append(record.seq)
+
+                    # Processing status
+                    if len(seqs)%align_ckpt==0: 
+                        print(f"Processed {len(seqs)} reads")
+                
         elif fastq_file.endswith(".fastq"): # Uncompressed fastq
             fastq_name = fastq_file[:-len(".fastq")] # Get fastq name
             fastq_df_ref = df_ref[df_ref[fastq_col]==fastq_file].reset_index(drop=True) # Isolate fastq reference library info
-            with open(os.path.join(fastq_dir,fastq_file), "r") as handle: # Parse reads
-                seqs=[record.seq for record in SeqIO.parse(handle, "fastq") if (len(seqs)+1>align_max) & (align_max!=0)]
-                reads = len(seqs)
+            with open(os.path.join(fastq_dir,fastq_file), "r") as handle:
+                for i,record in enumerate(SeqIO.parse(handle, "fastq")): # Parse reads
+                    
+                    # Get # of reads in fastq file; skip reads that are not in the alignment range
+                    reads = i
+                    if (align_dims[0]!=0)&(align_dims[0]>i):
+                        continue
+                    elif (align_dims[1]!=0)&(align_dims[1]<=i):
+                        continue
+                    
+                    # Append sequence
+                    seqs.append(record.seq)
+
+                    # Processing status
+                    if len(seqs)%align_ckpt==0: 
+                        print(f"Processed {len(seqs)} reads")
+        
         else: # Not a fastq file
             print("Not a fastq file")
             continue
         
         # Update memories & stats file with # of reads
-        print(f'{fastq_name}:\t{reads} reads')
-        stats.append((fastq_name,reads))
+        print(f'{fastq_name}:\t{len(seqs)} reads')
+        stats.append((fastq_name,reads,len(seqs)))
         memories.append(memory_timer(task=f"{fastq_file} (reads)"))
         
-        # Perform alignments
-        print('Perform alignments')
-        dc_alignments = {ref:0 for ref in fastq_df_ref[align_col]}
-        dc_aligned_reads = {ref:[] for ref in fastq_df_ref[align_col]}
-        dc_alignments_mismatch_num = {ref:0 for ref in fastq_df_ref[align_col]}
-        dc_alignments_mismatch_pos = {ref:[] for ref in fastq_df_ref[align_col]}
-        
-        for s,seq in enumerate(seqs): # Iterate though sequences
-            if align_max!=0:
-                if s+1>align_max: break
-            if s%10000==0: 
-                print(f'{s+1} out of {len(seqs)}') # Alignment status
-            seq_alignments_scores = []
-            seq_alignments_aligned = []
-            for ref in fastq_df_ref[align_col]: # Iterate though reference sequences
-                seq_alignment = aligner.align(ref, seq[0:len(ref)]) # trim ngs sequence to reference sequence & align
-                seq_alignments_scores.append(seq_alignment[0].score) # Save highest alignment score
-                seq_alignments_aligned.append(seq_alignment[0].aligned[0]) # Save alignment matches
+        # Append # of reads & alignment range to fastq_df_ref
+        fastq_df_ref['reads_total']= [reads]*len(fastq_df_ref)
+        fastq_df_ref['reads_processed']= [len(seqs)]*len(fastq_df_ref)
+        if align_dims==(0,0): 
+            fastq_df_ref['align_dims']= [(0,reads)]*len(fastq_df_ref)
+        else:
+            fastq_df_ref['align_dims']= [(align_dims[0],align_dims[1])] * len(fastq_df_ref)
 
-            # Isolate maximum score alignment
-            i = seq_alignments_scores.index(max(seq_alignments_scores))
-            ref_i = fastq_df_ref.iloc[i][align_col]
-            aligned_i = seq_alignments_aligned[i]
-            dc_alignments[fastq_df_ref.iloc[i][align_col]] = dc_alignments[ref_i]+1
-            dc_aligned_reads[fastq_df_ref.iloc[i][align_col]].append(s)
-
-            # Find & quantify mismatches (Change zero-indexed to one-indexed)
-            mismatch_pos = []
-            if len(aligned_i) == 1: 
-                (a1,b1) = aligned_i[0]
-                if (a1==0)&(b1==len(ref_i)-1): mismatch_pos.extend([])
-                elif a1==0: mismatch_pos.extend([k+1 for k in range(b1+1,len(ref_i))])
-                elif b1==len(ref_i)-1: mismatch_pos.extend([k+1 for k in range(0,a1-1)])
-                else: mismatch_pos.extend([j+1 for j in range(0,a1-1)] + [k+1 for k in range(b1+1,len(ref_i))])
-            else:
-                for j in range(len(aligned_i)-1):
-                    (a1,b1) = aligned_i[j]
-                    (a2,b2) = aligned_i[j+1]
-                    if (j==0)&(a1!=0): mismatch_pos.extend([k+1 for k in range(0,a1-1)])
-                    if (j==len(aligned_i)-2)&(b2!=len(ref_i)-1): mismatch_pos.extend([k+1 for k in range(b2+1,len(ref_i))])
-                    mismatch_pos.extend([k+1 for k in range(b1+1,a2-1)])
-            dc_alignments_mismatch_num[ref_i] = dc_alignments_mismatch_num[ref_i] + len(mismatch_pos)
-            dc_alignments_mismatch_pos[ref_i] = dc_alignments_mismatch_pos[ref_i] + mismatch_pos
-
-        # Calculate mismatch position fraction of alignments
-        dc_alignments_mismatch_pos_fraction = dict()
-        for (ref,mismatch_pos) in dc_alignments_mismatch_pos.items():
-            dc_alignments_mismatch_pos_fraction[ref] = {pos:mismatch_pos.count(pos) for pos in range(1,len(ref)+1)}
-
-        # Merge alignment dictionaries into a fastq dataframe
-        print('Merge alignment dictionaries into a fastq dataframe')
-        df_alignments = pd.DataFrame(dc_alignments.items(),columns=[align_col,'alignments'])
-        df_aligned_reads = pd.DataFrame(dc_aligned_reads.items(),columns=[align_col,'aligned_reads'])
-        df_alignments_mismatch_num = pd.DataFrame(dc_alignments_mismatch_num.items(),columns=[align_col,'mismatch_num'])
-        df_alignments_mismatch_pos = pd.DataFrame(dc_alignments_mismatch_pos.items(),columns=[align_col,'mismatch_pos']) 
-        df_fastq = pd.merge(left=fastq_df_ref,right=df_alignments,on=align_col)
-        df_fastq = pd.merge(left=df_fastq,right=df_aligned_reads,on=align_col)
-        df_fastq = pd.merge(left=df_fastq,right=df_alignments_mismatch_num,on=align_col)
-        df_fastq = pd.merge(left=df_fastq,right=df_alignments_mismatch_pos,on=align_col)
-        
-        # Calculate mismatch num & position per alignment
-        print('Calculate mismatch num & position per alignment')
-        mismatch_num_per_alignment_ls = []
-        mismatch_pos_per_alignment_ls = []
-        for (ref,mismatch_pos,mismatch_num,alignments) in t.zip_cols(df=df_fastq,cols=[align_col,'mismatch_pos','mismatch_num','alignments']):
-            if alignments==0:
-                mismatch_num_per_alignment_ls.append(0)
-                mismatch_pos_per_alignment_ls.append({pos:0 for pos in range(1,len(ref)+1)})
-            else:
-                mismatch_num_per_alignment_ls.append(mismatch_num/alignments)
-                mismatch_pos_per_alignment_ls.append({pos:mismatch_pos.count(pos)/alignments for pos in range(1,len(ref)+1)})
-        df_fastq['mismatch_num_per_alignment'] = mismatch_num_per_alignment_ls
-        df_fastq['mismatch_pos_per_alignment'] = mismatch_pos_per_alignment_ls
-        
-        # Save & append fastq dataframe to fastq dictionary
-        print('Save & append fastq dataframe to fastq dictionary')
-        io.save(dir=out_dir,file=f'{fastq_name}.csv',obj=df_fastq)
+        # Perform alignments, compute mismatches, & append to fastq dataframe to dictionary
+        df_fastq = perform_alignments(align_col=align_col, out_dir=out_dir, fastq_name=fastq_name, fastq_df_ref=fastq_df_ref,
+                                      aligner=aligner, seqs=seqs, memories=memories, align_ckpt=align_ckpt)
         if return_dc: fastqs[fastq_name]=df_fastq
-        memories.append(memory_timer(task=f"{fastq_name} (align)"))
+        memories.append(memory_timer(task=f"{fastq_name} (aligned)"))
 
         # Plot mismatch position per alignment
         plot_alignments(fastq_alignments={fastq_name:df_fastq}, align_col=align_col, id_col=id_col,
@@ -931,7 +980,7 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fa
     memories.append(memory_timer(task='count_alignments()'))
     io.save(dir=os.path.join(out_dir,'.count_alignments'),
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_stats.csv',
-            obj=pd.DataFrame(stats, columns=['file','reads']))
+            obj=pd.DataFrame(stats, columns=['file','total_reads','processed_reads']))
     io.save(dir=os.path.join(out_dir,'.count_alignments'),
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
@@ -946,7 +995,7 @@ def plot_paired(df: pd.DataFrame | str, id_col: str, vals: Literal['count','frac
     Parameters:
     df (dataframe | str): dataframe from paired_regions() or file path
     id_col (str): id column name in the paired region file
-    read_col (str, optional): aligned_reads column name in the paired region file
+    read_col (str, optional): reads_aligned column name in the paired region file
     vals (str, Literal): 'count' or 'fraction' columns
     title (str): plot title and file name
     out_dir (str): directory for output files
@@ -963,17 +1012,17 @@ def plot_paired(df: pd.DataFrame | str, id_col: str, vals: Literal['count','frac
     # Create tidy dataframe
     df_plot = pd.melt(frame=df,id_vars=id_col,
                       value_vars=[f'paired_{vals}',f'region1_only_{vals}',f'region2_only_{vals}'],
-                      value_name=vals,var_name='aligned_reads')
-    df_plot['aligned_reads'] = df_plot['aligned_reads'].str.replace('_count', '', regex=False)
+                      value_name=vals,var_name='reads_aligned')
+    df_plot['reads_aligned'] = df_plot['reads_aligned'].str.replace('_count', '', regex=False)
     
     # Generate stacked barplot
-    p.stack(df=df_plot,x=id_col,y=vals,cols='aligned_reads',
+    p.stack(df=df_plot,x=id_col,y=vals,cols='reads_aligned',
             vertical=False,title=title,figsize=(5,10),
             dir=out_dir,file=f'{title}{plot_suf}',
             show=show,**plot_kwargs)
 
 def paired_regions(region1_dir: str, region2_dir: str, out_dir: str, 
-                   id_col: str, read_col: str='aligned_reads', 
+                   id_col: str, read_col: str='reads_aligned', 
                    plot_suf: str='.pdf', show: bool=False, return_df: bool=False,
                    **plot_kwargs):
     '''
@@ -984,7 +1033,7 @@ def paired_regions(region1_dir: str, region2_dir: str, out_dir: str,
     region2_dir (str): directory with region 2 files
     out_dir (str): directory for output files
     id_col (str): id column name in the region files
-    read_col (str, optional): aligned_reads column name in the region files (Default: 'aligned_reads')
+    read_col (str, optional): reads_aligned column name in the region files (Default: 'reads_aligned')
     plot_suf (str, optional): plot type suffix with '.' (Default: '.pdf')
     show (bool, optional): show plots (Default: False)
     return_df (bool, optional): return (un)paired regions dataframe (Default: False)
