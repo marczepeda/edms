@@ -233,8 +233,6 @@ def count_motif(fastq_dir: str, pattern: str, out_dir: str, motif:str="motif",
     meta (DataFrame | str, optional): meta dataframe (or file path) must have 'fastq_file' column (Default: None)
     return_df (bool, optional): return dataframe (Default: False)
 
-    Future: add better save checkpoints that are similar to count_regions/alignments()
-
     Dependencies: pandas, gzip, os, Bio, fuzzy_substring_search() & memory_timer()
     '''
     # Initialize timer; memory & stats reporting
@@ -642,7 +640,7 @@ def plot_alignments(fastq_alignments: dict | str, align_col: str, id_col: str,
 def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_col: str,
                  fastq_dir: str, df_motif5: pd.DataFrame | str, df_motif3: pd.DataFrame | str,
                  out_dir: str, match_score: int=1, mismatch_score: int=-4, align_dims: tuple=(0,0),
-                 align_ckpt: int=10000, plot_suf: str='.pdf', show: bool=False, return_dc: bool=False,
+                 align_ckpt: int=10000, plot_suf: str=None, show: bool=False, return_dc: bool=False,
                  **plot_kwargs):
     ''' 
     count_region(): align read region from fastq directory to the annotated library with mismatches; plot and return fastq alignments dictionary
@@ -660,7 +658,7 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_
     mismatch_score (int, optional): mismatch score for pairwise alignment (Default: -4)
     align_dims (tuple, optional): (start_i, end_i) alignments per fastq file to save compute (Default: None)
     align_ckpt (int, optional): save checkpoints for alignments (Default: 10000)
-    plot_suf (str, optional): plot type suffix with '.' (Default: '.pdf')
+    plot_suf (str, optional): plot type suffix with '.' (Default: None)
     show (bool, optional): show plots (Default: False)
     return_dc (bool, optional): return fastqs dictionary (Default: False)
     **plot_kwargs (optional): plot key word arguments
@@ -838,8 +836,9 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_
         memories.append(memory_timer(task=f"{fastq_name} (aligned)"))
 
         # Plot mismatch position per alignment
-        plot_alignments(fastq_alignments={fastq_name:df_fastq}, align_col=align_col, id_col=id_col,
-                        out_dir=out_dir, plot_suf=plot_suf, show=show, **plot_kwargs)
+        if plot_suf is not None: 
+            plot_alignments(fastq_alignments={fastq_name:df_fastq}, align_col=align_col, id_col=id_col,
+                            out_dir=out_dir, plot_suf=plot_suf, show=show, **plot_kwargs)
         
     # Save and return
     memories.append(memory_timer(task='count_region()'))
@@ -853,7 +852,7 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_
 
 def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_col: str,
                      fastq_dir: str, out_dir: str, match_score: int=1, mismatch_score: int=-4,
-                     align_dims: tuple=(0,0), align_ckpt: int=10000, plot_suf: str='.pdf', show: bool=False, return_dc: bool=False,
+                     align_dims: tuple=(0,0), align_ckpt: int=10000, plot_suf: str=None, show: bool=False, return_dc: bool=False,
                      **plot_kwargs):
     ''' 
     count_alignments(): align reads from fastq directory to annotated library with mismatches; plot and return fastq alignments dictionary
@@ -869,6 +868,7 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fa
     mismatch_score (int, optional): mismatch score for pairwise alignment (Default: -4)
     align_dims (tuple, optional): (start_i, end_i) alignments per fastq file to save compute (Default: None)
     align_ckpt (int, optional): save checkpoints for alignments (Default: 10000)    plot_suf (str, optional): plot type suffix with '.' (Default: '.pdf')
+    plot_suf (str, optional): plot type suffix with '.' (Default: None)
     show (bool, optional): show plots (Default: False)
     return_dc (bool, optional): return fastqs dictionary (Default: False)
     **plot_kwargs (optional): plot key word arguments
@@ -973,8 +973,9 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fa
         memories.append(memory_timer(task=f"{fastq_name} (aligned)"))
 
         # Plot mismatch position per alignment
-        plot_alignments(fastq_alignments={fastq_name:df_fastq}, align_col=align_col, id_col=id_col,
-                        out_dir=out_dir, plot_suf=plot_suf, show=show, **plot_kwargs)
+        if plot_suf is not None: 
+            plot_alignments(fastq_alignments={fastq_name:df_fastq}, align_col=align_col, id_col=id_col,
+                            out_dir=out_dir, plot_suf=plot_suf, show=show, **plot_kwargs)
 
     # Save and return
     memories.append(memory_timer(task='count_alignments()'))

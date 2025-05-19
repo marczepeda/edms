@@ -21,6 +21,7 @@ import argparse
 
 from .gen import plot as p
 from .gen import stat as st
+from .gen import io
 from .gen import cli
 
 from .dat import cosmic as co 
@@ -568,9 +569,31 @@ def main():
     parser_stat_compare.set_defaults(func=st.compare)
 
     '''
+    edms.gen.io:
+    - in_subs(): moves all files with a given suffix into subfolders named after the files (excluding the suffix).
+    - out_subs(): recursively moves all files from subdirectories into the parent directory and delete the emptied subdirectories.
+    '''
+    parser_io = subparsers.add_parser("io", help="Input/Output")
+    subparsers_io = parser_io.add_subparsers()
+    
+    # Create subparsers for commands
+    parser_io_in_subs = subparsers_io.add_parser("in_subs", help="Moves all files with a given suffix into subfolders named after the files (excluding the suffix)")
+    parser_io_out_subs = subparsers_io.add_parser("out_subs", help="Delete subdirectories and move their files to the parent directory")
+    
+    # Add common arguments
+    for parser_io_common in [parser_io_in_subs,parser_io_out_subs]:
+        parser_io_common.add_argument("--dir", help="Path to parent directory", type=str, required=True)
+    
+    # in_subs arguments
+    parser_io_in_subs.add_argument("--suf", help="File suffix (e.g., '.txt', '.csv') to filter files.", type=int, required=True) 
+    
+    # Call command functions
+    parser_io_in_subs.set_defaults(func=io.in_subs)
+    parser_io_out_subs.set_defaults(func=io.out_subs)
+
+    '''
     edms.gen.cli:
     - access(): make all files and subdirectories accessible on Harvard FASRC
-    - expand_subs(): delete subdirectories and move their files to the parent directory
     - split_paired_reads(): split paired reads into new R1 and R2 subdirectories at the parent directory
     - smaller_fastq(): create new subdirectory containing fastqs with the # of reads limited
     '''
@@ -579,12 +602,11 @@ def main():
     
     # Create subparsers for commands
     parser_cli_access = subparsers_cli.add_parser("access", help="Make all files and subdirectories accessible on Harvard FASRC")
-    parser_cli_expand_subs = subparsers_cli.add_parser("expand_subs", help="Delete subdirectories and move their files to the parent directory")
     parser_cli_split_paired_reads = subparsers_cli.add_parser("split_paired_reads", help="Split paired reads into new R1 and R2 subdirectories at the parent directory")
     parser_cli_smaller_fastq = subparsers_cli.add_parser("smaller_fastq", help="Ccreate new subdirectory containing fastqs with the # of reads limited")
     
     # Add common arguments
-    for parser_cli_common in [parser_cli_access,parser_cli_expand_subs, parser_cli_split_paired_reads, parser_cli_smaller_fastq]:
+    for parser_cli_common in [parser_cli_access, parser_cli_split_paired_reads, parser_cli_smaller_fastq]:
         parser_cli_common.add_argument("--pt", help="Path to parent directory", type=str, default='.')
     
     # Smaller_fastq arguments
@@ -593,7 +615,6 @@ def main():
     
     # Call command functions
     parser_cli_access.set_defaults(func=cli.access)
-    parser_cli_expand_subs.set_defaults(func=cli.expand_subs)
     parser_cli_split_paired_reads.set_defaults(func=cli.split_paired_reads)
     parser_cli_smaller_fastq.set_defaults(func=cli.smaller_fastq)
 

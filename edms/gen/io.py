@@ -23,6 +23,8 @@ Usage:
 - excel_csvs(): exports excel file to .csv files in specified directory
 - df_to_dc_txt(): returns pandas DataFrame as a printed text that resembles a Python dictionary
 - dc_txt_to_df(): returns a pandas DataFrame from text that resembles a Python dictionary
+- in_subs(): moves all files with a given suffix into subfolders named after the files (excluding the suffix).
+- out_subs(): delete subdirectories and move their files to the parent directory
 
 [Directory Methods]
 - print_relative_paths(): prints relative paths for all files in a directory including subfolders
@@ -34,7 +36,7 @@ import pandas as pd
 import os
 import ast
 import csv
-import subprocess
+import shutil
 
 # Parsing Python literals
 def try_parse(value):
@@ -203,18 +205,18 @@ def save(dir: str, file: str, obj, cols=[], id=False, sort=True, **kwargs):
                 df.to_excel(writer,sheet_name=key,index=id) # Dataframe per sheet
     else: raise ValueError(f'save() does not work for {type(obj)} objects with {file.split(".")[-1]} files.')
 
-def save_dir(dir: str, file_suffix: str, dc: dict, **kwargs):
+def save_dir(dir: str, suf: str, dc: dict, **kwargs):
     ''' 
     save_dir(): save .csv files to a specified output directory from dictionary of objs
     
     Parameters:
     dir (str): output directory path
-    file_suffix (str): file name suffix
+    suf (str): file name suffix
     dc (dict): dictionary of objects (files)
 
     Dependencies: pandas, os, csv, & save()
     '''
-    for key,val in dc.items(): save(dir=dir,file=key+file_suffix,obj=val,**kwargs)
+    for key,val in dc.items(): save(dir=dir,file=key+suf,obj=val,**kwargs)
 
 # Input/Output
 def excel_csvs(pt: str,dir='',**kwargs):
@@ -267,6 +269,63 @@ def dc_txt_to_df(dc_txt: str, transpose=True):
     '''
     if transpose==True: return pd.DataFrame(ast.literal_eval(dc_txt)).T
     else: return pd.DataFrame(ast.literal_eval(dc_txt))
+
+def in_subs(dir: str, suf: str): 
+    '''
+    in_subs: moves all files with a given suffix into subdirectory named after the files (excluding the suffix).
+
+    Parameters:
+    dir (str): Path to the directory containing the files.
+    suf (str): File suffix (e.g., '.txt', '.csv') to filter files.
+
+    Dependences: os, shutil
+    '''
+    if not os.path.isdir(dir):
+        raise ValueError(f"{dir} is not a valid directory.")
+
+    for filename in os.listdir(dir):
+        file_path = os.path.join(dir, filename)
+        
+        if os.path.isfile(file_path) and filename.endswith(suf):
+            base_name = filename[:-len(suf)]
+            subdir = os.path.join(dir, base_name)
+
+            # Create subfolder if it doesn't exist
+            os.makedirs(subdir, exist_ok=True) 
+
+            # Move the file into the subfolder
+            new_path = os.path.join(subdir, filename)
+            shutil.move(file_path, new_path)
+
+def out_subs(dir: str):
+    """
+    out_subs(): Delete subdirectories and move their files to the parent directory.
+
+    Parameters:
+    dir (str): Path to the directory containing the files.
+    """
+    if not os.path.isdir(dir):
+        raise ValueError(f"{dir} is not a valid directory.")
+
+    for root, dirs, files in os.walk(dir, topdown=False):
+        for file in files:
+            file_path = os.path.join(root, file)
+            target_path = os.path.join(dir, file)
+
+            # Resolve name conflicts by appending a counter
+            base, ext = os.path.splitext(file)
+            counter = 1
+            while os.path.exists(target_path):
+                target_path = os.path.join(dir, f"{base}_{counter}{ext}")
+                counter += 1
+
+            shutil.move(file_path, target_path)
+
+        # Remove empty directories
+        for dir in dirs:
+            dir_path = os.path.join(root, dir)
+            if os.path.isdir(dir_path) and not os.listdir(dir_path):
+                os.rmdir(dir_path)
 
 # Directory Methods
 def print_relative_paths(root_dir: str):
