@@ -741,7 +741,7 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_
                 for i,record in enumerate(SeqIO.parse(handle, "fastq")): # Parse reads & isolate region between motifs
                     
                     # Get # of reads in fastq file; skip reads that are not in the alignment range
-                    reads = i
+                    reads = i+1
                     if (align_dims[0]!=0)&(align_dims[0]>i):
                         continue
                     elif (align_dims[1]!=0)&(align_dims[1]<=i):
@@ -781,7 +781,7 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_
                 for i,record in enumerate(SeqIO.parse(handle, "fastq")): # Parse reads & isolate region between motifs
                     
                     # Get # of reads in fastq file; skip reads that are not in the alignment range
-                    reads = i
+                    reads = i+1
                     if (align_dims[0]!=0)&(align_dims[0]>i):
                         continue
                     elif (align_dims[1]!=0)&(align_dims[1]<=i):
@@ -916,7 +916,7 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fa
                 for i,record in enumerate(SeqIO.parse(handle, "fastq")): # Parse reads
                     
                     # Get # of reads in fastq file; skip reads that are not in the alignment range
-                    reads = i
+                    reads = i + 1
                     if (align_dims[0]!=0)&(align_dims[0]>i):
                         continue
                     elif (align_dims[1]!=0)&(align_dims[1]<=i):
@@ -936,7 +936,7 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fa
                 for i,record in enumerate(SeqIO.parse(handle, "fastq")): # Parse reads
                     
                     # Get # of reads in fastq file; skip reads that are not in the alignment range
-                    reads = i
+                    reads = i + 1
                     if (align_dims[0]!=0)&(align_dims[0]>i):
                         continue
                     elif (align_dims[1]!=0)&(align_dims[1]<=i):
@@ -987,19 +987,18 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fa
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
     if return_dc: return fastqs
 
-def plot_paired(df: pd.DataFrame | str, id_col: str, vals: Literal['count','fraction'], 
-                title: str, out_dir: str, plot_suf: str='.pdf', show: bool=False, 
-                **plot_kwargs):
+def plot_paired(df: pd.DataFrame | str, title: str, out_dir: str,  
+                id_col: str='ID', desired_col: str='desired', 
+                plot_suf: str='.pdf', show: bool=False, **plot_kwargs):
     ''' 
     plot_paired(): generate stacked bar plots from paired_regions() dataframe
     
     Parameters:
     df (dataframe | str): dataframe from paired_regions() or file path
-    id_col (str): id column name in the paired region file
-    read_col (str, optional): reads_aligned column name in the paired region file
-    vals (str, Literal): 'count' or 'fraction' columns
     title (str): plot title and file name
     out_dir (str): directory for output files
+    id_col (str, optional): id column name in the paired region file (Default: 'ID')
+    desired_col (str, optional): desired column name in the paired region file (Default: 'desired')
     plot_suf (str, optional): plot type suffix with '.' (Default: '.pdf')
     show (bool, optional): show plots (Default: False)
     **plot_kwargs (optional): plot key word arguments
@@ -1010,52 +1009,75 @@ def plot_paired(df: pd.DataFrame | str, id_col: str, vals: Literal['count','frac
     if type(df)==str: 
         df = io.get(df)
 
-    # Create tidy dataframe
-    df_plot = pd.melt(frame=df,id_vars=id_col,
-                      value_vars=[f'paired_{vals}',f'region1_only_{vals}',f'region2_only_{vals}'],
-                      value_name=vals,var_name='reads_aligned')
-    df_plot['reads_aligned'] = df_plot['reads_aligned'].str.replace('_count', '', regex=False)
+    # Create, save & plot alignment status
+    paired_regions_alignment_status_df = df[[desired_col,'alignment_status']].value_counts().reset_index()
     
-    # Generate stacked barplot
-    p.stack(df=df_plot,x=id_col,y=vals,cols='reads_aligned',
-            vertical=False,title=title,figsize=(5,10),
-            dir=out_dir,file=f'{title}{plot_suf}',
-            show=show,**plot_kwargs)
+    io.save(dir=os.path.join(out_dir, title),file='alignment_status.csv',obj=paired_regions_alignment_status_df)
+    
+    p.stack(df=paired_regions_alignment_status_df,x='alignment_status',y='count',
+            cols=desired_col,cols_ord=[True,False],vertical=False,figsize=(6,2),
+            title=title,dir=os.path.join(out_dir, title),file=f'alignment_status{plot_suf}',show=show,**plot_kwargs)
 
-def paired_regions(region1_dir: str, region2_dir: str, out_dir: str, 
-                   id_col: str, read_col: str='reads_aligned', 
-                   plot_suf: str='.pdf', show: bool=False, return_df: bool=False,
+    # Create, save & plot alignment sistribution
+    paired_regions_alignment_distribution_df = df[df['alignment_status']=='region 1 & 2']
+    desired_ID = []
+    for id,desired in t.zip_cols(df=paired_regions_alignment_distribution_df,cols=[id_col,desired_col]):
+        if desired==True or id=='chimera': desired_ID.append(id)
+        else: desired_ID.append('not chimera')
+    paired_regions_alignment_distribution_df[id_col] = desired_ID
+
+    io.save(dir=os.path.join(out_dir, title),file='alignment_distribution.csv',obj=paired_regions_alignment_distribution_df)
+
+    p.stack(df=paired_regions_alignment_distribution_df[[id_col,'desired']].value_counts().reset_index(),
+            x='desired',y='count',cols=id_col,cmap='Spectral',x_ord=[True,False],vertical=False,
+            cols_ord=list(paired_regions_alignment_distribution_df[id_col].value_counts().keys()),
+            legend_ncol=4,legend_bbox_to_anchor=(0,-.3),figsize=(10,2),
+            title=title,dir=os.path.join(out_dir, title),file=f'alignment_distribution{plot_suf}',show=show,**plot_kwargs)
+
+def paired_regions(meta_dir: str, region1_dir: str, region2_dir: str, out_dir: str, 
+                   id_col: str='ID', desired_col: str='desired', 
+                   region1_alignment_col: str='r1_alignment', region2_alignment_col: str='r2_alignment', 
+                   reads_aligned_col: str='reads_aligned', reads_processed_col: str='reads_processed',
+                   plot_suf: str='.pdf', show: bool=False, return_dc: bool=False,
                    **plot_kwargs):
     '''
     paired_regions(): quantify, plot, & return (un)paired regions that aligned to the annotated library
 
     Parameters:
+    meta_dir (str): directory with meta files
     region1_dir (str): directory with region 1 files
     region2_dir (str): directory with region 2 files
     out_dir (str): directory for output files
-    id_col (str): id column name in the region files
-    read_col (str, optional): reads_aligned column name in the region files (Default: 'reads_aligned')
+    id_col (str): id column name in the region & meta files
+    desired_col (str): desired column name in the meta files
+    region1_alignment_col (str): region 1 alignment column name in the region & meta files
+    region2_alignment_col (str): region 2 alignment column name in the region & meta files
+    reads_aligned_col (str, optional): reads_aligned column name in the region files (Default: 'reads_aligned')
+    reads_processed_col (str, optional): reads_processed column name in the region files (Default: 'reads_processed')
     plot_suf (str, optional): plot type suffix with '.' (Default: '.pdf')
     show (bool, optional): show plots (Default: False)
-    return_df (bool, optional): return (un)paired regions dataframe (Default: False)
+    return_dc (bool, optional): return (un)paired regions dataframe (Default: False)
     **plot_kwargs (optional): plot key word arguments
 
-    Dependencies: Bio.SeqIO, gzip, os, pandas, Bio.Seq.Seq, Bio.PairwiseAligner, & plot_alignments()
+    Dependencies: os, pandas, io, plot, & plot_paired()
     '''
     # Initialize timer; memory reporting
     memory_timer(reset=True)
     memories = []
 
-    # Get region 1 and 2 file names
+    # Get meta, region 1 and 2 file names
+    meta_file_names = io.sorted_file_names(dir=meta_dir)
     region1_file_names = io.sorted_file_names(dir=region1_dir)
     region2_file_names = io.sorted_file_names(dir=region2_dir)
 
     # Check that files are correctly paired...
-    if len(region1_file_names)!=len(region2_file_names): # Equal # of files
-        raise Exception(f'Unequal # of files in region directories:\nregion1_dir: {region1_dir}\nregion2_dir: {region2_dir}')
+    if (len(region1_file_names)!=len(region2_file_names)) & (len(meta_file_names)!=len(region2_file_names)): # Equal # of files
+        raise Exception(f'Unequal # of files in meta & region directories:\nmeta_dir: {meta_dir}\nregion1_dir: {region1_dir}\nregion2_dir: {region2_dir}')
     
     # ...and obtain mismatch indices (if applicable)
     file_name_mismatch_ls = [] # Allowed mismatch R"1" & R"2"
+
+    # Compare region file names
     for region1_file_name,region2_file_name in zip(region1_file_names,region2_file_names):
         if len(region1_file_name)!=len(region2_file_name):
             raise ValueError(f"Mispaired files in region directories:\nregion1_dir: {region1_file_name}\nregion2_dir: {region2_file_name}\nFile names are different lengths")
@@ -1067,94 +1089,73 @@ def paired_regions(region1_dir: str, region2_dir: str, out_dir: str,
             file_name_mismatch_ls.extend(file_name_mismatch)
         else:
             file_name_mismatch_ls.append(len(region1_file_name))
-
+    
+    # Compare with meta file names
+    for i,(meta_file_name,region1_file_name,region2_file_name) in enumerate(zip(meta_file_names,region1_file_names,region2_file_names)):
+        if meta_file_name[0:file_name_mismatch_ls[i]]!=region1_file_name[0:file_name_mismatch_ls[i]]:
+            raise ValueError(f"Mispaired files in meta & region 1 directories:\nmeta_dir: {meta_file_name}\nregion1_dir: {region1_file_name}\nFile names are different lengths")
+        elif meta_file_name[0:file_name_mismatch_ls[i]]!=region2_file_name[0:file_name_mismatch_ls[i]]:
+            raise ValueError(f"Mispaired files in meta & region 2 directories:\nrmeta_dir: {meta_file_name}\nregion2_dir: {region2_file_name}\nFile names are different lengths")
+    
     # Parse paired regions
-    paired_regions_ls = [] # list of tuples
-    paired_regions_agg_ls = []
-    for i,(region1_file_name,region2_file_name) in enumerate(zip(region1_file_names, region2_file_names)):
+    paired_regions_dc = dict()
+    for i,(meta_file_name,region1_file_name,region2_file_name) in enumerate(zip(meta_file_names,region1_file_names,region2_file_names)):
         
         # Get regions dataframe
-        region1_file_df = io.get(os.path.join(region1_dir,region1_file_name),literal_eval=True)[[id_col,read_col]]
-        region2_file_df = io.get(os.path.join(region2_dir,region2_file_name),literal_eval=True)[[id_col,read_col]]
-        region_file_df = pd.merge(left=region1_file_df,right=region2_file_df,on=id_col,suffixes=("_region1","_region2"))
-        del region1_file_df # save memory
-        del region2_file_df
-        
-        # Quantify (un)paired reads
-        paired_ls = [] # Group
-        region1_ls = []
-        region2_ls = []
-        aligned_set = set() # Total
-        
-        for region1_reads_ls,region2_reads_ls in t.zip_cols(df=region_file_df,cols=[f'{read_col}_region1',f'{read_col}_region2']):
-            region1_reads_set = set(region1_reads_ls) # list to set
-            region2_reads_set = set(region2_reads_ls)
+        region1_file_df = io.get(os.path.join(region1_dir,region1_file_name),literal_eval=True)[[region1_alignment_col,reads_processed_col,reads_aligned_col]]
+        region2_file_df = io.get(os.path.join(region2_dir,region2_file_name),literal_eval=True)[[region2_alignment_col,reads_processed_col,reads_aligned_col]]
+        meta_file_df = io.get(os.path.join(meta_dir,meta_file_name),literal_eval=True)
 
-            paired_ls.append(len(region1_reads_set & region2_reads_set)) # Group
-            region1_ls.append(len(region1_reads_set - region2_reads_set))
-            region2_ls.append(len(region2_reads_set - region1_reads_set))
-
-            aligned_set.update(region1_reads_set) # Total
-            aligned_set.update(region2_reads_set)
+        # Create empty paired regions dataframe
+        paired_regions_file_df = pd.DataFrame({'read': np.arange(1, region1_file_df.iloc[0][reads_processed_col] + 1),
+                                                region1_alignment_col: [np.nan] * region1_file_df.iloc[0][reads_processed_col],
+                                                region2_alignment_col: [np.nan] * region1_file_df.iloc[0][reads_processed_col]})
         
-        aligned_num = len(aligned_set) # Total
-        del aligned_set # Save memory
+        # Fill in paired regions dataframe
+        for r1_alignment,reads_aligned in t.zip_cols(df=region1_file_df,cols=[region1_alignment_col,reads_aligned_col]):
+            for read in reads_aligned:
+                paired_regions_file_df.at[read-1,region1_alignment_col] = r1_alignment
+        del region1_file_df # Save memory
 
-        region_file_df['paired_count']=paired_ls # Group (count)
-        region_file_df['region1_only_count']=region1_ls
-        region_file_df['region2_only_count']=region2_ls
+        for r2_alignment,reads_aligned in t.zip_cols(df=region2_file_df,cols=[region2_alignment_col,reads_aligned_col]):
+            for read in reads_aligned:
+                paired_regions_file_df.at[read-1,region2_alignment_col] = r2_alignment
+        del region2_file_df # Save memory
         
-        region_file_df['paired_fraction']=[paired_num/aligned_num for paired_num in paired_ls] # Group (fraction)
-        region_file_df['region1_only_fraction']=[region1_num/aligned_num for region1_num in region1_ls]
-        region_file_df['region2_only_fraction']=[region2_num/aligned_num for region2_num in region2_ls]
+        # Check for paired regions
+        alignment_status = []
+        for r1_alignment,r2_alignment in t.zip_cols(df=paired_regions_file_df,cols=['r1_alignment','r2_alignment']):
+            if pd.isna(r1_alignment)==True and pd.isna(r2_alignment)==True:
+                alignment_status.append('neither')
+            elif pd.isna(r1_alignment)==True:
+                alignment_status.append('region 2')
+            elif pd.isna(r2_alignment)==True:
+                alignment_status.append('region 1')
+            else:
+                alignment_status.append('region 1 & 2')
+        paired_regions_file_df['alignment_status'] = alignment_status
+        
+        # Combine paired regions dataframe with meta dataframe
+        paired_regions_file_df = pd.merge(left=meta_file_df,right=paired_regions_file_df,how='right',on=[region1_alignment_col,region2_alignment_col])
+        del meta_file_df # Save memory
+
+        # Fill NA values
+        paired_regions_file_df[desired_col] = paired_regions_file_df[desired_col].fillna(False)
+        paired_regions_file_df[id_col] = paired_regions_file_df[id_col].fillna("chimera")
 
         # Memory reporting, save, & plot
-        region_file_name = region1_file_name[:file_name_mismatch_ls[i]] # before mismatch
-        memories.append(memory_timer(task=region_file_name))
-        io.save(dir=os.path.join(out_dir,region_file_name),
-                file='paired_regions.csv',
-                obj=region_file_df)
-        plot_paired(df=region_file_df, id_col=id_col, vals='count', title=region_file_name, 
-                    out_dir=out_dir, plot_suf=plot_suf, show=show, **plot_kwargs)
-        
-        # Append to list of tuples
-        paired_regions_ls.append((region_file_name,
-                                  region_file_df['paired_count'],
-                                  region_file_df['region1_only_count'],
-                                  region_file_df['region2_only_count'],
-                                  region_file_df['paired_fraction'],
-                                  region_file_df['region1_only_fraction'],
-                                  region_file_df['region2_only_fraction']))
-        paired_regions_agg_ls.append((region_file_name,
-                                      sum(region_file_df['paired_count']),
-                                      sum(region_file_df['region1_only_count']),
-                                      sum(region_file_df['region2_only_count']),
-                                      sum(region_file_df['paired_fraction']),
-                                      sum(region_file_df['region1_only_fraction']),
-                                      sum(region_file_df['region2_only_fraction'])))
-
-    # Create final dataframes & plot
-    paired_regions_agg_df = pd.DataFrame(paired_regions_agg_ls,
-                                         columns=['region_file','paired_count','region1_only_count','region2_only_count',
-                                                  'paired_fraction','region1_only_fraction','region2_only_fraction'])
-    paired_regions_df = pd.DataFrame(paired_regions_ls,
-                                     columns=['region_file','paired_count','region1_only_count','region2_only_count',
-                                              'paired_fraction','region1_only_fraction','region2_only_fraction'])
-    plot_paired(df=paired_regions_agg_df, id_col='region_file', vals='fraction', title='Aggregated PE Libraries', 
-                out_dir=out_dir, plot_suf=plot_suf, show=show, **plot_kwargs)
+        memories.append(memory_timer(task=meta_file_name[0:file_name_mismatch_ls[i]]))
+        io.save(dir=out_dir,file=meta_file_name,obj=paired_regions_file_df)
+        plot_paired(df=paired_regions_file_df, title=meta_file_name[0:file_name_mismatch_ls[i]], out_dir=out_dir,
+                    id_col=id_col, desired_col=desired_col, plot_suf=plot_suf, show=show, **plot_kwargs)
+        if return_dc: paired_regions_dc[meta_file_name] = paired_regions_file_df
     
     # Save & return
     memories.append(memory_timer(task='paired_regions()'))
     io.save(dir=os.path.join(out_dir,'.paired_regions'),
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
-    io.save(dir=out_dir,
-            file='paired_regions_agg.csv',
-            obj=paired_regions_agg_df)
-    io.save(dir=out_dir,
-            file='paired_regions.csv',
-            obj=paired_regions_df)
-    if return_df: return paired_regions_agg_df
+    if return_dc: return paired_regions_dc  
 
 # Quantify edit outcomes
 def trim_filter(record,qall:int,qavg:int,qtrim:int,qmask:int,alls:int,avgs:int,trims:int,masks:int):

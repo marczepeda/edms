@@ -919,8 +919,8 @@ def stack(df: pd.DataFrame | str,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord
     df_cut=df[df[y]>=cutoff]
     df_pivot=pd.pivot_table(df_cut, index=x, columns=cols, values=y, aggfunc=np.mean)
     df_pivot_err=pd.pivot_table(df_cut, index=x, columns=cols, values=y, aggfunc=np.std)
-    if cols_ord!=[]: df_pivot=df_pivot[cols_ord]
-    if x_ord!=[]: df_pivot=df_pivot.reindex(x_ord)
+    if cols_ord!=[]: df_pivot=df_pivot.reindex(columns=cols_ord)
+    if x_ord!=[]: df_pivot=df_pivot.reindex(index=x_ord)
 
     # Make stacked barplot
     if vertical: # orientation
