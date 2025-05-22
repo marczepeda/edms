@@ -20,7 +20,7 @@ Usage:
 # Import Packages
 import json
 import os
-import edms.gen.io as io
+from .gen import io
 
 # Supporting
 def str_dc(dc):
@@ -46,7 +46,7 @@ def load_config():
     """
     load_config(): Load configuration from the file
     
-    Dependencies: os,json
+    Dependencies: os, json
     """
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "r") as file:

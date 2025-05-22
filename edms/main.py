@@ -18,6 +18,9 @@ Usage:
 '''
 # Import packages
 import argparse
+import ast
+
+from . import config
 
 from .gen import plot as p
 from .gen import stat as st
@@ -31,7 +34,7 @@ from .bio import ngs
 from .bio import transfect as tf
 from .bio import qPCR
 from .bio import clone as cl
-from .bio import fastq as f
+from .bio import fastq as fq
 
 # Supporting methods
 '''
@@ -433,6 +436,30 @@ def main():
     subparsers = parser.add_subparsers()
 
     '''
+    edms.config:
+    - get_info: Retrieve information based on id
+    - set_info: Set information based on id
+    '''
+    parser_config = subparsers.add_parser("config", help="Configuration")
+    subparsers_config = parser_config.add_subparsers()
+
+    # get_info(): Retrieve information based on id
+    # set_info(): Set information based on id
+    parser_config_get_info = subparsers_config.add_parser("get", help="Retrieve information based on id")
+    parser_config_set_info = subparsers_config.add_parser("set", help="Set information based on id")
+    
+    # common arguments for get_info() and set_info()
+    for parser_config_info in [parser_config_get_info, parser_config_set_info]:
+        parser_config_info.add_argument("--id", type=str, help="Identifier from/for configuration file", required=True)
+    
+    # set_info() arguments
+    parser_config_set_info.add_argument("--info", type=ast.literal_eval, help="Information for configuration file (str or dict)", required=True)
+    
+    # default functions
+    parser_config_get_info.set_defaults(func=config.get_info)
+    parser_config_set_info.set_defaults(func=config.set_info)
+
+    '''
     edms.gen.plot:
     - scat(): creates scatter plot related graphs
     - cat(): creates category dependent graphs
@@ -572,6 +599,7 @@ def main():
     edms.gen.io:
     - in_subs(): moves all files with a given suffix into subfolders named after the files (excluding the suffix).
     - out_subs(): recursively moves all files from subdirectories into the parent directory and delete the emptied subdirectories.
+    - create_sh(): creates a shell script with SLURM job submission parameters for Harvard FASRC cluster.
     '''
     parser_io = subparsers.add_parser("io", help="Input/Output")
     subparsers_io = parser_io.add_subparsers()
@@ -579,17 +607,30 @@ def main():
     # Create subparsers for commands
     parser_io_in_subs = subparsers_io.add_parser("in_subs", help="Moves all files with a given suffix into subfolders named after the files (excluding the suffix)")
     parser_io_out_subs = subparsers_io.add_parser("out_subs", help="Delete subdirectories and move their files to the parent directory")
+    parser_io_create_sh = subparsers_io.add_parser("create_sh", description='Generate SLURM shell script for Harvard FASRC cluster.')
     
     # Add common arguments
     for parser_io_common in [parser_io_in_subs,parser_io_out_subs]:
         parser_io_common.add_argument("--dir", help="Path to parent directory", type=str, required=True)
     
-    # in_subs arguments
+    # in_subs() arguments
     parser_io_in_subs.add_argument("--suf", help="File suffix (e.g., '.txt', '.csv') to filter files.", type=int, required=True) 
     
+    # create_sh(): creates a shell script with SLURM job submission parameters for Harvard FASRC cluster.
+    parser_io_create_sh.add_argument('--dir', type=str, required=True, help='Directory to save the shell script.')
+    parser_io_create_sh.add_argument('--file', type=str, required=True, help='Name of the shell script file to create.')
+    parser_io_create_sh.add_argument('--cores', type=int, default=1, help='Number of CPU cores to request.')
+    parser_io_create_sh.add_argument('--partition', type=str, default='serial_reque', help='SLURM partition to use.')
+    parser_io_create_sh.add_argument('--time', type=str, default='0-00:10', help='Job run time in D-HH:MM format.')
+    parser_io_create_sh.add_argument('--mem', type=int, default=1000, help='Memory in MB.')
+    parser_io_create_sh.add_argument('--email', type=str, default=None, help='Notification email address.')
+    parser_io_create_sh.add_argument('--python', type=str, default='python/3.12.5-fasrc01', help='Python module to load.')
+    parser_io_create_sh.add_argument('--env', type=str, default='edms', help='Conda environment to activate.')
+
     # Call command functions
     parser_io_in_subs.set_defaults(func=io.in_subs)
     parser_io_out_subs.set_defaults(func=io.out_subs)
+    parser_io_create_sh.set_defaults(func=io.create_sh)
 
     '''
     edms.gen.cli:
@@ -995,10 +1036,10 @@ def main():
     parser_fastq_genotyping.add_argument("--masks", action="store_true", help="Include masked sequence and translation",default=False)
     parser_fastq_genotyping.add_argument("--keepX", action="store_true", help="Keep unknown translation (X) in output", default=False)
     
-    parser_fastq_revcom.set_defaults(func=f.revcom_fastqs)
-    parser_fastq_unzip.set_defaults(func=f.unzip_fastqs)
-    parser_fastq_comb.set_defaults(func=f.comb_fastqs)
-    parser_fastq_genotyping.set_defaults(func=f.genotyping)
+    parser_fastq_revcom.set_defaults(func=fq.revcom_fastqs)
+    parser_fastq_unzip.set_defaults(func=fq.unzip_fastqs)
+    parser_fastq_comb.set_defaults(func=fq.comb_fastqs)
+    parser_fastq_genotyping.set_defaults(func=fq.genotyping)
 
     '''
     Add pe.py

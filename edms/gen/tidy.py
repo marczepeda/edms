@@ -96,14 +96,14 @@ def merge(data: pd.DataFrame, meta: pd.DataFrame, id, cols: list):
     else: print("Error: id needs to be string or list of 2 strings")
     return data
 
-def shared_group(df: pd.DataFrame, shared: str, group: list, suffixes = ('','_list')) -> pd.DataFrame:
+def shared_group(df: pd.DataFrame, shared: str, group: list | str, suffixes = ('','_list')) -> pd.DataFrame:
     """
     shared_group(): group rows with shared values in a column, consolidate unique values from other columns into lists, & append to the original dataframe.
 
     Parameters:
     df (dataframe): Input pandas DataFrame.
     shared (str): name of column to group by shared values.
-    group (list): list of other columns that will have unique values grouped that share common values.
+    group (list | str): list of other columns that will have unique values grouped that share common values.
     suffixes (tuple, optional): Tuple of suffixes to apply to the columns in the output DataFrame (Default is ('','_list')).
     """
     return pd.merge(left=df, 
