@@ -7,7 +7,6 @@ Description: Command Line Interaction
 Usage:
 [Common commands for fastq files]
 - access(): make all files and subdirectories accessible on Harvard FASRC
-- split_paired_reads(): split paired reads into new R1 and R2 subdirectories at the parent directory
 - smaller_fastq(): create new subdirectory containing fastqs with the # of reads limited
 '''
 
@@ -32,23 +31,6 @@ def access(pt: str):
     print(f"terminal:\ncd {pt}\n{command}")
     result = subprocess.run(f"{command}", shell=True, cwd=pt, capture_output=True, text=True)
     
-    # Print output
-    if result.stdout: print(f"output:\n{result.stdout}")
-    if result.stderr: print(f"errors:\n{result.stderr}")
-
-def split_paired_reads(pt: str):
-    ''' split_paired_reads(): split paired reads into new R1 and R2 subdirectories at the parent directory
-        
-        Parameters:
-        pt (str): path to parent directory
-
-        Dependencies: subprocess
-    '''
-    # Run command in the directory
-    command = 'mkdir R1 R2 && mv *_R1_* R1 && mv *_R2_* R2'
-    print(f"terminal:\ncd {pt}\n{command}")
-    result = subprocess.run(f"{command}", shell=True, cwd=pt, capture_output=True, text=True)
-
     # Print output
     if result.stdout: print(f"output:\n{result.stdout}")
     if result.stderr: print(f"errors:\n{result.stderr}")

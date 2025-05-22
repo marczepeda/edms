@@ -412,6 +412,31 @@ python {".".join(file.split(".")[:-1])}.py \t# Run python script
     except Exception as e:
         print(f"An error occurred while creating the shell script: {e}")
 
+def split_R1_R2(dir: str):
+    '''
+    split_R1_R2(): split paired reads into new R1 and R2 subdirectories at the parent directory
+
+    Parameters:
+    dir (str): path to parent directory
+
+    Depedencies: os, shutil, mkdir()
+    '''
+    r1_dir = os.path.join(dir, 'R1')
+    r2_dir = os.path.join(dir, 'R2')
+
+    # Create directories if they don't exist
+    mkdir(r1_dir)
+    mkdir(r2_dir)
+
+    # Move files based on naming pattern
+    for fname in os.listdir(dir):
+        if '_R1_' in fname:
+            shutil.move(os.path.join(dir, fname), os.path.join(r1_dir, fname))
+        elif '_R2_' in fname:
+            shutil.move(os.path.join(dir, fname), os.path.join(r2_dir, fname))
+
+    print(f"Moved paired reads into {r1_dir} and {r2_dir}")
+
 # Directory Methods
 def print_relative_paths(root_dir: str):
     ''' 

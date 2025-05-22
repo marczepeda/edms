@@ -1,4 +1,8 @@
 # Endogenous Deep Mutational Scans (EDMS)
+## Command Line Interface
+```shell
+edms -h
+```
 ## Package Organization
 - gen: input/output, data wrangling, generating plots, and statistics.
     ```shell

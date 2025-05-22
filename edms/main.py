@@ -600,6 +600,7 @@ def main():
     - in_subs(): moves all files with a given suffix into subfolders named after the files (excluding the suffix).
     - out_subs(): recursively moves all files from subdirectories into the parent directory and delete the emptied subdirectories.
     - create_sh(): creates a shell script with SLURM job submission parameters for Harvard FASRC cluster.
+    - split_R1_R2(): split paired reads into new R1 and R2 subdirectories at the parent directory
     '''
     parser_io = subparsers.add_parser("io", help="Input/Output")
     subparsers_io = parser_io.add_subparsers()
@@ -607,10 +608,11 @@ def main():
     # Create subparsers for commands
     parser_io_in_subs = subparsers_io.add_parser("in_subs", help="Moves all files with a given suffix into subfolders named after the files (excluding the suffix)")
     parser_io_out_subs = subparsers_io.add_parser("out_subs", help="Delete subdirectories and move their files to the parent directory")
-    parser_io_create_sh = subparsers_io.add_parser("create_sh", description='Generate SLURM shell script for Harvard FASRC cluster.')
+    parser_io_create_sh = subparsers_io.add_parser("create_sh", help='Generate SLURM shell script for Harvard FASRC cluster.')
+    parser_io_split_R1_R2 = subparsers_io.add_parser("split_R1_R2", help='Split paired reads into new R1 and R2 subdirectories at the parent directory.')
     
     # Add common arguments
-    for parser_io_common in [parser_io_in_subs,parser_io_out_subs]:
+    for parser_io_common in [parser_io_in_subs,parser_io_out_subs,parser_io_split_R1_R2]:
         parser_io_common.add_argument("--dir", help="Path to parent directory", type=str, required=True)
     
     # in_subs() arguments
@@ -631,11 +633,11 @@ def main():
     parser_io_in_subs.set_defaults(func=io.in_subs)
     parser_io_out_subs.set_defaults(func=io.out_subs)
     parser_io_create_sh.set_defaults(func=io.create_sh)
+    parser_io_split_R1_R2.set_defaults(func=io.split_R1_R2)
 
     '''
     edms.gen.cli:
     - access(): make all files and subdirectories accessible on Harvard FASRC
-    - split_paired_reads(): split paired reads into new R1 and R2 subdirectories at the parent directory
     - smaller_fastq(): create new subdirectory containing fastqs with the # of reads limited
     '''
     parser_cli = subparsers.add_parser("cli", help="Command Line Interaction")
@@ -643,11 +645,10 @@ def main():
     
     # Create subparsers for commands
     parser_cli_access = subparsers_cli.add_parser("access", help="Make all files and subdirectories accessible on Harvard FASRC")
-    parser_cli_split_paired_reads = subparsers_cli.add_parser("split_paired_reads", help="Split paired reads into new R1 and R2 subdirectories at the parent directory")
     parser_cli_smaller_fastq = subparsers_cli.add_parser("smaller_fastq", help="Ccreate new subdirectory containing fastqs with the # of reads limited")
     
     # Add common arguments
-    for parser_cli_common in [parser_cli_access, parser_cli_split_paired_reads, parser_cli_smaller_fastq]:
+    for parser_cli_common in [parser_cli_access, parser_cli_smaller_fastq]:
         parser_cli_common.add_argument("--pt", help="Path to parent directory", type=str, default='.')
     
     # Smaller_fastq arguments
@@ -656,7 +657,6 @@ def main():
     
     # Call command functions
     parser_cli_access.set_defaults(func=cli.access)
-    parser_cli_split_paired_reads.set_defaults(func=cli.split_paired_reads)
     parser_cli_smaller_fastq.set_defaults(func=cli.smaller_fastq)
 
     '''
