@@ -37,9 +37,26 @@ def str_dc(dc):
     elif isinstance(dc, str): return
     else: TypeError(f"{dc} was not a string")
 
+def mkdir(dir: str, sep='/'):
+    '''
+    mkdir(): make directory if it does not exist (including parent directories)
+
+    Parameters:
+    dir (str): directory path
+    sep (str): seperator directory path
+
+    Dependencies: os
+    '''
+    dirs = dir.split(sep)
+    for i in range(len(dirs)):
+        check_dir = sep.join(dirs[:i+1])
+        if (os.path.exists(check_dir)==False)&(i!=0):
+            os.mkdir(check_dir)
+            print(f'Created {check_dir}')
+
 # CONFIG_FILE
 dir = os.path.expanduser("~/.config/edms") # Make directory for configuration file
-io.mkdir(dir)
+mkdir(dir)
 CONFIG_FILE = os.path.join(dir,".config.json") # Define the path for the configuration file
 
 def load_config():
