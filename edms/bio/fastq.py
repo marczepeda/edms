@@ -73,6 +73,7 @@ from ..gen import io
 from ..gen import tidy as t
 from ..gen import plot as p
 from ..utils import memory_timer
+from .. import config
 
 # Get rid of warnings
 import warnings
@@ -1502,15 +1503,16 @@ def outcomes_desired(df: pd.DataFrame, desired_edits: list | str, sample_col: st
 
     return df_desired,memories
 
-def genotyping(in_dir: str, sequence: str, res: int, desired_edits: list = None,
+def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=None, desired_edits: list = None,
                out_dir: str=None, out_file: str=None, return_df:bool=False, **kwargs):
     ''' 
     genotying(): quantify edit outcomes workflow
     
     Parameters:
     in_dir (str): directory with fastq files
-    sequence (str): sequence formatted flank5(genotype region)flank3
-    res (int): first AA number in genotype region
+    config_key (str, optional 1): config file key (FWD primer-REV primer) with 'sequence' & 'res' parameters
+    sequence (str, optional 2): sequence formatted flank5(genotype region)flank3
+    res (int, optional 2): first AA number in genotype region
     desired_edits (list, optional): list of desired edits (Default: None)
     out_dir (str, optional): output directory (Default: None)
     out_file (str, optional): output file (Default: None)
@@ -1531,6 +1533,12 @@ def genotyping(in_dir: str, sequence: str, res: int, desired_edits: list = None,
     memory_timer(reset=True)
     memories = []
     
+    # Check config file
+    if config_key is not None:
+        config_key = config.get_info(id=config_key)
+        sequence = config_key['sequence']
+        res = config_key['res']
+
     # Check sequence and obtain flank5(genotype region)flank3
     if '(' not in sequence or ')' not in sequence:
         raise(ValueError(f'Missing "(" or ")" in sequence:\n{sequence}'))

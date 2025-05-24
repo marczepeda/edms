@@ -7,6 +7,7 @@ Description: Configuration
 Usage:
 [Supporting]
 - str_dc(): Check that all dictionary components are strings
+- mkdir(): make directory if it does not exist (including parent directories)
 
 [CONFIG_FILE]
 - load_config(): Load configuration from the file
