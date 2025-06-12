@@ -781,6 +781,7 @@ def main():
     
     parser_ngs_pcrs.add_argument("--dir", help="Output directory path", type=str, default='.')
     parser_ngs_pcrs.add_argument("--file", help="Output file name (.xlsx)", type=str, default='NGS_plan.xlsx')
+    parser_ngs_pcrs.add_argument("--ultra", help="Using NEB Ultra II reagents", action="store_true")
     
     parser_ngs_pcrs.set_defaults(func=ngs.pcrs)
     

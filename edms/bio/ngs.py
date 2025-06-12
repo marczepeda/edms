@@ -7,6 +7,7 @@ Description: Next generation sequencing
 Usage:
 [NGS PCR calculation]
 - pcr_mm(): NEB Q5 PCR master mix calculations
+- pcr_mm_ultra(): NEBNext Ultra II PCR master mix calculations
 - pcrs(): generates NGS PCR plan automatically (Default: 96-well plates including outer wells)
 
 [Hamming distance calculation]
@@ -74,13 +75,55 @@ def pcr_mm(primers: pd.Series, template: str, template_uL: int,
                                                      },index=pd.Index(list(np.arange(1,9)), name=f"{pcr1_fwd}_{pcr1_rev}"))
     return pcr_mm_dc
                                             
+def pcr_mm_ultra(primers: pd.Series, template: str, template_uL: int,
+                 Q5_mm_x_stock=2,fwd_uM_stock=10,rev_uM_stock=10,
+                 Q5_mm_x_desired=1,fwd_uM_desired=0.5,rev_uM_desired=0.5,
+                 total_uL=20,mm_x=1.1):
+    '''
+    pcr_mm_ultra(): NEBNext Ultra II PCR master mix calculations
+    
+    Parameters:
+    primers (Series): value_counts() for primers
+    template (str): template name
+    template_uL (int): template uL per reaction
+    Q5_mm_x_stock (int, optional): Q5 reaction master mix stock (Default: 2)
+    fwd_uM_stock (int, optional): [FWD Primer] stock in mM (Default: 10)
+    rev_uM_stock (int, optional): [REV Primer] stock in mM (Default: 10)
+    Q5_mm_x_desired (int, optional): Q5 reaction master mix desired (Default: 1)
+    fwd_uM_desired (float, optional): [FWD Primer] desired in mM (Default: 0.5)
+    rev_uM_desired (float, optional): [REV Primer] desired in mM (Default: 0.5)
+    total_uL (int, optional): total uL per reaction (Default: 20)
+    mm_x (float, optional): master mix multiplier (Default: 1.1)
+
+    Dependencies: pandas
+    '''
+    pcr_mm_dc = dict()
+    for i,(pcr1_fwd,pcr1_rev) in enumerate(primers.keys()):
+        pcr_mm_dc[(pcr1_fwd,pcr1_rev)] = pd.DataFrame({'Component':['Nuclease-free H2O',f'NEBNext Q5 Ultra II {Q5_mm_x_stock}x MM',pcr1_fwd,pcr1_rev,template,'Total'],
+                                                       'Stock':['',Q5_mm_x_stock,fwd_uM_stock,rev_uM_stock,'',''],
+                                                       'Desired':['',Q5_mm_x_desired,fwd_uM_desired,rev_uM_desired,'',''],
+                                                       'Unit':['','x','uM','uM','',''],
+                                                       'uL': [round(total_uL-sum([Q5_mm_x_desired/Q5_mm_x_stock,fwd_uM_desired/fwd_uM_stock,rev_uM_desired/rev_uM_stock,template_uL/total_uL]*total_uL),2),
+                                                              round(Q5_mm_x_desired/Q5_mm_x_stock*total_uL,2),
+                                                              round(fwd_uM_desired/fwd_uM_stock*total_uL,2),
+                                                              round(rev_uM_desired/rev_uM_stock*total_uL,2),
+                                                              round(template_uL,2),
+                                                              round(total_uL,2)],
+                                                       'uL MM': [round((total_uL-sum([Q5_mm_x_desired/Q5_mm_x_stock,fwd_uM_desired/fwd_uM_stock,rev_uM_desired/rev_uM_stock,template_uL/total_uL]*total_uL))*primers.iloc[i]*mm_x,2),
+                                                                 round(Q5_mm_x_desired/Q5_mm_x_stock*total_uL*primers.iloc[i]*mm_x,2),
+                                                                 round(fwd_uM_desired/fwd_uM_stock*total_uL*primers.iloc[i]*mm_x,2),
+                                                                 round(rev_uM_desired/rev_uM_stock*total_uL*primers.iloc[i]*mm_x,2),
+                                                                 round(template_uL*primers.iloc[i]*mm_x,2),
+                                                                 round(total_uL*primers.iloc[i]*mm_x,2)]
+                                                     },index=pd.Index(list(np.arange(1,7)), name=f"{pcr1_fwd}_{pcr1_rev}"))
+    return pcr_mm_dc
 
 def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col='ID', 
          pcr1_id_col='PCR1 ID', pcr1_fwd_col='PCR1 FWD', pcr1_rev_col='PCR1 REV', 
          pcr2_id_col='PCR2 ID', pcr2_fwd_col='PCR2 FWD', pcr2_rev_col='PCR2 REV',
          Q5_mm_x_stock=5,dNTP_mM_stock=10,fwd_uM_stock=10,rev_uM_stock=10,Q5_U_uL_stock=2,
          Q5_mm_x_desired=1,dNTP_mM_desired=0.2,fwd_uM_desired=0.5,rev_uM_desired=0.5,Q5_U_uL_desired=0.02,
-         total_uL=20,mm_x=1.1,outer_wells=True):
+         total_uL=20,mm_x=1.1,outer_wells=True,ultra=False):
     '''
     pcrs(): generates NGS PCR plan automatically (Default: 96-well plates including outer wells)
     
@@ -109,6 +152,7 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col='ID',
     total_uL (int, optional): total uL per reaction (Default: 20)
     mm_x (float, optional): master mix multiplier (Default: 1.1)
     outer_wells (bool, optional): include outer wells (Default: True)
+    ultra (bool, optional): use NEB Ultra II reagents (Default: False)
 
     Dependencies: pandas,numpy,os,io
     '''
@@ -175,14 +219,26 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col='ID',
     
     # Create PCR master mixes for PCR1 and PCR2 primer pairs
     df['PCR2 FWD MM'] = 'PCR2 FWD'
-    pcr1_mms = pcr_mm(primers=df[[pcr1_fwd_col,pcr1_rev_col]].value_counts(),template='gDNA Extract',template_uL=5,
-                      Q5_mm_x_stock=Q5_mm_x_stock,dNTP_mM_stock=dNTP_mM_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
-                      Q5_U_uL_stock=Q5_U_uL_stock,Q5_mm_x_desired=Q5_mm_x_desired,dNTP_mM_desired=dNTP_mM_desired,fwd_uM_desired=fwd_uM_desired,
-                      rev_uM_desired=rev_uM_desired,Q5_U_uL_desired=Q5_U_uL_desired,total_uL=total_uL,mm_x=mm_x)
-    pcr2_mms = pcr_mm(primers=df[['PCR2 FWD MM',pcr2_rev_col]].value_counts(),template='PCR1 Product',template_uL=1,
-                      Q5_mm_x_stock=Q5_mm_x_stock,dNTP_mM_stock=dNTP_mM_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
-                      Q5_U_uL_stock=Q5_U_uL_stock,Q5_mm_x_desired=Q5_mm_x_desired,dNTP_mM_desired=dNTP_mM_desired,fwd_uM_desired=fwd_uM_desired,
-                      rev_uM_desired=rev_uM_desired,Q5_U_uL_desired=Q5_U_uL_desired,total_uL=total_uL,mm_x=mm_x)
+    if ultra:
+        Q5_mm_x_stock = 2 # NEBNext Ultra II Q5 master mix stock
+        pcr1_mms = pcr_mm_ultra(primers=df[[pcr1_fwd_col,pcr1_rev_col]].value_counts(),template='gDNA Extract',template_uL=total_uL-sum([Q5_mm_x_desired/Q5_mm_x_stock,fwd_uM_desired/fwd_uM_stock,rev_uM_desired/rev_uM_stock]*total_uL),
+                                Q5_mm_x_stock=Q5_mm_x_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
+                                Q5_mm_x_desired=Q5_mm_x_desired,fwd_uM_desired=fwd_uM_desired,rev_uM_desired=rev_uM_desired,
+                                total_uL=total_uL,mm_x=mm_x)
+        pcr2_mms = pcr_mm_ultra(primers=df[['PCR2 FWD MM',pcr2_rev_col]].value_counts(),template='PCR1 Product',template_uL=1,
+                                Q5_mm_x_stock=Q5_mm_x_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
+                                Q5_mm_x_desired=Q5_mm_x_desired,fwd_uM_desired=fwd_uM_desired,rev_uM_desired=rev_uM_desired,
+                                total_uL=total_uL,mm_x=mm_x)
+    else:
+        pcr1_mms = pcr_mm(primers=df[[pcr1_fwd_col,pcr1_rev_col]].value_counts(),template='gDNA Extract',template_uL=5,
+                          Q5_mm_x_stock=Q5_mm_x_stock,dNTP_mM_stock=dNTP_mM_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
+                          Q5_U_uL_stock=Q5_U_uL_stock,Q5_mm_x_desired=Q5_mm_x_desired,dNTP_mM_desired=dNTP_mM_desired,fwd_uM_desired=fwd_uM_desired,
+                          rev_uM_desired=rev_uM_desired,Q5_U_uL_desired=Q5_U_uL_desired,total_uL=total_uL,mm_x=mm_x)
+        pcr2_mms = pcr_mm(primers=df[['PCR2 FWD MM',pcr2_rev_col]].value_counts(),template='PCR1 Product',template_uL=1,
+                          Q5_mm_x_stock=Q5_mm_x_stock,dNTP_mM_stock=dNTP_mM_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
+                          Q5_U_uL_stock=Q5_U_uL_stock,Q5_mm_x_desired=Q5_mm_x_desired,dNTP_mM_desired=dNTP_mM_desired,fwd_uM_desired=fwd_uM_desired,
+                          rev_uM_desired=rev_uM_desired,Q5_U_uL_desired=Q5_U_uL_desired,total_uL=total_uL,mm_x=mm_x)
+
 
     if dir is not None and file is not None: # Save file if dir & file are specified
         io.mkdir(dir=dir)
