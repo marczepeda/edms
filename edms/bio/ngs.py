@@ -5,9 +5,14 @@ Created: 2024-11-12
 Description: Next generation sequencing
 
 Usage:
+[NGS Thermocycler]
+- group_boundaries(): Group a list of integers into segments where each segment contains consecutive numbers.
+- min_sec(): Convert decimal minutes to a tuple of (minutes, seconds).
+- thermocycler(): Creates a dictionary of thermocycler objects from a DataFrame.
+
 [NGS PCR calculation]
 - pcr_mm(): NEB Q5 PCR master mix calculations
-- pcr_mm_ultra(): NEBNext Ultra II PCR master mix calculations
+- pcr_mm_ultra(): NEBNext Ultra II Q5 PCR master mix calculations
 - pcrs(): generates NGS PCR plan automatically (Default: 96-well plates including outer wells)
 
 [Hamming distance calculation]
@@ -15,6 +20,8 @@ Usage:
 - compute_distance_matrix(): returns pairwise Hamming distance matrix for a list of sequences
 ''' 
 # Import Packages
+import math
+from typing import Literal
 import numpy as np
 import pandas as pd
 from Bio.Seq import Seq
@@ -22,6 +29,94 @@ import os
 from ..gen import io
 import warnings
 warnings.filterwarnings("ignore")
+
+# NGS Thermocycler
+def group_boundaries(nums: list[int]):
+    '''
+    group_boundaries(nums): Group a list of integers into segments where each segment contains consecutive numbers.
+    
+    Parameters:
+    nums (list[int]): A list of integers to be grouped.
+    '''
+    if not nums: # Check if the list is empty
+        return []
+
+    nums = sorted(set(nums))  # Remove duplicates and sort the list
+    groups = [] # Initialize an empty list to hold the groups
+    start = nums[0]
+
+    for i in range(1, len(nums)): # Iterate through the list starting from the second element
+        if nums[i] - nums[i - 1] > 1:
+            groups.append((start, nums[i - 1]))
+            start = nums[i]
+
+    groups.append((start, nums[-1]))  # Close the final segment
+    return groups
+
+def min_sec(decimal_minutes: float):
+    '''
+    min_sec(): Convert decimal minutes to a tuple of (minutes, seconds).
+
+    Parameters:
+    decimal_minutes (float): Decimal representation of minutes.
+    '''
+    minutes = int(decimal_minutes)
+    seconds = int(round((decimal_minutes - minutes) * 60))
+    return minutes, seconds
+
+def thermocycler(df: pd.DataFrame, n: Literal[1,2] = 1, cycles: int | str = None):
+    """
+    thermocycler(): Creates a dictionary of thermocycler objects from a DataFrame.
+
+    Parameters:
+    df (pd.DataFrame): DataFrame containing PCR data.
+    n (Literal[1, 2]): The PCR number to process (Default: 1).
+    cycles (int | str): Number of cycles for PCR1 (Default: None -> 30).
+
+    Dependencies: math, pandas, typing.Literal, min_sec(), group_boundaries()
+    """
+    dc = dict() # Initialize an empty dictionary to hold thermocycler dataframes
+    if n==1: # PCR1
+        if cycles is None:
+            cycles = 30
+    elif n==2: # PCR2
+        cycles = 8
+        df[f'PCR{n} FWD'] = 'PCR2 FWD'
+    else: 
+        raise ValueError("n must be 1 or 2")
+
+    # Iterate through unique combinations of FWD and REV primers for the specified PCR number
+    for (fwd,rev) in list(df[[f'PCR{n} FWD',f'PCR{n} REV']].value_counts().keys()):
+        title = f"{fwd}_{rev}: " # Initialize the thermocycler title for the set of primers
+
+        # Group the IDs based on the set of primers; determine the temperature and time
+        ls = group_boundaries(list(df[(df[f'PCR{n} FWD']==fwd) & (df[f'PCR{n} REV']==rev)]['ID'].keys()))
+        tm = df[(df[f'PCR{n} FWD']==fwd) & (df[f'PCR{n} REV']==rev)].iloc[0][f'PCR{n} Tm']
+        bp = df[(df[f'PCR{n} FWD']==fwd) & (df[f'PCR{n} REV']==rev)].iloc[0]['PCR2 bp']
+        (min,sec) = min_sec(math.floor(bp/500)/2+0.5)
+        if min == 0:
+            time = f"{sec}s"
+        else:
+            if sec == 0:
+                time = f"{min}min"
+            else:
+                time = f"{min}min {sec}s"
+
+        # Append grouped IDs to the thermocycler title
+        for (start, end) in ls:
+            if start == end:
+                title += f"{df.iloc[start][f'PCR{n} ID']}, "
+            else:
+                title += f"{df.iloc[start][f'PCR{n} ID']} -> {df.iloc[end][f'PCR{n} ID']}, "
+        
+        # Create a DataFrame for the thermocycler steps
+        dc[f'{fwd}_{rev}_{tm}°C'] = pd.DataFrame(
+            {'Temperature':['', '98°C', '98°C', f'{tm}°C', '72°C', '72°C', '4°C'],
+             'Time':['', '30s', '10s', '30s', '30s', time, '∞'],
+             'Repeat':['', '', f'{cycles} cycles', f'{cycles} cycles', f'{cycles} cycles', '', '']},
+             index=pd.Index([f'{title[:-2]}','1','2','2','2','3','4'], name="Step"))
+
+    return dc
 
 # NGS PCR calculation
 def pcr_mm(primers: pd.Series, template: str, template_uL: int,
@@ -73,6 +168,7 @@ def pcr_mm(primers: pd.Series, template: str, template_uL: int,
                                                                  round(Q5_U_uL_desired/Q5_U_uL_stock*total_uL*primers.iloc[i]*mm_x,2),
                                                                  round(total_uL*primers.iloc[i]*mm_x,2)]
                                                      },index=pd.Index(list(np.arange(1,9)), name=f"{pcr1_fwd}_{pcr1_rev}"))
+        
     return pcr_mm_dc
                                             
 def pcr_mm_ultra(primers: pd.Series, template: str, template_uL: int,
@@ -80,7 +176,7 @@ def pcr_mm_ultra(primers: pd.Series, template: str, template_uL: int,
                  Q5_mm_x_desired=1,fwd_uM_desired=0.5,rev_uM_desired=0.5,
                  total_uL=20,mm_x=1.1):
     '''
-    pcr_mm_ultra(): NEBNext Ultra II PCR master mix calculations
+    pcr_mm_ultra(): NEBNext Ultra II Q5 PCR master mix calculations
     
     Parameters:
     primers (Series): value_counts() for primers
@@ -99,7 +195,7 @@ def pcr_mm_ultra(primers: pd.Series, template: str, template_uL: int,
     '''
     pcr_mm_dc = dict()
     for i,(pcr1_fwd,pcr1_rev) in enumerate(primers.keys()):
-        pcr_mm_dc[(pcr1_fwd,pcr1_rev)] = pd.DataFrame({'Component':['Nuclease-free H2O',f'NEBNext Q5 Ultra II {Q5_mm_x_stock}x MM',pcr1_fwd,pcr1_rev,template,'Total'],
+        pcr_mm_dc[(pcr1_fwd,pcr1_rev)] = pd.DataFrame({'Component':['Nuclease-free H2O',f'NEBNext Ultra II Q5 {Q5_mm_x_stock}x MM',pcr1_fwd,pcr1_rev,template,'Total'],
                                                        'Stock':['',Q5_mm_x_stock,fwd_uM_stock,rev_uM_stock,'',''],
                                                        'Desired':['',Q5_mm_x_desired,fwd_uM_desired,rev_uM_desired,'',''],
                                                        'Unit':['','x','uM','uM','',''],
@@ -123,7 +219,7 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col='ID',
          pcr2_id_col='PCR2 ID', pcr2_fwd_col='PCR2 FWD', pcr2_rev_col='PCR2 REV',
          Q5_mm_x_stock=5,dNTP_mM_stock=10,fwd_uM_stock=10,rev_uM_stock=10,Q5_U_uL_stock=2,
          Q5_mm_x_desired=1,dNTP_mM_desired=0.2,fwd_uM_desired=0.5,rev_uM_desired=0.5,Q5_U_uL_desired=0.02,
-         total_uL=20,mm_x=1.1,outer_wells=True,ultra=False):
+         total_uL=20,mm_x=1.1,cycles: int | str = None, outer_wells=True,ultra=False):
     '''
     pcrs(): generates NGS PCR plan automatically (Default: 96-well plates including outer wells)
     
@@ -151,10 +247,11 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col='ID',
     Q5_U_uL_desired (float, optional): [Q5 Polymerase] desired in U/uL (Default: 0.02)
     total_uL (int, optional): total uL per reaction (Default: 20)
     mm_x (float, optional): master mix multiplier (Default: 1.1)
+    cycles (int | str): Number of cycles for the PCR1 process (Default: None -> 30).
     outer_wells (bool, optional): include outer wells (Default: True)
     ultra (bool, optional): use NEB Ultra II reagents (Default: False)
 
-    Dependencies: pandas,numpy,os,io
+    Dependencies: pandas,numpy,os,io,thermocycler(),pcr_mm(),pcr_mm_ultra()
     '''
     # Get samples dataframe from file path if needed
     if type(df)==str:
@@ -239,6 +336,9 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col='ID',
                           Q5_U_uL_stock=Q5_U_uL_stock,Q5_mm_x_desired=Q5_mm_x_desired,dNTP_mM_desired=dNTP_mM_desired,fwd_uM_desired=fwd_uM_desired,
                           rev_uM_desired=rev_uM_desired,Q5_U_uL_desired=Q5_U_uL_desired,total_uL=total_uL,mm_x=mm_x)
 
+    # Create thermocycler objects for PCR1 and PCR2
+    pcr1_thermo = thermocycler(df=df, n=1, cycles=cycles)
+    pcr2_thermo = thermocycler(df=df, n=2)
 
     if dir is not None and file is not None: # Save file if dir & file are specified
         io.mkdir(dir=dir)
@@ -250,14 +350,22 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col='ID',
                 sr += len(pivot)+2 # Skip 2 lines after each pivot
             for key,pcr1_mm in pcr1_mms.items():
                 pcr1_mm.to_excel(writer,sheet_name='NGS Plan',startrow=sr) # Sheet with all PCR MMs
-                pcr1_mm.to_excel(writer,sheet_name='_'.join(key)) # Pivot per sheet
-                sr += pcr1_mm.shape[0]+2 # Skip 2 lines after each pivot
+                pcr1_mm.to_excel(writer,sheet_name='_'.join(key)) # PCR MM per sheet
+                sr += pcr1_mm.shape[0]+2 # Skip 2 lines after each PCR MM
             for key,pcr2_mm in pcr2_mms.items():
                 pcr2_mm.to_excel(writer,sheet_name='NGS Plan',startrow=sr) # Sheet with all PCR MMs
-                pcr2_mm.to_excel(writer,sheet_name='_'.join(key)) # Pivot per sheet
-                sr += pcr2_mm.shape[0]+2 # Skip 2 lines after each pivot
+                pcr2_mm.to_excel(writer,sheet_name='_'.join(key)) # PCR MM per sheet
+                sr += pcr2_mm.shape[0]+2 # Skip 2 lines after each PCR MM
+            for key,thermo in pcr1_thermo.items():
+                thermo.to_excel(writer,sheet_name='NGS Plan',startrow=sr) # Sheet with all thermocyler objects
+                thermo.to_excel(writer,sheet_name=key) # Thermocyler object per sheet
+                sr += thermo.shape[0]+2 # Skip 2 lines after each thermocyler object
+            for key,thermo in pcr2_thermo.items():
+                thermo.to_excel(writer,sheet_name='NGS Plan',startrow=sr) # Sheet with all thermocyler objects
+                thermo.to_excel(writer,sheet_name=key) # Thermocyler object per sheet
+                sr += thermo.shape[0]+2 # Skip 2 lines after each thermocyler object
             
-    return pivots,pcr1_mms,pcr2_mms
+    return pivots,pcr1_mms,pcr2_mms,pcr1_thermo,pcr2_thermo
 
 # Hamming distance calculation
 def hamming_distance(seq1: str | Seq, seq2: str | Seq):
