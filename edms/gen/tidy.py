@@ -11,6 +11,7 @@ Usage:
 - missing_cols(): returns values from a list if they are not dataframe columns
 - merge(): adds metadata columns to data dataframe using metadata dataframe
 - shared_group(): group rows with shared values in a column, consolidate unique values from other columns into lists, & append to the original dataframe.
+- unique_tuples(): returns a list of unique tuples of value(s) from a dataframe column(s) in order
 
 [Dictionary methods]
 - filter_kwargs(): filter **kwargs by specified keywords
@@ -111,6 +112,34 @@ def shared_group(df: pd.DataFrame, shared: str, group: list | str, suffixes = ('
                     on=shared, 
                     how='left', 
                     suffixes=suffixes)
+
+def unique_tuples(df: pd.DataFrame, cols: list | str):
+    ''' 
+    unique_tuples(): returns a list of unique tuples of value(s) from a dataframe column(s) in order
+    
+    Parameters:
+    df (dataframe): pandas dataframe
+    cols (list | str): column name(s) to get unique pairs from
+    
+    Dependencies: pandas
+    '''
+    if type(cols)==str: cols=[cols]
+    return list(df[cols].drop_duplicates().itertuples(index=False, name=None))
+
+def vcs_ordered(df: pd.DataFrame, cols: list | str):
+    ''' 
+    vcs_ordered(): returns dataframe.value_counts() in order
+    
+    Parameters:
+    df (dataframe): pandas dataframe
+    cols (list | str): column name(s) to get unique values from
+    
+    Dependencies: pandas
+    '''
+    if type(cols)==str: cols=[cols]
+    vcs = df[cols].value_counts() # Get value counts
+    order = unique_tuples(df=df, cols=cols) # Get unique tuples
+    return pd.Series([vcs[pair] for pair in order], index=order)
 
 # Dictionary methods
 def filter_kwargs(keywords: list, **kwargs):

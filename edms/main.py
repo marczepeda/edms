@@ -768,21 +768,47 @@ def main():
 
     '''
     edms.bio.ngs:
-    - pcrs(): generates NGS PCR plan automatically (Default: 96-well plates including outer wells)
+    - pcrs(): generates NGS PCR plan automatically
     - compute_distance_matrix(): compute pairwise Hamming distance matrix for a list of sequences stored in a dataframe
     '''
     parser_ngs = subparsers.add_parser("ngs", help="Next generation sequencing")
     subparsers_ngs = parser_ngs.add_subparsers()
 
-    # pcrs(): generates NGS PCR plan automatically (Default: 96-well plates including outer wells)
+    # pcrs(): generates NGS PCR plan automatically
     parser_ngs_pcrs = subparsers_ngs.add_parser("pcrs", help="Plan NGS PCRs")
     
+    # pcrs(): Core parameters
     parser_ngs_pcrs.add_argument("--df", help="Input file", type=str, required=True)
     
     parser_ngs_pcrs.add_argument("--dir", help="Output directory path", type=str, default='.')
     parser_ngs_pcrs.add_argument("--file", help="Output file name (.xlsx)", type=str, default='NGS_plan.xlsx')
     parser_ngs_pcrs.add_argument("--cycles", help="Number of cycles for PCR1", type=str, default='30')
     parser_ngs_pcrs.add_argument("--ultra", help="Using NEB Ultra II reagents", action="store_true")
+    parser_ngs_pcrs.add_argument('--total_uL', type=int, default=20, help='Total reaction volume (uL)')
+    parser_ngs_pcrs.add_argument('--mm_x', type=float, default=1.1, help='Master mix multiplier')
+    
+    # pcrs(): Column names
+    parser_ngs_pcrs.add_argument('--gDNA_id_col', default='ID', help='gDNA ID column name')
+    parser_ngs_pcrs.add_argument('--pcr1_id_col', default='PCR1 ID', help='PCR1 ID column name')
+    parser_ngs_pcrs.add_argument('--pcr1_fwd_col', default='PCR1 FWD', help='PCR1 FWD column name')
+    parser_ngs_pcrs.add_argument('--pcr1_rev_col', default='PCR1 REV', help='PCR1 REV column name')
+    parser_ngs_pcrs.add_argument('--pcr2_id_col', default='PCR2 ID', help='PCR2 ID column name')
+    parser_ngs_pcrs.add_argument('--pcr2_fwd_col', default='PCR2 FWD', help='PCR2 FWD column name')
+    parser_ngs_pcrs.add_argument('--pcr2_rev_col', default='PCR2 REV', help='PCR2 REV column name')
+
+    # pcrs(): Stock concentrations
+    parser_ngs_pcrs.add_argument('--Q5_mm_x_stock', type=float, default=5, help='Q5 reaction master mix stock (X)')
+    parser_ngs_pcrs.add_argument('--dNTP_mM_stock', type=float, default=10, help='dNTP stock concentration (mM)')
+    parser_ngs_pcrs.add_argument('--fwd_uM_stock', type=float, default=10, help='Forward primer stock concentration (uM)')
+    parser_ngs_pcrs.add_argument('--rev_uM_stock', type=float, default=10, help='Reverse primer stock concentration (uM)')
+    parser_ngs_pcrs.add_argument('--Q5_U_uL_stock', type=float, default=2, help='Q5 Polymerase stock (U/uL)')
+
+    # pcrs(): Desired concentrations
+    parser_ngs_pcrs.add_argument('--Q5_mm_x_desired', type=float, default=1, help='Q5 reaction master mix desired (X)')
+    parser_ngs_pcrs.add_argument('--dNTP_mM_desired', type=float, default=0.2, help='dNTP desired concentration (mM)')
+    parser_ngs_pcrs.add_argument('--fwd_uM_desired', type=float, default=0.5, help='Forward primer desired concentration (uM)')
+    parser_ngs_pcrs.add_argument('--rev_uM_desired', type=float, default=0.5, help='Reverse primer desired concentration (uM)')
+    parser_ngs_pcrs.add_argument('--Q5_U_uL_desired', type=float, default=0.02, help='Q5 Polymerase desired amount (U/uL)')
     
     parser_ngs_pcrs.set_defaults(func=ngs.pcrs)
     
