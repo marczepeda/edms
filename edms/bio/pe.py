@@ -245,7 +245,7 @@ def PrimeDesignOutput(pt: str, scaffold_sequence: str, saturation_mutagenesis:st
 
     return pegRNAs,ngRNAs
 
-def MergePrimeDesignOutput(epegRNAs: dict | pd.DataFrame, ngRNAs: dict | pd.DataFrame,ngRNAs_group_max=3,
+def MergePrimeDesignOutput(epegRNAs: dict | pd.DataFrame, ngRNAs: dict | pd.DataFrame, ngRNAs_group_max=3,
                            epegRNA_suffix='_epegRNA', ngRNA_suffix='_ngRNA'):
     '''
     MergePrimeDesignOutput(): rejoins epeg/ngRNAs from PrimeDesign output & creates ngRNA_groups
@@ -297,6 +297,9 @@ def epegRNA_linkers(pegRNAs: pd.DataFrame, epegRNA_motif_sequence: str='CGCGGTTC
     
     Dependencies: pandas, pegLIT, & io
     '''
+    if type(df)==str: # Get pegRNAs dataframe from file path if needed
+        df = io.get(pt=df)
+
     # Get or make checkpoint DataFrame
     if checkpoint_dir is not None and checkpoint_file is not None: # Save checkpoints
         if checkpoint_pt=='': checkpoint = pd.DataFrame(columns=['pegRNA_number','Linker_sequence'])

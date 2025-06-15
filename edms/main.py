@@ -35,6 +35,7 @@ from .bio import transfect as tf
 from .bio import qPCR
 from .bio import clone as cl
 from .bio import fastq as fq
+from .bio import pe
 
 # Supporting methods
 '''
@@ -809,7 +810,7 @@ def main():
     parser_ngs_pcrs.add_argument('--fwd_uM_desired', type=float, default=0.5, help='Forward primer desired concentration (uM)')
     parser_ngs_pcrs.add_argument('--rev_uM_desired', type=float, default=0.5, help='Reverse primer desired concentration (uM)')
     parser_ngs_pcrs.add_argument('--Q5_U_uL_desired', type=float, default=0.02, help='Q5 Polymerase desired amount (U/uL)')
-    
+
     parser_ngs_pcrs.set_defaults(func=ngs.pcrs)
     
     # hamming_distance_matrix(): compute pairwise Hamming distance matrix for a list of sequences stored in a dataframe
@@ -942,7 +943,6 @@ def main():
     parser_clone_pcrsim.add_argument("--dir", type=str, help="Output directory", default='.')
     parser_clone_pcrsim.add_argument("--file", type=str, help="Output file name", default='pcr_sim.csv')
 
-
     parser_clone_pcrsim.add_argument("--fwd_ext_col", type=str, help="Column name for forward primer extension region")
     parser_clone_pcrsim.add_argument("--rev_ext_col", type=str, help="Column name for reverse primer extension region")
     parser_clone_pcrsim.add_argument("--product_col", type=str, default="PCR Product", help="Column name for output PCR product")
@@ -1071,8 +1071,35 @@ def main():
 
     '''
     Add pe.py
-    - ...
+    - epegRNA_linkers(): generate epegRNA linkers between PBS and 3' hairpin motif & finish annotations
+    
+    WIP: Full workflow
+    1. PrimeDesigner(): 
+        - PrimeDesignInput(): creates and checks PrimeDesign saturation mutagenesis input file
+        - PrimeDesign(): run PrimeDesign using Docker (NEED TO BE RUNNING DESKTOP APP)
+        - PrimeDesignOutput(): splits peg/ngRNAs from PrimeDesign output & finishes annotations
+    2. Pilot_Screen():
+        - shared_sequences(): Reduce PE library into shared spacers and PBS sequences
+        - cosmic/cvar: priority_muts(), priority_edits()
+    3. epegRNA_linkers(): generate epegRNA linkers between PBS and 3' hairpin motif & finish annotations
+    4. MergePrimeDesignOutput(): rejoins epeg/ngRNAs from PrimeDesign output & creates ngRNA_groups
     '''
+    parser_pe = subparsers.add_parser("pe", help="Prime Editing")
+    subparsers_pe = parser_pe.add_subparsers()
+
+    parser_pe_epegRNA_linkers = subparsers_pe.add_parser("epegRNA_linkers", help="Generate epegRNA linkers between PBS and 3' hairpin motif")
+    
+    # epegRNA_linkers(): Required input file
+    parser_pe_epegRNA_linkers.add_argument('--pegRNAs', help='Path to pegRNAs file',required=True)
+
+    # epegRNA_linkers(): Optional parameters
+    parser_pe_epegRNA_linkers.add_argument('--epegRNA_motif_sequence', default='CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA', help='epegRNA motif sequence (default: tevopreQ1)')
+    parser_pe_epegRNA_linkers.add_argument('--checkpoint_dir', type=str, help='Checkpoint directory path')
+    parser_pe_epegRNA_linkers.add_argument('--checkpoint_file', help='Checkpoint file name')
+    parser_pe_epegRNA_linkers.add_argument('--checkpoint_pt', type=str, default='', help='Previous checkpoint full path')
+    
+    # Set defaults
+    parser_pe_epegRNA_linkers.set_defaults(func=pe.epegRNA_linkers)
 
     # Parse all arguments
     args = parser.parse_args()
