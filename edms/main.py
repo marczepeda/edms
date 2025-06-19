@@ -830,6 +830,7 @@ def main():
     - sgRNAs(): design GG cloning oligonucleotides for cutting and base editing sgRNAs
     - epegRNAs(): design GG cloning oligonucleotides for prime editing epegRNAs
     - ngRNAs(): design GG cloning oligonucleotides for prime editing ngRNAs
+    - ng_epegRNAs(): design GG cloning oligonucleotides for prime editing ng/epegRNAs (all-in-one vector)
     - pe_twist_oligos(): makes twist oligonucleotides for prime editing
     - pcr_sim(): returns dataframe with simulated pcr product 
     '''
@@ -864,9 +865,10 @@ def main():
     parser_clone_epegRNAs.add_argument("--dir", help="Output directory path", type=str, default='.')
     parser_clone_epegRNAs.add_argument("--file", help="Output file name", type=str, default='epegRNAs.csv')
 
-    parser_clone_epegRNAs.add_argument("--tG", action="store_true", help="Add 5' G to spacer if needed")
-    parser_clone_epegRNAs.add_argument("--order", action="store_true", help="Format output for ordering oligos")
-    parser_clone_epegRNAs.add_argument("--make_extension", action="store_true", help="Build extension from RTT, PBS, and linker")
+    parser_clone_epegRNAs.add_argument("--dont_tG", dest="tG", default=True, action="store_false", help="Don't add 5' G to spacer if needed")
+    parser_clone_epegRNAs.add_argument("--dont_order", dest="order", default=True, action="store_false", help="Don't format output for ordering oligos")
+    parser_clone_epegRNAs.add_argument("--order_scaffold", action="store_true", help="Include scaffold sequence in the oligo order")
+    parser_clone_epegRNAs.add_argument("--dont_make_extension", dest="make_extension", default=True, action="store_false", help="Don't build extension from RTT, PBS, and linker")
     parser_clone_epegRNAs.add_argument("--spacer", type=str, default="Spacer_sequence", help="Column name for spacer sequence")
     parser_clone_epegRNAs.add_argument("--spacer_t5", type=str, default="CACC", help="Top 5' overhang for spacer")
     parser_clone_epegRNAs.add_argument("--spacer_t3", type=str, default="GTTTAAGAGC", help="Top 3' overhang for spacer")
@@ -892,15 +894,50 @@ def main():
     parser_clone_ngRNAs.add_argument("--dir", help="Output directory path", type=str, default='.')
     parser_clone_ngRNAs.add_argument("--file", help="Output file name", type=str, default='epegRNAs.csv')
     
-    parser_clone_ngRNAs.add_argument("--tG", action="store_true", help="Add 5' G to spacer if needed")
-    parser_clone_ngRNAs.add_argument("--order", action="store_true", help="Format output for oligo ordering")
+    parser_clone_ngRNAs.add_argument("--dont_tG", dest="tG", default=True, action="store_false", help="Don't add 5' G to spacer if needed")
+    parser_clone_ngRNAs.add_argument("--dont_order", dest="order", default=True, action="store_false", help="Don't format output for ordering oligos")
+    parser_clone_ngRNAs.add_argument("--order_scaffold", action="store_true", help="Include scaffold sequence in the oligo order")
     parser_clone_ngRNAs.add_argument("--spacer", type=str, default="Spacer_sequence", help="Column name for spacer sequence")
-    parser_clone_ngRNAs.add_argument("--ngRNA_sp_t5", type=str, default="CACC", help="Top strand 5' overhang")
-    parser_clone_ngRNAs.add_argument("--ngRNA_sp_t3", type=str, default="GTTTAAGAGC", help="Top strand 3' overhang")
-    parser_clone_ngRNAs.add_argument("--ngRNA_sp_b5", type=str, default="", help="Bottom strand 5' overhang")
-    parser_clone_ngRNAs.add_argument("--ngRNA_sp_b3", type=str, default="", help="Bottom strand 3' overhang")
+    parser_clone_ngRNAs.add_argument("--spacer_t5", type=str, default="CACC", help="Top strand 5' overhang")
+    parser_clone_ngRNAs.add_argument("--spacer_t3", type=str, default="GTTTAAGAGC", help="Top strand 3' overhang")
+    parser_clone_ngRNAs.add_argument("--spacer_b5", type=str, default="", help="Bottom strand 5' overhang")
+    parser_clone_ngRNAs.add_argument("--spacer_b3", type=str, default="", help="Bottom strand 3' overhang")
 
     parser_clone_ngRNAs.set_defaults(func=cl.ngRNAs)
+
+    # ng_epegRNAs(): design GG cloning oligonucleotides for prime editing ng/epegRNAs (all-in-one vector)
+    parser_clone_ng_epegRNAs = subparsers_clone.add_parser("ng_epegRNAs", help="Design GG oligos for ng/epegRNAs (all-in-one vector)")
+
+    parser_clone_ng_epegRNAs.add_argument("--df", type=str, help="Input file path", required=True)
+    parser_clone_ng_epegRNAs.add_argument("--id", type=str, help="Column name for unique sequence identifier",required=True)
+
+    parser_clone_ng_epegRNAs.add_argument("--dir", help="Output directory path", type=str, default='.')
+    parser_clone_ng_epegRNAs.add_argument("--file", help="Output file name", type=str, default='ng_epegRNAs.csv')
+
+    parser_clone_ng_epegRNAs.add_argument("--dont_tG", dest="tG", default=True, action="store_false", help="Don't add 5' G to spacer if needed")
+    parser_clone_ng_epegRNAs.add_argument("--dont_order", dest="order", default=True, action="store_false", help="Don't format output for ordering oligos")
+    parser_clone_ng_epegRNAs.add_argument("--order_epegRNA_scaffold", action="store_true", help="Include epegRNA scaffold sequence in the oligo order")
+    parser_clone_ng_epegRNAs.add_argument("--dont_make_extension", dest="make_extension", default=True, action="store_false", help="Don't build extension from RTT, PBS, and linker")
+    parser_clone_ng_epegRNAs.add_argument("--ng_spacer", type=str, default="Spacer_sequence_ngRNA", help="Column name for ngRNA spacer sequence")
+    parser_clone_ng_epegRNAs.add_argument("--ng_spacer_t5", type=str, default="GTTT", help="Top 5' overhang for ngRNA spacer")
+    parser_clone_ng_epegRNAs.add_argument("--ng_spacer_t3", type=str, default="", help="Top 3' overhang for ngRNA spacer")
+    parser_clone_ng_epegRNAs.add_argument("--ng_spacer_b5", type=str, default="AAAC", help="Bottom 5' overhang for ngRNA spacer")
+    parser_clone_ng_epegRNAs.add_argument("--ng_spacer_b3", type=str, default="", help="Bottom 3' overhang for ngRNA spacer")
+    parser_clone_ng_epegRNAs.add_argument("--epeg_spacer", type=str, default="Spacer_sequence_epegRNA", help="Column name for epegRNA spacer sequence")
+    parser_clone_ng_epegRNAs.add_argument("--epeg_spacer_t5", type=str, default="CACC", help="Top 5' overhang for epegRNA spacer")
+    parser_clone_ng_epegRNAs.add_argument("--epeg_spacer_t3", type=str, default="GTTTAAGAGC", help="Top 3' overhang for epegRNA spacer")
+    parser_clone_ng_epegRNAs.add_argument("--epeg_spacer_b5", type=str, default="", help="Bottom 5' overhang for epegRNA spacer")
+    parser_clone_ng_epegRNAs.add_argument("--epeg_spacer_b3", type=str, default="", help="Bottom 3' overhang for epegRNA spacer")
+    parser_clone_ng_epegRNAs.add_argument("--extension", type=str, default="Extension_sequence", help="Column name for epegRNA extension sequence")
+    parser_clone_ng_epegRNAs.add_argument("--extension_t5", type=str, default="", help="Top 5' overhang for epegRNA extension")
+    parser_clone_ng_epegRNAs.add_argument("--extension_t3", type=str, default="", help="Top 3' overhang for epegRNA extension")
+    parser_clone_ng_epegRNAs.add_argument("--extension_b5", type=str, default="CGCG", help="Bottom 5' overhang for epegRNA extension")
+    parser_clone_ng_epegRNAs.add_argument("--extension_b3", type=str, default="GCACCGACTC", help="Bottom 3' overhang for epegRNA extension")
+    parser_clone_ng_epegRNAs.add_argument("--RTT", type=str, default="RTT_sequence", help="Column name for RTT (reverse transcriptase template)")
+    parser_clone_ng_epegRNAs.add_argument("--PBS", type=str, default="PBS_sequence", help="Column name for PBS (primer binding site)")
+    parser_clone_ng_epegRNAs.add_argument("--linker", type=str, default="Linker_sequence", help="Column name for linker")
+
+    parser_clone_ng_epegRNAs.set_defaults(func=cl.ng_epegRNAs)
 
     # pe_twist_oligos(): makes twist oligonucleotides for prime editing
     parser_clone_pe_twist = subparsers_clone.add_parser("pe_twist", help="Design Twist oligos for PE constructs")
@@ -1073,7 +1110,7 @@ def main():
     Add pe.py
     - epegRNA_linkers(): generate epegRNA linkers between PBS and 3' hairpin motif & finish annotations
     
-    WIP: Full workflow
+    WIP: Full workflow (DO THIS IF PRIME DESIGN WORKS BETTER THAN OptiPrime)
     1. PrimeDesigner(): 
         - PrimeDesignInput(): creates and checks PrimeDesign saturation mutagenesis input file
         - PrimeDesign(): run PrimeDesign using Docker (NEED TO BE RUNNING DESKTOP APP)
