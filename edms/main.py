@@ -450,7 +450,7 @@ def main():
     parser_config_set_info = subparsers_config.add_parser("set", help="Set information based on id")
     
     # get_info() arguments
-    parser_config_get_info.add_argument("--id", type=str, help="Identifier from/for configuration file", required=False)
+    parser_config_get_info.add_argument("--id", type=str, help="Identifier from/for configuration file")
     
     # set_info() arguments
     parser_config_set_info.add_argument("--id", type=str, help="Identifier from/for configuration file", required=True)
