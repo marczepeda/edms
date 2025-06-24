@@ -81,12 +81,12 @@ def save_config(config):
         json.dump(config, file, indent=4)
 
 # Information
-def get_info(id: str):
+def get_info(id: str=None):
     """
     get_info(): Retrieve information based on id
     
     Parameters:
-    id (str): identifier from configuration file
+    id (str, optional): identifier from configuration file (Default: None)
 
     Dependencies: load_config()
     """
@@ -96,7 +96,7 @@ def get_info(id: str):
 
     # Report on information status
     if info: print(f"Got {id}: {info}")
-    else: print(f"No information found for {id}")
+    else: print(f"Configuration File:\n{json.dumps(config, indent=4)}")
     return info
 
 def set_info(id: str, info: str | dict):

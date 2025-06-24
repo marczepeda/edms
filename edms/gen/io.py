@@ -355,7 +355,7 @@ def out_subs(dir: str):
                 os.rmdir(dir_path)
 
 def create_sh(dir: str, file: str, 
-              cores: int = 1, partition: str='serial_reque', time: str = '0-00:10', mem: int = 1000, email: str=None,
+              cores: int = 1, partition: str='serial_requeue', time: str = '0-00:10', mem: int = 1000, email: str=None,
               python: str = 'python/3.12.5-fasrc01', env: str = 'edms'):
     '''
     create_sh(): creates a shell script with SLURM job submission parameters for Harvard FASRC cluster.

@@ -1322,6 +1322,9 @@ def region(fastqs: dict, flank5: str, flank3: str, save: bool=True, masks: bool=
         fastqs_1[file] = fastq.drop(sorted(missing_flank5.union(missing_flank3))).reset_index(drop=True)
         missing_flank5s.append(len(missing_flank5))
         missing_flank3s.append(len(missing_flank3))
+    
+    # Retain fastqs file length
+    fastqs_reads_filtered = {file:len(fastqs[file]) for file in fastqs.keys()}
     del fastqs # Save memory
 
     # Obtain nucleotide and AA sequences within flanks; remove fastq records with phred scores within flanks
@@ -1346,10 +1349,10 @@ def region(fastqs: dict, flank5: str, flank3: str, save: bool=True, masks: bool=
             fastqs_1[file]['nucN']=nuc
             fastqs_1[file]['protN']=protN
         
-        print(f'{file}:\t{len(fastqs[file])} reads\t=>\t{len(fastqs_1[file])} reads;\tmissing {missing_flank5s[j]} flank5;\tmissing {missing_flank3s[j]} flank3')
+        print(f'{file}:\t{fastqs_reads_filtered[file]} reads\t=>\t{len(fastqs_1[file])} reads;\tmissing {missing_flank5s[j]} flank5;\tmissing {missing_flank3s[j]} flank3')
         if save==True: out = pd.concat([out,
                                         pd.DataFrame({'file': [file],
-                                                      'reads_filtered': [len(fastqs[file])],
+                                                      'reads_filtered': [fastqs_reads_filtered[file]],
                                                       'reads_w_flanks': [len(fastqs_1[file])],
                                                       'reads_wo_flank5': [missing_flank5s[j]],
                                                       'reads_wo_flank3': [missing_flank3s[j]]})

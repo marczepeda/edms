@@ -449,11 +449,11 @@ def main():
     parser_config_get_info = subparsers_config.add_parser("get", help="Retrieve information based on id")
     parser_config_set_info = subparsers_config.add_parser("set", help="Set information based on id")
     
-    # common arguments for get_info() and set_info()
-    for parser_config_info in [parser_config_get_info, parser_config_set_info]:
-        parser_config_info.add_argument("--id", type=str, help="Identifier from/for configuration file", required=True)
+    # get_info() arguments
+    parser_config_get_info.add_argument("--id", type=str, help="Identifier from/for configuration file")
     
     # set_info() arguments
+    parser_config_set_info.add_argument("--id", type=str, help="Identifier from/for configuration file", required=True)
     parser_config_set_info.add_argument("--info", type=ast.literal_eval, help="Information for configuration file (str or dict)", required=True)
     
     # default functions
@@ -623,7 +623,7 @@ def main():
     parser_io_create_sh.add_argument('--dir', type=str, required=True, help='Directory to save the shell script.')
     parser_io_create_sh.add_argument('--file', type=str, required=True, help='Name of the shell script file to create.')
     parser_io_create_sh.add_argument('--cores', type=int, default=1, help='Number of CPU cores to request.')
-    parser_io_create_sh.add_argument('--partition', type=str, default='serial_reque', help='SLURM partition to use.')
+    parser_io_create_sh.add_argument('--partition', type=str, default='serial_requeue', help='SLURM partition to use.')
     parser_io_create_sh.add_argument('--time', type=str, default='0-00:10', help='Job run time in D-HH:MM format.')
     parser_io_create_sh.add_argument('--mem', type=int, default=1000, help='Memory in MB.')
     parser_io_create_sh.add_argument('--email', type=str, default=None, help='Notification email address.')
@@ -682,7 +682,7 @@ def main():
     parser_cosmic_mutations.set_defaults(func=co.mutations)
     
     # cds_group(): plot COSMIC mutations histogram with CDS regions highlighted in different colors
-    parser_cds_group = subparsers.add_parser("cds_group", help="Plot COSMIC mutation histogram with CDS regions highlighted")
+    parser_cds_group = subparsers_cosmic.add_parser("cds_group", help="Plot COSMIC mutation histogram with CDS regions highlighted")
 
     parser_cds_group.add_argument("--df_cosmic", type=str, help="COSMIC mutations() file path", required=True)
     parser_cds_group.add_argument("--df_cds", type=str, help="CDS region file path (with columns: gene, CDS, start, end)", required=True)
@@ -715,7 +715,7 @@ def main():
     parser_cosmic_priority_edits.set_defaults(func=co.priority_edits)
 
     # editor_mutations(): returns and plots editor accessible COSMIC mutations
-    parser_editor_muts = subparsers.add_parser("editor_mutations", help="Plot editor-accessible COSMIC mutations using BESCAN library")
+    parser_editor_muts = subparsers_cosmic.add_parser("editor_mutations", help="Plot editor-accessible COSMIC mutations using BESCAN library")
 
     parser_editor_muts.add_argument("--df_cosmic", type=str, help="COSMIC mutations() dataframe file path",required=True)
     parser_editor_muts.add_argument("--df_bescan", type=str, help="BESCAN sgRNA library dataframe file path",required=True)
