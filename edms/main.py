@@ -19,6 +19,7 @@ Usage:
 # Import packages
 import argparse
 import ast
+import datetime
 
 from . import config
 
@@ -537,8 +538,8 @@ def main():
 
     parser_stat_describe.add_argument("--df", type=str, help="Input file path", required=True)
 
-    parser_stat_describe.add_argument("--dir", type=str, help="Output directory",default='.')
-    parser_stat_describe.add_argument("--file", type=str, help="Output file name",default='descriptive.csv')
+    parser_stat_describe.add_argument("--dir", type=str, help="Output directory",default='../out')
+    parser_stat_describe.add_argument("--file", type=str, help="Output file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_descriptive.csv')
     
     parser_stat_describe.add_argument("--cols", nargs="+", help="List of numerical columns to describe")
     parser_stat_describe.add_argument("--group", type=str, help="Column name to group by")
@@ -553,8 +554,8 @@ def main():
     parser_stat_difference.add_argument("--compare_col", type=str, help="Name of column used for grouping/comparisons",required=True)
     parser_stat_difference.add_argument("--compare", nargs="+", help="List of groups to compare (e.g. A B)",required=True)
 
-    parser_stat_difference.add_argument("--dir", type=str, help="Output directory",default='.')
-    parser_stat_difference.add_argument("--file", type=str, help="Output file name",default='difference.csv')
+    parser_stat_difference.add_argument("--dir", type=str, help="Output directory",default='../out')
+    parser_stat_difference.add_argument("--file", type=str, help="Output file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_difference.csv')
 
     parser_stat_difference.add_argument("--same", action="store_true", help="Same subjects (paired test)")
     parser_stat_difference.add_argument("--para", action="store_true", help="Use parametric test (default: True)")
@@ -569,8 +570,8 @@ def main():
 
     parser_stat_correlation.add_argument("--df", type=str, help="Input file path",required=True)
 
-    parser_stat_correlation.add_argument("--dir", type=str, help="Output directory",default='.')
-    parser_stat_correlation.add_argument("--file", type=str, help="Output file name",default='correlation.csv')
+    parser_stat_correlation.add_argument("--dir", type=str, help="Output directory",default='../out')
+    parser_stat_correlation.add_argument("--file", type=str, help="Output file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_correlation.csv')
 
     parser_stat_correlation.add_argument("--var_cols", nargs="+", help="List of 2 variable columns for tidy format")
     parser_stat_correlation.add_argument("--value_cols", nargs="+", help="List of numerical columns to correlate")
@@ -591,8 +592,8 @@ def main():
     parser_stat_compare.add_argument("--count", type=str, help="Count column name",required=True)
 
     parser_stat_compare.add_argument("--psuedocount", type=int, default=1, help="Pseudocount to avoid log(0) or divide-by-zero errors")
-    parser_stat_compare.add_argument("--dir", type=str, help="Output directory",default='.')
-    parser_stat_compare.add_argument("--file", type=str, help="Output file name",default='compare.csv')
+    parser_stat_compare.add_argument("--dir", type=str, help="Output directory",default='../out')
+    parser_stat_compare.add_argument("--file", type=str, help="Output file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_compare.csv')
 
     parser_stat_compare.set_defaults(func=st.compare)
 
@@ -646,7 +647,7 @@ def main():
     
     # Create subparsers for commands
     parser_cli_access = subparsers_cli.add_parser("access", help="Make all files and subdirectories accessible on Harvard FASRC")
-    parser_cli_smaller_fastq = subparsers_cli.add_parser("smaller_fastq", help="Ccreate new subdirectory containing fastqs with the # of reads limited")
+    parser_cli_smaller_fastq = subparsers_cli.add_parser("smaller_fastq", help="Create new subdirectory containing fastqs with the # of reads limited")
     
     # Add common arguments
     for parser_cli_common in [parser_cli_access, parser_cli_smaller_fastq]:
@@ -676,8 +677,8 @@ def main():
 
     parser_cosmic_mutations.add_argument("--df", type=str, help="Input file path", required=True)
 
-    parser_cosmic_mutations.add_argument("--dir", type=str, help="Output directory",default='.')
-    parser_cosmic_mutations.add_argument("--file", type=str, help="Output file name",default='cosmic_mutations.csv')
+    parser_cosmic_mutations.add_argument("--dir", type=str, help="Output directory",default='../out')
+    parser_cosmic_mutations.add_argument("--file", type=str, help="Output file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_cosmic_mutations.csv')
 
     parser_cosmic_mutations.set_defaults(func=co.mutations)
     
@@ -687,7 +688,7 @@ def main():
     parser_cds_group.add_argument("--df_cosmic", type=str, help="COSMIC mutations() file path", required=True)
     parser_cds_group.add_argument("--df_cds", type=str, help="CDS region file path (with columns: gene, CDS, start, end)", required=True)
 
-    parser_cds_group.add_argument("--out_dir", type=str, help="Output directory for plot",default='.')
+    parser_cds_group.add_argument("--out_dir", type=str, help="Output directory for plot",default='../out')
 
     parser_cds_group.set_defaults(func=co.cds_group)
 
@@ -697,8 +698,8 @@ def main():
     parser_cosmic_priority_muts.add_argument("--pegRNAs_shared", type=str, help="Shared pegRNAs library dataframe file path", required=True)
     parser_cosmic_priority_muts.add_argument("--df_cosmic", type=str, help="COSMIC mutations() dataframe file path",required=True)
 
-    parser_cosmic_priority_muts.add_argument("--dir", type=str, help="Output directory",default='.')
-    parser_cosmic_priority_muts.add_argument("--file", type=str, help="Output file name",default='pegRNAs_shared_mutations.csv')
+    parser_cosmic_priority_muts.add_argument("--dir", type=str, help="Output directory",default='../out')
+    parser_cosmic_priority_muts.add_argument("--file", type=str, help="Output file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_pegRNAs_shared_mutations.csv')
 
     parser_cosmic_priority_muts.set_defaults(func=co.priority_muts)
 
@@ -709,8 +710,8 @@ def main():
     parser_cosmic_priority_edits.add_argument("--pegRNAs_shared", type=str, help="Shared pegRNAs library dataframe file path",required=True)
     parser_cosmic_priority_edits.add_argument("--df_cosmic", type=str, help="COSMIC mutations() dataframe file path",required=True)
     
-    parser_cosmic_priority_edits.add_argument("--dir", type=str, help="Output directory",default='.')
-    parser_cosmic_priority_edits.add_argument("--file", type=str, help="Output file name",default='pegRNAs_priority.csv')
+    parser_cosmic_priority_edits.add_argument("--dir", type=str, help="Output directory",default='../out')
+    parser_cosmic_priority_edits.add_argument("--file", type=str, help="Output file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_pegRNAs_priority.csv')
 
     parser_cosmic_priority_edits.set_defaults(func=co.priority_edits)
 
@@ -720,7 +721,7 @@ def main():
     parser_editor_muts.add_argument("--df_cosmic", type=str, help="COSMIC mutations() dataframe file path",required=True)
     parser_editor_muts.add_argument("--df_bescan", type=str, help="BESCAN sgRNA library dataframe file path",required=True)
 
-    parser_editor_muts.add_argument("--out_dir", type=str, help="Output directory for plots or results",default='.')
+    parser_editor_muts.add_argument("--out_dir", type=str, help="Output directory for plots or results",default='../out')
 
     parser_editor_muts.set_defaults(func=co.editor_mutations)
 
@@ -739,8 +740,8 @@ def main():
     parser_cvar_mutations.add_argument("--df", type=str, help="Input file path", required=True)
     parser_cvar_mutations.add_argument("--gene_name", type=str, help="Gene name", required=True)
 
-    parser_cvar_mutations.add_argument("--dir", type=str, help="Output directory",default='.')
-    parser_cvar_mutations.add_argument("--file", type=str, help="Output file name",default='cvar_mutations.csv')
+    parser_cvar_mutations.add_argument("--dir", type=str, help="Output directory",default='../out')
+    parser_cvar_mutations.add_argument("--file", type=str, help="Output file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_cvar_mutations.csv')
 
     parser_cvar_mutations.set_defaults(func=cvar.mutations)
 
@@ -750,8 +751,8 @@ def main():
     parser_cvar_priority_muts.add_argument("--pegRNAs_shared", type=str, help="Shared pegRNAs library dataframe file path", required=True)
     parser_cvar_priority_muts.add_argument("--df_clinvar", type=str, help="ClinVar mutations() dataframe file path",required=True)
 
-    parser_cvar_priority_muts.add_argument("--dir", type=str, help="Output directory",default='.')
-    parser_cvar_priority_muts.add_argument("--file", type=str, help="Output file name",default='pegRNAs_shared_mutations.csv')
+    parser_cvar_priority_muts.add_argument("--dir", type=str, help="Output directory",default='../out')
+    parser_cvar_priority_muts.add_argument("--file", type=str, help="Output file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_pegRNAs_shared_mutations.csv')
 
     parser_cvar_priority_muts.set_defaults(func=cvar.priority_muts)
 
@@ -762,8 +763,8 @@ def main():
     parser_cvar_priority_edits.add_argument("--pegRNAs_shared", type=str, help="Shared pegRNAs library dataframe file path",required=True)
     parser_cvar_priority_edits.add_argument("--df_clinvar", type=str, help="ClinVar mutations() dataframe file path",required=True)
 
-    parser_cvar_priority_edits.add_argument("--dir", type=str, help="Output directory",default='.')
-    parser_cvar_priority_edits.add_argument("--file", type=str, help="Output file name",default='pegRNAs_priority.csv')
+    parser_cvar_priority_edits.add_argument("--dir", type=str, help="Output directory",default='../out')
+    parser_cvar_priority_edits.add_argument("--file", type=str, help="Output file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_pegRNAs_priority.csv')
 
     parser_cvar_priority_edits.set_defaults(func=cvar.priority_edits)
 
@@ -781,8 +782,8 @@ def main():
     # pcrs(): Core parameters
     parser_ngs_pcrs.add_argument("--df", help="Input file", type=str, required=True)
     
-    parser_ngs_pcrs.add_argument("--dir", help="Output directory path", type=str, default='.')
-    parser_ngs_pcrs.add_argument("--file", help="Output file name (.xlsx)", type=str, default='NGS_plan.xlsx')
+    parser_ngs_pcrs.add_argument("--dir", help="Output directory path", type=str, default='../out')
+    parser_ngs_pcrs.add_argument("--file", help="Output file name (.xlsx)", type=str, default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_NGS_plan.xlsx')
     parser_ngs_pcrs.add_argument("--cycles", help="Number of cycles for PCR1", type=str, default='30')
     parser_ngs_pcrs.add_argument("--ultra", help="Using NEB Ultra II reagents", action="store_true")
     parser_ngs_pcrs.add_argument('--total_uL', type=int, default=20, help='Total reaction volume (uL)')
@@ -820,8 +821,8 @@ def main():
     parser_ngs_hamming.add_argument("--id", help="ID column name", type=str, required=True)
     parser_ngs_hamming.add_argument("--seqs", help="Sequences column name", type=str, required=True)
     
-    parser_ngs_hamming.add_argument("--dir", help="Output directory path", type=str, default='.')
-    parser_ngs_hamming.add_argument("--file", help="Output file name", type=str, default='hamming.csv')
+    parser_ngs_hamming.add_argument("--dir", help="Output directory path", type=str, default='../out')
+    parser_ngs_hamming.add_argument("--file", help="Output file name", type=str, default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_hamming.csv')
     
     parser_ngs_hamming.set_defaults(func=ngs.hamming_distance_matrix)
 
@@ -843,8 +844,8 @@ def main():
     parser_clone_sgRNAs.add_argument("--df", type=str, help="Input file path",required=True)
     parser_clone_sgRNAs.add_argument("--id", type=str, help="Column name for unique sgRNA identifier",required=True)
 
-    parser_clone_sgRNAs.add_argument("--dir", type=str, help="Output directory", default='.')
-    parser_clone_sgRNAs.add_argument("--file", type=str, help="Output file name", default='sgRNAs.csv')
+    parser_clone_sgRNAs.add_argument("--dir", type=str, help="Output directory", default='../out')
+    parser_clone_sgRNAs.add_argument("--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_sgRNAs.csv')
 
     parser_clone_sgRNAs.add_argument("--tG", action="store_true", help="Add 5' G to spacer if needed")
     parser_clone_sgRNAs.add_argument("--order", action="store_true", help="Format output for ordering oligos")
@@ -862,8 +863,8 @@ def main():
     parser_clone_epegRNAs.add_argument("--df", type=str, help="Input file path", required=True)
     parser_clone_epegRNAs.add_argument("--id", type=str, help="Column name for unique sequence identifier",required=True)
 
-    parser_clone_epegRNAs.add_argument("--dir", help="Output directory path", type=str, default='.')
-    parser_clone_epegRNAs.add_argument("--file", help="Output file name", type=str, default='epegRNAs.csv')
+    parser_clone_epegRNAs.add_argument("--dir", help="Output directory path", type=str, default='../out')
+    parser_clone_epegRNAs.add_argument("--file", help="Output file name", type=str, default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_epegRNAs.csv')
 
     parser_clone_epegRNAs.add_argument("--dont_tG", dest="tG", default=True, action="store_false", help="Don't add 5' G to spacer if needed")
     parser_clone_epegRNAs.add_argument("--dont_order", dest="order", default=True, action="store_false", help="Don't format output for ordering oligos")
@@ -891,8 +892,8 @@ def main():
     parser_clone_ngRNAs.add_argument("--df", type=str, help="Input file path", required=True)
     parser_clone_ngRNAs.add_argument("--id", type=str, help="Column name for unique sequence identifier",required=True)
 
-    parser_clone_ngRNAs.add_argument("--dir", help="Output directory path", type=str, default='.')
-    parser_clone_ngRNAs.add_argument("--file", help="Output file name", type=str, default='epegRNAs.csv')
+    parser_clone_ngRNAs.add_argument("--dir", help="Output directory path", type=str, default='../out')
+    parser_clone_ngRNAs.add_argument("--file", help="Output file name", type=str, default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_epegRNAs.csv')
     
     parser_clone_ngRNAs.add_argument("--dont_tG", dest="tG", default=True, action="store_false", help="Don't add 5' G to spacer if needed")
     parser_clone_ngRNAs.add_argument("--dont_order", dest="order", default=True, action="store_false", help="Don't format output for ordering oligos")
@@ -911,8 +912,8 @@ def main():
     parser_clone_ng_epegRNAs.add_argument("--df", type=str, help="Input file path", required=True)
     parser_clone_ng_epegRNAs.add_argument("--id", type=str, help="Column name for unique sequence identifier",required=True)
 
-    parser_clone_ng_epegRNAs.add_argument("--dir", help="Output directory path", type=str, default='.')
-    parser_clone_ng_epegRNAs.add_argument("--file", help="Output file name", type=str, default='ng_epegRNAs.csv')
+    parser_clone_ng_epegRNAs.add_argument("--dir", help="Output directory path", type=str, default='../out')
+    parser_clone_ng_epegRNAs.add_argument("--file", help="Output file name", type=str, default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_ng_epegRNAs.csv')
 
     parser_clone_ng_epegRNAs.add_argument("--dont_tG", dest="tG", default=True, action="store_false", help="Don't add 5' G to spacer if needed")
     parser_clone_ng_epegRNAs.add_argument("--dont_order", dest="order", default=True, action="store_false", help="Don't format output for ordering oligos")
@@ -945,8 +946,8 @@ def main():
     parser_clone_pe_twist.add_argument("--df", type=str, help="Input file path", required=True)
     parser_clone_pe_twist.add_argument("--id_pre", type=str, help="Prefix for ID column", required=True)
 
-    parser_clone_pe_twist.add_argument("--dir", type=str, help="Output directory", default='.')
-    parser_clone_pe_twist.add_argument("--file", type=str, help="Output file name", default='pe_twist.csv')
+    parser_clone_pe_twist.add_argument("--dir", type=str, help="Output directory", default='../out')
+    parser_clone_pe_twist.add_argument("--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_pe_twist.csv')
 
     parser_clone_pe_twist.add_argument("--tG", action="store_true", help="Add 5' G to spacers if needed")
     parser_clone_pe_twist.add_argument("--make_extension", action="store_true", help="Build extension from RTT, PBS, and linker")
@@ -977,8 +978,8 @@ def main():
     parser_clone_pcrsim.add_argument("--fwd_bind_col", type=str, help="Column name for forward primer binding region", required=True)
     parser_clone_pcrsim.add_argument("--rev_bind_col", type=str, help="Column name for reverse primer binding region", required=True)
 
-    parser_clone_pcrsim.add_argument("--dir", type=str, help="Output directory", default='.')
-    parser_clone_pcrsim.add_argument("--file", type=str, help="Output file name", default='pcr_sim.csv')
+    parser_clone_pcrsim.add_argument("--dir", type=str, help="Output directory", default='../out')
+    parser_clone_pcrsim.add_argument("--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_pcr_sim.csv')
 
     parser_clone_pcrsim.add_argument("--fwd_ext_col", type=str, help="Column name for forward primer extension region")
     parser_clone_pcrsim.add_argument("--rev_ext_col", type=str, help="Column name for reverse primer extension region")
@@ -1001,8 +1002,8 @@ def main():
     parser_transfect_PE3.add_argument("--epegRNAs", type=str, help="Path to epegRNAs file", required=True)
     parser_transfect_PE3.add_argument("--ngRNAs", type=str, help="Path to ngRNAs file", required=True)
 
-    parser_transfect_PE3.add_argument("--dir", type=str, help="Output directory", default='.')
-    parser_transfect_PE3.add_argument("--file", type=str, help="Output file name", default='transfect_PE3.csv')
+    parser_transfect_PE3.add_argument("--dir", type=str, help="Output directory", default='../out')
+    parser_transfect_PE3.add_argument("--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_transfect_PE3.csv')
 
     parser_transfect_PE3.add_argument("--pegRNA_number_col", type=str, default="pegRNA_number", help="Column name for pegRNA number")
     parser_transfect_PE3.add_argument("--epegRNAs_name_col", type=str, default="Name", help="Column name for epegRNA name")
@@ -1026,8 +1027,8 @@ def main():
 
     parser_transfect_virus.add_argument("--plasmids", type=str, help="Path to plasmids file", required=True)
 
-    parser_transfect_virus.add_argument("--dir", type=str, help="Output directory", default='.')
-    parser_transfect_virus.add_argument("--file", type=str, help="Output file name", default='transfect_virus.csv')
+    parser_transfect_virus.add_argument("--dir", type=str, help="Output directory", default='../out')
+    parser_transfect_virus.add_argument("--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_transfect_virus.csv')
 
     parser_transfect_virus.add_argument("--plasmid_col", type=str, default="Plasmid", help="Column name for plasmid name")
     parser_transfect_virus.add_argument("--description_col", type=str, default="Description", help="Column name for plasmid description")
@@ -1053,8 +1054,8 @@ def main():
     
     parser_ddcq.add_argument("--data", type=str, help="Input Cq file from CFX instrument",required=True)
 
-    parser_ddcq.add_argument("--dir", type=str, help="Output directory",default='.')
-    parser_ddcq.add_argument("--file", type=str, help="Output file name",default='qPCR_ddCq.csv')
+    parser_ddcq.add_argument("--dir", type=str, help="Output directory",default='../out')
+    parser_ddcq.add_argument("--file", type=str, help="Output file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_qPCR_ddCq.csv')
 
     parser_ddcq.add_argument("--sample_col", type=str, default="Sample", help="Column name for sample ID")
     parser_ddcq.add_argument("--target_col", type=str, default="Target", help="Column name for target gene ID")
@@ -1080,13 +1081,13 @@ def main():
     # Add common arguments: revcom_fastqs(), unzip_fastqs(), comb_fastqs(), and genotyping()
     for parser_fastq_common in [parser_fastq_revcom,parser_fastq_unzip,parser_fastq_comb,parser_fastq_genotyping]:
         parser_fastq_common.add_argument("--in_dir", type=str, help="Input directory containing FASTQ files",default='.')
-        parser_fastq_common.add_argument("--out_dir", type=str, help="Output directory",default = f'./out')
+        parser_fastq_common.add_argument("--out_dir", type=str, help="Output directory",default = f'../out')
 
     # Add specific arguments: comb_fastqs()
-    parser_fastq_comb.add_argument("--out_file", type=str, help="Name of output FASTQ file (.fastq or .fastq.gz)", default='comb.fastq.gz')
+    parser_fastq_comb.add_argument("--out_file", type=str, help="Name of output FASTQ file (.fastq or .fastq.gz)", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_comb.fastq.gz')
 
     # Add specific arguments: genotyping()
-    parser_fastq_genotyping.add_argument("--out_file", type=str, help="Name of output file", default='outcomes.csv')
+    parser_fastq_genotyping.add_argument("--out_file_prefix", type=str, help="Name of output file prefix", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
     
     parser_fastq_genotyping.add_argument("--sequence", type=str, help="Formatted sequence: flank5(genotype region)flank3", required=True)
     parser_fastq_genotyping.add_argument("--res", type=int, help="First amino acid number in genotype region",required=True)

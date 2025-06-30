@@ -102,18 +102,18 @@ def thermocycler(df: pd.DataFrame, n: Literal[1,2] = 1, cycles: int | str = None
     for (fwd,rev) in t.unique_tuples(df=df, cols=[pcr_fwd_col,pcr_rev_col]):
         title = f"{fwd}_{rev}: " # Initialize the thermocycler title for the set of primers
 
-        # Group the IDs based on the set of primers; determine the temperature and time
+        # Group the IDs based on the set of primers; determine the temperature and anneal_time
         ls = group_boundaries(list(df[(df[pcr_fwd_col]==fwd) & (df[pcr_rev_col]==rev)]['ID'].keys()))
         tm = df[(df[pcr_fwd_col]==fwd) & (df[pcr_rev_col]==rev)].iloc[0][f'PCR{n} Tm']
         bp = df[(df[pcr_fwd_col]==fwd) & (df[pcr_rev_col]==rev)].iloc[0]['PCR2 bp']
         (min,sec) = min_sec(math.floor(bp/500)/2+0.5)
         if min == 0:
-            time = f"{sec}s"
+            anneal_time = f"{sec}s"
         else:
             if sec == 0:
-                time = f"{min}min"
+                anneal_time = f"{min}min"
             else:
-                time = f"{min}min {sec}s"
+                anneal_time = f"{min}min {sec}s"
 
         # Append grouped IDs to the thermocycler title
         for (start, end) in ls:
@@ -125,15 +125,10 @@ def thermocycler(df: pd.DataFrame, n: Literal[1,2] = 1, cycles: int | str = None
         # Create a DataFrame for the thermocycler steps
         dc[f'{fwd}_{rev}_{tm}°C'] = pd.DataFrame(
             {'Temperature':['98°C', '98°C', f'{tm}°C', '72°C', '72°C', '4°C', ''],
-             'Time':['30s', '10s', '30s', '30s', time, '∞', ''],
+             'Time':['30s', '10s', '30s', anneal_time, '2min', '∞', ''],
              'Repeat':['', f'{cycles} cycles', f'{cycles} cycles', f'{cycles} cycles', '', '', '']},
              index=pd.Index(['1','2','2','2','3','4',f'{title[:-2]}'], name="Step"))
 
-        '''dc[f'{fwd}_{rev}_{tm}°C'] = pd.DataFrame(
-            {'Temperature':['', '98°C', '98°C', f'{tm}°C', '72°C', '72°C', '4°C'],
-             'Time':['', '30s', '10s', '30s', '30s', time, '∞'],
-             'Repeat':['', '', f'{cycles} cycles', f'{cycles} cycles', f'{cycles} cycles', '', '']},
-             index=pd.Index([f'{title[:-2]}','1','2','2','2','3','4'], name="Step"))'''
     return dc
 
 # NGS PCR calculation

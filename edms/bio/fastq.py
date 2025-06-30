@@ -30,6 +30,11 @@ Usage:
 - trim_filter(): trim and filter fastq sequence based on quality scores
 - get_fastqs(): get fastq files from directory and store records in dataframes in a dictionary
 - region(): gets DNA and AA sequence for records within flanks
+- [Supporting methods for genotype()]
+    - find_AA_edits(): find amino acid edits compared to wildtype sequence
+    - trim(): trim the sequence to a multiple of 3.
+    - format_alignment(): formats two sequences for alignment display & return the middle.
+    - find_indel(): aligns two sequences and returns the indel edit.
 - genotype(): assign genotypes to sequence records
 - outcomes(): returns edit count & fraction per sample (tidy format)
 - outcomes_desired(): groups desired edit count & fraction per sample (tidy format)
@@ -1209,7 +1214,7 @@ def trim_filter(record,qall:int,qavg:int,qtrim:int,qmask:int,alls:int,avgs:int,t
         else: return None,None,None,None,alls,avgs+1,trims,masks # Avg threshold not met
     else: return None,None,None,None,alls+1,avgs,trims,masks # All threshold not met
 
-def get_fastqs(dir: str,qall:int=10,qavg:int=30,qtrim:int=0,qmask:int=0,save:bool=True):
+def get_fastqs(dir: str,qall:int=10,qavg:int=30,qtrim:int=0,qmask:int=0,save:bool=True, return_memories: bool=False):
     ''' 
     get_fastqs(): get fastq files from directory and store records in dataframes in a dictionary
     
@@ -1220,6 +1225,7 @@ def get_fastqs(dir: str,qall:int=10,qavg:int=30,qtrim:int=0,qmask:int=0,save:boo
     qavg (int, optional): average phred quality score threshold for a read to not be discarded (Q = -log(err))
     qmask (int, optional): phred quality score threshold for base to not be masked to N (Q = -log(err))
     save (bool, optional): save reads statistics file to local directory (Default: True)
+    return_memories (bool, optional): return memories (Default: False)
 
     Dependencies: Bio.SeqIO, gzip, os, pandas, Bio.Seq.Seq, & trim_filter()
     '''
@@ -1285,9 +1291,11 @@ def get_fastqs(dir: str,qall:int=10,qavg:int=30,qtrim:int=0,qmask:int=0,save:boo
         memories.append(memory_timer(task=fastq_name))
 
     if save==True: io.save(dir='.',file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_get_fastqs.csv',obj=out)
-    return fastqs,memories
+    
+    if return_memories: return fastqs,memories
+    else: return fastqs
 
-def region(fastqs: dict, flank5: str, flank3: str, save: bool=True, masks: bool=False):
+def region(fastqs: dict, flank5: str, flank3: str, save: bool=True, masks: bool=False, return_memories: bool=False):
     ''' 
     region(): gets DNA and AA sequence for records within flanks
     
@@ -1297,6 +1305,7 @@ def region(fastqs: dict, flank5: str, flank3: str, save: bool=True, masks: bool=
     flank3 (str): top strand flanking sequence 3'
     save (bool, optional): save reads statistics file to local directory (Default: True)
     masks (bool, optional): include masked sequence and translation (Default: False)
+    return_memories (bool, optional): return memories (Default: False)
     
     Dependencies: pandas & Bio.Seq.Seq
     '''
@@ -1314,9 +1323,9 @@ def region(fastqs: dict, flank5: str, flank3: str, save: bool=True, masks: bool=
         missing_flank5 = set()
         missing_flank3 = set()
         for i,seq in enumerate(fastq['seq']):
-            if (seq.find(flank5)==-1):
+            if seq.find(flank5)==-1:
                 missing_flank5.add(i)
-            if (seq.find(flank3)==-1): 
+            if (seq.find(flank3)==-1) | (seq.find(flank3)<seq.find(flank5)+len(flank5)): # flank3 not found or before flank5
                 missing_flank3.add(i)
 
         fastqs_1[file] = fastq.drop(sorted(missing_flank5.union(missing_flank3))).reset_index(drop=True)
@@ -1346,7 +1355,7 @@ def region(fastqs: dict, flank5: str, flank3: str, save: bool=True, masks: bool=
         fastqs_1[file]['nuc']=nuc
         fastqs_1[file]['prot']=prot
         if masks==True:
-            fastqs_1[file]['nucN']=nuc
+            fastqs_1[file]['nucN']=nucN
             fastqs_1[file]['protN']=protN
         
         print(f'{file}:\t{fastqs_reads_filtered[file]} reads\t=>\t{len(fastqs_1[file])} reads;\tmissing {missing_flank5s[j]} flank5;\tmissing {missing_flank3s[j]} flank3')
@@ -1361,9 +1370,207 @@ def region(fastqs: dict, flank5: str, flank3: str, save: bool=True, masks: bool=
     
     if save==True: io.save(dir='.',file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_region.csv',obj=out)
     
-    return fastqs_1,memories
+    if return_memories: return fastqs_1,memories
+    else: return fastqs_1
 
-def genotype(fastqs: dict, res: int, wt: str, save: bool=True, masks: bool=False, keepX: bool=False):
+### Supporting methods for genotype()
+def find_AA_edits(wt: str, res: int, seq: str):
+    '''
+    find_AA_edits(): find amino acid edits compared to wildtype sequence
+    
+    Parameters:
+    wt (str): expected wildtype nucleotide sequence (in frame AA)
+    res (int): first AA number
+    seq (str): amino acid sequence to compare against wildtype
+    '''
+    # Find amino acid edits
+    e=[]
+    for j, (a, b) in enumerate(zip(wt, seq)):
+        if a != b: e.append(a+str(j+res)+b)
+
+    # Combine & return edit(s)    
+    if len(e)>1: return ", ".join(e)
+    elif len(e)==1: return e[0]
+    else: return 'Unknown'
+
+def trim(seq: str|Seq):
+    """
+    trim(): trim the sequence to a multiple of 3.
+
+    Parameters:
+    seq (str|Seq): The sequence to be trimmed.
+    """
+    while len(seq) % 3 != 0:
+        seq = seq[:-1]
+    return seq
+
+def format_alignment(a: str|Seq, b: str|Seq, show: bool=False):
+    '''
+    format_alignment(): formats two sequences for alignment display & return the middle.
+    
+    Parameters:
+    a (str|Seq): The first sequence.
+    b (str|Seq): The second sequence.
+    show (bool): If True, prints the formatted alignment.
+    '''
+    # Determine the middle of the alignment
+    mid = []
+    for x, y in zip(a, b):
+        if x == y:
+            mid.append('|')
+        elif x == '-' or y == '-':
+            mid.append('-')
+        else:
+            mid.append('.')
+    mid = ''.join(mid)
+
+    # Format the sequences for display & return
+    if show: print(f"{a}\n{mid}\n{b}")
+    return mid
+
+def find_indel(wt:str|Seq, mut:str|Seq, res: int, show:bool=False):
+    '''
+    find_indel(): aligns two sequences and returns the indel edit.
+
+    Parameters:
+    wt (str|Seq): The wild type sequence.
+    mut (str|Seq): The mutant sequence.
+    res (int): The first amino acid number in the sequence.
+    show (bool): If True, prints the formatted alignment.
+
+    Dependencies: Biopython
+    '''
+    # High sequence homology; punish gaps
+    aligner = PairwiseAligner()
+    aligner.mode = "global"
+    aligner.match_score = 2
+    aligner.mismatch_score = -1
+    aligner.open_gap_score = -10
+    aligner.extend_gap_score = -0.1
+
+    # Get the best protein alignment
+    alignment = aligner.align(Seq(trim(wt)).translate(),Seq(trim(mut)).translate())[0]
+    mid = format_alignment(alignment[0], alignment[1], show=show)
+
+    if len(mut)%3!=0: # Frameshift Indel
+        
+        # Find the first occurrence of '-' or '.' in the middle alignment
+        starts = [mid.find('-'), mid.find('.')]
+        start = min(starts) if min(starts) != -1 else max(starts) # Handles case where '-' or '.' is not found
+        
+        # Check start for AA
+        reverse = True
+        for i in range(start, len(alignment[0])): # Find AA from start to end of the alignemnt
+            if alignment[0][i] != '-':
+                start = i
+                reverse = False
+                break
+        
+        if reverse: # Find AA from start to beginning of the alignment
+            for i in range(0,start,-1):
+                if alignment[0][i] != '-':
+                    start = i
+                    break
+
+        # Format & return the edit
+        edit = f"{alignment[0][start]}{start+res-alignment[0].count('-',0,start)}fs"
+        category = 'Frameshift Indel'
+        if show: print(f"{edit} ({category})")
+        return edit,category
+            
+    elif alignment[0].count('-') > 0 and alignment[1].count('-') > 0: # In-frame Indel
+        
+        # Find the first occurrence of '-' or '.' in the middle alignment
+        starts = [mid.find('-'), mid.find('.')]
+        start = min(starts) if min(starts) != -1 else max(starts) # Handles case where '-' or '.' is not found
+        
+        num = start + res - 1 - alignment[0].count('-',0,start)
+        
+        # Find the last occurrence of '-' or '.' in the middle alignment
+        end = max(mid.rfind('-')+1,mid.rfind('.')+1)
+
+        # WT residues
+        befores = [aa_wt for aa_wt in alignment[0][start-1:end+1]]
+        before = ''.join(befores).replace('-', '') # remove replace to include "-"
+        
+        # Mut residues
+        afters = [aa_mut for aa_mut in alignment[1][start-1:end+1]]
+        after = ''.join(afters).replace('-', '') # remove replace to include "-"
+        
+        # Format & return the edit
+        edit = f"{before}{num}{after}" 
+        if "*" in alignment[1]:
+            category = 'Stop Codon Indel'
+        else:
+            category = 'In-frame Indel'
+        if show: print(f"{edit} ({category})")
+        return edit,category
+
+    elif alignment[0].count('-') > 0: # In-frame Insertion
+        
+        # Find the first occurrence of '-' or '.' in the middle alignment
+        starts = [mid.find('-'), mid.find('.')]
+        start = min(starts) if min(starts) != -1 else max(starts) # Handles case where '-' or '.' is not found
+        
+        num = start + res - 1 - alignment[0].count('-',0,start)
+        
+        # Find the last occurrence of '-' or '.' in the middle alignment
+        end = max(mid.rfind('-')+1,mid.rfind('.')+1)
+        
+        # WT residues
+        befores = [aa_wt for aa_wt in alignment[0][start-1:end-1]]
+        before = ''.join(befores).replace('-', '') # remove replace to include "-"
+        
+        # Mut residues
+        afters = [aa_mut for aa_mut in alignment[1][start-1:end]]
+        after = ''.join(afters).replace('-', '') # remove replace to include "-"
+        
+        # Format & return the edit
+        edit = f"{before}{num}{after}"  
+        if "*" in alignment[1]:
+            category = 'Stop Codon Indel'
+        else:
+            category = 'In-frame Insertion'
+        if show: print(f"{edit} ({category})")
+        return edit,category
+                
+    elif alignment[1].count('-') > 0: # In-frame Deletion
+        
+        # Find the first occurrence of '-' or '.' in the middle alignment
+        starts = [mid.find('-'), mid.find('.')]
+        start = min(starts) if min(starts) != -1 else max(starts)
+        
+        num = start + res - alignment[0].count('-',0,start)
+        
+        # Find the last occurrence of '-' or '.' in the middle alignment
+        end = max(mid.rfind('-')+1,mid.rfind('.')+1)
+        
+        # WT residues
+        befores = [aa_wt for aa_wt in alignment[0][start:end+1]]
+        before = ''.join(befores).replace('-', '') # remove replace to include "-"
+        
+        # Mut residues
+        afters = [aa_mut for aa_mut in alignment[1][start:end+1]]
+        after = ''.join(afters).replace('-', '') # remove replace to include "-"
+
+        # Format & return the edit
+        edit = f"{before}{num}{after}" 
+        if "*" in alignment[1]:
+            category = 'Stop Codon Indel'
+        else:
+            category = 'In-frame Deletion'
+        if show: print(f"{edit} ({category})")
+        return edit,category
+    
+    else: # Unknown Indel
+
+        # Format & return the edit
+        edit = 'Unknown'
+        category = 'Indel'
+        if show: print(f"{edit} ({category})")
+        return edit,category
+
+def genotype(fastqs: dict, res: int, wt: str, save: bool=True, masks: bool=False, keepX: bool=False, return_memories: bool=False):
     ''' 
     genotype(): assign genotypes to sequence records
     
@@ -1374,6 +1581,7 @@ def genotype(fastqs: dict, res: int, wt: str, save: bool=True, masks: bool=False
     save (bool, optional): save genotyped reads to local directory (Default: True)
     masks (bool, optional): include masked sequence and translation (Default: False)
     keepX (bool, optional): keep unknown translation (i.e., X) due to sequencing error (Default: False) 
+    return_memories (bool, optional): return memories (Default: False)
     
     Dependencies: pandas & Bio.Seq.Seq
 
@@ -1382,51 +1590,73 @@ def genotype(fastqs: dict, res: int, wt: str, save: bool=True, masks: bool=False
     # Memory reporting
     memories = []
 
+    # Get wildtype protein sequence
+    if len(wt)%3!=0: # Check if wildtype sequence is provided in-frame
+        raise(ValueError(f'WT sequence is not in-frame:\n{wt}'))
+    wt_prot = Seq.translate(Seq(wt))
+
     # Iterate through fastq files
     for file,fastq in fastqs.items():
-        edit=[]
-        if masks==True: editN=[]
-        for i in range(len(fastq['prot'])):
-            if len(wt)!=len(fastq.iloc[i]['nuc']): # Add single indels here
-                edit.append('Indel')
-                if masks==True: editN.append('Indel')
-            elif Seq.translate(Seq(wt))==fastq.iloc[i]['prot']: 
-                edit.append('WT')
-                if masks==True: editN.append('WT')
-            else:
-                e = []
-                if masks==True: eN = []
-                
-                for j, (a, b) in enumerate(zip(Seq.translate(Seq(wt)), fastq.iloc[i]['prot'])): # Find edits from sequence
-                    if a != b: e.append(a+str(j+res)+b)
-                if len(e)>1: edit.append(", ".join(e))
-                elif len(e)==1: edit.append(e[0])
-                else: edit.append('Unknown Edit')
-
-                if masks==True:    
-                    for j, (a, b) in enumerate(zip(Seq.translate(Seq(wt)), fastq.iloc[i]['protN'])): # Find edits from masked sequence
-                        if (a != b)&(str(b)!='X')&(keepX==False): eN.append(a+str(j+res)+b)
-                        elif (a != b)&(keepX==True): eN.append(a+str(j+res)+b)
-                    if len(eN)>1: editN.append(", ".join(eN))
-                    elif len(eN)==1: editN.append(eN[0])
-                    else: editN.append('Masked Edit')
         
-        fastqs[file]['edit']=edit
-        if masks==True: fastqs[file]['editN']=editN
+        # Save edits & corresponding categories
+        edits=[]
+        categories=[]
+        if masks==True: 
+            editsN=[]
+            categoriesN=[]
+
+        for i in range(len(fastq['prot'])): # Iterate through translated sequences
+            if len(fastq.iloc[i]['prot'])==0: # Empty sequence?
+                edits.append('Unknown')
+                categories.append('Flanks')
+                if masks==True: 
+                    editsN.append('Unknown')
+                    categoriesN.append('Flanks')
+                
+            elif len(wt)!=len(fastq.iloc[i]['nuc']): # Indel
+                edit,category = find_indel(wt=wt, mut=fastq.iloc[i]['nuc'], res=res, show=False)
+                edits.append(edit)
+                categories.append(category)
+                if masks == True: 
+                    edit,category = find_indel(wt=wt, mut=fastq.iloc[i]['nucN'], res=res, show=False)
+                    editsN.append(edit)
+                    categoriesN.append(category)
+            
+            elif wt_prot==fastq.iloc[i]['prot']: # WT sequence
+                edits.append('WT')
+                categories.append('WT')
+                if masks==True: 
+                    editsN.append('WT')
+                    categoriesN.append('WT')
+
+            else: # Substitution(s) without indels
+                edits.append(find_AA_edits(wt=wt_prot, res=res, seq=fastq.iloc[i]['prot']))
+                categories.append('Substitution') 
+                if masks==True: 
+                    editsN.append(find_AA_edits(wt=wt_prot, res=res, seq=fastq.iloc[i]['protN']))
+                    categoriesN.append('Substitution')
+        
+        fastqs[file]['edit']=edits
+        fastqs[file]['category']=categories
+        if masks==True: 
+            fastqs[file]['editN']=editsN
+            fastqs[file]['categoryN']=categoriesN
         print(f'{file}:\t{len(fastqs[file])} reads')
         memories.append(memory_timer(task=file))
     
     if save==True: io.save(dir='.',file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_genotype.csv',obj=t.reorder_cols(df=t.join(dc=fastqs,col='fastq_file'),cols=['fastq_file']))
     
-    return fastqs,memories
+    if return_memories: return fastqs,memories
+    else: return fastqs
 
-def outcomes(fastqs: dict, edit: str='edit'):
+def outcomes(fastqs: dict, col: str='edit', return_memories: bool=False):
     ''' 
     outcomes(): returns edit count & fraction per sample (tidy format)
 
     Parameters:
     fastqs (dict): dictionary from genotype
-    edit (str, optional): edit column name (Default: edit)
+    col (str, optional): column name (Default: edit)
+    return_memories (bool, optional): return memories (Default: False)
     
     Dependencies: pandas
     '''
@@ -1435,16 +1665,18 @@ def outcomes(fastqs: dict, edit: str='edit'):
 
     df = pd.DataFrame()
     for file,fastq in fastqs.items():
-        temp=pd.DataFrame({'sample':[file]*len(fastq[edit].value_counts()),
-                           edit:list(fastq[edit].value_counts().keys()),
-                           'count':fastq[edit].value_counts(),
-                           'fraction':fastq[edit].value_counts()/len(fastq[edit])})
+        temp=pd.DataFrame({'sample':[file]*len(fastq[col].value_counts()),
+                           col:list(fastq[col].value_counts().keys()),
+                           'count':fastq[col].value_counts(),
+                           'fraction':fastq[col].value_counts()/len(fastq[col])})
         df=pd.concat([df,temp]).reset_index(drop=True)
         memories.append(memory_timer(task=file))
-    return df,memories
+
+    if return_memories: return df,memories
+    else: return df
 
 def outcomes_desired(df: pd.DataFrame, desired_edits: list | str, sample_col: str='sample',
-                     edit_col: str='edit', count_col: str='count', fraction_col: str='fraction'):
+                     edit_col: str='edit', count_col: str='count', fraction_col: str='fraction', return_memories: bool=False):
     ''' 
     outcomes_desired(): groups desired edit count & fraction per sample (tidy format)
 
@@ -1455,6 +1687,7 @@ def outcomes_desired(df: pd.DataFrame, desired_edits: list | str, sample_col: st
     edit_col (str, optional): edit column name (Default: edit)
     count_col (str, optional): count column name (Default: count)
     fraction_col (str, optional): fraction column name (Default: fraction)
+    return_memories (bool, optional): return memories (Default: False)
 
     Dependencies: pandas
     '''
@@ -1504,10 +1737,11 @@ def outcomes_desired(df: pd.DataFrame, desired_edits: list | str, sample_col: st
         df_desired = pd.concat(objs=[df_desired,df_sample]).reset_index(drop=True)
         memories.append(memory_timer(task=sample))
 
-    return df_desired,memories
+    if return_memories: return df_desired,memories
+    else: return df_desired
 
 def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=None, desired_edits: list = None,
-               out_dir: str=None, out_file: str=None, return_df:bool=False, **kwargs):
+               out_dir: str=None, out_file_prefix: str=None, return_dc:bool=False, **kwargs):
     ''' 
     genotying(): quantify edit outcomes workflow
     
@@ -1519,7 +1753,7 @@ def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=N
     desired_edits (list, optional): list of desired edits (Default: None)
     out_dir (str, optional): output directory (Default: None)
     out_file (str, optional): output file (Default: None)
-    return_df (bool, optional): return dataframe (Default: False)
+    return_dc (bool, optional): return dictionary containing edit & category outcomes dataframes (Default: False)
 
     **kwargs:
     qall (int, optional): phred quality score threshold for all bases for a read to not be discarded (Q = -log(err))
@@ -1535,6 +1769,7 @@ def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=N
     # Initialize timer and memory reporting
     memory_timer(reset=True)
     memories = []
+    kwargs['return_memories'] = True # Return memories for all methods
     
     # Check config file
     if config_key is not None:
@@ -1548,12 +1783,14 @@ def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=N
     flank5 = sequence.split('(')[0]
     wt = sequence.split('(')[1].split(')')[0]
     flank3 = sequence.split(')')[1]
+    if len(wt)%3!=0:
+        raise(ValueError(f'WT sequence is not in-frame:\n{wt}'))
 
     # Split **kwargs
-    get_fastqs_kw = ['qall','qtrim','qavg','qmask','save'] # get_fastq()
-    region_kw = ['save','masks'] # region()
-    genotype_kw = ['save','masks','keepX'] # genotype()
-    outcomes_kw = ['edit'] # outcomes()
+    get_fastqs_kw = ['qall','qtrim','qavg','qmask','save','return_memories'] # get_fastq()
+    region_kw = ['save','masks','return_memories'] # region()
+    genotype_kw = ['save','masks','keepX','return_memories'] # genotype()
+    outcomes_kw = ['return_memories'] # outcomes()
 
     get_fastqs_kwargs = {k:kwargs[k] for k in get_fastqs_kw if k in kwargs}
     region_kwargs = {k:kwargs[k] for k in region_kw if k in kwargs}
@@ -1574,32 +1811,36 @@ def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=N
     memories.extend(memories1)
 
     memories.append(memory_timer(task='outcomes()'))
-    df,memories1 = outcomes(fastqs=dc,**outcomes_kwargs)
+    df_edits,memories1 = outcomes(fastqs=dc, col='edit', **outcomes_kwargs)
+    memories.extend(memories1)
+    df_categories,memories1  = outcomes(fastqs=dc, col='category', **outcomes_kwargs)
     memories.extend(memories1)
     del dc # Remove dc to save memory
 
     if desired_edits is not None: 
         memories.append(memory_timer(task='outcomes_desired()'))
-        df_desired,memories1 = outcomes_desired(df=df,desired_edits=desired_edits,**outcomes_kwargs)
+        df_desired,memories1 = outcomes_desired(df=df_edits,desired_edits=desired_edits,**outcomes_kwargs)
         memories.extend(memories1)
         del memories1
 
     # Save and return edit outcomes dataframe
     memories.append(memory_timer(task='genotyping()'))
-    if out_dir is not None and out_file is not None: # Save dataframes (optional)
+    if out_dir is not None and out_file_prefix is not None: # Save dataframes (optional)
         io.save(dir=os.path.join(out_dir,'.genotyping'), # memory reporting
                 file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
                 obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
 
-        io.save(dir=out_dir,file=out_file,obj=df) # outcomes
+        io.save(dir=out_dir,file=f'{out_file_prefix}_edit_outcomes.csv',obj=df_edits) # Edit outcomes
+        io.save(dir=out_dir,file=f'{out_file_prefix}_category_outcomes.csv',obj=df_categories) # Edit categoy outcomes
 
         if desired_edits is not None: 
             io.save(dir=out_dir, # outcomes desired
-                    file=f"{'.'.join(out_file.split('.')[:-1])}_desired.{out_file.split('.')[-1]}",
+                    file=f'{out_file_prefix}_edit_desired_outcomes.csv',
                     obj=df_desired)
     
-    if return_df: return df
-
+    if return_dc: 
+        return {'edit': df_edits,
+                'category': df_categories}
 
 # Supporting methods for DMS plots
 ''' aa_props: dictionary of AA properties with citations (Generated by ChatGPT)
