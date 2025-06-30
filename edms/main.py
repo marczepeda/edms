@@ -1089,8 +1089,9 @@ def main():
     # Add specific arguments: genotyping()
     parser_fastq_genotyping.add_argument("--out_file_prefix", type=str, help="Name of output file prefix", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
     
-    parser_fastq_genotyping.add_argument("--sequence", type=str, help="Formatted sequence: flank5(genotype region)flank3", required=True)
-    parser_fastq_genotyping.add_argument("--res", type=int, help="First amino acid number in genotype region",required=True)
+    parser_fastq_genotyping.add_argument("--config_key", type=str, help="Configuration file key for sequence [flank5(genotype region)flank3} & res (first amino acid in genotype region)", default=argparse.SUPPRESS)
+    parser_fastq_genotyping.add_argument("--sequence", type=str, help="Formatted sequence: flank5(genotype region)flank3", default=argparse.SUPPRESS)
+    parser_fastq_genotyping.add_argument("--res", type=int, help="First amino acid number in genotype region", default=argparse.SUPPRESS)
     
     parser_fastq_genotyping.add_argument("--desired_edits", type=str, nargs='+', help="List of desired edits", default=argparse.SUPPRESS)
     parser_fastq_genotyping.add_argument("--qall", type=int, help="Minimum Phred quality score for all bases", default=argparse.SUPPRESS)
