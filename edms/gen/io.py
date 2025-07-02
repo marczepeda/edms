@@ -27,6 +27,7 @@ Usage:
 - in_subs(): moves all files with a given suffix into subfolders named after the files (excluding the suffix).
 - out_subs(): delete subdirectories and move their files to the parent directory
 - create_sh(): creates a shell script with SLURM job submission parameters for Harvard FASRC cluster.
+- split_R1_R2(): split paired reads into new R1 and R2 subdirectories at the parent directory
 
 [Directory Methods]
 - print_relative_paths(): prints relative paths for all files in a directory including subfolders
