@@ -33,12 +33,11 @@ dependencies = [
   "psutil"
 ]
 
-[project.scripts]
-edms = "edms.main:main"
-
-[project.classifiers]
 classifiers = [
   "Programming Language :: Python :: 3",
   "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent"
 ]
+
+[project.scripts]
+edms = "edms.main:main"
