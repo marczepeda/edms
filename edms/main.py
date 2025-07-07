@@ -1101,6 +1101,11 @@ def main():
     parser_fastq_genotyping.add_argument("--no_saves", action="store_false", help="Don't save read statistics and genotypes files",dest="save",default=True)
     parser_fastq_genotyping.add_argument("--masks", action="store_true", help="Include masked sequence and translation",default=False)
     parser_fastq_genotyping.add_argument("--keepX", action="store_true", help="Keep unknown translation (X) in output", default=False)
+
+    parser_fastq_genotyping.add_argument("--match_score", type=float, help="Match score for pairwise alignment", default=argparse.SUPPRESS)
+    parser_fastq_genotyping.add_argument("--mismatch_score", type=float, help="Mismatch score for pairwise alignment", default=argparse.SUPPRESS)
+    parser_fastq_genotyping.add_argument("--open_gap_score", type=float, help="Open gap score for pairwise alignment", default=argparse.SUPPRESS)
+    parser_fastq_genotyping.add_argument("--extend_gap_score", type=float, help="Extend gap score for pairwise alignment", default=argparse.SUPPRESS)
     
     parser_fastq_revcom.set_defaults(func=fq.revcom_fastqs)
     parser_fastq_unzip.set_defaults(func=fq.unzip_fastqs)

@@ -645,7 +645,8 @@ def plot_alignments(fastq_alignments: dict | str, align_col: str, id_col: str,
 
 def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_col: str,
                  fastq_dir: str, df_motif5: pd.DataFrame | str, df_motif3: pd.DataFrame | str,
-                 out_dir: str, match_score: int=1, mismatch_score: int=-4, align_dims: tuple=(0,0),
+                 out_dir: str, match_score: float = 2, mismatch_score: float = -1, 
+                 open_gap_score: float = -10, extend_gap_score: float = -0.1, align_dims: tuple=(0,0),
                  align_ckpt: int=10000, plot_suf: str=None, show: bool=False, return_dc: bool=False,
                  **plot_kwargs):
     ''' 
@@ -660,8 +661,10 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_
     df_motif5 (dataframe | str): 5' motif dataframe (or file path)
     df_motif3 (dataframe | str): 3' motif dataframe (or file path)
     out_dir (str): directory for output files
-    match_score (int, optional): match score for pairwise alignment (Default: 1)
-    mismatch_score (int, optional): mismatch score for pairwise alignment (Default: -4)
+    match_score (float, optional): match score for pairwise alignment (Default: 2)
+    mismatch_score (float, optional): mismatch score for pairwise alignment (Default: -1)
+    open_gap_score (float, optional): open gap score for pairwise alignment (Default: -10)
+    extend_gap_score (float, optional): extend gap score for pairwise alignment (Default: -0.1)
     align_dims (tuple, optional): (start_i, end_i) alignments per fastq file to save compute (Default: None)
     align_ckpt (int, optional): save checkpoints for alignments (Default: 10000)
     plot_suf (str, optional): plot type suffix with '.' (Default: None)
@@ -678,9 +681,9 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_
     aligner = PairwiseAligner()
     aligner.mode = 'global'  # Use 'local' for local alignment
     aligner.match_score = match_score  # Score for a match
-    aligner.mismatch_score = mismatch_score/2  # Penalty for a mismatch; applied to both strands
-    aligner.open_gap_score = mismatch_score/2  # Penalty for opening a gap; applied to both strands
-    aligner.extend_gap_score = mismatch_score/2  # Penalty for extending a gap; applied to both strands
+    aligner.mismatch_score = mismatch_score  # Penalty for a mismatch; applied to both strands
+    aligner.open_gap_score = open_gap_score  # Penalty for opening a gap; applied to both strands
+    aligner.extend_gap_score = extend_gap_score  # Penalty for extending a gap; applied to both strands
 
     # Get dataframes from file path if needed
     if type(df_ref)==str: 
@@ -857,8 +860,9 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_
     if return_dc: return fastqs
 
 def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_col: str,
-                     fastq_dir: str, out_dir: str, match_score: int=1, mismatch_score: int=-4,
-                     align_dims: tuple=(0,0), align_ckpt: int=10000, plot_suf: str=None, show: bool=False, return_dc: bool=False,
+                     fastq_dir: str, out_dir: str, match_score: float = 2, mismatch_score: float = -1, 
+                     open_gap_score: float = -10, extend_gap_score: float = -0.1, align_dims: tuple=(0,0),
+                     align_ckpt: int=10000, plot_suf: str=None, show: bool=False, return_dc: bool=False,
                      **plot_kwargs):
     ''' 
     count_alignments(): align reads from fastq directory to annotated library with mismatches; plot and return fastq alignments dictionary
@@ -870,8 +874,10 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fa
     fastq_col (str): fastq column name in the annotated reference library
     fastq_dir (str): directory with fastq files
     out_dir (str): directory for output files
-    match_score (int, optional): match score for pairwise alignment (Default: 1)
-    mismatch_score (int, optional): mismatch score for pairwise alignment (Default: -4)
+    match_score (float, optional): match score for pairwise alignment (Default: 2)
+    mismatch_score (float, optional): mismatch score for pairwise alignment (Default: -1)
+    open_gap_score (float, optional): open gap score for pairwise alignment (Default: -10)
+    extend_gap_score (float, optional): extend gap score for pairwise alignment (Default: -0.1)
     align_dims (tuple, optional): (start_i, end_i) alignments per fastq file to save compute (Default: None)
     align_ckpt (int, optional): save checkpoints for alignments (Default: 10000)    plot_suf (str, optional): plot type suffix with '.' (Default: '.pdf')
     plot_suf (str, optional): plot type suffix with '.' (Default: None)
@@ -888,9 +894,9 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fa
     aligner = PairwiseAligner()
     aligner.mode = 'global'  # Use 'local' for local alignment
     aligner.match_score = match_score  # Score for a match
-    aligner.mismatch_score = mismatch_score/2  # Penalty for a mismatch; applied to both strands
-    aligner.open_gap_score = mismatch_score/2  # Penalty for opening a gap; applied to both strands
-    aligner.extend_gap_score = mismatch_score/2  # Penalty for extending a gap; applied to both strands
+    aligner.mismatch_score = mismatch_score  # Penalty for a mismatch; applied to both strands
+    aligner.open_gap_score = open_gap_score  # Penalty for opening a gap; applied to both strands
+    aligner.extend_gap_score = extend_gap_score  # Penalty for extending a gap; applied to both strands
 
     # Get dataframe from file path if needed
     if type(df_ref)==str: 
@@ -1428,7 +1434,9 @@ def format_alignment(a: str|Seq, b: str|Seq, show: bool=False):
     if show: print(f"{a}\n{mid}\n{b}")
     return mid
 
-def find_indel(wt:str|Seq, mut:str|Seq, res: int, show:bool=False):
+def find_indel(wt:str|Seq, mut:str|Seq, res: int, show:bool=False,
+               match_score: float = 2, mismatch_score: float = -1, 
+               open_gap_score: float = -10, extend_gap_score: float = -0.1):
     '''
     find_indel(): aligns two sequences and returns the indel edit.
 
@@ -1437,16 +1445,20 @@ def find_indel(wt:str|Seq, mut:str|Seq, res: int, show:bool=False):
     mut (str|Seq): The mutant sequence.
     res (int): The first amino acid number in the sequence.
     show (bool): If True, prints the formatted alignment.
+    match_score (float, optional): match score for pairwise alignment (Default: 2)
+    mismatch_score (float, optional): mismatch score for pairwise alignment (Default: -1)
+    open_gap_score (float, optional): open gap score for pairwise alignment (Default: -10)
+    extend_gap_score (float, optional): extend gap score for pairwise alignment (Default: -0.1)
 
     Dependencies: Biopython
     '''
     # High sequence homology; punish gaps
     aligner = PairwiseAligner()
     aligner.mode = "global"
-    aligner.match_score = 2
-    aligner.mismatch_score = -1
-    aligner.open_gap_score = -10
-    aligner.extend_gap_score = -0.1
+    aligner.match_score = match_score  # Score for a match
+    aligner.mismatch_score = mismatch_score  # Penalty for a mismatch; applied to both strands
+    aligner.open_gap_score = open_gap_score  # Penalty for opening a gap; applied to both strands
+    aligner.extend_gap_score = extend_gap_score  # Penalty for extending a gap; applied to both strands
 
     # Get the best protein alignment
     alignment = aligner.align(Seq(trim(wt)).translate(),Seq(trim(mut)).translate())[0]
@@ -1570,7 +1582,9 @@ def find_indel(wt:str|Seq, mut:str|Seq, res: int, show:bool=False):
         if show: print(f"{edit} ({category})")
         return edit,category
 
-def genotype(fastqs: dict, res: int, wt: str, save: bool=True, masks: bool=False, keepX: bool=False, return_memories: bool=False):
+def genotype(fastqs: dict, res: int, wt: str, save: bool=True, masks: bool=False, keepX: bool=False,
+             match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, 
+             extend_gap_score: float = -0.1, return_memories: bool=False):
     ''' 
     genotype(): assign genotypes to sequence records
     
@@ -1581,6 +1595,10 @@ def genotype(fastqs: dict, res: int, wt: str, save: bool=True, masks: bool=False
     save (bool, optional): save genotyped reads to local directory (Default: True)
     masks (bool, optional): include masked sequence and translation (Default: False)
     keepX (bool, optional): keep unknown translation (i.e., X) due to sequencing error (Default: False) 
+    match_score (float, optional): match score for pairwise alignment (Default: 2)
+    mismatch_score (float, optional): mismatch score for pairwise alignment (Default: -1)
+    open_gap_score (float, optional): open gap score for pairwise alignment (Default: -10)
+    extend_gap_score (float, optional): extend gap score for pairwise alignment (Default: -0.1)
     return_memories (bool, optional): return memories (Default: False)
     
     Dependencies: pandas & Bio.Seq.Seq
@@ -1614,11 +1632,15 @@ def genotype(fastqs: dict, res: int, wt: str, save: bool=True, masks: bool=False
                     categoriesN.append('Flanks')
                 
             elif len(wt)!=len(fastq.iloc[i]['nuc']): # Indel
-                edit,category = find_indel(wt=wt, mut=fastq.iloc[i]['nuc'], res=res, show=False)
+                edit,category = find_indel(wt=wt, mut=fastq.iloc[i]['nuc'], res=res, show=False, 
+                                           match_score=match_score, mismatch_score=mismatch_score,
+                                           open_gap_score=open_gap_score, extend_gap_score=extend_gap_score)
                 edits.append(edit)
                 categories.append(category)
                 if masks == True: 
-                    edit,category = find_indel(wt=wt, mut=fastq.iloc[i]['nucN'], res=res, show=False)
+                    edit,category = find_indel(wt=wt, mut=fastq.iloc[i]['nucN'], res=res, show=False, 
+                                               match_score=match_score, mismatch_score=mismatch_score,
+                                               open_gap_score=open_gap_score, extend_gap_score=extend_gap_score)
                     editsN.append(edit)
                     categoriesN.append(category)
             
@@ -1763,6 +1785,10 @@ def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=N
     save (bool, optional): save reads statistics and genotype file to local directory (Default: True)
     masks (bool, optional): include masked sequence and translation (Default: False)
     keepX (bool, optional): keep unknown translation (i.e., X) due to sequencing error (Default: False) 
+    match_score (float, optional): match score for pairwise alignment (Default: 2)
+    mismatch_score (float, optional): mismatch score for pairwise alignment (Default: -1)
+    open_gap_score (float, optional): open gap score for pairwise alignment (Default: -10)
+    extend_gap_score (float, optional): extend gap score for pairwise alignment (Default: -0.1)
     
     Dependencies: get_fastq(), region(), genotype(), outcomes(), outcomes_desired()
     '''
@@ -1789,7 +1815,7 @@ def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=N
     # Split **kwargs
     get_fastqs_kw = ['qall','qtrim','qavg','qmask','save','return_memories'] # get_fastq()
     region_kw = ['save','masks','return_memories'] # region()
-    genotype_kw = ['save','masks','keepX','return_memories'] # genotype()
+    genotype_kw = ['save','masks','keepX','match_score','mismatch_score','open_gap_score','extend_gap_score','return_memories'] # genotype()
     outcomes_kw = ['return_memories'] # outcomes()
 
     get_fastqs_kwargs = {k:kwargs[k] for k in get_fastqs_kw if k in kwargs}
