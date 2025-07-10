@@ -602,6 +602,7 @@ def main():
     - out_subs(): recursively moves all files from subdirectories into the parent directory and delete the emptied subdirectories.
     - create_sh(): creates a shell script with SLURM job submission parameters for Harvard FASRC cluster.
     - split_R1_R2(): split paired reads into new R1 and R2 subdirectories at the parent directory
+    - excel_csvs(): exports excel file to .csv files in specified directory  
     '''
     parser_io = subparsers.add_parser("io", help="Input/Output")
     subparsers_io = parser_io.add_subparsers()
@@ -611,6 +612,7 @@ def main():
     parser_io_out_subs = subparsers_io.add_parser("out_subs", help="Delete subdirectories and move their files to the parent directory")
     parser_io_create_sh = subparsers_io.add_parser("create_sh", help='Generate SLURM shell script for Harvard FASRC cluster.')
     parser_io_split_R1_R2 = subparsers_io.add_parser("split_R1_R2", help='Split paired reads into new R1 and R2 subdirectories at the parent directory.')
+    parser_io_excel_csvs = subparsers_io.add_parser("excel_csvs", help='Exports excel file to .csv files in specified directory.')
     
     # Add common arguments
     for parser_io_common in [parser_io_in_subs,parser_io_out_subs,parser_io_split_R1_R2]:
@@ -630,11 +632,16 @@ def main():
     parser_io_create_sh.add_argument('--python', type=str, default='python/3.12.5-fasrc01', help='Python module to load.')
     parser_io_create_sh.add_argument('--env', type=str, default='edms', help='Conda environment to activate.')
 
+    # excel_csvs(): exports excel file to .csv files in specified directory 
+    parser_io_excel_csvs.add_argument('--pt', type=str, help='Excel file path', required=True)
+    parser_io_excel_csvs.add_argument('--dir', type=str, help='Output directory path (Default: same directory as excel file name).',default='')
+
     # Call command functions
     parser_io_in_subs.set_defaults(func=io.in_subs)
     parser_io_out_subs.set_defaults(func=io.out_subs)
     parser_io_create_sh.set_defaults(func=io.create_sh)
     parser_io_split_R1_R2.set_defaults(func=io.split_R1_R2)
+    parser_io_excel_csvs.set_defaults(func=io.excel_csvs)
 
     '''
     edms.gen.cli:

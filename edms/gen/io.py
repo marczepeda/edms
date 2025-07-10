@@ -253,7 +253,7 @@ def excel_csvs(pt: str,dir='',**kwargs):
     
     Parameters:
     pt (str): excel file path
-    dir (str, optional): output directory path (same directory as excel file)
+    dir (str, optional): output directory path (Default: same directory as excel file name)
     
     Dependencies: pandas, os, & mkdir
     '''
