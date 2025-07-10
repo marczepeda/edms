@@ -126,7 +126,7 @@ def move_dist_legend(ax, legend_loc: str,legend_title_size: int,legend_size: int
     '''
     
     old_legend = ax.legend_
-    handles = old_legend.legendHandles
+    handles = old_legend.legend_handles
     labels = [t.get_text() for t in old_legend.get_texts()]
     title = old_legend.get_title().get_text()
     ax.legend(handles,labels,loc=legend_loc,bbox_to_anchor=legend_bbox_to_anchor,

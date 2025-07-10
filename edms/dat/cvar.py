@@ -43,7 +43,6 @@ def mutations(df: pd.DataFrame | str, gene_name:str, dir:str=None, file:str=None
     befores = []
     nums = []
     afters = []
-    aa_muts = []
     for aa_mut in df['Protein change']:
         num = int(re.findall(r'-?\d+',aa_mut)[0])
         nums.append(num)

@@ -68,11 +68,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from adjustText import adjust_text
-from collections import Counter
-from pathlib import Path
 from scipy.stats import ttest_ind
 import Levenshtein
-from typing import Literal
 
 from ..gen import io
 from ..gen import tidy as t

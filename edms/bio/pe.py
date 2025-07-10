@@ -13,11 +13,13 @@ Usage:
 - PrimeDesignInput(): creates and checks PrimeDesign saturation mutagenesis input file
 - PrimeDesign(): run PrimeDesign using Docker (NEED TO BE RUNNING DESKTOP APP)
 - PrimeDesignOutput(): splits peg/ngRNAs from PrimeDesign output & finishes annotations
-- MergePrimeDesignOutput(): rejoins epeg/ngRNAs from PrimeDesign output & creates ngRNA_groups
+- PrimeDesigner(): execute PrimeDesign for EDMS using Docker (NEED TO BE RUNNING DESKTOP APP)
+- merge(): rejoins epeg/ngRNAs & creates ngRNA_groups
 
 [pegRNA]
 - epegRNA_linkers(): generate epegRNA linkers between PBS and 3' hairpin motif & finish annotations
 - shared_sequences(): Reduce PE library into shared spacers and PBS sequences
+- PilotScreen(): Create pilot screen for EDMS
 - get_codons(): returns all codons within a specified frame for a nucleotide sequence
 - get_codon_frames(): returns all codon frames for a nucleotide sequence
 - is_sublist_in_order(): returns if each element in the sub list appears in the correct order in the main list
@@ -38,12 +40,15 @@ import pandas as pd
 import numpy as np
 import os
 import re
+from typing import Literal
 from Bio.Seq import Seq
 from Bio.Align import PairwiseAligner
 from ..bio import pegLIT as pegLIT
 from ..gen import io as io
 from ..gen import tidy as t
 from ..gen import plot as p
+from ..dat import cosmic as co 
+from ..dat import cvar
 
 # Biological Dictionaries
 ''' dna_aa_codon_table: DNA to AA codon table'''
@@ -180,7 +185,7 @@ def PrimeDesignOutput(pt: str, scaffold_sequence: str, saturation_mutagenesis:st
         SpCas9 flip + extend + com-modified (required for VLPs): GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC
         SpCas9 flip + extend (shorter): GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC
     saturation_mutagenesis (str, optional): saturation mutagenesis design with prime editing (Options: 'aa', 'base').
-    aa_index (int, optional): 1st amino acid in target sequence index (Optional, Default: start codon = 1)
+    aa_index (int, optional): 1st amino acid in target sequence index (Default: 1)
     
     Dependencies: io, numpy, & pandas
     '''
@@ -245,20 +250,81 @@ def PrimeDesignOutput(pt: str, scaffold_sequence: str, saturation_mutagenesis:st
 
     return pegRNAs,ngRNAs
 
-def MergePrimeDesignOutput(epegRNAs: dict | pd.DataFrame, ngRNAs: dict | pd.DataFrame, ngRNAs_group_max=3,
-                           epegRNA_suffix='_epegRNA', ngRNA_suffix='_ngRNA'):
+def PrimeDesigner(target_name: str, flank5_sequence: str, target_sequence: str, flank3_sequence: str,
+                  pbs_length_pooled_ls: list = [11,13,15], silent_mutation: bool = True,
+                  number_of_pegrnas: int = 1, number_of_ngrnas: int = 3,
+                  scaffold_sequence: str='GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC', 
+                  aa_index: int=1):
     '''
-    MergePrimeDesignOutput(): rejoins epeg/ngRNAs from PrimeDesign output & creates ngRNA_groups
+    PrimeDesigner(): execute PrimeDesign saturation mutagenesis for EDMS using Docker (NEED TO BE RUNNING DESKTOP APP)
+    
+    Parameters:
+    target_name (str): name of target
+    flank5_sequence (str): in-frame nucleotide sequence with 5' of saturation mutagensis region (length must be divisible by 3)
+    target_sequence (str): in-frame nucleotide sequence for the saturation mutagensis region (length must be divisible by 3)
+    flank3_sequence (str): in-frame nucleotide sequence with 3' of saturation mutagensis region (length must be divisible by 3)
+    pbs_length_pooled_ls (list, optional): list of primer binding site (PBS) lengths for the pegRNA extension (Default: [11,13,15])
+    silent_mutation (bool, optional): introduce silent mutation into PAM assuming sequence is in-frame (Default: True)
+    number_of_pegrnas (int, optional): maximum number of pegRNAs to design for each input sequence. The pegRNAs are ranked by 1) PAM disrupted > PAM intact then 2) distance to edit. (Default: 1)
+    number_of_ngrnas (int, optional): maximum number of ngRNAs to design for each input sequence. The ngRNAs are ranked by 1) PE3b-seed > PE3b-nonseed > PE3 then 2) deviation from nicking_distance_pooled. (Default: 3)
+    scaffold_sequence (str, optional): sgRNA scaffold sequence (Default: SpCas9 flip + extend + com-modified)
+        GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC
+    aa_index (int, optional): 1st amino acid in target sequence index (Default: 1)
+
+    Dependencies: PrimeDesignInput(), PrimeDesign(), & PrimeDesignOutput()
+    '''
+    # Create PrimeDesign input file
+    PrimeDesignInput(target_name=target_name, flank5_sequence=flank5_sequence, target_sequence=target_sequence, 
+                     flank3_sequence=flank3_sequence, dir='.', file=f'{"_".join(target_name.split(" "))}.csv')
+    
+    # Iterate through PBS lengths
+    pegRNAs=dict()
+    ngRNAs=dict()
+    for pbs_length_pooled in pbs_length_pooled_ls:
+
+        # Run PrimeDesign in saturation mutatgenesis mode
+        PrimeDesign(file=f'{"_".join(target_name.split(" "))}.csv', silent_mutation=silent_mutation, saturation_mutagenesis="aa",
+                    number_of_pegrnas=number_of_pegrnas, number_of_ngrnas=number_of_ngrnas, pbs_length_pooled=pbs_length_pooled)
+        
+        # Obtain pegRNAs and ngRNAs from PrimeDesign output
+        pegRNAs[pbs_length_pooled],ngRNAs[pbs_length_pooled] = PrimeDesignOutput(
+            pt=sorted([file for file in io.relative_paths('.') if "PrimeDesign.csv" in file], reverse= True)[0], 
+            scaffold_sequence=scaffold_sequence, saturation_mutagenesis='aa', aa_index=aa_index)
+    
+    # Save pegRNAs and ngRNAs
+    io.save_dir(dir='../pegRNAs', suf='.csv', dc=pegRNAs)
+    io.save_dir(dir='../ngRNAs', suf='.csv', dc=pegRNAs)
+
+def merge(epegRNAs: str | dict | pd.DataFrame, ngRNAs: str | dict | pd.DataFrame, ngRNAs_groups_max: int=3,
+          epegRNA_suffix: str='_epegRNA', ngRNA_suffix: str='_ngRNA', dir: str=None, file: str=None):
+    '''
+    merge(): rejoins epeg/ngRNAs & creates ngRNA_groups
     
     Parameters:
     epegRNAs (dict or dataframe): dictionary containing epegRNA dataframes or epegRNA dataframe
     ngRNAs (dict or dataframe): dictionary containing ngRNA dataframes or ngRNA dataframe
     ngRNAs_group_max (int, optional): maximum # of ngRNAs per epegRNA (Default: 3)
-    epegRNA_pre (str, optional): Prefix for epegRNAs columns (Default: epegRNA_)
-    ngRNA_pre (str, optional): Prefix for ngRNAs columns (Default: ngRNA_)
+    epegRNA_suffix (str, optional): Suffix for epegRNAs columns (Default: epegRNA_)
+    ngRNA_suffix (str, optional): Suffix for ngRNAs columns (Default: ngRNA_)
     
     Dependencies: tidy & pandas
     '''
+    # Get if epegRNAs and ngRNAs from path if needed
+    if isinstance(epegRNAs, str): 
+        if os.path.isdir(epegRNAs): # directory
+            epegRNAs = io.get_dir(dir=epegRNAs)
+        elif os.path.isfile(epegRNAs): # file
+            epegRNAs = io.get(pt=epegRNAs)
+        else:
+            raise(ValueError(f"'epegRNAs' does not exist or is not a file/directory.\n{epegRNAs}"))
+    if isinstance(ngRNAs, str): 
+        if os.path.isdir(ngRNAs): # directory
+            ngRNAs = io.get_dir(dir=ngRNAs)
+        elif os.path.isfile(ngRNAs): # file
+            ngRNAs = io.get(pt=ngRNAs)
+        else:
+            raise(ValueError(f"'ngRNAs' does not exist or is not a file/directory.\n{ngRNAs}"))
+
     # Join dictionary of dataframes if needed
     if isinstance(epegRNAs,dict): epegRNAs = t.join(epegRNAs).reset_index(drop=True)
     if isinstance(ngRNAs,dict): ngRNAs = t.join(ngRNAs).drop_duplicates(subset='ngRNA_number').reset_index(drop=True)
@@ -276,46 +342,51 @@ def MergePrimeDesignOutput(epegRNAs: dict | pd.DataFrame, ngRNAs: dict | pd.Data
     ngRNAs_dc = {(pegRNA_num):1 for (pegRNA_num) in list(epeg_ngRNAs['pegRNA_number'].value_counts().keys())}
     ngRNA_group_ls = []
     for pegRNA_num in epeg_ngRNAs['pegRNA_number']:
-        ngRNA_group_ls.append(ngRNAs_dc[pegRNA_num]%ngRNAs_group_max+1)
+        ngRNA_group_ls.append(ngRNAs_dc[pegRNA_num]%ngRNAs_groups_max+1)
         ngRNAs_dc[pegRNA_num]+=1
     epeg_ngRNAs['ngRNA_group']=ngRNA_group_ls
     
+    # Save epeg_ngRNAs if dir and file are provided
+    if dir is not None and file is not None:
+        io.save(dir=dir, file=file, obj=epeg_ngRNAs)
+
     return epeg_ngRNAs
 
 # pegRNA
-def epegRNA_linkers(pegRNAs: pd.DataFrame, epegRNA_motif_sequence: str='CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA',
-                    checkpoint_dir: str=None, checkpoint_file=None, checkpoint_pt: str=''):
+def epegRNA_linkers(pegRNAs: str | pd.DataFrame, epegRNA_motif_sequence: str='CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA',
+                    ckpt_dir: str=None, ckpt_file=None, ckpt_pt: str='',
+                    out_dir: str=None, out_file: str=None):
     ''' 
     epegRNA_linkers(): generate epegRNA linkers between PBS and 3' hairpin motif & finish annotations
     
     Parameters:
-    pegRNAs (dataframe): pegRNAs DataFrame
+    pegRNAs (str | dataframe): pegRNAs DataFrame or file path
     epegRNA_motif_sequence (str, optional): epegRNA motif sequence (Optional, Default: tevopreQ1)
-    checkpoint_dir (str, optional): Checkpoint directory
-    checkpoint_file (str, optional): Checkpoint file name
-    checkpoint_pt (str, optional): Previous checkpoint path
+    ckpt_dir (str, optional): Checkpoint directory
+    ckpt_file (str, optional): Checkpoint file name
+    ckpt_pt (str, optional): Previous ckpt path
     
     Dependencies: pandas, pegLIT, & io
     '''
-    if type(df)==str: # Get pegRNAs dataframe from file path if needed
-        df = io.get(pt=df)
+    if type(pegRNAs)==str: # Get pegRNAs dataframe from file path if needed
+        pegRNAs = io.get(pt=pegRNAs)
 
-    # Get or make checkpoint DataFrame
-    if checkpoint_dir is not None and checkpoint_file is not None: # Save checkpoints
-        if checkpoint_pt=='': checkpoint = pd.DataFrame(columns=['pegRNA_number','Linker_sequence'])
-        else: checkpoint = io.get(pt=checkpoint_pt)
-    else: checkpoint = '' # Don't save checkpoints, length needs to 0.
+    # Get or make ckpt DataFrame
+    if ckpt_dir is not None and ckpt_file is not None: # Save ckpts
+        if ckpt_pt=='': ckpt = pd.DataFrame(columns=['pegRNA_number','Linker_sequence'])
+        else: ckpt = io.get(pt=ckpt_pt)
+    else: ckpt = '' # Don't save ckpts, length needs to 0.
 
     # Generate epegRNA linkers between PBS and 3' hairpin motif
     linkers = []
     for i in range(len(pegRNAs)):
-        if i>=len(checkpoint):
+        if i>=len(ckpt):
             linkers.extend(pegLIT.pegLIT(seq_spacer=pegRNAs.iloc[i]['Spacer_sequence'],seq_scaffold=pegRNAs.iloc[i]['Scaffold_sequence'],
                                         seq_template=pegRNAs.iloc[i]['RTT_sequence'],seq_pbs=pegRNAs.iloc[i]['PBS_sequence'],
                                         seq_motif=epegRNA_motif_sequence))
-            if checkpoint_dir is not None and checkpoint_file is not None: # Save checkpoints
-                checkpoint = pd.concat([checkpoint,pd.DataFrame({'pegRNA_number': [i], 'Linker_sequence': [linkers[i]]})])
-                io.save(dir=checkpoint_dir,file=checkpoint_file,obj=checkpoint)
+            if ckpt_dir is not None and ckpt_file is not None: # Save ckpts
+                ckpt = pd.concat([ckpt,pd.DataFrame({'pegRNA_number': [i], 'Linker_sequence': [linkers[i]]})])
+                io.save(dir=ckpt_dir,file=ckpt_file,obj=ckpt)
             print(f'Status: {i} out of {len(pegRNAs)}')
     
     # Generate epegRNAs
@@ -324,20 +395,29 @@ def epegRNA_linkers(pegRNAs: pd.DataFrame, epegRNA_motif_sequence: str='CGCGGTTC
     epegRNAs = t.reorder_cols(df=pegRNAs,
                               cols=['pegRNA_number','gRNA_type','Strand','Edit', # Important metadata
                                     'Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence','Linker_sequence','Motif_sequence']) # Sequence information
+    
+    # Save epeg_ngRNAs if dir and file are provided
+    if out_dir is not None and out_file is not None:
+        io.save(dir=out_dir, file=out_file, obj=epegRNAs)
+    
     return epegRNAs
 
-def shared_sequences(pegRNAs: pd.DataFrame, hist_plot:bool=True, hist_dir: str=None, hist_file: str=None, **kwargs):
+def shared_sequences(pegRNAs: pd.DataFrame | str, hist_plot:bool=True, hist_dir: str=None, hist_file: str=None, **kwargs):
     ''' 
     shared_sequences(): Reduce PE library into shared spacers and PBS sequences
     
     Parameters:
-    pegRNAs (dataframe): pegRNAs DataFrame
+    pegRNAs (dataframe | str): pegRNAs DataFrame (or file path)
     hist_plot (bool, optional): display histogram of reduced PE library (Default: True)
     hist_dir (str, optional): directory to save histogram
     hist_file (str, optional): file name to save histogram
 
     Dependencies: pandas & plot
     '''
+    # Get pegRNAs DataFrame from file path if needed
+    if type(pegRNAs)==str:
+        pegRNAs = io.get(pt=pegRNAs)
+
     # Reduce PE library to the set shared of spacers and PBS motifs
     shared = sorted({(pegRNAs.iloc[i]['Spacer_sequence'],pegRNAs.iloc[i]['PBS_sequence']) for i in range(len(pegRNAs))})
     shared_pegRNAs_lib = pd.DataFrame(columns=['pegRNA_numbers','Strand','Edits','Spacer_sequence','PBS_sequence'])
@@ -382,6 +462,66 @@ def shared_sequences(pegRNAs: pd.DataFrame, hist_plot:bool=True, hist_dir: str=N
 
     return shared_pegRNAs_lib
 
+def PilotScreen(pegRNAs_dir: str, mutations_pt: str, database: Literal['COSMIC','ClinVar']='COSMIC'):
+    ''' 
+    Pilot_Screen(): Determine pilot screen for EDMS
+    
+    Parameters:
+    pegRNAs_dir (str): directory with pegRNAs from PrimeDesigner() output
+    mutations_pt (str): path to mutations file (COSMIC or ClinVar)
+    database (str, optional): database to use for priority mutations (Default: 'COSMIC')
+    
+    Dependencies: io, cosmic, cvar, shared_sequences(), priority_muts(), & priority_edits()
+    '''
+    # Get pegRNAs from PrimeDesigner() output
+    pegRNAs = io.get_dir(pegRNAs_dir)
+
+    # Get mutations from COSMIC or ClinVar file
+    if database=='COSMIC':
+        mutations = co.mutations(io.get(pt=mutations_pt))
+    elif database=='ClinVar':
+        mutations = cvar.mutations(io.get(pt=mutations_pt))
+    else: raise(ValueError(f"Database {database} not supported. Use 'COSMIC' or 'ClinVar'."))
+
+    # Isolate shared spacer & PBS sequences
+    pegRNAs_shared = dict()
+    for key,pegRNAs_pbs in pegRNAs.items():
+        pegRNAs_shared[key] = shared_sequences(pegRNAs=pegRNAs_pbs,
+                                               hist_dir='../shared_sequences',
+                                               hist_file=f'{key}.png',
+                                               show=False)
+    io.save_dir(dir='../shared_sequences',
+                suf='.csv',
+                dc=pegRNAs_shared)
+
+    # Determine priority mutations for each shared spacer & PBS sequence
+    pegRNAs_shared_muts = dict()
+    for key,pegRNAs_shared_pbs in pegRNAs_shared.items():
+        if database=='COSMIC': pegRNAs_shared_muts[key]=co.priority_muts(pegRNAs_shared=pegRNAs_shared_pbs,
+                                                                         df_cosmic=mutations)
+        elif database=='ClinVar': pegRNAs_shared_muts[key]=cvar.priority_muts(pegRNAs_shared=pegRNAs_shared_pbs,
+                                                                              df_clinvar=mutations)
+        else: raise(ValueError(f"Database {database} not supported. Use 'COSMIC' or 'ClinVar'."))
+
+    io.save_dir(dir='../shared_sequences_muts',
+                suf='.csv',
+                dc=pegRNAs_shared_muts)
+
+    # Determine priority edits for each shared spacer & PBS sequence
+    pegRNAs_priority = dict()
+    for key,pegRNAs_shared_pbs in pegRNAs_shared_muts.items():
+        if database=='COSMIC': pegRNAs_priority[key]=co.priority_edits(pegRNAs=pegRNAs[key],
+                                                                       pegRNAs_shared=pegRNAs_shared_pbs,
+                                                                       df_cosmic=mutations)
+        elif database=='ClinVar':  pegRNAs_shared_muts[key]=cvar.priority_edits(pegRNAs=pegRNAs[key],
+                                                                                pegRNAs_shared=pegRNAs_shared_pbs,
+                                                                                df_clinvar=mutations)
+        else: raise(ValueError(f"Database {database} not supported. Use 'COSMIC' or 'ClinVar'."))
+    
+    io.save_dir(dir='../pegRNAs_priority',
+                suf='.csv',
+                dc=pegRNAs_priority)
+    
 def get_codons(sequence,frame:int=0):
     ''' 
     get_codons(): returns all codons within a specified frame for a nucleotide sequence

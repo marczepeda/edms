@@ -30,7 +30,7 @@ Usage:
 - split_R1_R2(): split paired reads into new R1 and R2 subdirectories at the parent directory
 
 [Directory Methods]
-- print_relative_paths(): prints relative paths for all files in a directory including subfolders
+- relative_paths(): returns relative paths for all files in a directory including subfolders
 - sorted_file_names: returns sorted file names in a directory with the specified suffix
 '''
 
@@ -244,7 +244,7 @@ def save_dir(dir: str, suf: str, dc: dict, **kwargs):
 
     Dependencies: pandas, os, csv, & save()
     '''
-    for key,val in dc.items(): save(dir=dir,file=key+suf,obj=val,**kwargs)
+    for key,val in dc.items(): save(dir=dir,file=str(key)+suf,obj=val,**kwargs)
 
 # Input/Output
 def excel_csvs(pt: str,dir='',**kwargs):
@@ -439,20 +439,22 @@ def split_R1_R2(dir: str):
     print(f"Moved paired reads into {r1_dir} and {r2_dir}")
 
 # Directory Methods
-def print_relative_paths(root_dir: str):
+def relative_paths(root_dir: str):
     ''' 
-    print_relative_paths(): prints relative paths for all files in a directory including subfolders
+    relative_paths(): returns relative paths for all files in a directory including subfolders
     
     Parameters:
     root_dir (str): root directory path or relative path
 
     Dependencies: os
     '''
+    relative_paths = []
     for dirpath, dirnames, filenames in os.walk(root_dir):
         for filename in filenames:
             # Get the relative path of the file
             relative_path = os.path.relpath(os.path.join(dirpath, filename), root_dir)
-            print(relative_path)
+            relative_paths.append(relative_path)
+    return relative_paths
 
 def sorted_file_names(dir: str, suf: str='.csv'):
     '''
