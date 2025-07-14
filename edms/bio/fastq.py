@@ -473,7 +473,7 @@ def mismatch_alignments(align_col: str, out_dir: str, fastq_name: str,
     mismatch_alignments(): Compute & save mismatch number and position per alignment; enables checkpoints
 
     Parameters:
-    align_col (str): align column name in annotated library reference file
+    align_col (str): align column name in the annotated library reference file
     out_dir (str): directory for output files
     fastq_name (str): name of fastq file
     fastq_df_ref (dataframe): annotated reference library dataframe
@@ -522,7 +522,7 @@ def perform_alignments(align_col: str, out_dir: str, fastq_name: str, fastq_df_r
     perform_alignments(): perform alignments on fastq reads using PairwiseAligner and compute mismatches using mismatch_alignments()
 
     Parameters:
-    align_col (str): align column name in annotated library reference file
+    align_col (str): align column name in the annotated library reference file
     out_dir (str): directory for output files
     fastq_name (str): name of fastq file
     fastq_df_ref (dataframe): annotated reference library dataframe
@@ -597,8 +597,8 @@ def plot_alignments(fastq_alignments: dict | str, align_col: str, id_col: str,
     
     Parameters:
     fastq_alignments (dict | str): fastq alignments dictionary from count_region() or count_alignments()
-    align_col (str): align column name in annotated library reference file
-    id_col (str): id column name in annotated library reference file
+    align_col (str): align column name in the annotated library reference file
+    id_col (str): id column name in the annotated library reference file
     fastq_dir (str): directory with fastq files
     out_dir (str): directory for output files
     plot_suf (str, optional): plot type suffix with '.' (Default: '.pdf')
@@ -1217,7 +1217,7 @@ def trim_filter(record,qall:int,qavg:int,qtrim:int,qmask:int,alls:int,avgs:int,t
         else: return None,None,None,None,alls,avgs+1,trims,masks # Avg threshold not met
     else: return None,None,None,None,alls+1,avgs,trims,masks # All threshold not met
 
-def get_fastqs(dir: str,qall:int=10,qavg:int=30,qtrim:int=0,qmask:int=0,save:bool=True, return_memories: bool=False):
+def get_fastqs(in_dir: str,qall:int=10,qavg:int=30,qtrim:int=0,qmask:int=0,save:bool=True, return_memories: bool=False, outdir: str=None):
     ''' 
     get_fastqs(): get fastq files from directory and store records in dataframes in a dictionary
     
@@ -1229,6 +1229,7 @@ def get_fastqs(dir: str,qall:int=10,qavg:int=30,qtrim:int=0,qmask:int=0,save:boo
     qmask (int, optional): phred quality score threshold for base to not be masked to N (Q = -log(err))
     save (bool, optional): save reads statistics file to local directory (Default: True)
     return_memories (bool, optional): return memories (Default: False)
+    out_dir (str, optional): directory to save reads statistics file (Default: None)
 
     Dependencies: Bio.SeqIO, gzip, os, pandas, Bio.Seq.Seq, & trim_filter()
     '''
@@ -1238,7 +1239,7 @@ def get_fastqs(dir: str,qall:int=10,qavg:int=30,qtrim:int=0,qmask:int=0,save:boo
     # Make fastqs dictionary
     fastqs = dict()
     if save == True: out = pd.DataFrame()
-    for fastq_file in os.listdir(dir): # Iterate through fastq files
+    for fastq_file in os.listdir(in_dir): # Iterate through fastq files
         reads = 0 
         alls = 0 # Keep track of reads & outcomes
         avgs = 0
@@ -1251,7 +1252,7 @@ def get_fastqs(dir: str,qall:int=10,qavg:int=30,qtrim:int=0,qmask:int=0,save:boo
 
         if fastq_file.endswith(".fastq.gz"): # Compressed fastq
             fastq_name = fastq_file[:-len(".fastq.gz")] # Get fastq name
-            with gzip.open(os.path.join(dir,fastq_file), "rt") as handle:
+            with gzip.open(os.path.join(in_dir,fastq_file), "rt") as handle:
 
                 for r,record in enumerate(SeqIO.parse(handle, "fastq")): # Parse reads
                     reads=r+1
@@ -1264,7 +1265,7 @@ def get_fastqs(dir: str,qall:int=10,qavg:int=30,qtrim:int=0,qmask:int=0,save:boo
 
         elif fastq_file.endswith(".fastq"): # Uncompressed fastq
             fastq_name = fastq_file[:-len(".fastq")] # Get fastq name
-            with open(os.path.join(dir,fastq_file), "r") as handle:
+            with open(os.path.join(in_dir,fastq_file), "r") as handle:
 
                 for r,record in enumerate(SeqIO.parse(handle, "fastq")): # Parse reads
                     reads=r+1
@@ -1293,12 +1294,14 @@ def get_fastqs(dir: str,qall:int=10,qavg:int=30,qtrim:int=0,qmask:int=0,save:boo
                                                       'reads_masked': [masks]})])
         memories.append(memory_timer(task=fastq_name))
 
-    if save==True: io.save(dir='.',file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_get_fastqs.csv',obj=out)
+    if save==True: 
+        if outdir is None: outdir = '.'
+        io.save(dir=os.path.join(outdir,'stats'),file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_get_fastqs.csv',obj=out)
     
     if return_memories: return fastqs,memories
     else: return fastqs
 
-def region(fastqs: dict, flank5: str, flank3: str, save: bool=True, masks: bool=False, return_memories: bool=False):
+def region(fastqs: dict, flank5: str, flank3: str, save: bool=True, masks: bool=False, return_memories: bool=False, out_dir: str=None):
     ''' 
     region(): gets DNA and AA sequence for records within flanks
     
@@ -1309,6 +1312,7 @@ def region(fastqs: dict, flank5: str, flank3: str, save: bool=True, masks: bool=
     save (bool, optional): save reads statistics file to local directory (Default: True)
     masks (bool, optional): include masked sequence and translation (Default: False)
     return_memories (bool, optional): return memories (Default: False)
+    out_dir (str, optional): directory to save reads statistics file (Default: None)
     
     Dependencies: pandas & Bio.Seq.Seq
     '''
@@ -1371,7 +1375,9 @@ def region(fastqs: dict, flank5: str, flank3: str, save: bool=True, masks: bool=
                                         ])
         memories.append(memory_timer(task=file))
     
-    if save==True: io.save(dir='.',file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_region.csv',obj=out)
+    if save==True: 
+        if out_dir is None: out_dir = '.'
+        io.save(dir=os.path.join(out_dir,'stats'),file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_region.csv',obj=out)
     
     if return_memories: return fastqs_1,memories
     else: return fastqs_1
@@ -1581,7 +1587,7 @@ def find_indel(wt:str|Seq, mut:str|Seq, res: int, show:bool=False,
 
 def genotype(fastqs: dict, res: int, wt: str, save: bool=True, masks: bool=False, keepX: bool=False,
              match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, 
-             extend_gap_score: float = -0.1, return_memories: bool=False):
+             extend_gap_score: float = -0.1, return_memories: bool=False, out_dir: str=None):
     ''' 
     genotype(): assign genotypes to sequence records
     
@@ -1597,6 +1603,7 @@ def genotype(fastqs: dict, res: int, wt: str, save: bool=True, masks: bool=False
     open_gap_score (float, optional): open gap score for pairwise alignment (Default: -10)
     extend_gap_score (float, optional): extend gap score for pairwise alignment (Default: -0.1)
     return_memories (bool, optional): return memories (Default: False)
+    out_dir (str, optional): directory to save genotyped reads (Default: None)
     
     Dependencies: pandas & Bio.Seq.Seq
 
@@ -1663,7 +1670,9 @@ def genotype(fastqs: dict, res: int, wt: str, save: bool=True, masks: bool=False
         print(f'{file}:\t{len(fastqs[file])} reads')
         memories.append(memory_timer(task=file))
     
-    if save==True: io.save(dir='.',file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_genotype.csv',obj=t.reorder_cols(df=t.join(dc=fastqs,col='fastq_file'),cols=['fastq_file']))
+    if save==True: 
+        if out_dir is None: out_dir = '.'
+        io.save(dir=os.path.join(out_dir,'ckpt'),file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_genotype.csv',obj=t.reorder_cols(df=t.join(dc=fastqs,col='fastq_file'),cols=['fastq_file']))
     
     if return_memories: return fastqs,memories
     else: return fastqs
@@ -1822,15 +1831,15 @@ def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=N
 
     # Quantify edit outcomes workflow
     memories.append(memory_timer(task='get_fastqs()'))
-    dc,memories1 = get_fastqs(dir=in_dir,**get_fastqs_kwargs)
+    dc,memories1 = get_fastqs(in_dir=in_dir,outdir=out_dir,**get_fastqs_kwargs)
     memories.extend(memories1)
 
     memories.append(memory_timer(task='region()'))
-    dc,memories1 = region(fastqs=dc,flank5=flank5,flank3=flank3,**region_kwargs)
+    dc,memories1 = region(fastqs=dc,flank5=flank5,flank3=flank3,outdir=out_dir,**region_kwargs)
     memories.extend(memories1)
 
     memories.append(memory_timer(task='genotype()'))
-    dc,memories1 = genotype(fastqs=dc,res=res,wt=wt,**genotype_kwargs)
+    dc,memories1 = genotype(fastqs=dc,res=res,wt=wt,outdir=out_dir,**genotype_kwargs)
     memories.extend(memories1)
 
     memories.append(memory_timer(task='outcomes()'))

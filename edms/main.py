@@ -616,7 +616,7 @@ def main():
     
     # Add common arguments
     for parser_io_common in [parser_io_in_subs,parser_io_out_subs,parser_io_split_R1_R2]:
-        parser_io_common.add_argument("--dir", help="Path to parent directory", type=str, required=True)
+        parser_io_common.add_argument("--dir", help="Path to parent directory", type=str, default='.')
     
     # in_subs() arguments
     parser_io_in_subs.add_argument("--suf", help="File suffix (e.g., '.txt', '.csv') to filter files.", type=int, required=True) 
@@ -1075,6 +1075,14 @@ def main():
     - unzip_fastqs(): Unzip gzipped fastqs and write to a new directory
     - comb_fastqs(): Combines one or more (un)compressed fastqs files into a single (un)compressed fastq file
     - genotyping(): quantify edit outcomes workflow
+    ## New functions
+    - count_motif(): returns a dataframe with the sequence motif location with mismatches per read for every fastq file in a directory
+    - plot_motif(): generate plots highlighting motif mismatches, locations, and sequences
+    - plot_alignments(): generate line & distribution plots from fastq alignments dictionary
+    - count_region(): align read region from fastq directory to the annotated library with mismatches; plot and return fastq alignments dictionary
+    - count_alignments(): align reads from fastq directory to annotated library with mismatches; plot and return fastq alignments dictionary
+    - plot_paired(): generate stacked bar plots from paired_regions() dataframe
+    - paired_regions(): quantify, plot, & return (un)paired regions that aligned to the annotated library
     '''
     parser_fastq = subparsers.add_parser("fastq", help="FASTQ files")
     subparsers_fastq = parser_fastq.add_subparsers()
@@ -1083,6 +1091,13 @@ def main():
     parser_fastq_unzip = subparsers_fastq.add_parser("unzip", help="Unzip gzipped FASTQ files to a new directory")
     parser_fastq_comb = subparsers_fastq.add_parser("comb", help="Combine multiple FASTQ files into a single FASTQ (.fastq or .fastq.gz)")
     parser_fastq_genotyping = subparsers_fastq.add_parser("genotyping", help="Quantify edit outcomes from sequencing data")
+    parser_fastq_count_motif = subparsers_fastq.add_parser("count_motif", help="Count motif occurrences in FASTQ files")
+    parser_fastq_plot_motif = subparsers_fastq.add_parser("plot_motif", help="Plot motif occurrences from FASTQ files")
+    parser_fastq_plot_alignments = subparsers_fastq.add_parser("plot_alignments", help="Plot alignments from FASTQ files")
+    parser_fastq_count_region = subparsers_fastq.add_parser("count_region", help="Count region occurrences in FASTQ files")
+    parser_fastq_count_alignments = subparsers_fastq.add_parser("count_alignments", help="Count alignments in FASTQ files")
+    parser_fastq_plot_paired = subparsers_fastq.add_parser("plot_paired", help="Plot paired regions from FASTQ files")
+    parser_fastq_paired_regions = subparsers_fastq.add_parser("paired_regions", help="Extract paired regions from FASTQ files")
 
     # Add common arguments: revcom_fastqs(), unzip_fastqs(), comb_fastqs(), and genotyping()
     for parser_fastq_common in [parser_fastq_revcom,parser_fastq_unzip,parser_fastq_comb,parser_fastq_genotyping]:
@@ -1114,10 +1129,112 @@ def main():
     parser_fastq_genotyping.add_argument("--open_gap_score", type=float, help="Open gap score for pairwise alignment", default=argparse.SUPPRESS)
     parser_fastq_genotyping.add_argument("--extend_gap_score", type=float, help="Extend gap score for pairwise alignment", default=argparse.SUPPRESS)
     
+    # count_motif():
+    parser_fastq_count_motif.add_argument("--fastq_dir", help="Path to directory containing FASTQ files", required=True)
+    parser_fastq_count_motif.add_argument("--pattern", help="Motif sequence pattern to search for", required=True)
+    parser_fastq_count_motif.add_argument("--out_dir", help="Output directory to save results", default=f'../out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
+
+    parser_fastq_count_motif.add_argument("--motif", default="motif", help="Name of the motif (Default: 'motif')")
+    parser_fastq_count_motif.add_argument("--max_distance", type=int, default=0, help="Maximum Levenshtein distance allowed (i.e., # of mismatches, Default: 0)")
+    parser_fastq_count_motif.add_argument("--max_reads", type=int, default=0, help="Maximum # of reads to process per file")
+    parser_fastq_count_motif.add_argument("--meta", type=str, help="Optional path to metadata CSV/TSV file with 'fastq_file' column")
+
+    # plot_motif():
+    parser_fastq_plot_motif.add_argument("--df", help="Path to count_motif() output file", required=True)
+
+    parser_fastq_plot_motif.add_argument("--out_dir", type=str, help="Directory to save plots", default=f'../out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
+    parser_fastq_plot_motif.add_argument("--plot_suf", type=str, default=".pdf", help="Plot file suffix (e.g. .pdf, .png)")
+    parser_fastq_plot_motif.add_argument("--numeric", choices=["count", "fraction"], default="count", help="Numeric column to use for plotting (Default: 'count')")
+    parser_fastq_plot_motif.add_argument("--id_col", default="fastq_file", help="Column used for sample ID (Default: 'fastq_file')")
+    parser_fastq_plot_motif.add_argument("--id_axis", default="fastq", help="Label to use on the plot axis (Default: 'fastq')")
+    parser_fastq_plot_motif.add_argument("--stack_figsize", nargs=2, default=(7, 3), help="Stacked plot figure size as 'W H'")
+    parser_fastq_plot_motif.add_argument("--heat_figsize", nargs=2, help="Heatmap figure size as 'W H'")
+    parser_fastq_plot_motif.add_argument("--cutoff_frac", type=float, default=0.01, help="Minimum fraction to include in y-axis (Default: 0.01)")
+
+    # plot_alignments():
+    parser_fastq_plot_alignments.add_argument("--fastq_alignments", help="Directory with the fastq alignments dictionary", required=True)
+    parser_fastq_plot_alignments.add_argument("--align_col", help="Align column name in the annotated library reference file", required=True)
+    parser_fastq_plot_alignments.add_argument("--id_col", help="ID column name in the annotated library reference file", required=True)
+
+    parser_fastq_plot_alignments.add_argument("--out_dir", help="Output directory for plots", default=f'../out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
+    parser_fastq_plot_alignments.add_argument("--plot_suf", default=".pdf", help="Plot file suffix (default: .pdf)")
+    parser_fastq_plot_alignments.add_argument("--show", action="store_true", help="Display plots interactively")
+    
+    # count_region():
+    parser_fastq_count_region.add_argument("--df_ref", help="Annotated reference library file path", required=True)
+    parser_fastq_count_region.add_argument("--align_col", help="Align column name in the annotated reference library", required=True)
+    parser_fastq_count_region.add_argument("--id_col", help="ID column name in the annotated reference library", required=True)
+    parser_fastq_count_region.add_argument("--fastq_col", help="Fastq column name in the annotated reference library", required=True)
+    parser_fastq_count_region.add_argument("--fastq_dir", help="Directory containing FASTQ files", required=True)
+    parser_fastq_count_region.add_argument("--df_motif5", help="5' motif file path", required=True)
+    parser_fastq_count_region.add_argument("--df_motif3", help="3' motif file path", required=True)
+
+    parser_fastq_count_region.add_argument("--out_dir", help="Output directory", default=f'../out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
+    parser_fastq_count_region.add_argument("--match_score", type=float, default=2, help="Score for matches (default: 2)")
+    parser_fastq_count_region.add_argument("--mismatch_score", type=float, default=-1, help="Score for mismatches (default: -1)")
+    parser_fastq_count_region.add_argument("--open_gap_score", type=float, default=-10, help="Gap opening score (default: -10)")
+    parser_fastq_count_region.add_argument("--extend_gap_score", type=float, default=-0.1, help="Gap extension score (default: -0.1)")
+    parser_fastq_count_region.add_argument("--align_dims", nargs=2, default=(0, 0), help="Alignment range as 'start end' (default: 0 0 = all reads)")
+    parser_fastq_count_region.add_argument("--align_ckpt", type=int, default=10000, help="Checkpoint frequency (default: 10000)")
+    parser_fastq_count_region.add_argument("--plot_suf", type=str, help="Plot suffix type (e.g. '.pdf')")
+    parser_fastq_count_region.add_argument("--show", action="store_true", help="Display plots interactively")
+    
+    # count_alignments():
+    parser_fastq_count_alignments.add_argument("--df_ref", help="Annotated reference library file path", required=True)
+    parser_fastq_count_alignments.add_argument("--align_col", help="Align column name in the annotated reference library", required=True)
+    parser_fastq_count_alignments.add_argument("--id_col", help="ID column name in the annotated reference library", required=True)
+    parser_fastq_count_alignments.add_argument("--fastq_col", help="Fastq column name in the annotated reference library", required=True)
+    parser_fastq_count_alignments.add_argument("--fastq_dir", help="Directory containing FASTQ files", required=True)
+
+    parser_fastq_count_alignments.add_argument("--out_dir", help="Output directory", default=f'../out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
+    parser_fastq_count_alignments.add_argument("--match_score", type=float, default=2, help="Match score (default: 2)")
+    parser_fastq_count_alignments.add_argument("--mismatch_score", type=float, default=-1, help="Mismatch penalty (default: -1)")
+    parser_fastq_count_alignments.add_argument("--open_gap_score", type=float, default=-10, help="Gap open penalty (default: -10)")
+    parser_fastq_count_alignments.add_argument("--extend_gap_score", type=float, default=-0.1, help="Gap extension penalty (default: -0.1)")
+    parser_fastq_count_alignments.add_argument("--align_dims", nargs=2, default=(0, 0), help="Alignment range as 'start end' (default: 0 0 = all reads)")
+    parser_fastq_count_alignments.add_argument("--align_ckpt", type=int, default=10000, help="Checkpoint frequency for saving alignment progress")
+    parser_fastq_count_alignments.add_argument("--plot_suf", type=str, help="Plot file suffix (e.g. .pdf, .png)")
+    parser_fastq_count_alignments.add_argument("--show", action="store_true", help="Show plots interactively")
+    
+    # plot_paired():
+    parser_fastq_plot_paired.add_argument("--df", help="Paired region file path", required=True)
+    parser_fastq_plot_paired.add_argument("--title", help="Plot title and output filename (without extension)", required=True)
+    
+    parser_fastq_plot_paired.add_argument("--out_dir", help="Output directory", default=f'../out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
+    parser_fastq_plot_paired.add_argument("--id_col", default="ID", help="Column name for ID (default: 'ID')")
+    parser_fastq_plot_paired.add_argument("--desired_col", default="desired", help="Column name for desired sequences (default: 'desired')")
+    parser_fastq_plot_paired.add_argument("--plot_suf", default=".pdf", help="Plot file suffix (e.g. .pdf or .png)")
+    parser_fastq_plot_paired.add_argument("--show", action="store_true", help="Display plots interactively")
+
+    # paired_regions():
+    parser_fastq_paired_regions.add_argument("--meta_dir", help="Directory containing meta files", required=True)
+    parser_fastq_paired_regions.add_argument("--region1_dir", help="Directory with region 1 alignment files", required=True)
+    parser_fastq_paired_regions.add_argument("--region2_dir", help="Directory with region 2 alignment files", required=True)
+
+    parser_fastq_paired_regions.add_argument("--out_dir", help="Output directory", default=f'../out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
+    parser_fastq_paired_regions.add_argument("--id_col", default="ID", help="Column name for unique identifiers (default: 'ID')")
+    parser_fastq_paired_regions.add_argument("--desired_col", default="desired", help="Column name for desired sequences (default: 'desired')")
+    parser_fastq_paired_regions.add_argument("--region1_alignment_col", default="r1_alignment", help="Column name for region 1 alignment data")
+    parser_fastq_paired_regions.add_argument("--region2_alignment_col", default="r2_alignment", help="Column name for region 2 alignment data")
+    parser_fastq_paired_regions.add_argument("--reads_aligned_col", default="reads_aligned", help="Column name for aligned reads (default: 'reads_aligned')")
+    parser_fastq_paired_regions.add_argument("--reads_processed_col", default="reads_processed", help="Column name for processed reads (default: 'reads_processed')")
+    parser_fastq_paired_regions.add_argument("--plot_suf", default=".pdf", help="Plot file suffix (e.g., .pdf, .png)")
+    parser_fastq_paired_regions.add_argument("--show", action="store_true", help="Display plots interactively")
+    parser_fastq_paired_regions.add_argument("--return_dc", action="store_true", help="Return paired/unpaired dataframe")
+
+
+    # Set defaults
     parser_fastq_revcom.set_defaults(func=fq.revcom_fastqs)
     parser_fastq_unzip.set_defaults(func=fq.unzip_fastqs)
     parser_fastq_comb.set_defaults(func=fq.comb_fastqs)
     parser_fastq_genotyping.set_defaults(func=fq.genotyping)
+    parser_fastq_count_motif.set_defaults(func=fq.count_motif)
+    parser_fastq_plot_motif.set_defaults(func=fq.plot_motif)
+    parser_fastq_plot_alignments.set_defaults(func=fq.plot_alignments)
+    parser_fastq_count_region.set_defaults(func=fq.count_region)
+    parser_fastq_count_alignments.set_defaults(func=fq.count_alignments)
+    parser_fastq_plot_paired.set_defaults(func=fq.plot_paired)
+    parser_fastq_paired_regions.set_defaults(func=fq.paired_regions)
 
     '''
     Add pe.py
