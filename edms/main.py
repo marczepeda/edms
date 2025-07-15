@@ -667,6 +667,7 @@ def main():
     edms.gen.cli:
     - access(): make all files and subdirectories accessible on Harvard FASRC
     - smaller_fastq(): create new subdirectory containing fastqs with the # of reads limited
+    - create_export_var(): create a persistent environment variable by adding it to the user's shell config.
     '''
     parser_cli = subparsers.add_parser("cli", help="Command Line Interaction")
     subparsers_cli = parser_cli.add_subparsers()
@@ -674,6 +675,8 @@ def main():
     # Create subparsers for commands
     parser_cli_access = subparsers_cli.add_parser("access", help="Make all files and subdirectories accessible on Harvard FASRC")
     parser_cli_smaller_fastq = subparsers_cli.add_parser("smaller_fastq", help="Create new subdirectory containing fastqs with the # of reads limited")
+    parser_cli_create_export_var = subparsers_cli.add_parser("create_export_var", help="Create a persistent export variable by adding it to the user's shell config.")
+    parser_cli_view_export_vars = subparsers_cli.add_parser("view_export_vars", help="View the current export variables in the user's shell config.")
     
     # Add common arguments
     for parser_cli_common in [parser_cli_access, parser_cli_smaller_fastq]:
@@ -683,9 +686,19 @@ def main():
     parser_cli_smaller_fastq.add_argument("--reads", help="# of reads per fastq file", type=int, default='100000') 
     parser_cli_smaller_fastq.add_argument("--suf", help="Fastq file suffix", type=int, default=".fastq.gz") 
     
-    # Call command functions
+    # create_export_var arguments
+    parser_cli_create_export_var.add_argument("--name", help="Name of the environment variable (e.g., MYPROJ)", required=True)
+    parser_cli_create_export_var.add_argument("--pt", help="Path the variable should point to (e.g., ~/projects/myproj)", required=True)
+    parser_cli_create_export_var.add_argument("--shell", choices=["bash", "zsh"], default=argparse.SUPPRESS, help="Shell type)")
+    
+    # view_export_var arguments
+    parser_cli_view_export_vars.add_argument("--shell", choices=["bash", "zsh"], default=argparse.SUPPRESS, help="Shell type")
+
+    # set default functions
     parser_cli_access.set_defaults(func=cli.access)
     parser_cli_smaller_fastq.set_defaults(func=cli.smaller_fastq)
+    parser_cli_create_export_var.set_defaults(func=cli.create_export_var)
+    parser_cli_view_export_vars.set_defaults(func=cli.view_export_vars)
 
     '''
     edms.dat.cosmic:
