@@ -641,9 +641,9 @@ def plot_alignments(fastq_alignments: dict | str, align_col: str, id_col: str,
                title=f'{fastq_name}',dir=out_dir_fastq_name,file=f'alignments{plot_suf}',
                show=show,**plot_kwargs)
 
-def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_col: str,
+def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
                  fastq_dir: str, df_motif5: pd.DataFrame | str, df_motif3: pd.DataFrame | str,
-                 out_dir: str, match_score: float = 2, mismatch_score: float = -1, 
+                 out_dir: str, fastq_col: str=None, match_score: float = 2, mismatch_score: float = -1, 
                  open_gap_score: float = -10, extend_gap_score: float = -0.1, align_dims: tuple=(0,0),
                  align_ckpt: int=10000, plot_suf: str=None, show: bool=False, return_dc: bool=False,
                  **plot_kwargs):
@@ -654,11 +654,11 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_
     df_ref (dataframe | str): annotated reference library dataframe (or file path)
     align_col (str): align column name in the annotated reference library
     id_col (str): id column name in the annotated reference library
-    fastq_col (str): fastq column name in the annotated reference library
     fastq_dir (str): directory with fastq files
     df_motif5 (dataframe | str): 5' motif dataframe (or file path)
     df_motif3 (dataframe | str): 3' motif dataframe (or file path)
     out_dir (str): directory for output files
+    fastq_col (str, optional): fastq column name in the annotated reference library (Default: None)
     match_score (float, optional): match score for pairwise alignment (Default: 2)
     mismatch_score (float, optional): mismatch score for pairwise alignment (Default: -1)
     open_gap_score (float, optional): open gap score for pairwise alignment (Default: -10)
@@ -696,8 +696,9 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_
         raise Exception(f'Missing alignment column: {align_col}') 
     if id_col not in df_ref.columns.tolist():
         raise Exception(f'Missing id column: {id_col}')
-    if fastq_col not in df_ref.columns.tolist():
-        raise Exception(f'Missing fastq column: {fastq_col}')
+    if fastq_col is not None:
+        if fastq_col not in df_ref.columns.tolist():
+            raise Exception(f'Missing fastq column: {fastq_col}')
     df_ref[align_col] = df_ref[align_col].str.upper() 
 
     # Check for fastq_file, start_i and end_i columns
@@ -743,7 +744,7 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_
             fastq_name = fastq_file[:-len(".fastq.gz")] # Get fastq name
             fastq_motif5 = df_motif5[df_motif5['fastq_file']==fastq_file].reset_index(drop=True) # Isolate fastq motif5 info
             fastq_motif3 = df_motif3[df_motif3['fastq_file']==fastq_file].reset_index(drop=True) # Isolate fastq motif3 info
-            fastq_df_ref = df_ref[df_ref[fastq_col]==fastq_file].reset_index(drop=True) # Isolate fastq reference library info
+            if fastq_col is not None: fastq_df_ref = df_ref[df_ref[fastq_col]==fastq_file].reset_index(drop=True) # Isolate fastq reference library info
             with gzip.open(os.path.join(fastq_dir,fastq_file), "rt") as handle:
                 for i,record in enumerate(SeqIO.parse(handle, "fastq")): # Parse reads & isolate region between motifs
                     
@@ -783,7 +784,7 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_
             fastq_name = fastq_file[:-len(".fastq")] # Get fastq name
             fastq_motif5 = df_motif5[df_motif5['fastq_file']==fastq_file].reset_index(drop=True) # Isolate fastq motif5 info
             fastq_motif3 = df_motif3[df_motif3['fastq_file']==fastq_file].reset_index(drop=True) # Isolate fastq motif3 info
-            fastq_df_ref = df_ref[df_ref[fastq_col]==fastq_file].reset_index(drop=True) # Isolate fastq reference library info
+            if fastq_col is not None: fastq_df_ref = df_ref[df_ref[fastq_col]==fastq_file].reset_index(drop=True) # Isolate fastq reference library info
             with open(os.path.join(fastq_dir,fastq_file), "r") as handle:    
                 for i,record in enumerate(SeqIO.parse(handle, "fastq")): # Parse reads & isolate region between motifs
                     
@@ -857,8 +858,8 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
     if return_dc: return fastqs
 
-def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fastq_col: str,
-                     fastq_dir: str, out_dir: str, match_score: float = 2, mismatch_score: float = -1, 
+def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
+                     fastq_dir: str, out_dir: str, fastq_col: str=None, match_score: float = 2, mismatch_score: float = -1, 
                      open_gap_score: float = -10, extend_gap_score: float = -0.1, align_dims: tuple=(0,0),
                      align_ckpt: int=10000, plot_suf: str=None, show: bool=False, return_dc: bool=False,
                      **plot_kwargs):
@@ -869,9 +870,9 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fa
     df_ref (dataframe | str): annotated reference library dataframe (or file path)
     align_col (str): align column name in the annotated reference library
     id_col (str): id column name in the annotated reference library
-    fastq_col (str): fastq column name in the annotated reference library
     fastq_dir (str): directory with fastq files
     out_dir (str): directory for output files
+    fastq_col (str, optional): fastq column name in the annotated reference library (Default: None)
     match_score (float, optional): match score for pairwise alignment (Default: 2)
     mismatch_score (float, optional): mismatch score for pairwise alignment (Default: -1)
     open_gap_score (float, optional): open gap score for pairwise alignment (Default: -10)
@@ -905,8 +906,9 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fa
         raise Exception(f'Missing alignment column: {align_col}') 
     if id_col not in df_ref.columns.tolist():
         raise Exception(f'Missing id column: {id_col}')
-    if fastq_col not in df_ref.columns.tolist():
-        raise Exception(f'Missing fastq column: {fastq_col}')
+    if fastq_col is not None:
+        if fastq_col not in df_ref.columns.tolist():
+            raise Exception(f'Missing fastq column: {fastq_col}')
     df_ref[align_col] = df_ref[align_col].str.upper() 
     
     # Memory & stats reporting
@@ -921,7 +923,7 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fa
         seqs = [] # Store alignment sequences
         if fastq_file.endswith(".fastq.gz"): # Compressed fastq
             fastq_name = fastq_file[:-len(".fastq.gz")] # Get fastq name
-            fastq_df_ref = df_ref[df_ref[fastq_col]==fastq_file].reset_index(drop=True) # Isolate fastq reference library info
+            if fastq_col is not None: fastq_df_ref = df_ref[df_ref[fastq_col]==fastq_file].reset_index(drop=True) # Isolate fastq reference library info
             with gzip.open(os.path.join(fastq_dir,fastq_file), "rt") as handle:
                 for i,record in enumerate(SeqIO.parse(handle, "fastq")): # Parse reads
                     
@@ -941,7 +943,7 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str, fa
                 
         elif fastq_file.endswith(".fastq"): # Uncompressed fastq
             fastq_name = fastq_file[:-len(".fastq")] # Get fastq name
-            fastq_df_ref = df_ref[df_ref[fastq_col]==fastq_file].reset_index(drop=True) # Isolate fastq reference library info
+            if fastq_col is not None: fastq_df_ref = df_ref[df_ref[fastq_col]==fastq_file].reset_index(drop=True) # Isolate fastq reference library info
             with open(os.path.join(fastq_dir,fastq_file), "r") as handle:
                 for i,record in enumerate(SeqIO.parse(handle, "fastq")): # Parse reads
                     

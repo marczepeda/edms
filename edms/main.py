@@ -400,7 +400,7 @@ def add_common_plot_vol_args(subparser):
     subparser.add_argument("--color", type=str, default="lightgray", help="Color for nonsignificant values")
     subparser.add_argument("--alpha", type=float, default=0.5, help="Transparency for nonsignificant values")
     subparser.add_argument("--edgecol", type=str, default="black", help="Edge color")
-    subparser.add_argument("--vertical", action="store_true", help="Use vertical layout (default: True)")
+    subparser.add_argument("--vertical", action="store_true", help="Use vertical layout (Default: True)")
 
     # Figure setup
     subparser.add_argument("--figsize", type=parse_tuple_int, default=(10,6), help="Figure size formatted 'width,height'")
@@ -577,8 +577,8 @@ def main():
     parser_stat_difference.add_argument("--file", type=str, help="Output file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_difference.csv')
 
     parser_stat_difference.add_argument("--same", action="store_true", help="Same subjects (paired test)")
-    parser_stat_difference.add_argument("--para", action="store_true", help="Use parametric test (default: True)")
-    parser_stat_difference.add_argument("--alpha", type=float, default=0.05, help="Significance level (default: 0.05)")
+    parser_stat_difference.add_argument("--para", action="store_true", help="Use parametric test (Default: True)")
+    parser_stat_difference.add_argument("--alpha", type=float, default=0.05, help="Significance level (Default: 0.05)")
     parser_stat_difference.add_argument("--within_cols", nargs="+", help="Columns for repeated measures (used if same=True and para=True)")
     parser_stat_difference.add_argument("--method", type=str, default="holm", help="Correction method for multiple comparisons")
 
@@ -595,8 +595,8 @@ def main():
     parser_stat_correlation.add_argument("--var_cols", nargs="+", help="List of 2 variable columns for tidy format")
     parser_stat_correlation.add_argument("--value_cols", nargs="+", help="List of numerical columns to correlate")
     parser_stat_correlation.add_argument("--method", type=str, default="pearson", choices=["pearson", "spearman", "kendall"],
-                                         help="Correlation method to use (default: pearson)")
-    parser_stat_correlation.add_argument("--numeric_only", action="store_true", help="Only use numeric columns (default: True)")
+                                         help="Correlation method to use (Default: pearson)")
+    parser_stat_correlation.add_argument("--numeric_only", action="store_true", help="Only use numeric columns (Default: True)")
 
     parser_stat_correlation.set_defaults(func=st.correlation)
 
@@ -990,7 +990,7 @@ def main():
 
     parser_clone_pe_twist.add_argument("--tG", action="store_true", help="Add 5' G to spacers if needed")
     parser_clone_pe_twist.add_argument("--make_extension", action="store_true", help="Build extension from RTT, PBS, and linker")
-    parser_clone_pe_twist.add_argument("--UMI_length", type=int, default=8, help="Length of UMI (default: 8)")
+    parser_clone_pe_twist.add_argument("--UMI_length", type=int, default=8, help="Length of UMI (Default: 8)")
     parser_clone_pe_twist.add_argument("--UMI_GC_fract", nargs=2, type=float, default=(0.4, 0.6), help="Tuple for GC content bounds (e.g. 0.4 0.6)")
     parser_clone_pe_twist.add_argument("--fwd_barcode_t5", type=str, default="Forward Barcode", help="Forward barcode column name")
     parser_clone_pe_twist.add_argument("--rev_barcode_t3", type=str, default="Reverse Barcode", help="Reverse barcode column name")
@@ -1190,25 +1190,25 @@ def main():
     parser_fastq_plot_alignments.add_argument("--id_col", help="ID column name in the annotated library reference file", required=True)
 
     parser_fastq_plot_alignments.add_argument("--out_dir", help="Output directory for plots", default=f'../out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
-    parser_fastq_plot_alignments.add_argument("--plot_suf", default=".pdf", help="Plot file suffix (default: .pdf)")
+    parser_fastq_plot_alignments.add_argument("--plot_suf", default=".pdf", help="Plot file suffix (Default: .pdf)")
     parser_fastq_plot_alignments.add_argument("--show", action="store_true", help="Display plots interactively",default=False)
     
     # count_region():
     parser_fastq_count_region.add_argument("--df_ref", help="Annotated reference library file path", required=True)
     parser_fastq_count_region.add_argument("--align_col", help="Align column name in the annotated reference library", required=True)
     parser_fastq_count_region.add_argument("--id_col", help="ID column name in the annotated reference library", required=True)
-    parser_fastq_count_region.add_argument("--fastq_col", help="Fastq column name in the annotated reference library", required=True)
     parser_fastq_count_region.add_argument("--fastq_dir", help="Directory containing FASTQ files", required=True)
     parser_fastq_count_region.add_argument("--df_motif5", help="5' motif file path", required=True)
     parser_fastq_count_region.add_argument("--df_motif3", help="3' motif file path", required=True)
 
     parser_fastq_count_region.add_argument("--out_dir", help="Output directory", default=f'../out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
-    parser_fastq_count_region.add_argument("--match_score", type=float, default=2, help="Score for matches (default: 2)")
-    parser_fastq_count_region.add_argument("--mismatch_score", type=float, default=-1, help="Score for mismatches (default: -1)")
-    parser_fastq_count_region.add_argument("--open_gap_score", type=float, default=-10, help="Gap opening score (default: -10)")
-    parser_fastq_count_region.add_argument("--extend_gap_score", type=float, default=-0.1, help="Gap extension score (default: -0.1)")
-    parser_fastq_count_region.add_argument("--align_dims", type=parse_tuple_int, default=(0, 0), help="Alignment range formatted as 'start,end' (default: 0,0 = all reads)")
-    parser_fastq_count_region.add_argument("--align_ckpt", type=int, default=10000, help="Checkpoint frequency (default: 10000)")
+    parser_fastq_count_region.add_argument("--fastq_col", help="Fastq column name in the annotated reference library (Default: None)", default=None)
+    parser_fastq_count_region.add_argument("--match_score", type=float, default=2, help="Score for matches (Default: 2)")
+    parser_fastq_count_region.add_argument("--mismatch_score", type=float, default=-1, help="Score for mismatches (Default: -1)")
+    parser_fastq_count_region.add_argument("--open_gap_score", type=float, default=-10, help="Gap opening score (Default: -10)")
+    parser_fastq_count_region.add_argument("--extend_gap_score", type=float, default=-0.1, help="Gap extension score (Default: -0.1)")
+    parser_fastq_count_region.add_argument("--align_dims", type=parse_tuple_int, default=(0, 0), help="Alignment range formatted as 'start,end' (Default: 0,0 = all reads)")
+    parser_fastq_count_region.add_argument("--align_ckpt", type=int, default=10000, help="Checkpoint frequency (Default: 10000)")
     parser_fastq_count_region.add_argument("--plot_suf", type=str, help="Plot suffix type (e.g. '.pdf')")
     parser_fastq_count_region.add_argument("--show", action="store_true", help="Display plots interactively", default=False)
     
@@ -1216,15 +1216,15 @@ def main():
     parser_fastq_count_alignments.add_argument("--df_ref", help="Annotated reference library file path", required=True)
     parser_fastq_count_alignments.add_argument("--align_col", help="Align column name in the annotated reference library", required=True)
     parser_fastq_count_alignments.add_argument("--id_col", help="ID column name in the annotated reference library", required=True)
-    parser_fastq_count_alignments.add_argument("--fastq_col", help="Fastq column name in the annotated reference library", required=True)
     parser_fastq_count_alignments.add_argument("--fastq_dir", help="Directory containing FASTQ files", required=True)
 
     parser_fastq_count_alignments.add_argument("--out_dir", help="Output directory", default=f'../out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
-    parser_fastq_count_alignments.add_argument("--match_score", type=float, default=2, help="Match score (default: 2)")
-    parser_fastq_count_alignments.add_argument("--mismatch_score", type=float, default=-1, help="Mismatch penalty (default: -1)")
-    parser_fastq_count_alignments.add_argument("--open_gap_score", type=float, default=-10, help="Gap open penalty (default: -10)")
-    parser_fastq_count_alignments.add_argument("--extend_gap_score", type=float, default=-0.1, help="Gap extension penalty (default: -0.1)")
-    parser_fastq_count_alignments.add_argument("--align_dims", type=parse_tuple_int, default=(0, 0), help="Alignment range as 'start,end' (default: 0,0 = all reads)")
+    parser_fastq_count_alignments.add_argument("--fastq_col", help="Fastq column name in the annotated reference library (Default: None)", default=None)
+    parser_fastq_count_alignments.add_argument("--match_score", type=float, default=2, help="Match score (Default: 2)")
+    parser_fastq_count_alignments.add_argument("--mismatch_score", type=float, default=-1, help="Mismatch penalty (Default: -1)")
+    parser_fastq_count_alignments.add_argument("--open_gap_score", type=float, default=-10, help="Gap open penalty (Default: -10)")
+    parser_fastq_count_alignments.add_argument("--extend_gap_score", type=float, default=-0.1, help="Gap extension penalty (Default: -0.1)")
+    parser_fastq_count_alignments.add_argument("--align_dims", type=parse_tuple_int, default=(0, 0), help="Alignment range as 'start,end' (Default: 0,0 = all reads)")
     parser_fastq_count_alignments.add_argument("--align_ckpt", type=int, default=10000, help="Checkpoint frequency for saving alignment progress")
     parser_fastq_count_alignments.add_argument("--plot_suf", type=str, help="Plot file suffix (e.g. .pdf, .png)")
     parser_fastq_count_alignments.add_argument("--show", action="store_true", help="Show plots interactively")
@@ -1234,8 +1234,8 @@ def main():
     parser_fastq_plot_paired.add_argument("--title", help="Plot title and output filename (without extension)", required=True)
     
     parser_fastq_plot_paired.add_argument("--out_dir", help="Output directory", default=f'../out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
-    parser_fastq_plot_paired.add_argument("--id_col", default="ID", help="Column name for ID (default: 'ID')")
-    parser_fastq_plot_paired.add_argument("--desired_col", default="desired", help="Column name for desired sequences (default: 'desired')")
+    parser_fastq_plot_paired.add_argument("--id_col", default="ID", help="Column name for ID (Default: 'ID')")
+    parser_fastq_plot_paired.add_argument("--desired_col", default="desired", help="Column name for desired sequences (Default: 'desired')")
     parser_fastq_plot_paired.add_argument("--plot_suf", default=".pdf", help="Plot file suffix (e.g. .pdf or .png)")
     parser_fastq_plot_paired.add_argument("--show", action="store_true", help="Display plots interactively")
 
@@ -1245,12 +1245,12 @@ def main():
     parser_fastq_paired_regions.add_argument("--region2_dir", help="Directory with region 2 alignment files", required=True)
 
     parser_fastq_paired_regions.add_argument("--out_dir", help="Output directory", default=f'../out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
-    parser_fastq_paired_regions.add_argument("--id_col", default="ID", help="Column name for unique identifiers (default: 'ID')")
-    parser_fastq_paired_regions.add_argument("--desired_col", default="desired", help="Column name for desired sequences (default: 'desired')")
+    parser_fastq_paired_regions.add_argument("--id_col", default="ID", help="Column name for unique identifiers (Default: 'ID')")
+    parser_fastq_paired_regions.add_argument("--desired_col", default="desired", help="Column name for desired sequences (Default: 'desired')")
     parser_fastq_paired_regions.add_argument("--region1_alignment_col", default="r1_alignment", help="Column name for region 1 alignment data")
     parser_fastq_paired_regions.add_argument("--region2_alignment_col", default="r2_alignment", help="Column name for region 2 alignment data")
-    parser_fastq_paired_regions.add_argument("--reads_aligned_col", default="reads_aligned", help="Column name for aligned reads (default: 'reads_aligned')")
-    parser_fastq_paired_regions.add_argument("--reads_processed_col", default="reads_processed", help="Column name for processed reads (default: 'reads_processed')")
+    parser_fastq_paired_regions.add_argument("--reads_aligned_col", default="reads_aligned", help="Column name for aligned reads (Default: 'reads_aligned')")
+    parser_fastq_paired_regions.add_argument("--reads_processed_col", default="reads_processed", help="Column name for processed reads (Default: 'reads_processed')")
     parser_fastq_paired_regions.add_argument("--plot_suf", default=".pdf", help="Plot file suffix (e.g., .pdf, .png)")
     parser_fastq_paired_regions.add_argument("--show", action="store_true", help="Display plots interactively")
     parser_fastq_paired_regions.add_argument("--return_dc", action="store_true", help="Return paired/unpaired dataframe")
@@ -1300,7 +1300,7 @@ def main():
     parser_pe_PrimeDesigner.add_argument("--scaffold_sequence", type=str, default="GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC",
                         help="sgRNA scaffold sequence (Default: SpCas9 flip + extend + com-modified)")
     parser_pe_PrimeDesigner.add_argument("--aa_index", type=int, default=1,
-                        help="Index of 1st amino acid in target sequence (default: 1)")
+                        help="Index of 1st amino acid in target sequence (Default: 1)")
 
     # Pilot_Screen():
     parser_pe_PilotScreen = subparsers_pe.add_parser("PilotScreen", help="Determine pilot screen for EDMS")
@@ -1310,7 +1310,7 @@ def main():
     parser_pe_PilotScreen.add_argument("--mutations", type=str, dest='mutations_pt', help="Path to mutations file (COSMIC or ClinVar)", required=True)
     
     # Optional parameters
-    parser_pe_PilotScreen.add_argument("--database", type=str, choices=['COSMIC', 'ClinVar'], default='COSMIC', help="Database to use for priority mutations (default: 'COSMIC')")
+    parser_pe_PilotScreen.add_argument("--database", type=str, choices=['COSMIC', 'ClinVar'], default='COSMIC', help="Database to use for priority mutations (Default: 'COSMIC')")
 
     # epegRNA_linkers():
     parser_pe_epegRNA_linkers = subparsers_pe.add_parser("epegRNA_linkers", help="Generate epegRNA linkers between PBS and 3' hairpin motif")
@@ -1319,7 +1319,7 @@ def main():
     parser_pe_epegRNA_linkers.add_argument('--pegRNAs', help='Path to pegRNAs file',required=True)
 
     # Optional parameters
-    parser_pe_epegRNA_linkers.add_argument('--epegRNA_motif_sequence', default='CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA', help='epegRNA motif sequence (default: tevopreQ1)')
+    parser_pe_epegRNA_linkers.add_argument('--epegRNA_motif_sequence', default='CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA', help='epegRNA motif sequence (Default: tevopreQ1)')
     parser_pe_epegRNA_linkers.add_argument('--ckpt_dir', type=str, help='Checkpoint directory path (Default: ../epegRNAs/ckpt)', default='../epegRNAs/ckpt')
     parser_pe_epegRNA_linkers.add_argument('--ckpt_file', help='Checkpoint file name (Default: YYMMDD_HHMMSS_epegRNA_linkers.csv)', default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_epegRNA_linkers.csv')
     parser_pe_epegRNA_linkers.add_argument('--ckpt_pt', type=str, default='', help='Previous checkpoint full path (Example: ../epegRNAs/ckpt/YYMMDD_HHMMSS_epegRNA_linkers.csv)')
