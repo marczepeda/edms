@@ -37,7 +37,6 @@ import matplotlib.cm as cm
 from matplotlib.ticker import MaxNLocator
 import numpy as np
 from adjustText import adjust_text
-from scipy.stats import ttest_ind
 from . import io
 from . import tidy as t
 

@@ -30,7 +30,8 @@ dependencies = [
   "pillow",
   "dna-features-viewer",
   "openpyxl",
-  "psutil"
+  "psutil",
+  "argcomplete"
 ]
 
 classifiers = [

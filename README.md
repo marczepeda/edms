@@ -1,7 +1,7 @@
 # Endogenous Deep Mutational Scans (EDMS)
 ## Command Line Interface
 ```shell
-edms -h
+edms -h # or edms <TAB>
 ```
 ## Package Organization
 - gen: input/output, data wrangling, generating plots, and statistics.
@@ -54,6 +54,7 @@ edms -h
     conda env create -f edms.yml # When conda asks you to proceed, type "y"
     conda activate edms
     pip install -e . # Include the "."
+    bash autocomplete.sh
     conda deactivate
     ```
 5. (Optional) Install PrimeDesign by downloading Docker: https://www.docker.com/
@@ -74,6 +75,7 @@ edms -h
     git clone https://github.com/marczepeda/edms.git
     cd edms
     pip install -e . # Include the "."
+    bash autocomplete.sh
     conda deactivate
     ```
 

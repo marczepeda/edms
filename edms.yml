@@ -149,6 +149,7 @@ dependencies:
   - zstandard=0.23.0=py312hea69d52_2
   - zstd=1.5.7=h6491c7d_2
   - pip:
+      - argcomplete==3.6.2
       - dna-features-viewer==3.1.4
       - joblib==1.4.2
       - scikit-learn==1.6.1
