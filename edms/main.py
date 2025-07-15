@@ -6,6 +6,8 @@ Description: Endogenous Deep Mutational Scans
 
 Usage:
 [Supporting methods]
+- parse_tuple_int(arg): Parse a string argument into a tuple of integers
+- parse_tuple_float(arg): Parse a string argument into a tuple of floats
 - add_common_plot_scat_args(subparser): Add common arguments for scatter plot related graphs
 - add_common_plot_cat_args(subparser): Add common arguments for category dependent graphs
 - add_common_plot_dist_args(subparser): Add common arguments for distribution graphs
@@ -40,6 +42,24 @@ from .bio import pe
 
 # Supporting methods
 '''
+    parse_tuple_int(arg): Parse a string argument into a tuple of integers
+'''
+def parse_tuple_int(arg):
+    try:
+        return tuple(map(int, arg.split(',')))
+    except:
+        raise argparse.ArgumentTypeError(f"{arg} must be formatted as 'int,int,...'")
+    
+'''
+    parse_tuple_float(arg): Parse a string argument into a tuple of floats
+'''
+def parse_tuple_float(arg):
+    try:
+        return tuple(map(float, arg.split(',')))
+    except:
+        raise argparse.ArgumentTypeError(f"{arg} must be formatted as 'float,float,...'")
+
+'''
     add_common_plot_scat_args(subparser): Add common arguments for scatter plot related graphs
 '''
 def add_common_plot_scat_args(subparser):
@@ -61,7 +81,7 @@ def add_common_plot_scat_args(subparser):
     subparser.add_argument("--edgecol", type=str, default="black", help="Edge color")
 
     # Figure appearance
-    subparser.add_argument("--figsize", nargs=2, type=int, default=(10,6), help="Figure size (width height)")
+    subparser.add_argument("--figsize", type=parse_tuple_int, default=(10,6), help="Figure size formatted 'width,height'")
     subparser.add_argument("--title", type=str, default="", help="Plot title")
     subparser.add_argument("--title_size", type=int, default=18)
     subparser.add_argument("--title_weight", type=str, default="bold")
@@ -73,7 +93,7 @@ def add_common_plot_scat_args(subparser):
     subparser.add_argument("--x_axis_weight", type=str, default="bold")
     subparser.add_argument("--x_axis_font", type=str, default="Arial")
     subparser.add_argument("--x_axis_scale", type=str, default="linear")
-    subparser.add_argument("--x_axis_dims", nargs=2, type=float, default=(0,0))
+    subparser.add_argument("--x_axis_dims", type=parse_tuple_int, default=(0,0))
     subparser.add_argument("--x_ticks_rot", type=int, default=0)
     subparser.add_argument("--x_ticks_font", type=str, default="Arial")
     subparser.add_argument("--x_ticks", nargs="+", help="X-axis ticks")
@@ -84,7 +104,7 @@ def add_common_plot_scat_args(subparser):
     subparser.add_argument("--y_axis_weight", type=str, default="bold")
     subparser.add_argument("--y_axis_font", type=str, default="Arial")
     subparser.add_argument("--y_axis_scale", type=str, default="linear")
-    subparser.add_argument("--y_axis_dims", nargs=2, type=float, default=(0,0))
+    subparser.add_argument("--y_axis_dims", type=parse_tuple_int, default=(0,0))
     subparser.add_argument("--y_ticks_rot", type=int, default=0)
     subparser.add_argument("--y_ticks_font", type=str, default="Arial")
     subparser.add_argument("--y_ticks", nargs="+", help="Y-axis ticks")
@@ -93,13 +113,13 @@ def add_common_plot_scat_args(subparser):
     subparser.add_argument("--legend_title", type=str, default="")
     subparser.add_argument("--legend_title_size", type=int, default=12)
     subparser.add_argument("--legend_size", type=int, default=9)
-    subparser.add_argument("--legend_bbox_to_anchor", nargs=2, type=float, default=(1,1))
+    subparser.add_argument("--legend_bbox_to_anchor", type=parse_tuple_float, default=(1,1))
     subparser.add_argument("--legend_loc", type=str, default="upper left")
-    subparser.add_argument("--legend_items", nargs=2, type=int, default=(0,0))
+    subparser.add_argument("--legend_items", type=parse_tuple_int, default=(0,0))
     subparser.add_argument("--legend_ncol", type=int, default=1)
 
     # Display and formatting
-    subparser.add_argument("--show", action="store_true", help="Show the plot")
+    subparser.add_argument("--show", action="store_true", help="Show the plot", default=False)
     subparser.add_argument("--space_capitalize", action="store_true", help="Capitalize legend/label names with spaces")
 
 '''
@@ -129,7 +149,7 @@ def add_common_plot_cat_args(subparser):
     subparser.add_argument("--errcap", type=float, default=0.1, help="Error bar cap size")
 
     # Figure appearance
-    subparser.add_argument("--figsize", nargs=2, type=int, default=(10, 6), help="Figure size (width height)")
+    subparser.add_argument("--figsize", type=parse_tuple_int, default=(10,6), help="Figure size formatted 'width,height'")
     subparser.add_argument("--title", type=str, default="")
     subparser.add_argument("--title_size", type=int, default=18)
     subparser.add_argument("--title_weight", type=str, default="bold")
@@ -141,7 +161,7 @@ def add_common_plot_cat_args(subparser):
     subparser.add_argument("--x_axis_weight", type=str, default="bold")
     subparser.add_argument("--x_axis_font", type=str, default="Arial")
     subparser.add_argument("--x_axis_scale", type=str, default="linear")
-    subparser.add_argument("--x_axis_dims", nargs=2, type=float, default=(0, 0))
+    subparser.add_argument("--x_axis_dims", type=parse_tuple_float, default=(0, 0))
     subparser.add_argument("--x_ticks_rot", type=int, default=0)
     subparser.add_argument("--x_ticks_font", type=str, default="Arial")
     subparser.add_argument("--x_ticks", nargs="+", help="X-axis ticks")
@@ -152,7 +172,7 @@ def add_common_plot_cat_args(subparser):
     subparser.add_argument("--y_axis_weight", type=str, default="bold")
     subparser.add_argument("--y_axis_font", type=str, default="Arial")
     subparser.add_argument("--y_axis_scale", type=str, default="linear")
-    subparser.add_argument("--y_axis_dims", nargs=2, type=float, default=(0, 0))
+    subparser.add_argument("--y_axis_dims", type=parse_tuple_float, default=(0, 0))
     subparser.add_argument("--y_ticks_rot", type=int, default=0)
     subparser.add_argument("--y_ticks_font", type=str, default="Arial")
     subparser.add_argument("--y_ticks", nargs="+", help="Y-axis ticks")
@@ -161,13 +181,13 @@ def add_common_plot_cat_args(subparser):
     subparser.add_argument("--legend_title", type=str, default="")
     subparser.add_argument("--legend_title_size", type=int, default=12)
     subparser.add_argument("--legend_size", type=int, default=9)
-    subparser.add_argument("--legend_bbox_to_anchor", nargs=2, type=float, default=(1, 1))
+    subparser.add_argument("--legend_bbox_to_anchor", type=parse_tuple_float, default=(1, 1))
     subparser.add_argument("--legend_loc", type=str, default="upper left")
-    subparser.add_argument("--legend_items", nargs=2, type=int, default=(0, 0))
+    subparser.add_argument("--legend_items", type=parse_tuple_int, default=(0, 0))
     subparser.add_argument("--legend_ncol", type=int, default=1)
 
     # Display and formatting
-    subparser.add_argument("--show", action="store_true", help="Show the plot")
+    subparser.add_argument("--show", action="store_true", help="Show the plot", default=False)
     subparser.add_argument("--space_capitalize", action="store_true", help="Capitalize labels/legends")
 
 '''
@@ -201,7 +221,7 @@ def add_common_plot_dist_args(subparser):
     subparser.add_argument("--des", action="store_true", help="Remove plot spines (despine)")
 
     # Figure appearance
-    subparser.add_argument("--figsize", nargs=2, type=int, default=(10, 6), help="Figure size (width height)")
+    subparser.add_argument("--figsize", type=parse_tuple_int, default=(10,6), help="Figure size formatted 'width,height'")
     subparser.add_argument("--title", type=str, default="")
     subparser.add_argument("--title_size", type=int, default=18)
     subparser.add_argument("--title_weight", type=str, default="bold")
@@ -213,7 +233,7 @@ def add_common_plot_dist_args(subparser):
     subparser.add_argument("--x_axis_weight", type=str, default="bold")
     subparser.add_argument("--x_axis_font", type=str, default="Arial")
     subparser.add_argument("--x_axis_scale", type=str, default="linear")
-    subparser.add_argument("--x_axis_dims", nargs=2, type=float, default=(0, 0))
+    subparser.add_argument("--x_axis_dims", type=parse_tuple_float, default=(0, 0))
     subparser.add_argument("--x_ticks_rot", type=int, default=0)
     subparser.add_argument("--x_ticks_font", type=str, default="Arial")
     subparser.add_argument("--x_ticks", nargs="+", help="X-axis tick values")
@@ -224,7 +244,7 @@ def add_common_plot_dist_args(subparser):
     subparser.add_argument("--y_axis_weight", type=str, default="bold")
     subparser.add_argument("--y_axis_font", type=str, default="Arial")
     subparser.add_argument("--y_axis_scale", type=str, default="linear")
-    subparser.add_argument("--y_axis_dims", nargs=2, type=float, default=(0, 0))
+    subparser.add_argument("--y_axis_dims", type=parse_tuple_float, default=(0, 0))
     subparser.add_argument("--y_ticks_rot", type=int, default=0)
     subparser.add_argument("--y_ticks_font", type=str, default="Arial")
     subparser.add_argument("--y_ticks", nargs="+", help="Y-axis tick values")
@@ -233,13 +253,13 @@ def add_common_plot_dist_args(subparser):
     subparser.add_argument("--legend_title", type=str, default="")
     subparser.add_argument("--legend_title_size", type=int, default=12)
     subparser.add_argument("--legend_size", type=int, default=9)
-    subparser.add_argument("--legend_bbox_to_anchor", nargs=2, type=float, default=(1, 1))
+    subparser.add_argument("--legend_bbox_to_anchor", type=parse_tuple_float, default=(1, 1))
     subparser.add_argument("--legend_loc", type=str, default="upper left")
-    subparser.add_argument("--legend_items", nargs=2, type=int, default=(0, 0))
+    subparser.add_argument("--legend_items", type=parse_tuple_int, default=(0, 0))
     subparser.add_argument("--legend_ncol", type=int, default=1)
 
     # Final display
-    subparser.add_argument("--show", action="store_true", help="Show the plot")
+    subparser.add_argument("--show", action="store_true", help="Show the plot", default=False)
     subparser.add_argument("--space_capitalize", action="store_true", help="Capitalize labels/legend with spacing")
 
 '''
@@ -255,7 +275,7 @@ def add_common_plot_heat_args(subparser):
     subparser.add_argument("--y", type=str, help="Y-axis column name to split tidy-formatted dataframe into a dictionary pivot-formatted dataframes")
     subparser.add_argument("--vars", type=str, help="Variable column name to split tidy-formatted dataframe into a dictionary pivot-formatted dataframes")
     subparser.add_argument("--vals", type=str, help="Value column name to split tidy-formatted dataframe into a dictionary pivot-formatted dataframes")
-    subparser.add_argument("--vals_dims", nargs=2, type=float, help="Min/max for values (vmin vmax)")
+    subparser.add_argument("--vals_dims", type=parse_tuple_float, help="Min/max for values formatted as 'vmin,vmax'")
 
     subparser.add_argument("--dir", type=str, help="Output directory path", default='./out')
     subparser.add_argument("--file", type=str, help="Output filename", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_heat.png')
@@ -272,7 +292,7 @@ def add_common_plot_heat_args(subparser):
     subparser.add_argument("--title_size", type=int, default=18)
     subparser.add_argument("--title_weight", type=str, default="bold")
     subparser.add_argument("--title_font", type=str, default="Arial")
-    subparser.add_argument("--figsize", nargs=2, type=int, default=(10, 6), help="Figure size (width height)")
+    subparser.add_argument("--figsize", type=parse_tuple_int, default=(10,6), help="Figure size formatted 'width,height'")
 
     # X-axis
     subparser.add_argument("--x_axis", type=str, default="")
@@ -291,7 +311,7 @@ def add_common_plot_heat_args(subparser):
     subparser.add_argument("--y_ticks_font", type=str, default="Arial")
 
     # Final display
-    subparser.add_argument("--show", action="store_true", help="Show the plot")
+    subparser.add_argument("--show", action="store_true", help="Show the plot", default=False)
     subparser.add_argument("--space_capitalize", action="store_true", help="Capitalize labels/legend with spacing")
 
 '''
@@ -317,7 +337,7 @@ def add_common_plot_stack_args(subparser):
     subparser.add_argument("--vertical", action="store_true", help="Stack bars vertically (default True)")
 
     # Figure & layout
-    subparser.add_argument("--figsize", nargs=2, type=int, default=(10, 6), help="Figure size (width height)")
+    subparser.add_argument("--figsize", type=parse_tuple_int, default=(10,6), help="Figure size formatted 'width,height'")
     subparser.add_argument("--title", type=str, default="")
     subparser.add_argument("--title_size", type=int, default=18)
     subparser.add_argument("--title_weight", type=str, default="bold")
@@ -328,7 +348,7 @@ def add_common_plot_stack_args(subparser):
     subparser.add_argument("--x_axis_size", type=int, default=12)
     subparser.add_argument("--x_axis_weight", type=str, default="bold")
     subparser.add_argument("--x_axis_font", type=str, default="Arial")
-    subparser.add_argument("--x_axis_dims", nargs=2, type=float, default=(0,0))
+    subparser.add_argument("--x_axis_dims", type=parse_tuple_float, default=(0,0))
     subparser.add_argument("--x_ticks_rot", type=int, help="X-axis tick rotation")
     subparser.add_argument("--x_ticks_font", type=str, default="Arial")
 
@@ -337,7 +357,7 @@ def add_common_plot_stack_args(subparser):
     subparser.add_argument("--y_axis_size", type=int, default=12)
     subparser.add_argument("--y_axis_weight", type=str, default="bold")
     subparser.add_argument("--y_axis_font", type=str, default="Arial")
-    subparser.add_argument("--y_axis_dims", nargs=2, type=float, default=(0,0))
+    subparser.add_argument("--y_axis_dims", type=parse_tuple_float, default=(0,0))
     subparser.add_argument("--y_ticks_rot", type=int, help="Y-axis tick rotation")
     subparser.add_argument("--y_ticks_font", type=str, default="Arial")
 
@@ -345,12 +365,12 @@ def add_common_plot_stack_args(subparser):
     subparser.add_argument("--legend_title", type=str, default="")
     subparser.add_argument("--legend_title_size", type=int, default=12)
     subparser.add_argument("--legend_size", type=int, default=12)
-    subparser.add_argument("--legend_bbox_to_anchor", nargs=2, type=float, default=(1, 1))
+    subparser.add_argument("--legend_bbox_to_anchor", type=parse_tuple_float, default=(1, 1))
     subparser.add_argument("--legend_loc", type=str, default="upper left")
     subparser.add_argument("--legend_ncol", type=int, default=1)
 
     # Display and formatting
-    subparser.add_argument("--show", action="store_true", help="Show the plot")
+    subparser.add_argument("--show", action="store_true", help="Show the plot", default=False)
     subparser.add_argument("--space_capitalize", action="store_true", help="Capitalize labels/legends with spacing")
 
 '''
@@ -365,7 +385,7 @@ def add_common_plot_vol_args(subparser):
     # Optional data columns
     subparser.add_argument("--stys", type=str, help="Style column name")
     subparser.add_argument("--size", type=str, help="Size column name")
-    subparser.add_argument("--size_dims", nargs=2, type=float, help="Min/max for size scaling")
+    subparser.add_argument("--size_dims", type=parse_tuple_float, help="Min/max for size scaling formatted as min,max")
     subparser.add_argument("--label", type=str, help="Label column name")
 
     # Thresholds
@@ -383,7 +403,7 @@ def add_common_plot_vol_args(subparser):
     subparser.add_argument("--vertical", action="store_true", help="Use vertical layout (default: True)")
 
     # Figure setup
-    subparser.add_argument("--figsize", nargs=2, type=int, default=(10, 6), help="Figure size (width height)")
+    subparser.add_argument("--figsize", type=parse_tuple_int, default=(10,6), help="Figure size formatted 'width,height'")
     subparser.add_argument("--title", type=str, default="")
     subparser.add_argument("--title_size", type=int, default=18)
     subparser.add_argument("--title_weight", type=str, default="bold")
@@ -394,7 +414,7 @@ def add_common_plot_vol_args(subparser):
     subparser.add_argument("--x_axis_size", type=int, default=12)
     subparser.add_argument("--x_axis_weight", type=str, default="bold")
     subparser.add_argument("--x_axis_font", type=str, default="Arial")
-    subparser.add_argument("--x_axis_dims", nargs=2, type=float, default=(0, 0))
+    subparser.add_argument("--x_axis_dims", type=parse_tuple_float, default=(0, 0))
     subparser.add_argument("--x_ticks_rot", type=int, default=0)
     subparser.add_argument("--x_ticks_font", type=str, default="Arial")
     subparser.add_argument("--x_ticks", nargs="+", help="Custom x-axis tick values")
@@ -404,7 +424,7 @@ def add_common_plot_vol_args(subparser):
     subparser.add_argument("--y_axis_size", type=int, default=12)
     subparser.add_argument("--y_axis_weight", type=str, default="bold")
     subparser.add_argument("--y_axis_font", type=str, default="Arial")
-    subparser.add_argument("--y_axis_dims", nargs=2, type=float, default=(0, 0))
+    subparser.add_argument("--y_axis_dims", type=parse_tuple_float, default=(0, 0))
     subparser.add_argument("--y_ticks_rot", type=int, default=0)
     subparser.add_argument("--y_ticks_font", type=str, default="Arial")
     subparser.add_argument("--y_ticks", nargs="+", help="Custom y-axis tick values")
@@ -413,16 +433,16 @@ def add_common_plot_vol_args(subparser):
     subparser.add_argument("--legend_title", type=str, default="")
     subparser.add_argument("--legend_title_size", type=int, default=12)
     subparser.add_argument("--legend_size", type=int, default=9)
-    subparser.add_argument("--legend_bbox_to_anchor", nargs=2, type=float, default=(1, 1))
+    subparser.add_argument("--legend_bbox_to_anchor", type=parse_tuple_float, default=(1, 1))
     subparser.add_argument("--legend_loc", type=str, default="upper left")
-    subparser.add_argument("--legend_items", nargs=2, type=int, default=(0, 0))
+    subparser.add_argument("--legend_items", type=parse_tuple_int, default=(0, 0))
     subparser.add_argument("--legend_ncol", type=int, default=1)
 
     # Boolean switches
     subparser.add_argument("--display_size", action="store_true", help="Display size annotations")
     subparser.add_argument("--display_labels", action="store_true", help="Display text labels")
     subparser.add_argument("--return_df", action="store_true", help="Return annotated DataFrame")
-    subparser.add_argument("--show", action="store_true", help="Show the plot")
+    subparser.add_argument("--show", action="store_true", help="Show the plot", default=False)
     subparser.add_argument("--space_capitalize", action="store_true", help="Capitalize labels/legends with spaces")
 
 # Main method
@@ -1075,7 +1095,6 @@ def main():
     - unzip_fastqs(): Unzip gzipped fastqs and write to a new directory
     - comb_fastqs(): Combines one or more (un)compressed fastqs files into a single (un)compressed fastq file
     - genotyping(): quantify edit outcomes workflow
-    ## New functions
     - count_motif(): returns a dataframe with the sequence motif location with mismatches per read for every fastq file in a directory
     - plot_motif(): generate plots highlighting motif mismatches, locations, and sequences
     - plot_alignments(): generate line & distribution plots from fastq alignments dictionary
@@ -1148,8 +1167,8 @@ def main():
     parser_fastq_plot_motif.add_argument("--numeric", choices=["count", "fraction"], default="count", help="Numeric column to use for plotting (Default: 'count')")
     parser_fastq_plot_motif.add_argument("--id_col", default="fastq_file", help="Column used for sample ID (Default: 'fastq_file')")
     parser_fastq_plot_motif.add_argument("--id_axis", default="fastq", help="Label to use on the plot axis (Default: 'fastq')")
-    parser_fastq_plot_motif.add_argument("--stack_figsize", nargs=2, default=(7, 3), help="Stacked plot figure size as 'W H'")
-    parser_fastq_plot_motif.add_argument("--heat_figsize", nargs=2, help="Heatmap figure size as 'W H'")
+    parser_fastq_plot_motif.add_argument("--stack_figsize", type=parse_tuple_int, default=(7, 3), help="Stacked plot figure size formatted as 'width,height'")
+    parser_fastq_plot_motif.add_argument("--heat_figsize", type=parse_tuple_int, help="Heatmap figure size formateed as 'width,height'")
     parser_fastq_plot_motif.add_argument("--cutoff_frac", type=float, default=0.01, help="Minimum fraction to include in y-axis (Default: 0.01)")
 
     # plot_alignments():
@@ -1159,7 +1178,7 @@ def main():
 
     parser_fastq_plot_alignments.add_argument("--out_dir", help="Output directory for plots", default=f'../out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
     parser_fastq_plot_alignments.add_argument("--plot_suf", default=".pdf", help="Plot file suffix (default: .pdf)")
-    parser_fastq_plot_alignments.add_argument("--show", action="store_true", help="Display plots interactively")
+    parser_fastq_plot_alignments.add_argument("--show", action="store_true", help="Display plots interactively",default=False)
     
     # count_region():
     parser_fastq_count_region.add_argument("--df_ref", help="Annotated reference library file path", required=True)
@@ -1175,10 +1194,10 @@ def main():
     parser_fastq_count_region.add_argument("--mismatch_score", type=float, default=-1, help="Score for mismatches (default: -1)")
     parser_fastq_count_region.add_argument("--open_gap_score", type=float, default=-10, help="Gap opening score (default: -10)")
     parser_fastq_count_region.add_argument("--extend_gap_score", type=float, default=-0.1, help="Gap extension score (default: -0.1)")
-    parser_fastq_count_region.add_argument("--align_dims", nargs=2, default=(0, 0), help="Alignment range as 'start end' (default: 0 0 = all reads)")
+    parser_fastq_count_region.add_argument("--align_dims", type=parse_tuple_int, default=(0, 0), help="Alignment range formatted as 'start,end' (default: 0,0 = all reads)")
     parser_fastq_count_region.add_argument("--align_ckpt", type=int, default=10000, help="Checkpoint frequency (default: 10000)")
     parser_fastq_count_region.add_argument("--plot_suf", type=str, help="Plot suffix type (e.g. '.pdf')")
-    parser_fastq_count_region.add_argument("--show", action="store_true", help="Display plots interactively")
+    parser_fastq_count_region.add_argument("--show", action="store_true", help="Display plots interactively", default=False)
     
     # count_alignments():
     parser_fastq_count_alignments.add_argument("--df_ref", help="Annotated reference library file path", required=True)
@@ -1192,7 +1211,7 @@ def main():
     parser_fastq_count_alignments.add_argument("--mismatch_score", type=float, default=-1, help="Mismatch penalty (default: -1)")
     parser_fastq_count_alignments.add_argument("--open_gap_score", type=float, default=-10, help="Gap open penalty (default: -10)")
     parser_fastq_count_alignments.add_argument("--extend_gap_score", type=float, default=-0.1, help="Gap extension penalty (default: -0.1)")
-    parser_fastq_count_alignments.add_argument("--align_dims", nargs=2, default=(0, 0), help="Alignment range as 'start end' (default: 0 0 = all reads)")
+    parser_fastq_count_alignments.add_argument("--align_dims", type=parse_tuple_int, default=(0, 0), help="Alignment range as 'start,end' (default: 0,0 = all reads)")
     parser_fastq_count_alignments.add_argument("--align_ckpt", type=int, default=10000, help="Checkpoint frequency for saving alignment progress")
     parser_fastq_count_alignments.add_argument("--plot_suf", type=str, help="Plot file suffix (e.g. .pdf, .png)")
     parser_fastq_count_alignments.add_argument("--show", action="store_true", help="Show plots interactively")

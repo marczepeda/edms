@@ -347,7 +347,7 @@ def count_motif(fastq_dir: str, pattern: str, out_dir: str, motif:str="motif",
 
 def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.pdf',numeric: str='count',
                id_col: str='fastq_file', id_axis: str='fastq', stack_figsize: tuple=(7,3), heat_figsize: tuple=None,
-               cutoff_frac:float=0.01, return_df:bool=False):
+               cutoff_frac:float=0.01, return_df:bool=False, show:bool=True):
     '''
     plot_motif(): generate plots highlighting motif mismatches, locations, and sequences
     
@@ -362,6 +362,7 @@ def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.pdf',numeri
     heat_figsize (tuple, optional): heatmap figure size (Default: None)
     cutoff_frac (float, optional): y-axis values needs be greater than (e.g. 0.01) fraction
     return_df (bool, optional): return dataframe (Default: False)
+    show (bool, optional): show plots (Default: True)
 
     Dependencies: count_motifs(), plot
     '''
@@ -435,31 +436,31 @@ def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.pdf',numeri
         p.stack(df=df_mismatches,x=id_col,y=numeric,cols='mismatches', y_axis='Reads',
                 title=f"{df.iloc[0]['motif']}: {df.iloc[0]['pattern']}", x_axis=id_axis,
                 vertical=False,figsize=stack_figsize,cmap='tab20',
-                dir=out_dir,file=f"mismatches{plot_suf}")
+                dir=out_dir,file=f"mismatches{plot_suf}",show=show)
         
         p.stack(df=df_locations,x=id_col,y=numeric,cols='location', y_axis='Reads',
                 title=f"{df.iloc[0]['motif']}: {df.iloc[0]['pattern']}", x_axis=id_axis,
                 vertical=False,figsize=stack_figsize,cmap='tab20',
-                dir=out_dir,file=f"locations{plot_suf}")
+                dir=out_dir,file=f"locations{plot_suf}",show=show)
         
         p.heat(df=df_windows,x=id_col,y='window',vars='motif',vals=numeric,x_axis=id_axis,y_ticks_font='Courier New',
                figsize=heat_figsize,x_ticks_rot=45,title=f"{df.iloc[0]['motif']}: {df.iloc[0]['pattern']}",sq=False,
-               dir=out_dir,file=f"windows{plot_suf}")
+               dir=out_dir,file=f"windows{plot_suf}",show=show)
     
     else: # fraction
         p.stack(df=df_mismatches,x=id_col,y=numeric,cols='mismatches', y_axis='Reads fraction',
                 title=f"{df.iloc[0]['motif']}: {df.iloc[0]['pattern']}", x_axis=id_axis,
                 vertical=False,figsize=stack_figsize,cmap='tab20',
-                dir=out_dir,file=f"mismatches{plot_suf}")
+                dir=out_dir,file=f"mismatches{plot_suf}",show=show)
         
         p.stack(df=df_locations,x=id_col,y=numeric,cols='location', y_axis='Reads fraction',
                 title=f"{df.iloc[0]['motif']}: {df.iloc[0]['pattern']}", x_axis=id_axis,
                 vertical=False,figsize=stack_figsize,cmap='tab20',
-                dir=out_dir,file=f"locations{plot_suf}")
+                dir=out_dir,file=f"locations{plot_suf}",show=show)
         
         p.heat(df=df_windows,x=id_col,y='window',vars='motif',vals=numeric,x_axis=id_axis,y_ticks_font='Courier New',
                figsize=heat_figsize,x_ticks_rot=45,title=f"{df.iloc[0]['motif']}: {df.iloc[0]['pattern']}",sq=False,
-               dir=out_dir,file=f"windows{plot_suf}",vals_dims=(0,1)) 
+               dir=out_dir,file=f"windows{plot_suf}",vals_dims=(0,1),show=show)
     
     # Return value_counts() dataframes (optional)
     if return_df: return (df_mismatches,df_locations,df_windows)
