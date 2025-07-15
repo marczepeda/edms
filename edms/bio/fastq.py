@@ -1296,7 +1296,7 @@ def get_fastqs(in_dir: str,qall:int=10,qavg:int=30,qtrim:int=0,qmask:int=0,save:
 
     if save==True: 
         if outdir is None: outdir = '.'
-        io.save(dir=os.path.join(outdir,'stats'),file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_get_fastqs.csv',obj=out)
+        io.save(dir=os.path.join(outdir,'.genotyping'),file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_get_fastqs.csv',obj=out)
     
     if return_memories: return fastqs,memories
     else: return fastqs
@@ -1377,7 +1377,7 @@ def region(fastqs: dict, flank5: str, flank3: str, save: bool=True, masks: bool=
     
     if save==True: 
         if out_dir is None: out_dir = '.'
-        io.save(dir=os.path.join(out_dir,'stats'),file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_region.csv',obj=out)
+        io.save(dir=os.path.join(out_dir,'.genotyping'),file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_region.csv',obj=out)
     
     if return_memories: return fastqs_1,memories
     else: return fastqs_1
@@ -1585,7 +1585,7 @@ def find_indel(wt:str|Seq, mut:str|Seq, res: int, show:bool=False,
         if show: print(f"{edit} ({category})")
         return edit,category
 
-def genotype(fastqs: dict, res: int, wt: str, save: bool=True, masks: bool=False, keepX: bool=False,
+def genotype(fastqs: dict, res: int, wt: str, save: bool=False, masks: bool=False, keepX: bool=False,
              match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, 
              extend_gap_score: float = -0.1, return_memories: bool=False, out_dir: str=None):
     ''' 
@@ -1595,7 +1595,7 @@ def genotype(fastqs: dict, res: int, wt: str, save: bool=True, masks: bool=False
     fastqs (dict): dictionary from filter_fastqs
     res (int): first AA number
     wt (str, optional 2): expected wildtype nucleotide sequence (in frame AA; required unless pt is provided)
-    save (bool, optional): save genotyped reads to local directory (Default: True)
+    save (bool, optional): save genotyped reads to local directory (Default: False)
     masks (bool, optional): include masked sequence and translation (Default: False)
     keepX (bool, optional): keep unknown translation (i.e., X) due to sequencing error (Default: False) 
     match_score (float, optional): match score for pairwise alignment (Default: 2)
@@ -1672,7 +1672,7 @@ def genotype(fastqs: dict, res: int, wt: str, save: bool=True, masks: bool=False
     
     if save==True: 
         if out_dir is None: out_dir = '.'
-        io.save(dir=os.path.join(out_dir,'ckpt'),file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_genotype.csv',obj=t.reorder_cols(df=t.join(dc=fastqs,col='fastq_file'),cols=['fastq_file']))
+        io.save(dir=os.path.join(out_dir,'.genotyping'),file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_genotype.csv',obj=t.reorder_cols(df=t.join(dc=fastqs,col='fastq_file'),cols=['fastq_file']))
     
     if return_memories: return fastqs,memories
     else: return fastqs

@@ -1120,7 +1120,8 @@ def main():
     parser_fastq_genotyping.add_argument("--qavg", type=int, help="Minimum average Phred quality score", default=argparse.SUPPRESS)
     parser_fastq_genotyping.add_argument("--qmask", type=int, help="Phred quality threshold for masking to N", default=argparse.SUPPRESS)
 
-    parser_fastq_genotyping.add_argument("--no_saves", action="store_false", help="Don't save read statistics and genotypes files",dest="save",default=True)
+    parser_fastq_genotyping.add_argument("--save", action="store_true", help="Save read statistics and genotypes files", dest="save", default=argparse.SUPPRESS)
+    parser_fastq_genotyping.add_argument("--no_save", action="store_false", help="Don't save read statistics and genotypes files", dest="save", default=argparse.SUPPRESS)
     parser_fastq_genotyping.add_argument("--masks", action="store_true", help="Include masked sequence and translation",default=False)
     parser_fastq_genotyping.add_argument("--keepX", action="store_true", help="Keep unknown translation (X) in output", default=False)
 
