@@ -744,7 +744,8 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
             fastq_name = fastq_file[:-len(".fastq.gz")] # Get fastq name
             fastq_motif5 = df_motif5[df_motif5['fastq_file']==fastq_file].reset_index(drop=True) # Isolate fastq motif5 info
             fastq_motif3 = df_motif3[df_motif3['fastq_file']==fastq_file].reset_index(drop=True) # Isolate fastq motif3 info
-            if fastq_col is not None: fastq_df_ref = df_ref[df_ref[fastq_col]==fastq_file].reset_index(drop=True) # Isolate fastq reference library info
+            if fastq_col is not None: fastq_df_ref = df_ref[df_ref[fastq_col]==fastq_file].reset_index(drop=True) # Isolate fastq reference library info (if needed)
+            else: fastq_df_ref = df_ref.copy()
             with gzip.open(os.path.join(fastq_dir,fastq_file), "rt") as handle:
                 for i,record in enumerate(SeqIO.parse(handle, "fastq")): # Parse reads & isolate region between motifs
                     
@@ -784,7 +785,8 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
             fastq_name = fastq_file[:-len(".fastq")] # Get fastq name
             fastq_motif5 = df_motif5[df_motif5['fastq_file']==fastq_file].reset_index(drop=True) # Isolate fastq motif5 info
             fastq_motif3 = df_motif3[df_motif3['fastq_file']==fastq_file].reset_index(drop=True) # Isolate fastq motif3 info
-            if fastq_col is not None: fastq_df_ref = df_ref[df_ref[fastq_col]==fastq_file].reset_index(drop=True) # Isolate fastq reference library info
+            if fastq_col is not None: fastq_df_ref = df_ref[df_ref[fastq_col]==fastq_file].reset_index(drop=True) # Isolate fastq reference library info (if needed)
+            else: fastq_df_ref = df_ref.copy()
             with open(os.path.join(fastq_dir,fastq_file), "r") as handle:    
                 for i,record in enumerate(SeqIO.parse(handle, "fastq")): # Parse reads & isolate region between motifs
                     
@@ -923,7 +925,8 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
         seqs = [] # Store alignment sequences
         if fastq_file.endswith(".fastq.gz"): # Compressed fastq
             fastq_name = fastq_file[:-len(".fastq.gz")] # Get fastq name
-            if fastq_col is not None: fastq_df_ref = df_ref[df_ref[fastq_col]==fastq_file].reset_index(drop=True) # Isolate fastq reference library info
+            if fastq_col is not None: fastq_df_ref = df_ref[df_ref[fastq_col]==fastq_file].reset_index(drop=True) # Isolate fastq reference library info (if needed)
+            else: fastq_df_ref = df_ref.copy()
             with gzip.open(os.path.join(fastq_dir,fastq_file), "rt") as handle:
                 for i,record in enumerate(SeqIO.parse(handle, "fastq")): # Parse reads
                     
@@ -943,7 +946,8 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
                 
         elif fastq_file.endswith(".fastq"): # Uncompressed fastq
             fastq_name = fastq_file[:-len(".fastq")] # Get fastq name
-            if fastq_col is not None: fastq_df_ref = df_ref[df_ref[fastq_col]==fastq_file].reset_index(drop=True) # Isolate fastq reference library info
+            if fastq_col is not None: fastq_df_ref = df_ref[df_ref[fastq_col]==fastq_file].reset_index(drop=True) # Isolate fastq reference library info (if needed)
+            else: fastq_df_ref = df_ref.copy()
             with open(os.path.join(fastq_dir,fastq_file), "r") as handle:
                 for i,record in enumerate(SeqIO.parse(handle, "fastq")): # Parse reads
                     
