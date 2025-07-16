@@ -2284,6 +2284,7 @@ def stack(df: pd.DataFrame,x='sample',y='fraction',cols='edit',cutoff=0.01,cols_
     dir (str, optional): save plot to directory
     cmap (str, optional): matplotlib color map
     errcap (int, optional): error bar cap line width
+    vertical (bool, optional): vertical orientation; otherwise horizontal (Default: True)
     figsize (tuple, optional): figure size
     title (str, optional): plot title
     title_size (int, optional): plot title font size

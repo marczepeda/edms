@@ -944,7 +944,7 @@ def stack(df: pd.DataFrame | str,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord
         else: plt.ylim(y_axis_dims[0],y_axis_dims[1])
 
     else: # Horizontal orientation
-        df_pivot.plot(kind='barh',yerr=df_pivot_err,capsize=errcap, figsize=figsize,colormap=cmap,stacked=True,**kwargs)
+        df_pivot.plot(kind='barh',xerr=df_pivot_err,capsize=errcap, figsize=figsize,colormap=cmap,stacked=True,**kwargs)
 
         # Set y axis
         if x_axis=='': 
