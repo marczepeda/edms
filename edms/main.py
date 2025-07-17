@@ -349,7 +349,6 @@ def add_common_plot_stack_args(subparser):
     subparser.add_argument("--x_axis_size", type=int, default=12, help="Font size for X-axis label")
     subparser.add_argument("--x_axis_weight", type=str, default="bold", help="Font weight for X-axis label")
     subparser.add_argument("--x_axis_font", type=str, default="Arial", help="Font family for X-axis label")
-    subparser.add_argument("--x_axis_dims", type=parse_tuple_float, default=(0,0), help="X-axis range as tuple: start,end")
     subparser.add_argument("--x_ticks_rot", type=int, help="Rotation angle for X-axis tick labels")
     subparser.add_argument("--x_ticks_font", type=str, default="Arial", help="Font family for X-axis tick labels")
 

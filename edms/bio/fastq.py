@@ -2267,7 +2267,7 @@ def stack(df: pd.DataFrame,x='sample',y='fraction',cols='edit',cutoff=0.01,cols_
           file=None,dir=None,cmap='Set2',errcap=4,vertical=True,
           figsize=(10,6),title='Editing Outcomes',title_size=18,title_weight='bold',title_font='Arial',
           x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_font='Arial',x_ticks_rot=0,x_ticks_font='Arial',
-          y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_font='Arial',y_ticks_rot=0,y_ticks_font='Arial',
+          y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_font='Arial',y_axis_dims=(0,0),y_ticks_rot=0,y_ticks_font='Arial',
           legend_title='',legend_title_size=12,legend_size=12,
           legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_ncol=1,show=True,space_capitalize=True,**kwargs):
     ''' 
@@ -2300,6 +2300,7 @@ def stack(df: pd.DataFrame,x='sample',y='fraction',cols='edit',cutoff=0.01,cols_
     y_axis_size (int, optional): y-axis name font size
     y_axis_weight (str, optional): y-axis name bold, italics, etc.
     y_axis_font (str, optional): y-axis font
+    y_axis_dims (tuple, optional): y-axis dimensions (start, end)
     y_ticks_rot (int, optional): y-axis ticks rotation
     y_ticks_font (str, optional): y-ticks font
     legend_title (str, optional): legend title
@@ -2328,8 +2329,8 @@ def stack(df: pd.DataFrame,x='sample',y='fraction',cols='edit',cutoff=0.01,cols_
         positions = list()
         for geno in genotypes:
             numbers = re.findall(r'\d+\.?\d*', geno)
-            if geno==f'<{cutoff}':positions.append(100001) # Places <cutoff at the end
-            elif len(numbers)==0: positions.append(100000) # Places WT and Indel at the end
+            if geno==f'<{cutoff}':positions.append(100000) # Places <cutoff near the end
+            elif len(numbers)==0: positions.append(100001) # Places WT at the end
             else: positions.append(sum([int(n) for n in numbers])/len(numbers))
         assign = pd.DataFrame({'positions':positions,
                                'genotypes':genotypes})
@@ -2340,7 +2341,7 @@ def stack(df: pd.DataFrame,x='sample',y='fraction',cols='edit',cutoff=0.01,cols_
             file=file,dir=dir,cmap=cmap,errcap=errcap,vertical=vertical,
             figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
             x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,
-            y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,
+            y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_dims=y_axis_dims,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,
             legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,
             legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_ncol=legend_ncol,show=show,space_capitalize=space_capitalize,**kwargs)
 

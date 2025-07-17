@@ -854,7 +854,7 @@ def heat(df: pd.DataFrame | str, x: str=None, y: str=None, vars: str=None, vals:
 def stack(df: pd.DataFrame | str,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord=[],
           file: str=None,dir: str=None,cmap='Set2',errcap=4,vertical=True,
           figsize=(10,6),title='',title_size=18,title_weight='bold',title_font='Arial',
-          x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_font='Arial',x_axis_dims=(0,0),x_ticks_rot=0,x_ticks_font='Arial',
+          x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_font='Arial',x_ticks_rot=0,x_ticks_font='Arial',
           y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_font='Arial',y_axis_dims=(0,0),y_ticks_rot=0,y_ticks_font='Arial',
           legend_title='',legend_title_size=12,legend_size=12,
           legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_ncol=1,show=True,space_capitalize=True,**kwargs):
@@ -888,6 +888,7 @@ def stack(df: pd.DataFrame | str,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord
     y_axis_size (int, optional): y-axis name font size
     y_axis_weight (str, optional): y-axis name bold, italics, etc.
     y_axis_font (str, optional): y-axis font
+    y_axis_dims (tuple, optional): y-axis dimensions (start, end)
     y_ticks_rot (int, optional): y-axis ticks rotation
     y_ticks_font (str, optional): y-ticks font
     legend_title (str, optional): legend title
@@ -961,8 +962,8 @@ def stack(df: pd.DataFrame | str,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord
         if (y_ticks_rot==0)|(y_ticks_rot==90): plt.xticks(rotation=y_ticks_rot,ha='center',fontfamily=y_ticks_font)
         else: plt.xticks(rotation=y_ticks_rot,ha='right',fontfamily=y_ticks_font)
 
-        if x_axis_dims==(0,0): print('Default x axis dimensions.')
-        else: plt.xlim(x_axis_dims[0],x_axis_dims[1])
+        if y_axis_dims==(0,0): print('Default x axis dimensions.')
+        else: plt.xlim(y_axis_dims[0],y_axis_dims[1])
         
     # Set title
     if title=='' and file is not None: title=re_un_cap(".".join(file.split(".")[:-1]))
