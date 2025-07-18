@@ -1353,4 +1353,5 @@ def main():
     args = parser.parse_args()
     args_dict = vars(args)
     func = args_dict.pop("func")
+    args_dict.pop("command", None)  # Remove 'command' if it exists (required for autocomplete)
     func(**args_dict)    
