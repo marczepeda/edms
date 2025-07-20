@@ -1108,6 +1108,7 @@ def main():
     - unzip_fastqs(): Unzip gzipped fastqs and write to a new directory
     - comb_fastqs(): Combines one or more (un)compressed fastqs files into a single (un)compressed fastq file
     - genotyping(): quantify edit outcomes workflow
+    - abundances(): quantify desired edits count & fraction per sample
     - count_motif(): returns a dataframe with the sequence motif location with mismatches per read for every fastq file in a directory
     - plot_motif(): generate plots highlighting motif mismatches, locations, and sequences
     - plot_alignments(): generate line & distribution plots from fastq alignments dictionary
@@ -1122,7 +1123,8 @@ def main():
     parser_fastq_revcom = subparsers_fastq.add_parser("revcom", help="Reverse complement all FASTQ files in a directory")
     parser_fastq_unzip = subparsers_fastq.add_parser("unzip", help="Unzip gzipped FASTQ files to a new directory")
     parser_fastq_comb = subparsers_fastq.add_parser("comb", help="Combine multiple FASTQ files into a single FASTQ (.fastq or .fastq.gz)")
-    parser_fastq_genotyping = subparsers_fastq.add_parser("genotyping", help="Quantify edit outcomes from sequencing data")
+    parser_fastq_genotyping = subparsers_fastq.add_parser("genotyping", help="Quantify edit outcomes workflow")
+    parser_fastq_abundances = subparsers_fastq.add_parser("abundances", help="Quantify edit outcomes count & fraction per sample")
     parser_fastq_count_motif = subparsers_fastq.add_parser("count_motif", help="Count motif occurrences in FASTQ files")
     parser_fastq_plot_motif = subparsers_fastq.add_parser("plot_motif", help="Plot motif occurrences from FASTQ files")
     parser_fastq_plot_alignments = subparsers_fastq.add_parser("plot_alignments", help="Plot alignments from FASTQ files")
@@ -1161,6 +1163,16 @@ def main():
     parser_fastq_genotyping.add_argument("--open_gap_score", type=float, help="Open gap score for pairwise alignment", default=argparse.SUPPRESS)
     parser_fastq_genotyping.add_argument("--extend_gap_score", type=float, help="Extend gap score for pairwise alignment", default=argparse.SUPPRESS)
     
+    # abundances():
+    parser_fastq_abundances.add_argument("--df", help="Input file with sample, edit, count, & fraction information", required=True)
+    parser_fastq_abundances.add_argument("--desired_edits", nargs="+", help="List of desired edits to isolate (space-separated)",required=True)
+
+    # Optional column customization
+    parser_fastq_abundances.add_argument("--sample_col", default="sample", help="Column for sample ID (default: 'sample')")
+    parser_fastq_abundances.add_argument("--edit_col", default="edit", help="Column for edit identifier (default: 'edit')")
+    parser_fastq_abundances.add_argument("--count_col", default="count", help="Column for edit count (default: 'count')")
+    parser_fastq_abundances.add_argument("--fraction_col", default="fraction", help="Column for edit fraction (default: 'fraction')")
+
     # count_motif():
     parser_fastq_count_motif.add_argument("--fastq_dir", help="Path to directory containing FASTQ files", required=True)
     parser_fastq_count_motif.add_argument("--pattern", help="Motif sequence pattern to search for", required=True)
@@ -1254,12 +1266,12 @@ def main():
     parser_fastq_paired_regions.add_argument("--show", action="store_true", help="Display plots interactively")
     parser_fastq_paired_regions.add_argument("--return_dc", action="store_true", help="Return paired/unpaired dataframe")
 
-
     # Set defaults
     parser_fastq_revcom.set_defaults(func=fq.revcom_fastqs)
     parser_fastq_unzip.set_defaults(func=fq.unzip_fastqs)
     parser_fastq_comb.set_defaults(func=fq.comb_fastqs)
     parser_fastq_genotyping.set_defaults(func=fq.genotyping)
+    parser_fastq_abundances.set_defaults(func=fq.abundances)
     parser_fastq_count_motif.set_defaults(func=fq.count_motif)
     parser_fastq_plot_motif.set_defaults(func=fq.plot_motif)
     parser_fastq_plot_alignments.set_defaults(func=fq.plot_alignments)
