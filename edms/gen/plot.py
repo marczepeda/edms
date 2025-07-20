@@ -13,6 +13,7 @@ Usage:
 - move_dis_legend(): moves legend for distribution graphs
 - extract_pivots(): returns a dictionary of pivot-formatted dataframes from tidy-formatted dataframe
 - formatter(): formats, displays, and saves plots
+- repeat_palette_cmap(): returns a list of a repeated seaborn palette or matplotlib color map
 
 [Graph methods]
 - scat(): creates scatter plot related graphs
@@ -34,11 +35,11 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+import matplotlib.colors as mcolors
 from matplotlib.ticker import MaxNLocator
 import numpy as np
 from adjustText import adjust_text
 from . import io
-from . import tidy as t
 
 # Supporting methods
 def re_un_cap(input: str):
@@ -260,6 +261,28 @@ def formatter(typ:str,ax,df:pd.DataFrame,x:str,y:str,cols:str,file:str,dir:str,p
         io.mkdir(dir) # Make output directory if it does not exist
         plt.savefig(fname=os.path.join(dir, file), dpi=600, bbox_inches='tight', format=f'{file.split(".")[-1]}')
     if show: plt.show()
+
+def repeat_palette_cmap(palette_or_cmap: str, repeats: int):
+    '''
+    repeat_palette_cmap(): returns a list of a repeated seaborn palette or matplotlib color map
+
+    Parameters:
+    palette_or_cmap (str): seaborn palette or matplotlib color map name
+    repeats (int): number of color map repeats
+    '''
+    # Check repeats is a positive integer
+    if not isinstance(repeats, int) or repeats <= 0:
+        raise ValueError(f"repeats={repeats} must be a positive integer.")
+    
+    if palette_or_cmap in sns.color_palette(): # Check if cmap is a valid seaborn color palette
+        cmap = sns.palettes.SEABORN_PALETTES[palette_or_cmap] # Get the color palette
+        return mcolors.ListedColormap(cmap * repeats) # Repeats the color palette
+    elif palette_or_cmap in plt.colormaps(): # Check if cmap is a valid matplotlib color map
+        cmap = cm.get_cmap(palette_or_cmap) # Get the color map
+        return mcolors.ListedColormap([cmap(i) for i in range(cmap.N)] * repeats) # Breaks the color map into a repeated list
+    else:
+        print(f'{cmap} is not a valid matplotlib color map and did not apply repeat.')
+        return cmap
 
 # Graph methods
 def scat(typ: str,df: pd.DataFrame | str,x: str,y: str,cols: str=None,cols_ord: list=None,stys: str=None,cols_exclude: list | str=None,
@@ -852,7 +875,7 @@ def heat(df: pd.DataFrame | str, x: str=None, y: str=None, vars: str=None, vals:
     if show: plt.show()
 
 def stack(df: pd.DataFrame | str,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord=[],
-          file: str=None,dir: str=None,cmap='Set2',errcap=4,vertical=True,
+          file: str=None,dir: str=None,palette_or_cmap='Set2',repeats=1,errcap=4,vertical=True,
           figsize=(10,6),title='',title_size=18,title_weight='bold',title_font='Arial',
           x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_font='Arial',x_ticks_rot=0,x_ticks_font='Arial',
           y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_font='Arial',y_axis_dims=(0,0),y_ticks_rot=0,y_ticks_font='Arial',
@@ -870,7 +893,8 @@ def stack(df: pd.DataFrame | str,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord
     cols_ord (list, optional): color column values order
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
-    cmap (str, optional): matplotlib color map
+    palette_or_cmap (str, optional): seaborn palette or matplotlib color map
+    repeats (int, optional): number of color palette or map repeats (Default: 1)
     errcap (int, optional): error bar cap line width
     vertical (bool, optional): vertical orientation; otherwise horizontal (Default: True)
     figsize (tuple, optional): figure size
@@ -924,7 +948,7 @@ def stack(df: pd.DataFrame | str,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord
 
     # Make stacked barplot
     if vertical: # orientation
-        df_pivot.plot(kind='bar',yerr=df_pivot_err,capsize=errcap, figsize=figsize,colormap=cmap,stacked=True,**kwargs)
+        df_pivot.plot(kind='bar',yerr=df_pivot_err,capsize=errcap, figsize=figsize,colormap=repeat_palette_cmap(palette_or_cmap,repeats),stacked=True,**kwargs)
         
         # Set x axis
         if x_axis=='': 
@@ -945,7 +969,7 @@ def stack(df: pd.DataFrame | str,x:str,y:str,cols:str,cutoff=0,cols_ord=[],x_ord
         else: plt.ylim(y_axis_dims[0],y_axis_dims[1])
 
     else: # Horizontal orientation
-        df_pivot.plot(kind='barh',xerr=df_pivot_err,capsize=errcap, figsize=figsize,colormap=cmap,stacked=True,**kwargs)
+        df_pivot.plot(kind='barh',xerr=df_pivot_err,capsize=errcap, figsize=figsize,colormap=repeat_palette_cmap(palette_or_cmap,repeats),stacked=True,**kwargs)
 
         # Set y axis
         if x_axis=='': 

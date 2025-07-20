@@ -333,7 +333,7 @@ def add_common_plot_stack_args(subparser):
     subparser.add_argument("--cutoff", type=float, default=0, help="Minimum value cutoff for inclusion in stack")
     subparser.add_argument("--cols_ord", nargs="+", help="Order of values in the color column")
     subparser.add_argument("--x_ord", nargs="+", help="Custom order of X-axis categories")
-    subparser.add_argument("--cmap", type=str, default="Set2", help="Matplotlib colormap for stacked bars")
+    subparser.add_argument("--palette_or_cmap", type=str, default="Set2", help="Seaborn palette or Matplotlib colormap for stacked bars")
     subparser.add_argument("--errcap", type=int, default=4, help="Width of error bar caps")
     subparser.add_argument("--vertical", action="store_true", help="Stack bars vertically (default True)", default=False)
 
@@ -1146,7 +1146,6 @@ def main():
     parser_fastq_genotyping.add_argument("--sequence", type=str, help="Formatted sequence: flank5(genotype region)flank3", default=argparse.SUPPRESS)
     parser_fastq_genotyping.add_argument("--res", type=int, help="First amino acid number in genotype region", default=argparse.SUPPRESS)
     
-    parser_fastq_genotyping.add_argument("--desired_edits", type=str, nargs='+', help="List of desired edits", default=argparse.SUPPRESS)
     parser_fastq_genotyping.add_argument("--qall", type=int, help="Minimum Phred quality score for all bases", default=argparse.SUPPRESS)
     parser_fastq_genotyping.add_argument("--qtrim", type=int, help="Phred quality threshold for end trimming", default=argparse.SUPPRESS)
     parser_fastq_genotyping.add_argument("--qavg", type=int, help="Minimum average Phred quality score", default=argparse.SUPPRESS)

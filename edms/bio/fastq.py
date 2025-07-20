@@ -1717,7 +1717,7 @@ def outcomes_desired(df: pd.DataFrame, desired_edits: list | str, sample_col: st
 
     Parameters:
     df (DataFrame): dataframe with edit count & fraction per sample (tidy format)
-    desired_edits (list or str): list of desired edits (list of str) or desired edits column name (str)
+    desired_edits (list or str): list of desired edits (list of str)
     sample_col (str, optional): sample column name (Default: sample)
     edit_col (str, optional): edit column name (Default: edit)
     count_col (str, optional): count column name (Default: count)
@@ -1729,17 +1729,12 @@ def outcomes_desired(df: pd.DataFrame, desired_edits: list | str, sample_col: st
     # Memory reporting
     memories = []
 
-    if isinstance(desired_edits, list): desired_edits_col = None # Determine if desired edits is a list or str
-    elif isinstance(desired_edits, str): desired_edits_col = desired_edits
+    if isinstance(desired_edits, str): desired_edits = [desired_edits] # Make desired edits a list
     else: TypeError(f'desired_edits = {desired_edits} was not a list or str.')
 
     df_desired = pd.DataFrame()
     for sample in df[sample_col].value_counts().keys(): # Iterate through samples
         df_sample = df[df[sample_col]==sample].reset_index(drop=True)
-
-        if desired_edits_col: 
-            desired_edits = df_sample.iloc[0][desired_edits_col] # Get desired edits list for each sample if the column name was provided
-            if isinstance(desired_edits, str): desired_edits = [desired_edits]
         
         i_desired = [] # Store desired edit & corresponding counts & fractions
         count_desired = []
@@ -1775,7 +1770,7 @@ def outcomes_desired(df: pd.DataFrame, desired_edits: list | str, sample_col: st
     if return_memories: return df_desired,memories
     else: return df_desired
 
-def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=None, desired_edits: list = None,
+def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=None, desired_edits: list|str = None,
                out_dir: str=None, out_file_prefix: str=None, return_dc:bool=False, **kwargs):
     ''' 
     genotying(): quantify edit outcomes workflow
@@ -1785,7 +1780,7 @@ def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=N
     config_key (str, optional 1): config file key (FWD primer-REV primer) with 'sequence' & 'res' parameters
     sequence (str, optional 2): sequence formatted flank5(genotype region)flank3
     res (int, optional 2): first AA number in genotype region
-    desired_edits (list, optional): list of desired edits (Default: None)
+    desired_edits (list | str, optional): list of desired edits (Default: None)
     out_dir (str, optional): output directory (Default: None)
     out_file (str, optional): output file (Default: None)
     return_dc (bool, optional): return dictionary containing edit & category outcomes dataframes (Default: False)
@@ -1856,12 +1851,6 @@ def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=N
     memories.extend(memories1)
     del dc # Remove dc to save memory
 
-    if desired_edits is not None: 
-        memories.append(memory_timer(task='outcomes_desired()'))
-        df_desired,memories1 = outcomes_desired(df=df_edits,desired_edits=desired_edits,**outcomes_kwargs)
-        memories.extend(memories1)
-        del memories1
-
     # Save and return edit outcomes dataframe
     memories.append(memory_timer(task='genotyping()'))
     if out_dir is not None and out_file_prefix is not None: # Save dataframes (optional)
@@ -1871,11 +1860,6 @@ def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=N
 
         io.save(dir=out_dir,file=f'{out_file_prefix}_edit_outcomes.csv',obj=df_edits) # Edit outcomes
         io.save(dir=out_dir,file=f'{out_file_prefix}_category_outcomes.csv',obj=df_categories) # Edit categoy outcomes
-
-        if desired_edits is not None: 
-            io.save(dir=out_dir, # outcomes desired
-                    file=f'{out_file_prefix}_edit_desired_outcomes.csv',
-                    obj=df_desired)
     
     if return_dc: 
         return {'edit': df_edits,
@@ -2264,7 +2248,7 @@ def cat(typ: str,df: pd.DataFrame,x: str,y: str,errorbar=None,cols=None,cols_ord
           **kwargs)
 
 def stack(df: pd.DataFrame,x='sample',y='fraction',cols='edit',cutoff=0.01,cols_ord=[],x_ord=[],
-          file=None,dir=None,cmap='Set2',errcap=4,vertical=True,
+          file=None,dir=None,palette_or_cmap='Set2',repeats=1,errcap=4,vertical=True,
           figsize=(10,6),title='Editing Outcomes',title_size=18,title_weight='bold',title_font='Arial',
           x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_font='Arial',x_ticks_rot=0,x_ticks_font='Arial',
           y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_font='Arial',y_axis_dims=(0,0),y_ticks_rot=0,y_ticks_font='Arial',
@@ -2282,7 +2266,8 @@ def stack(df: pd.DataFrame,x='sample',y='fraction',cols='edit',cutoff=0.01,cols_
     cols_ord (list, optional): color column values order
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
-    cmap (str, optional): matplotlib color map
+    palette_or_cmap (str, optional): seaborn palette or matplotlib color map
+    repeats (int, optional): number of color palette or map repeats (Default: 1)
     errcap (int, optional): error bar cap line width
     vertical (bool, optional): vertical orientation; otherwise horizontal (Default: True)
     figsize (tuple, optional): figure size
@@ -2338,7 +2323,7 @@ def stack(df: pd.DataFrame,x='sample',y='fraction',cols='edit',cutoff=0.01,cols_
     
     # Make stacked barplot
     p.stack(df=df_cut,x=x,y=y,cols=cols,cutoff=0,cols_ord=cols_ord,x_ord=x_ord,
-            file=file,dir=dir,cmap=cmap,errcap=errcap,vertical=vertical,
+            file=file,dir=dir,palette_or_cmap=palette_or_cmap,repeats=repeats,errcap=errcap,vertical=vertical,
             figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
             x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,
             y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_dims=y_axis_dims,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,
