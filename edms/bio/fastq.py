@@ -435,12 +435,12 @@ def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.pdf',numeri
     if numeric=='count':
         p.stack(df=df_mismatches,x=id_col,y=numeric,cols='mismatches', y_axis='Reads',
                 title=f"{df.iloc[0]['motif']}: {df.iloc[0]['pattern']}", x_axis=id_axis,
-                vertical=False,figsize=stack_figsize,cmap='tab20',
+                vertical=False,figsize=stack_figsize,palette_or_cmap='tab20',
                 dir=out_dir,file=f"mismatches{plot_suf}",show=show)
         
         p.stack(df=df_locations,x=id_col,y=numeric,cols='location', y_axis='Reads',
                 title=f"{df.iloc[0]['motif']}: {df.iloc[0]['pattern']}", x_axis=id_axis,
-                vertical=False,figsize=stack_figsize,cmap='tab20',
+                vertical=False,figsize=stack_figsize,palette_or_cmap='tab20',
                 dir=out_dir,file=f"locations{plot_suf}",show=show)
         
         p.heat(df=df_windows,x=id_col,y='window',vars='motif',vals=numeric,x_axis=id_axis,y_ticks_font='Courier New',
@@ -450,12 +450,12 @@ def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.pdf',numeri
     else: # fraction
         p.stack(df=df_mismatches,x=id_col,y=numeric,cols='mismatches', y_axis='Reads fraction',
                 title=f"{df.iloc[0]['motif']}: {df.iloc[0]['pattern']}", x_axis=id_axis,
-                vertical=False,figsize=stack_figsize,cmap='tab20',
+                vertical=False,figsize=stack_figsize,palette_or_cmap='tab20',
                 dir=out_dir,file=f"mismatches{plot_suf}",show=show)
         
         p.stack(df=df_locations,x=id_col,y=numeric,cols='location', y_axis='Reads fraction',
                 title=f"{df.iloc[0]['motif']}: {df.iloc[0]['pattern']}", x_axis=id_axis,
-                vertical=False,figsize=stack_figsize,cmap='tab20',
+                vertical=False,figsize=stack_figsize,palette_or_cmap='tab20',
                 dir=out_dir,file=f"locations{plot_suf}",show=show)
         
         p.heat(df=df_windows,x=id_col,y='window',vars='motif',vals=numeric,x_axis=id_axis,y_ticks_font='Courier New',
@@ -1045,7 +1045,7 @@ def plot_paired(df: pd.DataFrame | str, title: str, out_dir: str,
     io.save(dir=os.path.join(out_dir, title),file='alignment_distribution.csv',obj=paired_regions_alignment_distribution_df)
 
     p.stack(df=paired_regions_alignment_distribution_df[[id_col,'desired']].value_counts().reset_index(),
-            x='desired',y='count',cols=id_col,cmap='Spectral',x_ord=[True,False],vertical=False,
+            x='desired',y='count',cols=id_col,palette_or_cmap='Spectral',x_ord=[True,False],vertical=False,
             cols_ord=list(paired_regions_alignment_distribution_df[id_col].value_counts().keys()),
             legend_ncol=4,legend_bbox_to_anchor=(0,-.3),figsize=(10,2),
             title=title,dir=os.path.join(out_dir, title),file=f'alignment_distribution{plot_suf}',show=show,**plot_kwargs)
