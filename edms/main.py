@@ -1116,6 +1116,7 @@ def main():
     - count_alignments(): align reads from fastq directory to annotated library with mismatches; plot and return fastq alignments dictionary
     - plot_paired(): generate stacked bar plots from paired_regions() dataframe
     - paired_regions(): quantify, plot, & return (un)paired regions that aligned to the annotated library
+    - editing_per_library(): Determine editing relative library abundance
     '''
     parser_fastq = subparsers.add_parser("fastq", help="FASTQ files")
     subparsers_fastq = parser_fastq.add_subparsers()
@@ -1132,6 +1133,7 @@ def main():
     parser_fastq_count_alignments = subparsers_fastq.add_parser("count_alignments", help="Count alignments in FASTQ files")
     parser_fastq_plot_paired = subparsers_fastq.add_parser("plot_paired", help="Plot paired regions from FASTQ files")
     parser_fastq_paired_regions = subparsers_fastq.add_parser("paired_regions", help="Extract paired regions from FASTQ files")
+    parser_fastq_editing_per_library = subparsers_fastq.add_parser("editing_per_library", help="Determine editing relative library abundance")
 
     # Add common arguments: revcom_fastqs(), unzip_fastqs(), comb_fastqs(), and genotyping()
     for parser_fastq_common in [parser_fastq_revcom,parser_fastq_unzip,parser_fastq_comb,parser_fastq_genotyping]:
@@ -1266,6 +1268,15 @@ def main():
     parser_fastq_paired_regions.add_argument("--show", action="store_true", help="Display plots interactively")
     parser_fastq_paired_regions.add_argument("--return_dc", action="store_true", help="Return paired/unpaired dataframe")
 
+    # editing_per_library():
+    parser_fastq_editing_per_library.add_argument("--edit_dc", help="Path to directory with edit outcomes files", required=True)
+    parser_fastq_editing_per_library.add_argument("--paired_regions_dc", help="Path to directory with paired regions files", required=True)
+    parser_fastq_editing_per_library.add_argument("--fastq_ids", help="Path to file containing fastq IDs for 'genotyping' and 'paired_regions'", required=True)
+
+    parser_fastq_editing_per_library.add_argument("--out_dir", type=str, help="Output directory to save results (Default: ../out/date_time)", default=f"../out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}")
+    parser_fastq_editing_per_library.add_argument("--count", default="count", help="Column to use for epeg-ngRNA counts (Default: 'count')")
+    parser_fastq_editing_per_library.add_argument("--psuedocount", type=int, default=1, help="Pseudocount to add to all counts (Default: 1)")
+
     # Set defaults
     parser_fastq_revcom.set_defaults(func=fq.revcom_fastqs)
     parser_fastq_unzip.set_defaults(func=fq.unzip_fastqs)
@@ -1279,6 +1290,7 @@ def main():
     parser_fastq_count_alignments.set_defaults(func=fq.count_alignments)
     parser_fastq_plot_paired.set_defaults(func=fq.plot_paired)
     parser_fastq_paired_regions.set_defaults(func=fq.paired_regions)
+    parser_fastq_editing_per_library.set_defaults(func=fq.editing_per_library)
 
     '''
     Add pe.py

@@ -233,14 +233,14 @@ def save(dir: str, file: str, obj, cols=[], id=False, sort=True, **kwargs):
                 df.to_excel(writer,sheet_name=key,index=id) # Dataframe per sheet
     else: raise ValueError(f'save() does not work for {type(obj)} objects with {file.split(".")[-1]} files.')
 
-def save_dir(dir: str, suf: str, dc: dict, **kwargs):
+def save_dir(dir: str, dc: dict, suf: str='.csv', **kwargs):
     ''' 
     save_dir(): save .csv files to a specified output directory from dictionary of objs
     
     Parameters:
     dir (str): output directory path
-    suf (str): file name suffix
     dc (dict): dictionary of objects (files)
+    suf (str, optional): file name suffix (Default: .csv)
 
     Dependencies: pandas, os, csv, & save()
     '''
