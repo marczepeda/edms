@@ -1806,8 +1806,8 @@ def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=N
                 'category': df_categories}
 
 def abundances(df: pd.DataFrame | str, desired_edits: list, sample_col: str='sample',
-               edit_col: str='edit', count_col: str='count', fraction_col: str='fraction', 
-               return_memories: bool=False):
+               edit_col: str='edit', count_col: str='count', fraction_col: str='fraction',
+               multiple: bool=True, return_memories: bool=False):
     ''' 
     abundances(): quantify desired edits count & fraction per sample
 
@@ -1818,6 +1818,7 @@ def abundances(df: pd.DataFrame | str, desired_edits: list, sample_col: str='sam
     edit_col (str, optional): edit column name (Default: edit)
     count_col (str, optional): count column name (Default: count)
     fraction_col (str, optional): fraction column name (Default: fraction)
+    multiple (bool, optional): whether to search for desired edits within multiple edit outcomes (Default: True)
     return_memories (bool, optional): return memories (Default: False)
 
     Dependencies: pandas
@@ -1843,7 +1844,7 @@ def abundances(df: pd.DataFrame | str, desired_edits: list, sample_col: str='sam
 
             for i,(edit,count,fraction) in enumerate(t.zip_cols(df=df_sample,cols=[edit_col,count_col,fraction_col])):
                 
-                if ', ' in edit: # Search for desired edit within multiple edit outcomes
+                if ', ' in edit and multiple: # Search for desired edit within multiple edit outcomes
                     edits = edit.split(', ')
                     for edit in edits:
                         if edit in desired_edit:

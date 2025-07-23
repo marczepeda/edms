@@ -1169,11 +1169,11 @@ def main():
     parser_fastq_abundances.add_argument("--df", help="Input file with sample, edit, count, & fraction information", required=True)
     parser_fastq_abundances.add_argument("--desired_edits", nargs="+", help="List of desired edits to isolate (space-separated)",required=True)
 
-    # Optional column customization
-    parser_fastq_abundances.add_argument("--sample_col", default="sample", help="Column for sample ID (default: 'sample')")
-    parser_fastq_abundances.add_argument("--edit_col", default="edit", help="Column for edit identifier (default: 'edit')")
-    parser_fastq_abundances.add_argument("--count_col", default="count", help="Column for edit count (default: 'count')")
-    parser_fastq_abundances.add_argument("--fraction_col", default="fraction", help="Column for edit fraction (default: 'fraction')")
+    parser_fastq_abundances.add_argument("--sample_col", default="sample", help="Column for sample ID (Default: 'sample')")
+    parser_fastq_abundances.add_argument("--edit_col", default="edit", help="Column for edit identifier (Default: 'edit')")
+    parser_fastq_abundances.add_argument("--count_col", default="count", help="Column for edit count (Default: 'count')")
+    parser_fastq_abundances.add_argument("--fraction_col", default="fraction", help="Column for edit fraction (Default: 'fraction')")
+    parser_fastq_abundances.add_argument("--only_singles", action="store_false", dest="multiple", help="Only include reads with isolated desired edits (Default: False)",default=True)
 
     # count_motif():
     parser_fastq_count_motif.add_argument("--fastq_dir", help="Path to directory containing FASTQ files", required=True)

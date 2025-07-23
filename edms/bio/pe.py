@@ -20,12 +20,13 @@ Usage:
 - epegRNA_linkers(): generate epegRNA linkers between PBS and 3' hairpin motif & finish annotations
 - shared_sequences(): Reduce PE library into shared spacers and PBS sequences
 - PilotScreen(): Create pilot screen for EDMS
-- get_codons(): returns all codons within a specified frame for a nucleotide sequence
-- get_codon_frames(): returns all codon frames for a nucleotide sequence
-- is_sublist_in_order(): returns if each element in the sub list appears in the correct order in the main list
-- RTT_designer(): design all possible RTT for given spacer & PBS (WT, single insertions, & single deletions)
-- compare_RTTs(): compares RTT outcome to WT RTT outcome and returns observed it
-- pegRNAs_tester(): confirm that pegRNAs should create the predicted edit
+- [Create indels]
+    - get_codons(): returns all codons within a specified frame for a nucleotide sequence
+    - get_codon_frames(): returns all codon frames for a nucleotide sequence
+    - is_sublist_in_order(): returns if each element in the sub list appears in the correct order in the main list
+    - RTT_designer(): design all possible RTT for given spacer & PBS (WT, single insertions, & single deletions)
+    - compare_RTTs(): compares RTT outcome to WT RTT outcome and returns observed it
+    - pegRNAs_tester(): confirm that pegRNAs should create the predicted edit
 
 [Comparing pegRNA libraries]
 - print_shared_sequences(): prints spacer and PBS sequences from dictionary of shared_sequences libraries
@@ -371,14 +372,18 @@ def epegRNA_linkers(pegRNAs: str | pd.DataFrame, epegRNA_motif_sequence: str='CG
     if type(pegRNAs)==str: # Get pegRNAs dataframe from file path if needed
         pegRNAs = io.get(pt=pegRNAs)
 
-    # Get or make ckpt DataFrame
+    # Get or make ckpt DataFrame & linkers
+    linkers = []
     if ckpt_dir is not None and ckpt_file is not None: # Save ckpts
-        if ckpt_pt=='': ckpt = pd.DataFrame(columns=['pegRNA_number','Linker_sequence'])
-        else: ckpt = io.get(pt=ckpt_pt)
-    else: ckpt = '' # Don't save ckpts, length needs to 0.
+        if ckpt_pt=='': 
+            ckpt = pd.DataFrame(columns=['pegRNA_number','Linker_sequence'])
+        else: 
+            ckpt = io.get(pt=ckpt_pt)
+            linkers = list(ckpt['Linker_sequence']) # Get linkers from ckpt
+    else: 
+        ckpt = '' # Don't save ckpts, length needs to 0.
 
     # Generate epegRNA linkers between PBS and 3' hairpin motif
-    linkers = []
     for i in range(len(pegRNAs)):
         if i>=len(ckpt):
             linkers.extend(pegLIT.pegLIT(seq_spacer=pegRNAs.iloc[i]['Spacer_sequence'],seq_scaffold=pegRNAs.iloc[i]['Scaffold_sequence'],
@@ -521,25 +526,26 @@ def PilotScreen(pegRNAs_dir: str, mutations_pt: str, database: Literal['COSMIC',
     io.save_dir(dir='../pegRNAs_priority',
                 suf='.csv',
                 dc=pegRNAs_priority)
-    
-def get_codons(sequence,frame:int=0):
+
+### Create Indels   
+def get_codons(sequence, frame:int=0):
     ''' 
     get_codons(): returns all codons within a specified frame for a nucleotide sequence
     
     Parameters:
-    sequence: nucletide sequence
+    sequence (str): nucletide sequence
     frame (int, optional): codon frame (0, 1, or 2)
 
     Dependencies:
     '''
     return [sequence[i:i+3] for i in range(frame, len(sequence) - 2, 3)]
 
-def get_codon_frames(sequence):
+def get_codon_frames(sequence: str):
     ''' 
     get_codon_frames(): returns all codon frames for a nucleotide sequence
     
     Parameters:
-    seqeuence: nucleotide sequence
+    seqeuence (str): nucleotide sequence
 
     Dependencies:
     ''' 
@@ -558,18 +564,22 @@ def is_sublist_in_order(main_list, sub_list):
     it = iter(main_list) # Initialize an iterator for the sub_list
     return all(item in it for item in sub_list) # Check if each element in sub_list appears in the correct order in main_list
 
-def RTT_designer(pegRNAs: pd.DataFrame, file: str, aa_index: int=1, rtt_length: int=39):
+def RTT_designer(pegRNAs: pd.DataFrame | str, file: str, aa_index: int=1, rtt_length: int=39):
     ''' 
     RTT_designer(): design all possible RTT for given spacer & PBS (WT, single insertions, & single deletions)
     
     Parameters:
-    pegRNAs (dataframe): pegRNAs DataFrame
+    pegRNAs (dataframe | str): pegRNAs DataFrame (or file path)
     file (str): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)
     aa_index (int, optional): 1st amino acid in target sequence index (Default: start codon = 1)
     RTT_length (int, optional): Reverse transcriptase template length (bp)
 
     Dependencies: io, pandas, Bio.Seq.Seq, shared_sequences(), get_codons(), get_codon_frames(), is_sublist_in_order(), & aa_dna_codon_table
     '''
+    # Get pegRNAs DataFrame from file path if needed
+    if type(pegRNAs)==str:
+        pegRNAs = io.get(pt=pegRNAs)
+
     # Get reference sequence & codons (+ reverse complement)
     target_sequence = io.get(file).iloc[0]['target_sequence']
     seq = Seq(target_sequence.split('(')[1].split(')')[0]) # Break apart target sequences
@@ -587,7 +597,6 @@ def RTT_designer(pegRNAs: pd.DataFrame, file: str, aa_index: int=1, rtt_length: 
     extended_codons_nuc = Seq('').join(extended_codons) # Join codons into full in-frame nucleotide sequence
     extended_codons_prot = Seq.translate(extended_codons_nuc) # Translate to full in-frame protein sequence
     extended_codons_aa_indexes = list(np.arange(aa_index-len(codons_flank5),aa_index-len(codons_flank5)+len(extended_codons_prot))) # Obtain full in-frame amino acid indexes
-
 
     print(f'FWD Ref: {seq_nuc}')
     print(f'REV Ref: {rc_seq_nuc}')
@@ -880,7 +889,7 @@ def RTT_designer(pegRNAs: pd.DataFrame, file: str, aa_index: int=1, rtt_length: 
     # Combine wildtype, substitution, insertion, deletion libraries
     return pd.concat([pegRNAs,wildtypes,insertions,deletions]).reset_index(drop=True)
 
-def compare_RTTs(rtt_prot,rtt_prot_indexes: list,rtt_wt_prot, rtt_wt_prot_indexes: list,annotation: str,strand: str):
+def compare_RTTs(rtt_prot,rtt_prot_indexes: list, rtt_wt_prot, rtt_wt_prot_indexes: list,annotation: str,strand: str):
     ''' 
     compare_RTTs(): compares RTT outcome to WT RTT outcome and returns observed it
     
@@ -949,12 +958,12 @@ def compare_RTTs(rtt_prot,rtt_prot_indexes: list,rtt_wt_prot, rtt_wt_prot_indexe
         return edit
         
 
-def pegRNAs_tester(pegRNAs: pd.DataFrame, file: str, aa_index: int=1):
+def pegRNAs_tester(pegRNAs: pd.DataFrame | str, file: str, aa_index: int=1):
     ''' 
     pegRNAs_tester(): confirm that pegRNAs should create the predicted edit
     
     Parameters:
-    pegRNAs (dataframe): pegRNAs DataFrame
+    pegRNAs (dataframe | str): pegRNAs DataFrame (or file path)
     file (str): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)
     aa_index (int, optional): 1st amino acid in target sequence index (Optional, Default: start codon = 1)
     
@@ -969,6 +978,10 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame, file: str, aa_index: int=1):
         (2) inserted AA matches the next (+ strand) or previous (- strand) AA, so compare_RTTs() shifts mutation by 1 AA
         (3) single insertion of final AA in RTT, which matches next AA and returns wildtype sequence
     '''
+    # Get pegRNAs DataFrame from file path if needed
+    if type(pegRNAs)==str:
+        pegRNAs = io.get(pt=pegRNAs)
+
     # Catch all stop codons that are written as "X" instead of "*"
     pegRNAs['Edit'] = pegRNAs['Edit'].replace('X', '*', regex=True)
 
