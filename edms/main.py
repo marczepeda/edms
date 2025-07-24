@@ -44,6 +44,7 @@ from .bio import qPCR
 from .bio import clone as cl
 from .bio import fastq as fq
 from .bio import pe
+from .bio import sanger
 
 # Supporting methods
 def parse_tuple_int(arg):
@@ -865,6 +866,49 @@ def main():
     
     parser_ngs_hamming.set_defaults(func=ngs.hamming_distance_matrix)
 
+    '''
+    edms.bio.sanger:
+    - pcrs(): generates Sanger PCR plan automatically
+    - compute_distance_matrix(): compute pairwise Hamming distance matrix for a list of sequences stored in a dataframe
+    '''
+    parser_sanger = subparsers.add_parser("sanger", help="Sanger sequencing")
+    subparsers_sanger = parser_sanger.add_subparsers()
+
+    # pcrs(): generates Sanger PCR plan automatically
+    parser_sanger_pcrs = subparsers_sanger.add_parser("pcrs", help="Plan Sanger PCRs")
+    
+    # pcrs(): Core parameters
+    parser_sanger_pcrs.add_argument("--df", help="Input file", type=str, required=True)
+    parser_sanger_pcrs.add_argument("--dir", help="Output directory path", type=str, default='../out')
+    parser_sanger_pcrs.add_argument("--file", help="Output file name (.xlsx)", type=str, default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_Sanger_plan.xlsx')
+    parser_sanger_pcrs.add_argument("--cycles", help="Number of cycles for PCR1", type=str, default='30')
+    parser_sanger_pcrs.add_argument("--ultra", help="Using NEB Ultra II reagents", action="store_true")
+    parser_sanger_pcrs.add_argument('--total_uL', type=int, default=20, help='Total reaction volume (uL)')
+    parser_sanger_pcrs.add_argument('--mm_x', type=float, default=1.1, help='Master mix multiplier')
+    
+    # pcrs(): Column names
+    parser_sanger_pcrs.add_argument('--gDNA_id_col', default='ID', help='gDNA ID column name')
+    parser_sanger_pcrs.add_argument('--pcr1_id_col', default='PCR1 ID', help='PCR1 ID column name')
+    parser_sanger_pcrs.add_argument('--pcr1_fwd_col', default='PCR1 FWD', help='PCR1 FWD column name')
+    parser_sanger_pcrs.add_argument('--pcr1_rev_col', default='PCR1 REV', help='PCR1 REV column name')
+   
+
+    # pcrs(): Stock concentrations
+    parser_sanger_pcrs.add_argument('--Q5_mm_x_stock', type=float, default=5, help='Q5 reaction master mix stock (X)')
+    parser_sanger_pcrs.add_argument('--dNTP_mM_stock', type=float, default=10, help='dNTP stock concentration (mM)')
+    parser_sanger_pcrs.add_argument('--fwd_uM_stock', type=float, default=10, help='Forward primer stock concentration (uM)')
+    parser_sanger_pcrs.add_argument('--rev_uM_stock', type=float, default=10, help='Reverse primer stock concentration (uM)')
+    parser_sanger_pcrs.add_argument('--Q5_U_uL_stock', type=float, default=2, help='Q5 Polymerase stock (U/uL)')
+
+    # pcrs(): Desired concentrations
+    parser_sanger_pcrs.add_argument('--Q5_mm_x_desired', type=float, default=1, help='Q5 reaction master mix desired (X)')
+    parser_sanger_pcrs.add_argument('--dNTP_mM_desired', type=float, default=0.2, help='dNTP desired concentration (mM)')
+    parser_sanger_pcrs.add_argument('--fwd_uM_desired', type=float, default=0.5, help='Forward primer desired concentration (uM)')
+    parser_sanger_pcrs.add_argument('--rev_uM_desired', type=float, default=0.5, help='Reverse primer desired concentration (uM)')
+    parser_sanger_pcrs.add_argument('--Q5_U_uL_desired', type=float, default=0.02, help='Q5 Polymerase desired amount (U/uL)')
+
+    parser_sanger_pcrs.set_defaults(func=sanger.pcrs)
+    
     '''
     edms.bio.clone
     - sgRNAs(): design GG cloning oligonucleotides for cutting and base editing sgRNAs
