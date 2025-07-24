@@ -54,7 +54,7 @@ edms -h # or edms <TAB>
     conda env create -f edms.yml # When conda asks you to proceed, type "y"
     conda activate edms
     pip install -e . # Include the "."
-    bash autocomplete.sh
+    bash autocomplete.sh # Optional: follow CLI instructions
     conda deactivate
     ```
 5. (Optional) Install PrimeDesign by downloading Docker: https://www.docker.com/
@@ -75,7 +75,6 @@ edms -h # or edms <TAB>
     git clone https://github.com/marczepeda/edms.git
     cd edms
     pip install -e . # Include the "."
-    bash autocomplete.sh
     conda deactivate
     ```
 
