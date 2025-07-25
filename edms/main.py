@@ -1298,20 +1298,27 @@ def main():
     - PilotScreen(): Create pilot screen for EDMS
     - epegRNA_linkers(): Generate epegRNA linkers between PBS and 3' hairpin motif & finish annotations
     - merge(): rejoins epeg/ngRNAs & creates ngRNA_groups
+
+    WIP:
+    - RTT_designer(): design all possible RTT for given spacer & PBS (WT, single insertions, & single deletions)
+    - pegRNAs_tester(): confirm that pegRNAs should create the predicted edit
     '''
     parser_pe = subparsers.add_parser("pe", help="Prime Editing")
     subparsers_pe = parser_pe.add_subparsers()
 
-    # PrimeDesigner():
     parser_pe_PrimeDesigner = subparsers_pe.add_parser("PrimeDesigner", help="Execute PrimeDesign saturation mutagenesis for EDMS using Docker (NEED TO BE RUNNING DESKTOP APP)")
+    parser_pe_PilotScreen = subparsers_pe.add_parser("PilotScreen", help="Determine pilot screen for EDMS")
+    parser_pe_epegRNA_linkers = subparsers_pe.add_parser("epegRNA_linkers", help="Generate epegRNA linkers between PBS and 3' hairpin motif")
+    parser_pe_merge = subparsers_pe.add_parser("merge", help="rejoins epeg/ngRNAs & creates ngRNA groups")
+    parser_pe_RTT_designer = subparsers_pe.add_parser("RTT_designer", help="Design all possible RTT for given spacer & PBS (WT, single insertions, & single deletions)")
+    parser_pe_pegRNAs_tester = subparsers_pe.add_parser("pegRNAs_tester", help="Confirm that pegRNAs should create the predicted edit")
     
-    # Required parameters
+    # PrimeDesigner():
     parser_pe_PrimeDesigner.add_argument("--name", type=str, dest='target_name',help="Name of the target", required=True)
     parser_pe_PrimeDesigner.add_argument("--flank5", type=str, dest='flank5_sequence', help="5' flank sequence (in-frame, length divisible by 3)", required=True)
     parser_pe_PrimeDesigner.add_argument("--target", type=str, dest='target_sequence', help="Target sequence (in-frame, length divisible by 3)", required=True)
     parser_pe_PrimeDesigner.add_argument("--flank3", type=str, dest='flank3_sequence', help="3' flank sequence (in-frame, length divisible by 3)", required=True)
 
-    # Optional parameters
     parser_pe_PrimeDesigner.add_argument("--pbs_lengths", type=int, dest='pbs_length_pooled_ls', nargs="+", default=[11,13,15],
                         help="List of PBS lengths (Default: 11,13,15)")
     parser_pe_PrimeDesigner.add_argument("--no_silent_mutation", dest="silent_mutation", action="store_false",
@@ -1326,22 +1333,14 @@ def main():
                         help="Index of 1st amino acid in target sequence (Default: 1)")
 
     # Pilot_Screen():
-    parser_pe_PilotScreen = subparsers_pe.add_parser("PilotScreen", help="Determine pilot screen for EDMS")
-    
-    # Required parameters
     parser_pe_PilotScreen.add_argument("--pegRNAs", type=str, dest='pegRNAs_dir',help="Directory with pegRNAs from PrimeDesigner() output", required=True)
     parser_pe_PilotScreen.add_argument("--mutations", type=str, dest='mutations_pt', help="Path to mutations file (COSMIC or ClinVar)", required=True)
     
-    # Optional parameters
     parser_pe_PilotScreen.add_argument("--database", type=str, choices=['COSMIC', 'ClinVar'], default='COSMIC', help="Database to use for priority mutations (Default: 'COSMIC')")
 
     # epegRNA_linkers():
-    parser_pe_epegRNA_linkers = subparsers_pe.add_parser("epegRNA_linkers", help="Generate epegRNA linkers between PBS and 3' hairpin motif")
-    
-    # Required input file
     parser_pe_epegRNA_linkers.add_argument('--pegRNAs', help='Path to pegRNAs file',required=True)
 
-    # Optional parameters
     parser_pe_epegRNA_linkers.add_argument('--epegRNA_motif_sequence', default='CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA', help='epegRNA motif sequence (Default: tevopreQ1)')
     parser_pe_epegRNA_linkers.add_argument('--ckpt_dir', type=str, help='Checkpoint directory path (Default: ../epegRNAs/ckpt)', default='../epegRNAs/ckpt')
     parser_pe_epegRNA_linkers.add_argument('--ckpt_file', help='Checkpoint file name (Default: YYMMDD_HHMMSS_epegRNA_linkers.csv)', default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_epegRNA_linkers.csv')
@@ -1350,24 +1349,38 @@ def main():
     parser_pe_epegRNA_linkers.add_argument("--out_file", type=str, help="Name of the output file (Default: epegRNAs.csv)", default='epegRNAs.csv')
 
     # MergePrimeDesignOutput():
-    parser_pe_merge = subparsers_pe.add_parser("merge", help="rejoins epeg/ngRNAs & creates ngRNA groups")
-    
-    # Required parameters
     parser_pe_merge.add_argument("--epegRNAs", type=str, help="Directory or file with epegRNAs", required=True)
     parser_pe_merge.add_argument("--ngRNAs", type=str, help="Directory or file with ngRNAs", required=True)
     
-    # Optional parameters
     parser_pe_merge.add_argument("--ngRNAs_groups", type=str, dest='ngRNAs_groups_max', help="Maximum # of ngRNAs per epegRNA (Default: 3)", default=3)
     parser_pe_merge.add_argument("--epegRNA_suffix", type=str, help="Suffix for epegRNAs columns (Default: _epegRNA)", default='_epegRNA')
     parser_pe_merge.add_argument("--ngRNA_suffix", type=str, help="Suffix for ngRNAs columns (Default: _ngRNA)", default='_ngRNA')
     parser_pe_merge.add_argument("--out_dir", type=str, dest='dir', help="Output directory (Default: ../epeg_ngRNAs)", default='../epeg_ngRNAs')
     parser_pe_merge.add_argument("--out_file", type=str, dest='file', help="Name of the output file (Default: epeg_ngRNAs.csv)", default='epeg_ngRNAs.csv')
 
+    # RTT_designer():
+    parser_pe_RTT_designer.add_argument("--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
+    parser_pe_RTT_designer.add_argument("--in_file", type=str, help="Path to PrimeDesign input file", required=True)
+    
+    parser_pe_RTT_designer.add_argument("--aa_index", type=int, default=1, help="Index of 1st amino acid in target sequence (Default: 1)")
+    parser_pe_RTT_designer.add_argument("--RTT_length", type=int, default=39, help="Length of RTT (Default: 39)")
+    parser_pe_RTT_designer.add_argument("--out_dir", type=str, help="Output directory (Default: ../RTT_Designer)", default='../RTT_Designer')
+    parser_pe_RTT_designer.add_argument("--out_file", type=str, help="Name of the output file (Default: pegRNAs.csv)", default='pegRNAs.csv')
+
+    # pegRNAs_tester():
+    parser_pe_pegRNAs_tester.add_argument("--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
+    parser_pe_pegRNAs_tester.add_argument("--in_file", type=str, help="Path to PrimeDesign input file", required=True)
+    parser_pe_pegRNAs_tester.add_argument("--aa_index", type=int, default=1, help="Index of 1st amino acid in target sequence (Default: 1)")
+    parser_pe_pegRNAs_tester.add_argument("--out_dir", type=str, help="Output directory (Default: ../pegRNAs_tester)", default='../pegRNAs_tester')
+    parser_pe_pegRNAs_tester.add_argument("--out_file", type=str, help="Name of the output file (Default: pegRNAs.csv)", default='pegRNAs.csv')
+
     # Set defaults
     parser_pe_PrimeDesigner.set_defaults(func=pe.PrimeDesigner)
     parser_pe_PilotScreen.set_defaults(func=pe.PilotScreen)
     parser_pe_epegRNA_linkers.set_defaults(func=pe.epegRNA_linkers)
     parser_pe_merge.set_defaults(func=pe.merge)
+    parser_pe_RTT_designer.set_defaults(func=pe.RTT_designer)
+    parser_pe_pegRNAs_tester.set_defaults(func=pe.pegRNAs_tester)
 
     # Enable autocomplete
     argcomplete.autocomplete(parser)

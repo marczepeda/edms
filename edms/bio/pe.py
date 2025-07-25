@@ -571,6 +571,7 @@ def found_list_in_order(main_ls: list, sub_ls: list):
             
             for sub_item in sub_ls: # Iterate through sub_ls
                 try:
+                    print(f'Found {item} in main_ls at index {m}, checking {sub_item} in sub_ls at index {s}...')
                     if sub_item == main_ls[m+s]: # Check sub_ls and main_ls item match
                         s+=1 # Increment s to check next item in main_ls 
                     else: # If item does not match sub_ls, break
@@ -674,10 +675,7 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: str, aa_index: int=1, rtt
             # Obtain reverse complement WT RTT in-frame from + strand
             rc_rtt_wt = Seq.reverse_complement(rtt_wt) # reverse complement of rtt (+ strand)
             rc_rtt_codon_frames = get_codon_frames(rc_rtt_wt) # codons
-            print(f"Codons: {codons}")
-            print(f"Extended Codons: {extended_codons}")
             for i,rc_rtt_codon_frame in enumerate(rc_rtt_codon_frames): # Search for in-frame nucleotide sequence
-                print(f"rc_rtt_codon_frame: {rc_rtt_codon_frame}")
                 if found_list_in_order(codons,rc_rtt_codon_frame): # Codon frame from reverse complement of rtt matches codons of in-frame nucleotide sequence
                     rc_rtt_wt_inframe_nuc_codons_flank5 = rc_rtt_wt[:i] # Save codon frame flank 5'
                     rc_rtt_wt_inframe_nuc_codons = rc_rtt_codon_frame # Save codon frame
@@ -695,7 +693,7 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: str, aa_index: int=1, rtt
                     rc_rtt_wt_inframe_prot = Seq.translate(rc_rtt_wt_inframe_nuc) # Translate to in-frame protein sequence
                     rc_rtt_wt_inframe_prot_indexes = extended_codons_aa_indexes[extended_codons_prot.find(rc_rtt_wt_inframe_prot):extended_codons_prot.find(rc_rtt_wt_inframe_prot)+len(rc_rtt_wt_inframe_prot)] # Obtain correponding aa indexes
                     print('Used extended codons')
-                    break
+                    
             
             print(f'Strand: {shared_pegRNAs_lib.iloc[j]["Strand"]}')
             print(f'Nucleotides: {rc_rtt_wt}')
@@ -812,10 +810,7 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: str, aa_index: int=1, rtt
             
             # Obtain WT RTT in-frame from + strand
             rtt_codon_frames = get_codon_frames(rtt_wt) # codons
-            print(f"Codons: {codons}")
-            print(f"Extended Codons: {extended_codons}")
             for i,rtt_codon_frame in enumerate(rtt_codon_frames): # Search for in-frame nucleotide sequence
-                print(f"rtt_codon_frame: {rtt_codon_frame}")
                 if found_list_in_order(codons,rtt_codon_frame): # Codon frame from rtt matches codons of in-frame nucleotide sequence
                     rtt_wt_inframe_nuc_codons_flank5 = rtt_wt[:i] # Save codon frame flank 5'
                     rtt_wt_inframe_nuc_codons = rtt_codon_frame # Save codon frame
@@ -833,7 +828,7 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: str, aa_index: int=1, rtt
                     rtt_wt_inframe_prot = Seq.translate(rtt_wt_inframe_nuc) # Translate to in-frame protein sequence
                     rtt_wt_inframe_prot_indexes = extended_codons_aa_indexes[extended_codons_prot.find(rtt_wt_inframe_prot):extended_codons_prot.find(rtt_wt_inframe_prot)+len(rtt_wt_inframe_prot)] # Obtain correponding aa indexes
                     print('Used extended codons')
-                    break
+                    
             
             print(f'Strand: {shared_pegRNAs_lib.iloc[j]["Strand"]}')
             print(f'Nucleotides: {rtt_wt}')
@@ -1088,11 +1083,12 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame | str, in_file: str, aa_index: int=1, o
             
             # Obtain reverse complement PBS in-frame from + strand
             rc_pbs = Seq.reverse_complement(Seq(pegRNAs.iloc[j]['PBS_sequence'])) # reverse complement of pbs (+ strand)
-            print(f'RC_PBS: {pbs}')
+            print(f'RC_PBS: {rc_pbs}')
             print(f"codons: {codons}")
             print(f"extended_codons: {extended_codons}")
             rc_pbs_codon_frames = get_codon_frames(rc_pbs) # codons
             for i,rc_pbs_codon_frame in enumerate(rc_pbs_codon_frames): # Search for in-frame nucleotide sequence
+                print(f'RC_PBS Codon Frame: {rc_pbs_codon_frame}')
                 if found_list_in_order(codons,rc_pbs_codon_frame): # Codon frame from reverse complement of pbs matches codons of in-frame nucleotide sequence
                     rc_pbs_inframe_nuc_codons_flank5 = rc_pbs[:i] # Save codon frame flank 5'
                     rc_pbs_inframe_nuc_codons = rc_pbs_codon_frame # Save codon frame
@@ -1110,6 +1106,7 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame | str, in_file: str, aa_index: int=1, o
                     rc_pbs_inframe_prot = Seq.translate(rc_pbs_inframe_nuc) # Translate to in-frame protein sequence
                     rc_pbs_inframe_prot_indexes = extended_codons_aa_indexes[extended_codons_prot.find(rc_pbs_inframe_prot):extended_codons_prot.find(rc_pbs_inframe_prot)+len(rc_pbs_inframe_prot)] # Obtain correponding aa indexes
                     print('Used extended codons')
+                    
 
             print(f'Strand: {pegRNAs.iloc[j]["Strand"]}')
             print(f'Annotation: {pegRNAs.iloc[j]["Annotation"]}')
@@ -1157,6 +1154,7 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame | str, in_file: str, aa_index: int=1, o
                     rc_rtt_wt_inframe_prot = Seq.translate(rc_rtt_wt_inframe_nuc) # Translate to in-frame protein sequence
                     rc_rtt_wt_inframe_prot_indexes = extended_codons_aa_indexes[extended_codons_prot.find(rc_rtt_wt_inframe_prot):extended_codons_prot.find(rc_rtt_wt_inframe_prot)+len(rc_rtt_wt_inframe_prot)] # Obtain correponding aa indexes
                     print('Used extended codons')
+                    
             
             print(f'RTT WT (RC) Nucleotides: {rc_rtt_wt}')
             print(f'PBS Flank 3\' + RTT WT (RC) Nucleotides: {rc_pbs_inframe_flank3_rtt_wt}')
@@ -1228,6 +1226,7 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame | str, in_file: str, aa_index: int=1, o
                     pbs_inframe_prot = Seq.translate(pbs_inframe_nuc) # Translate to in-frame protein sequence
                     pbs_inframe_prot_indexes = extended_codons_aa_indexes[extended_codons_prot.find(pbs_inframe_prot):extended_codons_prot.find(pbs_inframe_prot)+len(pbs_inframe_prot)] # Obtain correponding aa indexes
                     print('Used extended codons')
+                    
             
             print(f'Strand: {pegRNAs.iloc[j]["Strand"]}')
             print(f'Annotation: {pegRNAs.iloc[j]["Annotation"]}')
@@ -1279,7 +1278,8 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame | str, in_file: str, aa_index: int=1, o
                     rtt_wt_inframe_nuc = Seq('').join(rtt_wt_pbs_inframe_flank5_codon_frame) # Join codon frame to make in-frame nucleotide sequence
                     rtt_wt_inframe_prot = Seq.translate(rtt_wt_inframe_nuc) # Translate to in-frame protein sequence
                     rtt_wt_inframe_prot_indexes = extended_codons_aa_indexes[extended_codons_prot.find(rtt_wt_inframe_prot):extended_codons_prot.find(rtt_wt_inframe_prot)+len(rtt_wt_inframe_prot)] # Obtain correponding aa indexes
-                    print('Used extended codons')         
+                    print('Used extended codons')
+                           
             
             print(f'RTT WT Nucleotides: {rtt_wt}')
             print(f'RTT WT + PBS Flank 5\' Nucleotides: {rtt_wt_pbs_inframe_flank5}')
