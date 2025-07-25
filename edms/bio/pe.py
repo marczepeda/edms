@@ -41,6 +41,7 @@ import pandas as pd
 import numpy as np
 import os
 import re
+import datetime
 from typing import Literal
 from Bio.Seq import Seq
 from Bio.Align import PairwiseAligner
@@ -50,6 +51,7 @@ from ..gen import tidy as t
 from ..gen import plot as p
 from ..dat import cosmic as co 
 from ..dat import cvar
+from ..utils import memory_timer
 
 # Biological Dictionaries
 ''' dna_aa_codon_table: DNA to AA codon table'''
@@ -551,37 +553,66 @@ def get_codon_frames(sequence: str):
     ''' 
     return [get_codons(sequence,frame) for frame in range(3)]
 
-def is_sublist_in_order(main_list, sub_list):
+def found_list_in_order(main_ls: list, sub_ls: list):
     ''' 
-    is_sublist_in_order(): returns if each element in the sub list appears in the correct order in the main list
+    found_list_in_order(): returns try if sub_ls is found in main_ls in order, otherwise returns False
     
     Parameters:
-    main_list: search for it here
-    sub_list: find this list
+    main_ls (list): search for it here
+    sub_ls (list): find this list
 
     Dependencies:
     '''
-    it = iter(main_list) # Initialize an iterator for the sub_list
-    return all(item in it for item in sub_list) # Check if each element in sub_list appears in the correct order in main_list
+    found=False # Initialize found variable
+    for m,item in enumerate(main_ls): # Iterate through main_ls
+        
+        s=0 # Start index for sub_ls
+        if item == sub_ls[0]: # If item matches sub_ls
+            
+            for sub_item in sub_ls: # Iterate through sub_ls
+                try:
+                    print(f'Found {item} in main_ls at index {m}, checking {sub_item} in sub_ls at index {s}...')
+                    if sub_item == main_ls[m+s]: # Check sub_ls and main_ls item match
+                        s+=1 # Increment s to check next item in main_ls 
+                    else: # If item does not match sub_ls, break
+                        break
+                    
+                    if s+1 == len(sub_ls): # If last item in sub_ls; found True
+                        found=True
 
-def RTT_designer(pegRNAs: pd.DataFrame | str, file: str, aa_index: int=1, rtt_length: int=39):
+                except IndexError: # End of main_ls reached
+                    return False
+            
+        if found==True: # Found all items in order
+            return True 
+    
+    return False # Not found
+
+def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: str, aa_index: int=1, rtt_length: int=39, out_dir: str=None, out_file: str=None, return_df: bool=True):
     ''' 
     RTT_designer(): design all possible RTT for given spacer & PBS (WT, single insertions, & single deletions)
     
     Parameters:
     pegRNAs (dataframe | str): pegRNAs DataFrame (or file path)
-    file (str): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)
+    in_file (str): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)
     aa_index (int, optional): 1st amino acid in target sequence index (Default: start codon = 1)
     RTT_length (int, optional): Reverse transcriptase template length (bp)
+    out_dir (str, optional): output directory
+    out_file (str, optional): output filename
+    return_df (bool, optional): return dataframe (Default: True)
 
-    Dependencies: io, pandas, Bio.Seq.Seq, shared_sequences(), get_codons(), get_codon_frames(), is_sublist_in_order(), & aa_dna_codon_table
+    Dependencies: io, pandas, Bio.Seq.Seq, shared_sequences(), get_codons(), get_codon_frames(), found_list_in_order(), & aa_dna_codon_table
     '''
+    # Initialize timer; memory reporting
+    memory_timer(reset=True)
+    memories = []
+
     # Get pegRNAs DataFrame from file path if needed
     if type(pegRNAs)==str:
         pegRNAs = io.get(pt=pegRNAs)
 
     # Get reference sequence & codons (+ reverse complement)
-    target_sequence = io.get(file).iloc[0]['target_sequence']
+    target_sequence = io.get(in_file).iloc[0]['target_sequence']
     seq = Seq(target_sequence.split('(')[1].split(')')[0]) # Break apart target sequences
     flank5 = Seq(target_sequence.split('(')[0])
     flank3 = Seq(target_sequence.split(')')[1])
@@ -645,7 +676,7 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, file: str, aa_index: int=1, rtt_le
             rc_rtt_wt = Seq.reverse_complement(rtt_wt) # reverse complement of rtt (+ strand)
             rc_rtt_codon_frames = get_codon_frames(rc_rtt_wt) # codons
             for i,rc_rtt_codon_frame in enumerate(rc_rtt_codon_frames): # Search for in-frame nucleotide sequence
-                if is_sublist_in_order(codons,rc_rtt_codon_frame): # Codon frame from reverse complement of rtt matches codons of in-frame nucleotide sequence
+                if found_list_in_order(codons,rc_rtt_codon_frame): # Codon frame from reverse complement of rtt matches codons of in-frame nucleotide sequence
                     rc_rtt_wt_inframe_nuc_codons_flank5 = rc_rtt_wt[:i] # Save codon frame flank 5'
                     rc_rtt_wt_inframe_nuc_codons = rc_rtt_codon_frame # Save codon frame
                     rc_rtt_wt_inframe_nuc_codons_flank3 = rc_rtt_wt[i+3*len(rc_rtt_codon_frame):] # Save codon frame flank 3'
@@ -654,7 +685,7 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, file: str, aa_index: int=1, rtt_le
                     rc_rtt_wt_inframe_prot_indexes = aa_indexes[seq_prot.find(rc_rtt_wt_inframe_prot):seq_prot.find(rc_rtt_wt_inframe_prot)+len(rc_rtt_wt_inframe_prot)] # Obtain correponding aa indexes
                     print('Used codons')
                     break
-                elif is_sublist_in_order(extended_codons,rc_rtt_codon_frame): # Codon frame from reverse complement of rtt matches extended codons of in-frame nucleotide sequence
+                elif found_list_in_order(extended_codons,rc_rtt_codon_frame): # Codon frame from reverse complement of rtt matches extended codons of in-frame nucleotide sequence
                     rc_rtt_wt_inframe_nuc_codons_flank5 = rc_rtt_wt[:i] # Save codon frame flank 5'
                     rc_rtt_wt_inframe_nuc_codons = rc_rtt_codon_frame # Save codon frame
                     rc_rtt_wt_inframe_nuc_codons_flank3 = rc_rtt_wt[i+3*len(rc_rtt_codon_frame):] # Save codon frame flank 3'
@@ -662,7 +693,7 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, file: str, aa_index: int=1, rtt_le
                     rc_rtt_wt_inframe_prot = Seq.translate(rc_rtt_wt_inframe_nuc) # Translate to in-frame protein sequence
                     rc_rtt_wt_inframe_prot_indexes = extended_codons_aa_indexes[extended_codons_prot.find(rc_rtt_wt_inframe_prot):extended_codons_prot.find(rc_rtt_wt_inframe_prot)+len(rc_rtt_wt_inframe_prot)] # Obtain correponding aa indexes
                     print('Used extended codons')
-                    break
+                    
             
             print(f'Strand: {shared_pegRNAs_lib.iloc[j]["Strand"]}')
             print(f'Nucleotides: {rc_rtt_wt}')
@@ -780,7 +811,7 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, file: str, aa_index: int=1, rtt_le
             # Obtain WT RTT in-frame from + strand
             rtt_codon_frames = get_codon_frames(rtt_wt) # codons
             for i,rtt_codon_frame in enumerate(rtt_codon_frames): # Search for in-frame nucleotide sequence
-                if is_sublist_in_order(codons,rtt_codon_frame): # Codon frame from rtt matches codons of in-frame nucleotide sequence
+                if found_list_in_order(codons,rtt_codon_frame): # Codon frame from rtt matches codons of in-frame nucleotide sequence
                     rtt_wt_inframe_nuc_codons_flank5 = rtt_wt[:i] # Save codon frame flank 5'
                     rtt_wt_inframe_nuc_codons = rtt_codon_frame # Save codon frame
                     rtt_wt_inframe_nuc_codons_flank3 = rtt_wt[i+3*len(rtt_codon_frame):] # Save codon frame flank 3'
@@ -789,7 +820,7 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, file: str, aa_index: int=1, rtt_le
                     rtt_wt_inframe_prot_indexes = aa_indexes[seq_prot.find(rtt_wt_inframe_prot):seq_prot.find(rtt_wt_inframe_prot)+len(rtt_wt_inframe_prot)] # Obtain correponding aa indexes
                     print('Used codons')
                     break
-                elif is_sublist_in_order(extended_codons,rtt_codon_frame): # Codon frame from rtt matches extended codons of in-frame nucleotide sequence
+                elif found_list_in_order(extended_codons,rtt_codon_frame): # Codon frame from rtt matches extended codons of in-frame nucleotide sequence
                     rtt_wt_inframe_nuc_codons_flank5 = rtt_wt[:i] # Save codon frame flank 5'
                     rtt_wt_inframe_nuc_codons = rtt_codon_frame # Save codon frame
                     rtt_wt_inframe_nuc_codons_flank3 = rtt_wt[i+3*len(rtt_codon_frame):] # Save codon frame flank 3'
@@ -797,6 +828,7 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, file: str, aa_index: int=1, rtt_le
                     rtt_wt_inframe_prot = Seq.translate(rtt_wt_inframe_nuc) # Translate to in-frame protein sequence
                     rtt_wt_inframe_prot_indexes = extended_codons_aa_indexes[extended_codons_prot.find(rtt_wt_inframe_prot):extended_codons_prot.find(rtt_wt_inframe_prot)+len(rtt_wt_inframe_prot)] # Obtain correponding aa indexes
                     print('Used extended codons')
+                    
             
             print(f'Strand: {shared_pegRNAs_lib.iloc[j]["Strand"]}')
             print(f'Nucleotides: {rtt_wt}')
@@ -887,16 +919,25 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, file: str, aa_index: int=1, rtt_le
             return
 
     # Combine wildtype, substitution, insertion, deletion libraries
-    return pd.concat([pegRNAs,wildtypes,insertions,deletions]).reset_index(drop=True)
+    pegRNAs = pd.concat([pegRNAs,wildtypes,insertions,deletions]).reset_index(drop=True)   
 
-def compare_RTTs(rtt_prot,rtt_prot_indexes: list, rtt_wt_prot, rtt_wt_prot_indexes: list,annotation: str,strand: str):
+    # Save & Return
+    memories.append(memory_timer(task=f"RTT_designer()"))
+    if out_dir is not None and out_file is not None:
+        io.save(dir=os.path.join(out_dir,f'.RTT_designer'),
+                file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
+                obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+        io.save(dir=out_dir,file=out_file,obj=pegRNAs)
+    if return_df: return pegRNAs
+
+def compare_RTTs(rtt_prot: Seq, rtt_prot_indexes: list, rtt_wt_prot: Seq, rtt_wt_prot_indexes: list, annotation: str, strand: str):
     ''' 
     compare_RTTs(): compares RTT outcome to WT RTT outcome and returns observed it
     
     Parameters:
-    rtt_prot: RTT outcome, which is AA sequence
+    rtt_prot (Seq): RTT outcome, which is AA sequence
     rtt_prot_indexes (list): RTT outcome indexes, which is AA sequence indexes
-    rtt_wt_prot: RTT WT outcome, which is WT AA sequence
+    rtt_wt_prot (Seq): RTT WT outcome, which is WT AA sequence
     rtt_wt_prot_indexes (list): RTT WT outcome indexes, which is WT AA sequence indexes
     annotation (str): PrimeDesign output, insertion, deletion, or wildtype
     strand (str): Prime Design output (i.e., "+" or "-")
@@ -956,18 +997,20 @@ def compare_RTTs(rtt_prot,rtt_prot_indexes: list, rtt_wt_prot, rtt_wt_prot_index
         edit = f'{rtt_wt_prot[i_diff]}{rtt_prot_indexes[i_diff]}{rtt_prot[i_diff]}'
         print(f'Substitution Edit: {edit}\n')
         return edit
-        
 
-def pegRNAs_tester(pegRNAs: pd.DataFrame | str, file: str, aa_index: int=1):
+def pegRNAs_tester(pegRNAs: pd.DataFrame | str, in_file: str, aa_index: int=1, out_dir: str=None, out_file: str=None, return_df: bool=False):
     ''' 
     pegRNAs_tester(): confirm that pegRNAs should create the predicted edit
     
     Parameters:
     pegRNAs (dataframe | str): pegRNAs DataFrame (or file path)
-    file (str): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)
+    in_file (str): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)
     aa_index (int, optional): 1st amino acid in target sequence index (Optional, Default: start codon = 1)
+    out_dir (str, optional): output directory
+    out_file (str, optional): output filename
+    return_df (bool, optional): return dataframe (Default: True)
     
-    Dependencies: Bio.Seq.Seq, numpy, pandas, is_sublist_in_order(), get_codons(), get_codon_frames(), & compare_RTTs()
+    Dependencies: Bio.Seq.Seq, numpy, pandas, is_sublist_consecutive(), get_codons(), get_codon_frames(), & compare_RTTs()
     
     Common errors for calling edits...
     1. deletions:
@@ -978,6 +1021,10 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame | str, file: str, aa_index: int=1):
         (2) inserted AA matches the next (+ strand) or previous (- strand) AA, so compare_RTTs() shifts mutation by 1 AA
         (3) single insertion of final AA in RTT, which matches next AA and returns wildtype sequence
     '''
+    # Initialize timer; memory reporting
+    memory_timer(reset=True)
+    memories = []
+
     # Get pegRNAs DataFrame from file path if needed
     if type(pegRNAs)==str:
         pegRNAs = io.get(pt=pegRNAs)
@@ -986,7 +1033,7 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame | str, file: str, aa_index: int=1):
     pegRNAs['Edit'] = pegRNAs['Edit'].replace('X', '*', regex=True)
 
     # Get reference sequence & codons (+ reverse complement)
-    target_sequence = io.get(file).iloc[0]['target_sequence']
+    target_sequence = io.get(in_file).iloc[0]['target_sequence']
     seq = Seq(target_sequence.split('(')[1].split(')')[0]) # Break apart target sequences
     flank5 = Seq(target_sequence.split('(')[0])
     flank3 = Seq(target_sequence.split(')')[1])
@@ -1020,7 +1067,7 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame | str, file: str, aa_index: int=1):
     edits_deletions_set = set(edits_deletions)
     
     print(f'Expected Edits in pegRNA library...\nSubstitutions: {edits_substitutions}\nInsertions: {edits_insertions}\nDeletions: {edits_deletions}')
-    print(f'All substitions present: {edits_substitutions_set.issubset(set(pegRNAs["Edit"]))}; missing: {edits_substitutions_set-set(pegRNAs["Edit"])}')
+    print(f'All substitutions present: {edits_substitutions_set.issubset(set(pegRNAs["Edit"]))}; missing: {edits_substitutions_set-set(pegRNAs["Edit"])}')
     print(f'All insertions present: {edits_insertions_set.issubset(set(pegRNAs["Edit"]))}; missing: {edits_insertions_set-set(pegRNAs["Edit"])}')
     print(f'All deletions present: {edits_deletions_set.issubset(set(pegRNAs["Edit"]))}; missing: {edits_deletions_set-set(pegRNAs["Edit"])}\n')
 
@@ -1036,9 +1083,13 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame | str, file: str, aa_index: int=1):
             
             # Obtain reverse complement PBS in-frame from + strand
             rc_pbs = Seq.reverse_complement(Seq(pegRNAs.iloc[j]['PBS_sequence'])) # reverse complement of pbs (+ strand)
+            print(f'RC_PBS: {rc_pbs}')
+            print(f"codons: {codons}")
+            print(f"extended_codons: {extended_codons}")
             rc_pbs_codon_frames = get_codon_frames(rc_pbs) # codons
             for i,rc_pbs_codon_frame in enumerate(rc_pbs_codon_frames): # Search for in-frame nucleotide sequence
-                if is_sublist_in_order(codons,rc_pbs_codon_frame): # Codon frame from reverse complement of pbs matches codons of in-frame nucleotide sequence
+                print(f'RC_PBS Codon Frame: {rc_pbs_codon_frame}')
+                if found_list_in_order(codons,rc_pbs_codon_frame): # Codon frame from reverse complement of pbs matches codons of in-frame nucleotide sequence
                     rc_pbs_inframe_nuc_codons_flank5 = rc_pbs[:i] # Save codon frame flank 5'
                     rc_pbs_inframe_nuc_codons = rc_pbs_codon_frame # Save codon frame
                     rc_pbs_inframe_nuc_codons_flank3 = rc_pbs[i+3*len(rc_pbs_codon_frame):] # Save codon frame flank 3'
@@ -1047,7 +1098,7 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame | str, file: str, aa_index: int=1):
                     rc_pbs_inframe_prot_indexes = aa_indexes[seq_prot.find(rc_pbs_inframe_prot):seq_prot.find(rc_pbs_inframe_prot)+len(rc_pbs_inframe_prot)] # Obtain correponding aa indexes
                     print('Used codons')
                     break
-                elif is_sublist_in_order(extended_codons,rc_pbs_codon_frame): # Codon frame from reverse complement of pbs matches extended codons of in-frame nucleotide sequence
+                elif found_list_in_order(extended_codons,rc_pbs_codon_frame): # Codon frame from reverse complement of pbs matches extended codons of in-frame nucleotide sequence
                     rc_pbs_inframe_nuc_codons_flank5 = rc_pbs[:i] # Save codon frame flank 5'
                     rc_pbs_inframe_nuc_codons = rc_pbs_codon_frame # Save codon frame
                     rc_pbs_inframe_nuc_codons_flank3 = rc_pbs[i+3*len(rc_pbs_codon_frame):] # Save codon frame flank 3'
@@ -1055,6 +1106,7 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame | str, file: str, aa_index: int=1):
                     rc_pbs_inframe_prot = Seq.translate(rc_pbs_inframe_nuc) # Translate to in-frame protein sequence
                     rc_pbs_inframe_prot_indexes = extended_codons_aa_indexes[extended_codons_prot.find(rc_pbs_inframe_prot):extended_codons_prot.find(rc_pbs_inframe_prot)+len(rc_pbs_inframe_prot)] # Obtain correponding aa indexes
                     print('Used extended codons')
+                    
 
             print(f'Strand: {pegRNAs.iloc[j]["Strand"]}')
             print(f'Annotation: {pegRNAs.iloc[j]["Annotation"]}')
@@ -1067,7 +1119,7 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame | str, file: str, aa_index: int=1):
             print(f'PBS Amino Acid #s In-Frame: {rc_pbs_inframe_prot_indexes}\n')
 
             # Obtain RTT amino sequence
-            rc_rtt = Seq.reverse_complement(Seq(pegRNAs.iloc[j]['RTT_sequence'])) # reverse complement of rtt (+ strand)
+            rc_rtt = Seq.reverse_complement(Seq(pegRNAs.iloc[j]['RTT_sequence'].upper())) # reverse complement of rtt (+ strand)
             rc_pbs_inframe_flank3_rtt = rc_pbs_inframe_nuc_codons_flank3+rc_rtt
             rc_pbs_inframe_flank3_rtt_codons = get_codons(rc_pbs_inframe_flank3_rtt)
             rc_pbs_inframe_flank3_rtt_prot = Seq.translate(Seq('').join(rc_pbs_inframe_flank3_rtt))
@@ -1085,7 +1137,7 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame | str, file: str, aa_index: int=1):
             rc_pbs_inframe_flank3_rtt_wt = rc_pbs_inframe_nuc_codons_flank3+rc_rtt_wt
             rc_pbs_inframe_flank3_rtt_wt_codon_frames = get_codon_frames(rc_pbs_inframe_flank3_rtt_wt) # codons
             for i,rc_pbs_inframe_flank3_rtt_wt_codon_frame in enumerate(rc_pbs_inframe_flank3_rtt_wt_codon_frames): # Search for in-frame nucleotide sequence
-                if is_sublist_in_order(codons,rc_pbs_inframe_flank3_rtt_wt_codon_frame): # Codon frame from reverse complement of rtt matches codons of in-frame nucleotide sequence
+                if found_list_in_order(codons,rc_pbs_inframe_flank3_rtt_wt_codon_frame): # Codon frame from reverse complement of rtt matches codons of in-frame nucleotide sequence
                     rc_rtt_wt_inframe_nuc_codons_flank5 = rc_rtt_wt[:i] # Save codon frame flank 5'
                     rc_rtt_wt_inframe_nuc_codons = rc_pbs_inframe_flank3_rtt_wt_codon_frame # Save codon frame
                     rc_rtt_wt_inframe_nuc_codons_flank3 = rc_rtt_wt[i+3*len(rc_pbs_inframe_flank3_rtt_wt_codon_frame):] # Save codon frame flank 3'
@@ -1094,7 +1146,7 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame | str, file: str, aa_index: int=1):
                     rc_rtt_wt_inframe_prot_indexes = aa_indexes[seq_prot.find(rc_rtt_wt_inframe_prot):seq_prot.find(rc_rtt_wt_inframe_prot)+len(rc_rtt_wt_inframe_prot)] # Obtain correponding aa indexes
                     print('Used codons')
                     break
-                elif is_sublist_in_order(extended_codons,rc_pbs_inframe_flank3_rtt_wt_codon_frame): # Codon frame from reverse complement of rtt matches extended codons of in-frame nucleotide sequence
+                elif found_list_in_order(extended_codons,rc_pbs_inframe_flank3_rtt_wt_codon_frame): # Codon frame from reverse complement of rtt matches extended codons of in-frame nucleotide sequence
                     rc_rtt_wt_inframe_nuc_codons_flank5 = rc_rtt_wt[:i] # Save codon frame flank 5'
                     rc_rtt_wt_inframe_nuc_codons = rc_pbs_inframe_flank3_rtt_wt_codon_frame # Save codon frame
                     rc_rtt_wt_inframe_nuc_codons_flank3 = rc_rtt_wt[i+3*len(rc_pbs_inframe_flank3_rtt_wt_codon_frame):] # Save codon frame flank 3'
@@ -1102,6 +1154,7 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame | str, file: str, aa_index: int=1):
                     rc_rtt_wt_inframe_prot = Seq.translate(rc_rtt_wt_inframe_nuc) # Translate to in-frame protein sequence
                     rc_rtt_wt_inframe_prot_indexes = extended_codons_aa_indexes[extended_codons_prot.find(rc_rtt_wt_inframe_prot):extended_codons_prot.find(rc_rtt_wt_inframe_prot)+len(rc_rtt_wt_inframe_prot)] # Obtain correponding aa indexes
                     print('Used extended codons')
+                    
             
             print(f'RTT WT (RC) Nucleotides: {rc_rtt_wt}')
             print(f'PBS Flank 3\' + RTT WT (RC) Nucleotides: {rc_pbs_inframe_flank3_rtt_wt}')
@@ -1150,9 +1203,13 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame | str, file: str, aa_index: int=1):
             
             # Obtain PBS in-frame from + strand
             pbs = Seq(pegRNAs.iloc[j]['PBS_sequence']) # pbs (+ strand)
+            print(f'PBS: {pbs}')
+            print(f"codons: {codons}")
+            print(f"extended_codons: {extended_codons}")
             pbs_codon_frames = get_codon_frames(pbs) # codons
             for i,pbs_codon_frame in enumerate(pbs_codon_frames): # Search for in-frame nucleotide sequence
-                if is_sublist_in_order(codons,pbs_codon_frame): # Codon frame from pbs matches codons of in-frame nucleotide sequence
+                print(f"pbs_codon_frame: {i}, {pbs_codon_frame}")
+                if found_list_in_order(codons,pbs_codon_frame): # Codon frame from pbs matches codons of in-frame nucleotide sequence
                     pbs_inframe_nuc_codons_flank5 = pbs[:i] # Save codon frame flank 5'
                     pbs_inframe_nuc_codons = pbs_codon_frame # Save codon frame
                     pbs_inframe_nuc_codons_flank3 = pbs[i+3*len(pbs_codon_frame):] # Save codon frame flank 3'
@@ -1161,7 +1218,7 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame | str, file: str, aa_index: int=1):
                     pbs_inframe_prot_indexes = aa_indexes[seq_prot.find(pbs_inframe_prot):seq_prot.find(pbs_inframe_prot)+len(pbs_inframe_prot)] # Obtain correponding aa indexes
                     print('Used codons')
                     break
-                elif is_sublist_in_order(extended_codons,pbs_codon_frame): # Codon frame from pbs matches extended codons of in-frame nucleotide sequence
+                elif found_list_in_order(extended_codons,pbs_codon_frame): # Codon frame from pbs matches extended codons of in-frame nucleotide sequence
                     pbs_inframe_nuc_codons_flank5 = pbs[:i] # Save codon frame flank 5'
                     pbs_inframe_nuc_codons = pbs_codon_frame # Save codon frame
                     pbs_inframe_nuc_codons_flank3 = pbs[i+3*len(pbs_codon_frame):] # Save codon frame flank 3'
@@ -1169,6 +1226,7 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame | str, file: str, aa_index: int=1):
                     pbs_inframe_prot = Seq.translate(pbs_inframe_nuc) # Translate to in-frame protein sequence
                     pbs_inframe_prot_indexes = extended_codons_aa_indexes[extended_codons_prot.find(pbs_inframe_prot):extended_codons_prot.find(pbs_inframe_prot)+len(pbs_inframe_prot)] # Obtain correponding aa indexes
                     print('Used extended codons')
+                    
             
             print(f'Strand: {pegRNAs.iloc[j]["Strand"]}')
             print(f'Annotation: {pegRNAs.iloc[j]["Annotation"]}')
@@ -1181,7 +1239,7 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame | str, file: str, aa_index: int=1):
             print(f'PBS Amino Acid #s In-Frame: {pbs_inframe_prot_indexes}\n')
 
             # Obtain RTT amino sequence
-            rtt = Seq(pegRNAs.iloc[j]['RTT_sequence']) # rtt (+ strand)
+            rtt = Seq(pegRNAs.iloc[j]['RTT_sequence'].upper()) # rtt (+ strand)
             rtt_pbs_inframe_flank5 = rtt+pbs_inframe_nuc_codons_flank5
             rtt_pbs_inframe_flank5_codons = get_codons(rtt_pbs_inframe_flank5,len(rtt_pbs_inframe_flank5)%3)
             rtt_pbs_inframe_flank5_prot = Seq.translate(Seq('').join(rtt_pbs_inframe_flank5_codons))
@@ -1199,7 +1257,12 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame | str, file: str, aa_index: int=1):
             rtt_wt_pbs_inframe_flank5 = rtt_wt+pbs_inframe_nuc_codons_flank5
             rtt_wt_pbs_inframe_flank5_codon_frames = get_codon_frames(rtt_wt_pbs_inframe_flank5) # codons
             for i,rtt_wt_pbs_inframe_flank5_codon_frame in enumerate(rtt_wt_pbs_inframe_flank5_codon_frames): # Search for in-frame nucleotide sequence
-                if is_sublist_in_order(codons,rtt_wt_pbs_inframe_flank5_codon_frame): # Codon frame from rtt matches codons of in-frame nucleotide sequence
+                '''print(f"rtt_wt_pbs_inframe_flank5_codon_frame: {i}, {rtt_wt_pbs_inframe_flank5_codon_frame}")
+                print(f"codons: {codons}")
+                print(is_sublist_consecutive(codons,rtt_wt_pbs_inframe_flank5_codon_frame))
+                print(f"extended_codons: {extended_codons}")
+                print(is_sublist_consecutive(extended_codons,rtt_wt_pbs_inframe_flank5_codon_frame))'''
+                if found_list_in_order(codons,rtt_wt_pbs_inframe_flank5_codon_frame): # Codon frame from rtt matches codons of in-frame nucleotide sequence
                     rtt_wt_inframe_nuc_codons_flank5 = rtt_wt[:i] # Save codon frame flank 5'
                     rtt_wt_inframe_nuc_codons = rtt_wt_pbs_inframe_flank5_codon_frame # Save codon frame
                     rtt_wt_inframe_nuc_codons_flank3 = rtt_wt[i+3*len(rtt_wt_pbs_inframe_flank5_codon_frame):] # Save codon frame flank 3'
@@ -1208,14 +1271,15 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame | str, file: str, aa_index: int=1):
                     rtt_wt_inframe_prot_indexes = aa_indexes[seq_prot.find(rtt_wt_inframe_prot):seq_prot.find(rtt_wt_inframe_prot)+len(rtt_wt_inframe_prot)] # Obtain correponding aa indexes
                     print('Used codons')
                     break
-                elif is_sublist_in_order(extended_codons,rtt_wt_pbs_inframe_flank5_codon_frame): # Codon frame from rtt matches extended codons of in-frame nucleotide sequence
+                elif found_list_in_order(extended_codons,rtt_wt_pbs_inframe_flank5_codon_frame): # Codon frame from rtt matches extended codons of in-frame nucleotide sequence
                     rtt_wt_inframe_nuc_codons_flank5 = rtt_wt[:i] # Save codon frame flank 5'
                     rtt_wt_inframe_nuc_codons = rtt_wt_pbs_inframe_flank5_codon_frame # Save codon frame
                     rtt_wt_inframe_nuc_codons_flank3 = rtt_wt[i+3*len(rtt_wt_pbs_inframe_flank5_codon_frame):] # Save codon frame flank 3'
                     rtt_wt_inframe_nuc = Seq('').join(rtt_wt_pbs_inframe_flank5_codon_frame) # Join codon frame to make in-frame nucleotide sequence
                     rtt_wt_inframe_prot = Seq.translate(rtt_wt_inframe_nuc) # Translate to in-frame protein sequence
                     rtt_wt_inframe_prot_indexes = extended_codons_aa_indexes[extended_codons_prot.find(rtt_wt_inframe_prot):extended_codons_prot.find(rtt_wt_inframe_prot)+len(rtt_wt_inframe_prot)] # Obtain correponding aa indexes
-                    print('Used extended codons')         
+                    print('Used extended codons')
+                           
             
             print(f'RTT WT Nucleotides: {rtt_wt}')
             print(f'RTT WT + PBS Flank 5\' Nucleotides: {rtt_wt_pbs_inframe_flank5}')
@@ -1262,13 +1326,24 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame | str, file: str, aa_index: int=1):
         else: 
             print('Error: Strand column can only have "+" and "-".')
             return
+        
+        if j%1000==0: # Report memory usage every 1000 iterations
+            memories.append(memory_timer(task=f"pegRNA_tester(): {j+1} out of {len(pegRNAs)}"))
     
     pegRNAs['Edit_check']=edits
     pegRNAs['Edit_matches']=edit_matches
     pegRNAs['AAs_before']=prot_befores
     pegRNAs['AAs_after']=prot_afters
     pegRNAs['Edit_matches_explain']=edit_matches_explain
-    return pegRNAs
+
+    # Save & Return
+    memories.append(memory_timer(task=f"pegRNA tester(): {len(pegRNAs)} out of {len(pegRNAs)}"))
+    if out_dir is not None and out_file is not None:
+        io.save(dir=os.path.join(out_dir,f'.pegRNA_tester'),
+                file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
+                obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+        io.save(dir=out_dir,file=out_file,obj=pegRNAs)
+    if return_df: return pegRNAs
 
 # Comparing pegRNA libraries
 def print_shared_sequences(dc: dict):
