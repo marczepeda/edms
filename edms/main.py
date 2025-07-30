@@ -826,7 +826,8 @@ def main():
     parser_ngs_pcrs.add_argument("--file", help="Output file name (.xlsx)", type=str, default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_NGS_plan.xlsx')
     parser_ngs_pcrs.add_argument("--cycles", help="Number of cycles for PCR1", type=str, default='30')
     parser_ngs_pcrs.add_argument("--ultra", help="Using NEB Ultra II reagents", action="store_true")
-    parser_ngs_pcrs.add_argument('--total_uL', type=int, default=20, help='Total reaction volume (uL)')
+    parser_ngs_pcrs.add_argument('--pcr1_total_uL', type=int, default=20, help='PCR1 Total reaction volume (uL)')
+    parser_ngs_pcrs.add_argument('--pcr2_total_uL', type=int, default=20, help='PCR2 Total reaction volume (uL)')
     parser_ngs_pcrs.add_argument('--mm_x', type=float, default=1.1, help='Master mix multiplier')
     
     # pcrs(): Column names
@@ -892,7 +893,6 @@ def main():
     parser_sanger_pcrs.add_argument('--pcr1_fwd_col', default='PCR1 FWD', help='PCR1 FWD column name')
     parser_sanger_pcrs.add_argument('--pcr1_rev_col', default='PCR1 REV', help='PCR1 REV column name')
    
-
     # pcrs(): Stock concentrations
     parser_sanger_pcrs.add_argument('--Q5_mm_x_stock', type=float, default=5, help='Q5 reaction master mix stock (X)')
     parser_sanger_pcrs.add_argument('--dNTP_mM_stock', type=float, default=10, help='dNTP stock concentration (mM)')

@@ -232,7 +232,7 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col='ID',
          pcr2_id_col='PCR2 ID', pcr2_fwd_col='PCR2 FWD', pcr2_rev_col='PCR2 REV',
          Q5_mm_x_stock=5,dNTP_mM_stock=10,fwd_uM_stock=10,rev_uM_stock=10,Q5_U_uL_stock=2,
          Q5_mm_x_desired=1,dNTP_mM_desired=0.2,fwd_uM_desired=0.5,rev_uM_desired=0.5,Q5_U_uL_desired=0.02,
-         total_uL=20,mm_x=1.1,cycles: int | str = None,ultra=False):
+         pcr1_total_uL=20,pcr2_total_uL=20,mm_x=1.1,cycles: int | str = None,ultra=False):
     '''
     pcrs(): generates NGS PCR plan automatically
     
@@ -258,7 +258,8 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col='ID',
     fwd_uM_desired (float, optional): [FWD Primer] desired in mM (Default: 0.5)
     rev_uM_desired (float, optional): [REV Primer] desired in mM (Default: 0.5)
     Q5_U_uL_desired (float, optional): [Q5 Polymerase] desired in U/uL (Default: 0.02)
-    total_uL (int, optional): total uL per reaction (Default: 20)
+    pcr1_total_uL (int, optional): total uL per reaction (Default: 20)
+    pcr2_total_uL (int, optional): total uL per reaction (Default: 20)
     mm_x (float, optional): master mix multiplier (Default: 1.1)
     cycles (int | str): Number of cycles for the PCR1 process (Default: None -> 30).
     ultra (bool, optional): use NEB Ultra II reagents (Default: False)
@@ -361,23 +362,23 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col='ID',
 
     if ultra:
         Q5_mm_x_stock = 2 # NEBNext Ultra II Q5 master mix stock
-        pcr1_mms = pcr_mm_ultra(primers=pcr1_primers_vcs,template='gDNA Extract',template_uL=total_uL-sum([Q5_mm_x_desired/Q5_mm_x_stock,fwd_uM_desired/fwd_uM_stock,rev_uM_desired/rev_uM_stock]*total_uL),
+        pcr1_mms = pcr_mm_ultra(primers=pcr1_primers_vcs,template='gDNA Extract',template_uL=pcr1_total_uL-sum([Q5_mm_x_desired/Q5_mm_x_stock,fwd_uM_desired/fwd_uM_stock,rev_uM_desired/rev_uM_stock]*pcr1_total_uL),
                                 Q5_mm_x_stock=Q5_mm_x_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
                                 Q5_mm_x_desired=Q5_mm_x_desired,fwd_uM_desired=fwd_uM_desired,rev_uM_desired=rev_uM_desired,
-                                total_uL=total_uL,mm_x=mm_x)
+                                total_uL=pcr1_total_uL,mm_x=mm_x)
         pcr2_mms = pcr_mm_ultra(primers=pcr2_primers_vcs,template='PCR1 Product',template_uL=1,
                                 Q5_mm_x_stock=Q5_mm_x_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
                                 Q5_mm_x_desired=Q5_mm_x_desired,fwd_uM_desired=fwd_uM_desired,rev_uM_desired=rev_uM_desired,
-                                total_uL=total_uL,mm_x=mm_x)
+                                total_uL=pcr2_total_uL,mm_x=mm_x)
     else:
         pcr1_mms = pcr_mm(primers=pcr1_primers_vcs,template='gDNA Extract',template_uL=5,
                           Q5_mm_x_stock=Q5_mm_x_stock,dNTP_mM_stock=dNTP_mM_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
                           Q5_U_uL_stock=Q5_U_uL_stock,Q5_mm_x_desired=Q5_mm_x_desired,dNTP_mM_desired=dNTP_mM_desired,fwd_uM_desired=fwd_uM_desired,
-                          rev_uM_desired=rev_uM_desired,Q5_U_uL_desired=Q5_U_uL_desired,total_uL=total_uL,mm_x=mm_x)
+                          rev_uM_desired=rev_uM_desired,Q5_U_uL_desired=Q5_U_uL_desired,total_uL=pcr1_total_uL,mm_x=mm_x)
         pcr2_mms = pcr_mm(primers=pcr2_primers_vcs,template='PCR1 Product',template_uL=1,
                           Q5_mm_x_stock=Q5_mm_x_stock,dNTP_mM_stock=dNTP_mM_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
                           Q5_U_uL_stock=Q5_U_uL_stock,Q5_mm_x_desired=Q5_mm_x_desired,dNTP_mM_desired=dNTP_mM_desired,fwd_uM_desired=fwd_uM_desired,
-                          rev_uM_desired=rev_uM_desired,Q5_U_uL_desired=Q5_U_uL_desired,total_uL=total_uL,mm_x=mm_x)
+                          rev_uM_desired=rev_uM_desired,Q5_U_uL_desired=Q5_U_uL_desired,total_uL=pcr2_total_uL,mm_x=mm_x)
 
     # Create thermocycler objects for PCR1 and PCR2
     pcr1_thermo = thermocycler(df=df, n=1, cycles=cycles, pcr_fwd_col=pcr1_fwd_col, pcr_rev_col=pcr1_rev_col)
