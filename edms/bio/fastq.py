@@ -1225,7 +1225,7 @@ def trim_filter(record,qall:int,qavg:int,qtrim:int,qmask:int,alls:int,avgs:int,t
         else: return None,None,None,None,alls,avgs+1,trims,masks # Avg threshold not met
     else: return None,None,None,None,alls+1,avgs,trims,masks # All threshold not met
 
-def get_fastqs(in_dir: str,qall:int=10,qavg:int=30,qtrim:int=0,qmask:int=0,save:bool=True, return_memories: bool=False, outdir: str=None):
+def get_fastqs(in_dir: str,qall:int=10,qavg:int=30,qtrim:int=0,qmask:int=0,save:bool=True, return_memories: bool=False, out_dir: str=None):
     ''' 
     get_fastqs(): get fastq files from directory and store records in dataframes in a dictionary
     
@@ -1303,8 +1303,8 @@ def get_fastqs(in_dir: str,qall:int=10,qavg:int=30,qtrim:int=0,qmask:int=0,save:
         memories.append(memory_timer(task=fastq_name))
 
     if save==True: 
-        if outdir is None: outdir = '.'
-        io.save(dir=os.path.join(outdir,'.genotyping'),file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_get_fastqs.csv',obj=out)
+        if out_dir is None: out_dir = '.'
+        io.save(dir=os.path.join(out_dir,'.genotyping'),file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_get_fastqs.csv',obj=out)
     
     if return_memories: return fastqs,memories
     else: return fastqs
@@ -1773,15 +1773,15 @@ def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=N
 
     # Quantify edit outcomes workflow
     memories.append(memory_timer(task='get_fastqs()'))
-    dc,memories1 = get_fastqs(in_dir=in_dir,outdir=out_dir,**get_fastqs_kwargs)
+    dc,memories1 = get_fastqs(in_dir=in_dir,out_dir=out_dir,**get_fastqs_kwargs)
     memories.extend(memories1)
 
     memories.append(memory_timer(task='region()'))
-    dc,memories1 = region(fastqs=dc,flank5=flank5,flank3=flank3,outdir=out_dir,**region_kwargs)
+    dc,memories1 = region(fastqs=dc,flank5=flank5,flank3=flank3,out_dir=out_dir,**region_kwargs)
     memories.extend(memories1)
 
     memories.append(memory_timer(task='genotype()'))
-    dc,memories1 = genotype(fastqs=dc,res=res,wt=wt,outdir=out_dir,**genotype_kwargs)
+    dc,memories1 = genotype(fastqs=dc,res=res,wt=wt,out_dir=out_dir,**genotype_kwargs)
     memories.extend(memories1)
 
     memories.append(memory_timer(task='outcomes()'))
