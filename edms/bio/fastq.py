@@ -1685,7 +1685,7 @@ def genotype(fastqs: dict, res: int, wt: str, save: bool=False, masks: bool=Fals
     if return_memories: return fastqs,memories
     else: return fastqs
 
-def outcomes(fastqs: dict, return_memories: bool=False):
+def outcomes(fastqs: dict, col: str='edit',return_memories: bool=False):
     ''' 
     outcomes(): returns edit count & fraction per sample (tidy format)
 
@@ -1701,10 +1701,10 @@ def outcomes(fastqs: dict, return_memories: bool=False):
 
     df = pd.DataFrame()
     for file,fastq in fastqs.items():
-        temp=pd.DataFrame({'sample':[file]*len(fastq['edit'].value_counts()),
-                           'edit':list(fastq['edit'].value_counts().keys()),
-                           'count':fastq['edit'].value_counts(),
-                           'fraction':fastq['edit'].value_counts()/len(fastq['edit'])})
+        temp=pd.DataFrame({'sample':[file]*len(fastq[col].value_counts()),
+                           col:list(fastq[col].value_counts().keys()),
+                           'count':fastq[col].value_counts(),
+                           'fraction':fastq[col].value_counts()/len(fastq[col])})
         df=pd.concat([df,temp]).reset_index(drop=True)
         memories.append(memory_timer(task=file))
 
