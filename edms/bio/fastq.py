@@ -1807,7 +1807,7 @@ def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=N
 
 def abundances(df: pd.DataFrame | str, desired_edits: list, sample_col: str='sample',
                edit_col: str='edit', count_col: str='count', fraction_col: str='fraction',
-               multiple: bool=True, return_memories: bool=False):
+               combinations: int=1, return_memories: bool=False):
     ''' 
     abundances(): quantify desired edits count & fraction per sample
 
@@ -1818,7 +1818,7 @@ def abundances(df: pd.DataFrame | str, desired_edits: list, sample_col: str='sam
     edit_col (str, optional): edit column name (Default: edit)
     count_col (str, optional): count column name (Default: count)
     fraction_col (str, optional): fraction column name (Default: fraction)
-    multiple (bool, optional): whether to search for desired edits within multiple edit outcomes (Default: True)
+    combinations (int, optional): maximum # of desired edit combinations to search for (Default: 1 => single edits)
     return_memories (bool, optional): return memories (Default: False)
 
     Dependencies: pandas
@@ -1833,8 +1833,23 @@ def abundances(df: pd.DataFrame | str, desired_edits: list, sample_col: str='sam
     # Split data to increase performance
     dc = t.split(df=df, key=sample_col)
     
+    # Search for multple edits
+    if combinations > 1:
+
+        desired_edits_combos = []
+
+        for r in range(1, combinations + 1):
+            for combo in combinations(desired_edits, r):
+
+                sorted_combo = sorted(combo, key=lambda x: float(''.join(filter(str.isdigit, x)))) # Sort each combination numerically
+                combo_str = ", ".join(sorted_combo) # Join as a string with ", "
+                desired_edits_combos.append(combo_str)
+
+        desired_edits = desired_edits_combos
+
     # Store desired edits abundances for each sample
     df_desired = pd.DataFrame(columns=df.columns) # Initialize empty DataFrame with same columns as df
+    
     for key,df_sample in dc.items(): # Iterate through samples
         for desired_edit in desired_edits: # Iterate through desired edits
         
@@ -1843,21 +1858,11 @@ def abundances(df: pd.DataFrame | str, desired_edits: list, sample_col: str='sam
             fraction_desired = []
 
             for i,(edit,count,fraction) in enumerate(t.zip_cols(df=df_sample,cols=[edit_col,count_col,fraction_col])):
-                
-                if ', ' in edit and multiple: # Search for desired edit within multiple edit outcomes
-                    edits = edit.split(', ')
-                    for edit in edits:
-                        if edit in desired_edit:
-                            i_desired.append(i)
-                            count_desired.append(count)
-                            fraction_desired.append(fraction)
-                            break
+                if edit == desired_edit: # Check if edit matches desired edit
 
-                else: # Search for desired within single edit outcome
-                    if edit in desired_edit:
-                        i_desired.append(i)
-                        count_desired.append(count)
-                        fraction_desired.append(fraction)
+                    i_desired.append(i)
+                    count_desired.append(count)
+                    fraction_desired.append(fraction)
 
             other_cols = [col for col in df_sample.columns if col not in [edit_col,count_col,fraction_col]]
             df_sample_desired = df_sample.iloc[0][other_cols].to_frame().T.reset_index(drop=True)

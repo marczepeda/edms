@@ -62,18 +62,16 @@ edms -h # or edms <TAB>
     docker pull pinellolab/primedesign # Docker desktop app needs to be open
     ```
 ### Update
-1. Enter the environment and delete edms:
+1. Enter the environment and uninstall edms:
     ```shell
-    cd ~
-    cd git
+    cd ~/git/edms
     conda activate edms
     pip uninstall edms # Enter 'Y' when prompted
-    rm -rf edms
+    
     ```
-2. Clone edms from github and install edms:
+2. Pull latest version from github and install edms:
     ```shell
-    git clone https://github.com/marczepeda/edms.git
-    cd edms
+    git pull orgin main
     pip install -e . # Include the "."
     conda deactivate
     ```

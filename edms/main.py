@@ -1217,7 +1217,7 @@ def main():
     parser_fastq_abundances.add_argument("--edit_col", default="edit", help="Column for edit identifier (Default: 'edit')")
     parser_fastq_abundances.add_argument("--count_col", default="count", help="Column for edit count (Default: 'count')")
     parser_fastq_abundances.add_argument("--fraction_col", default="fraction", help="Column for edit fraction (Default: 'fraction')")
-    parser_fastq_abundances.add_argument("--only_singles", action="store_false", dest="multiple", help="Only include reads with isolated desired edits (Default: False)",default=True)
+    parser_fastq_abundances.add_argument("--combinations", default=1, help="Maximum # of desired edit combinations to search for (Default: 1 => single edits)")
 
     # count_motif():
     parser_fastq_count_motif.add_argument("--fastq_dir", help="Path to directory containing FASTQ files", required=True)
