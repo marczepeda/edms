@@ -1342,8 +1342,7 @@ def main():
     - PilotScreen(): Create pilot screen for EDMS
     - epegRNA_linkers(): Generate epegRNA linkers between PBS and 3' hairpin motif & finish annotations
     - merge(): rejoins epeg/ngRNAs & creates ngRNA_groups
-
-    WIP:
+    - sensor_designer(): design pegRNA sensors
     - RTT_designer(): design all possible RTT for given spacer & PBS (WT, single insertions, & single deletions)
     - pegRNAs_tester(): confirm that pegRNAs should create the predicted edit
     '''
@@ -1354,9 +1353,10 @@ def main():
     parser_pe_PilotScreen = subparsers_pe.add_parser("PilotScreen", help="Determine pilot screen for EDMS")
     parser_pe_epegRNA_linkers = subparsers_pe.add_parser("epegRNA_linkers", help="Generate epegRNA linkers between PBS and 3' hairpin motif")
     parser_pe_merge = subparsers_pe.add_parser("merge", help="rejoins epeg/ngRNAs & creates ngRNA groups")
+    parser_pe_sensor_designer = subparsers_pe.add_parser("sensor_designer", help='Design pegRNA sensors')
     parser_pe_RTT_designer = subparsers_pe.add_parser("RTT_designer", help="Design all possible RTT for given spacer & PBS (WT, single insertions, & single deletions)")
     parser_pe_pegRNAs_tester = subparsers_pe.add_parser("pegRNAs_tester", help="Confirm that pegRNAs should create the predicted edit")
-    
+
     # PrimeDesigner():
     parser_pe_PrimeDesigner.add_argument("--name", type=str, dest='target_name',help="Name of the target", required=True)
     parser_pe_PrimeDesigner.add_argument("--flank5", type=str, dest='flank5_sequence', help="5' flank sequence (in-frame, length divisible by 3)", required=True)
@@ -1402,6 +1402,16 @@ def main():
     parser_pe_merge.add_argument("--out_dir", type=str, dest='dir', help="Output directory (Default: ../epeg_ngRNAs)", default='../epeg_ngRNAs')
     parser_pe_merge.add_argument("--out_file", type=str, dest='file', help="Name of the output file (Default: epeg_ngRNAs.csv)", default='epeg_ngRNAs.csv')
 
+    # sensor_designer():
+    parser_pe_sensor_designer.add_argument("--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
+    parser_pe_sensor_designer.add_argument("--in_file", type=str, help="Path to PrimeDesign input file", required=True)
+
+    parser_pe_sensor_designer.add_argument("--sensor_length", type=int, default=60, help="Total length of the sensor in bp (Default: 60)")
+    parser_pe_sensor_designer.add_argument("--before_spacer", type=int, default=5, help="Amount of nucleotide context to put before the protospacer in the sensor (Default = 5)")
+    parser_pe_sensor_designer.add_argument("--sensor_orientation", type=str, default='revcom', help="Orientation of the sensor relative to the protospacer (Options: 'revcom' [Default b/c minimize recombination] or ’forward’")
+    parser_pe_sensor_designer.add_argument("--out_dir", type=str, help="Output directory (Default: ../pegRNAs_tester)", default='../sensor_designer')
+    parser_pe_sensor_designer.add_argument("--out_file", type=str, help="Name of the output file (Default: pegRNAs.csv)", default='pegRNAs.csv')
+
     # RTT_designer():
     parser_pe_RTT_designer.add_argument("--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
     parser_pe_RTT_designer.add_argument("--in_file", type=str, help="Path to PrimeDesign input file", required=True)
@@ -1414,9 +1424,11 @@ def main():
     # pegRNAs_tester():
     parser_pe_pegRNAs_tester.add_argument("--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
     parser_pe_pegRNAs_tester.add_argument("--in_file", type=str, help="Path to PrimeDesign input file", required=True)
+
     parser_pe_pegRNAs_tester.add_argument("--aa_index", type=int, default=1, help="Index of 1st amino acid in target sequence (Default: 1)")
     parser_pe_pegRNAs_tester.add_argument("--out_dir", type=str, help="Output directory (Default: ../pegRNAs_tester)", default='../pegRNAs_tester')
     parser_pe_pegRNAs_tester.add_argument("--out_file", type=str, help="Name of the output file (Default: pegRNAs.csv)", default='pegRNAs.csv')
+    parser_pe_pegRNAs_tester.add_argument("--comments", action='store_true', help="Print comments (Default: False)", default=False)
 
     # Set defaults
     parser_pe_PrimeDesigner.set_defaults(func=pe.PrimeDesigner)
@@ -1425,6 +1437,7 @@ def main():
     parser_pe_merge.set_defaults(func=pe.merge)
     parser_pe_RTT_designer.set_defaults(func=pe.RTT_designer)
     parser_pe_pegRNAs_tester.set_defaults(func=pe.pegRNAs_tester)
+    parser_pe_sensor_designer.set_defaults(func=pe.sensor_designer)
 
     # Enable autocomplete
     argcomplete.autocomplete(parser)

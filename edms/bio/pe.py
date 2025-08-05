@@ -540,7 +540,7 @@ def sensor_designer(pegRNAs: pd.DataFrame | str, in_file: str, sensor_length: in
     Parameters:
     pegRNAs (dataframe | str): pegRNAs DataFrame (or file path)
     in_file (dataframe | str): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)
-    sensor_length (int, optional): Total length of the sensor in nt (Default = 60)
+    sensor_length (int, optional): Total length of the sensor in bp (Default = 60)
     before_spacer (int, optional): Amount of nucleotide context to put before the protospacer in the sensor (Default = 5)
     sensor_orientation (Literal, optional): Orientation of the sensor relative to the protospacer (Options: 'revcom' [Default b/c minimize recombination] or ’forward’).
     out_dir (str, optional): output directory
@@ -692,7 +692,8 @@ def found_list_in_order(main_ls: list, sub_ls: list):
     
     return -1 # Not found
 
-def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_index: int=1, rtt_length: int=39, out_dir: str=None, out_file: str=None, return_df: bool=True):
+def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_index: int=1, rtt_length: int=39, 
+                 out_dir: str=None, out_file: str=None, return_df: bool=True, comments: bool=False):
     ''' 
     RTT_designer(): design all possible RTT for given spacer & PBS (WT, single insertions, & single deletions)
     
@@ -704,6 +705,7 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_in
     out_dir (str, optional): output directory
     out_file (str, optional): output filename
     return_df (bool, optional): return dataframe (Default: True)
+    comments (bool, optional): print comments (Default: False)
 
     Dependencies: io, pandas, Bio.Seq.Seq, shared_sequences(), get_codons(), get_codon_frames(), found_list_in_order(), & aa_dna_codon_table
     '''
@@ -738,10 +740,11 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_in
     extended_codons_prot = Seq.translate(extended_codons_nuc) # Translate to full in-frame protein sequence
     extended_codons_aa_indexes = list(np.arange(aa_index-len(codons_flank5),aa_index-len(codons_flank5)+len(extended_codons_prot))) # Obtain full in-frame amino acid indexes
 
-    print(f'FWD Ref: {seq_nuc}')
-    print(f'REV Ref: {rc_seq_nuc}')
-    print(f'Nucleotides: {seq}')
-    print(f'Amino Acids: {seq_prot}\n')
+    if comments:
+        print(f'FWD Ref: {seq_nuc}')
+        print(f'REV Ref: {rc_seq_nuc}')
+        print(f'Nucleotides: {seq}')
+        print(f'Amino Acids: {seq_prot}\n')
 
     # Obtain shared spacer and PBS sequences 
     shared_pegRNAs_lib = shared_sequences(pegRNAs=pegRNAs,hist_plot=False)
@@ -750,10 +753,10 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_in
     wildtypes = pd.DataFrame()
     insertions = pd.DataFrame()
     deletions = pd.DataFrame()
-    for j,(spacer,pbs) in enumerate(t.zip_cols(df=shared_pegRNAs_lib,cols=['Spacer_sequence','PBS_sequence'])): # Iterate through primer binding sites
+    for j,(spacer,pbs,strand) in enumerate(t.zip_cols(df=shared_pegRNAs_lib,cols=['Spacer_sequence','PBS_sequence','Strand'])): # Iterate through primer binding sites
 
         found = False # Boolean for RTT wildtype found
-        if shared_pegRNAs_lib.iloc[j]['Strand']=='+': # Spacer: + strand; PBS & RTT: - strand
+        if strand=='+': # Spacer: + strand; PBS & RTT: - strand
             
             # Find spacer in sequence
             spacer_j = seq_nuc.find(spacer)
@@ -775,9 +778,9 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_in
             wildtypes = pd.concat([wildtypes,
                                    pd.DataFrame({'pegRNA_number': [j],
                                                  'gRNA_type': ['pegRNA'],
-                                                 'Strand': [shared_pegRNAs_lib.iloc[j]['Strand']],
+                                                 'Strand': [strand],
                                                  'Edit': [None],
-                                                 'Spacer_sequence': [shared_pegRNAs_lib.iloc[j]['Spacer_sequence']],
+                                                 'Spacer_sequence': [spacer],
                                                  'Scaffold_sequence': [pegRNAs.iloc[0]['Scaffold_sequence']],
                                                  'RTT_sequence': [str(rtt_wt)],
                                                  'PBS_sequence': [pbs],
@@ -799,9 +802,12 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_in
             # Obtain reverse complement WT RTT in-frame from + strand
             rc_rtt_wt = Seq.reverse_complement(rtt_wt) # reverse complement of rtt (+ strand)
             rc_rtt_codon_frames = get_codon_frames(rc_rtt_wt) # codons
-            print(f"Extended Codons (Here): {extended_codons[math.floor((len(rc_seq_nuc)-pbs_j)/3)-1:math.floor((len(rc_seq_nuc)-pbs_j+rtt_length)/3)]}")
+            if comments:
+                print(f"Extended Codons (Here): {extended_codons[math.floor((len(rc_seq_nuc)-pbs_j)/3)-1:math.floor((len(rc_seq_nuc)-pbs_j+rtt_length)/3)]}")
             for i,rc_rtt_codon_frame in enumerate(rc_rtt_codon_frames): # Search for in-frame nucleotide sequence
-                print(f"rc_rtt_codon_frame: {rc_rtt_codon_frame}")
+                if comments:
+                    print(f"rc_rtt_codon_frame: {rc_rtt_codon_frame}")
+                
                 index = found_list_in_order(extended_codons[math.floor((len(rc_seq_nuc)-pbs_j)/3)-1:math.floor((len(rc_seq_nuc)-pbs_j+rtt_length)/3)],rc_rtt_codon_frame)
                 if index != -1: # Codon frame from reverse complement of rtt matches extended codons of in-frame nucleotide sequence
                     rc_rtt_wt_inframe_nuc_codons_flank5 = rc_rtt_wt[:i] # Save codon frame flank 5'
@@ -813,16 +819,18 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_in
                     found=True
                     break
             
-            print(f'Strand: {shared_pegRNAs_lib.iloc[j]["Strand"]}')
+            if comments:
+                print(f'Strand: {shared_pegRNAs_lib.iloc[j]["Strand"]}')    
+                print(f'Nucleotides: {rc_rtt_wt}')
+                print(f'Nucleotides 5\' of Codons: {rc_rtt_wt_inframe_nuc_codons_flank5}')
+                print(f'Nucleotides Codons: {rc_rtt_wt_inframe_nuc_codons}')
+                print(f'Nucleotides 3\' of Codons: {rc_rtt_wt_inframe_nuc_codons_flank3}')
+                print(f'Nucleotides In-Frame: {rc_rtt_wt_inframe_nuc}')
+                print(f'Amino Acids In-Frame: {rc_rtt_wt_inframe_prot}')
+                print(f'Amino Acid #s In-Frame: {rc_rtt_wt_inframe_prot_indexes}\n')
+
             if found==False:
                 raise(ValueError("RTT was not found."))
-            print(f'Nucleotides: {rc_rtt_wt}')
-            print(f'Nucleotides 5\' of Codons: {rc_rtt_wt_inframe_nuc_codons_flank5}')
-            print(f'Nucleotides Codons: {rc_rtt_wt_inframe_nuc_codons}')
-            print(f'Nucleotides 3\' of Codons: {rc_rtt_wt_inframe_nuc_codons_flank3}')
-            print(f'Nucleotides In-Frame: {rc_rtt_wt_inframe_nuc}')
-            print(f'Amino Acids In-Frame: {rc_rtt_wt_inframe_prot}')
-            print(f'Amino Acid #s In-Frame: {rc_rtt_wt_inframe_prot_indexes}\n')
 
             # Obtain single insertion RTTs from - strand
             edits_in = []
@@ -837,15 +845,16 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_in
                                                               Seq('').join(rc_rtt_wt_inframe_nuc_codons[i+1:]), # Codons after insertion
                                                               rc_rtt_wt_inframe_nuc_codons_flank3]))) # Codon frame flank 3'
             
-            print(f'Insertions: {edits_in}')
-            print(f'Insertion RTTs: {rtts_in}\n')
+            if comments:
+                print(f'Insertions: {edits_in}')
+                print(f'Insertion RTTs: {rtts_in}\n')
 
             insertions = pd.concat([insertions,
                                     pd.DataFrame({'pegRNA_number': [j]*len(edits_in),
                                                   'gRNA_type': ['pegRNA']*len(edits_in),
-                                                  'Strand': [shared_pegRNAs_lib.iloc[j]['Strand']]*len(edits_in),
+                                                  'Strand': [strand]*len(edits_in),
                                                   'Edit': edits_in,
-                                                  'Spacer_sequence': [shared_pegRNAs_lib.iloc[j]['Spacer_sequence']]*len(edits_in),
+                                                  'Spacer_sequence': [spacer]*len(edits_in),
                                                   'Scaffold_sequence': [pegRNAs.iloc[0]['Scaffold_sequence']]*len(edits_in),
                                                   'RTT_sequence': [str(rtt_in) for rtt_in in rtts_in],
                                                   'PBS_sequence': [pbs]*len(edits_in),
@@ -872,15 +881,16 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_in
                                                rc_rtt_wt_inframe_nuc_codons_flank3])) # Codon frame flank 3'
                                                for i in range(len(rc_rtt_wt_inframe_nuc_codons)) if i<len(rc_rtt_wt_inframe_nuc_codons)-1] # Don't want last AA
             
-            print(f'Deletions: {edits_del}')
-            print(f'Deletion RTTs: {rtts_del}\n\n')
+            if comments:
+                print(f'Deletions: {edits_del}')
+                print(f'Deletion RTTs: {rtts_del}\n\n')
 
             deletions = pd.concat([deletions,
                                    pd.DataFrame({'pegRNA_number': [j]*len(edits_del),
                                                  'gRNA_type': ['pegRNA']*len(edits_del),
-                                                 'Strand': [shared_pegRNAs_lib.iloc[j]['Strand']]*len(edits_del),
+                                                 'Strand': [strand]*len(edits_del),
                                                  'Edit': edits_del,
-                                                 'Spacer_sequence': [shared_pegRNAs_lib.iloc[j]['Spacer_sequence']]*len(edits_del),
+                                                 'Spacer_sequence': [spacer]*len(edits_del),
                                                  'Scaffold_sequence': [pegRNAs.iloc[0]['Scaffold_sequence']]*len(edits_del),
                                                  'RTT_sequence': [str(rtt_del) for rtt_del in rtts_del],
                                                  'PBS_sequence': [pbs]*len(edits_del),
@@ -899,7 +909,7 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_in
                                                  'RTT_GC_content': [None]*len(edits_del),
                                                  'First_extension_nucleotide': [rtt_del[0] for rtt_del in rtts_del]})]).reset_index(drop=True)
             
-        elif shared_pegRNAs_lib.iloc[j]['Strand']=='-': # Spacer: - strand; PBS & RTT: + strand
+        elif strand=='-': # Spacer: - strand; PBS & RTT: + strand
             
             # Find spacer in sequence
             spacer_j = rc_seq_nuc.find(spacer)
@@ -921,9 +931,9 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_in
             wildtypes = pd.concat([wildtypes,
                                    pd.DataFrame({'pegRNA_number': [j],
                                                  'gRNA_type': ['pegRNA'],
-                                                 'Strand': [shared_pegRNAs_lib.iloc[j]['Strand']],
+                                                 'Strand': [strand],
                                                  'Edit': [None],
-                                                 'Spacer_sequence': [shared_pegRNAs_lib.iloc[j]['Spacer_sequence']],
+                                                 'Spacer_sequence': [spacer],
                                                  'Scaffold_sequence': [pegRNAs.iloc[0]['Scaffold_sequence']],
                                                  'RTT_sequence': [str(rtt_wt)],
                                                  'PBS_sequence': [pbs],
@@ -959,7 +969,7 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_in
                     found=True
                     break
             
-            print(f'Strand: {shared_pegRNAs_lib.iloc[j]["Strand"]}')
+            print(f'Strand: {strand}')
             if found==False:
                 raise(ValueError("RTT was not found."))
             print(f'Nucleotides: {rtt_wt}')
@@ -989,9 +999,9 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_in
             insertions = pd.concat([insertions,
                                     pd.DataFrame({'pegRNA_number': [j]*len(edits_in),
                                                   'gRNA_type': ['pegRNA']*len(edits_in),
-                                                  'Strand': [shared_pegRNAs_lib.iloc[j]['Strand']]*len(edits_in),
+                                                  'Strand': [spacer]*len(edits_in),
                                                   'Edit': edits_in,
-                                                  'Spacer_sequence': [shared_pegRNAs_lib.iloc[j]['Spacer_sequence']]*len(edits_in),
+                                                  'Spacer_sequence': [spacer]*len(edits_in),
                                                   'Scaffold_sequence': [pegRNAs.iloc[0]['Scaffold_sequence']]*len(edits_in),
                                                   'RTT_sequence': [str(rtt_in) for rtt_in in rtts_in],
                                                   'PBS_sequence': [pbs]*len(edits_in),
@@ -1024,9 +1034,9 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_in
             deletions = pd.concat([deletions,
                                    pd.DataFrame({'pegRNA_number': [j]*len(edits_del),
                                                  'gRNA_type': ['pegRNA']*len(edits_del),
-                                                 'Strand': [shared_pegRNAs_lib.iloc[j]['Strand']]*len(edits_del),
+                                                 'Strand': [strand]*len(edits_del),
                                                  'Edit': edits_del,
-                                                 'Spacer_sequence': [shared_pegRNAs_lib.iloc[j]['Spacer_sequence']]*len(edits_del),
+                                                 'Spacer_sequence': [spacer]*len(edits_del),
                                                  'Scaffold_sequence': [pegRNAs.iloc[0]['Scaffold_sequence']]*len(edits_del),
                                                  'RTT_sequence': [str(rtt_del) for rtt_del in rtts_del],
                                                  'PBS_sequence': [pbs]*len(edits_del),
@@ -1062,7 +1072,7 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_in
     if return_df: return pegRNAs
 
 ### Check pegRNAs
-def compare_RTTs(rtt_prot: Seq, rtt_prot_indexes: list, rtt_wt_prot: Seq, rtt_wt_prot_indexes: list, annotation: str, strand: str):
+def compare_RTTs(rtt_prot: Seq, rtt_prot_indexes: list, rtt_wt_prot: Seq, rtt_wt_prot_indexes: list, annotation: str, strand: str, comments: bool=False):
     ''' 
     compare_RTTs(): compares RTT outcome to WT RTT outcome and returns observed it
     
@@ -1073,12 +1083,13 @@ def compare_RTTs(rtt_prot: Seq, rtt_prot_indexes: list, rtt_wt_prot: Seq, rtt_wt
     rtt_wt_prot_indexes (list): RTT WT outcome indexes, which is WT AA sequence indexes
     annotation (str): PrimeDesign output, insertion, deletion, or wildtype
     strand (str): Prime Design output (i.e., "+" or "-")
+    comments (bool, optional): print comments (Default: False)
 
     Dependencies:
     '''
     # Determine edit category
     if (rtt_prot==rtt_wt_prot)&(rtt_prot_indexes==rtt_wt_prot_indexes): # Wildtype
-        print('WT')
+        if comments: print('WT')
         return None
     
     elif annotation=='insertion': # Insertion
@@ -1089,7 +1100,7 @@ def compare_RTTs(rtt_prot: Seq, rtt_prot_indexes: list, rtt_wt_prot: Seq, rtt_wt
                     i_diff = i
                     break
             edit = f'{rtt_wt_prot[i_diff-1]}{rtt_wt_prot_indexes[i_diff-1]}{"".join(rtt_prot[i_diff-1:i_diff+1])}'
-            print(f'Insertion Edit: {edit}\n')
+            if comments: print(f'Insertion Edit: {edit}\n')
             return edit
         elif strand=='-':
             for i in range(len(rtt_wt_prot)-1,-1,-1): # Find difference starting from 3' end (C-term)
@@ -1097,7 +1108,7 @@ def compare_RTTs(rtt_prot: Seq, rtt_prot_indexes: list, rtt_wt_prot: Seq, rtt_wt
                     i_diff = i
                     break
             edit = f'{rtt_wt_prot[i_diff]}{rtt_wt_prot_indexes[i_diff]}{"".join(rtt_prot[i_diff-1:i_diff+1])}'
-            print(f'Insertion Edit: {edit}\n')
+            if comments: print(f'Insertion Edit: {edit}\n')
             return edit
     
     elif annotation=='deletion': # Deletion
@@ -1108,7 +1119,7 @@ def compare_RTTs(rtt_prot: Seq, rtt_prot_indexes: list, rtt_wt_prot: Seq, rtt_wt
                     i_diff = i
                     break
             edit = f'{rtt_wt_prot[i_diff]}{rtt_wt_prot_indexes[i_diff]}del'
-            print(f'Deletion Edit: {edit}\n')
+            if comments: print(f'Deletion Edit: {edit}\n')
             return edit
         elif strand=='-':
             for i in range(len(rtt_wt_prot)-1,-1,-1): # Find difference starting from 3' end (C-term)
@@ -1116,7 +1127,7 @@ def compare_RTTs(rtt_prot: Seq, rtt_prot_indexes: list, rtt_wt_prot: Seq, rtt_wt
                     i_diff = i
                     break
             edit = f'{rtt_wt_prot[i_diff]}{rtt_wt_prot_indexes[i_diff]}del'
-            print(f'Deletion Edit: {edit}\n')
+            if comments: print(f'Deletion Edit: {edit}\n')
             return edit
         else: print('Error: Strand must be "+" or "-"')
 
@@ -1127,7 +1138,7 @@ def compare_RTTs(rtt_prot: Seq, rtt_prot_indexes: list, rtt_wt_prot: Seq, rtt_wt
                 i_diff = i
                 break
         edit = f'{rtt_wt_prot[i_diff]}{rtt_prot_indexes[i_diff]}{rtt_prot[i_diff]}'
-        print(f'Substitution Edit: {edit}\n')
+        if comments: print(f'Substitution Edit: {edit}\n')
         return edit
 
 def pegRNAs_tester(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_index: int=1, out_dir: str=None, out_file: str=None, return_df: bool=True, comments: bool=False):
@@ -1218,7 +1229,7 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_
     prot_befores = []
     prot_afters = []
     edit_matches_explain = []
-    for j,(strand,pbs) in enumerate(t.zip_cols(df=pegRNAs,cols=['Strand','PBS_sequence'])): # Iterate through primer binding sites
+    for j,(expected_edit,strand,annotation,pbs,rtt) in enumerate(t.zip_cols(df=pegRNAs,cols=['Edit','Strand','Annotation','PBS_sequence','RTT_sequence'])): # Iterate through primer binding sites
         
         if comments: 
             print(f'Loop: {j}')
@@ -1260,7 +1271,7 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_
             
             if comments:
                 print(f'Strand: {strand}')
-                print(f'Annotation: {pegRNAs.iloc[j]["Annotation"]}')
+                print(f'Annotation: {annotation}')
                 print(f'PBS Nucleotides: {rc_pbs}')
                 print(f'PBS Nucleotides 5\' of Codons: {rc_pbs_inframe_nuc_codons_flank5}')
                 print(f'PBS Nucleotides Codons: {rc_pbs_inframe_nuc_codons}')
@@ -1273,7 +1284,7 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_
                 raise(ValueError(f"PBS was not found: {pbs}"))
 
             # Obtain RTT amino sequence
-            rc_rtt = Seq.reverse_complement(Seq(pegRNAs.iloc[j]['RTT_sequence'].upper())) # reverse complement of rtt (+ strand)
+            rc_rtt = Seq.reverse_complement(Seq(rtt.upper())) # reverse complement of rtt (+ strand)
             rc_pbs_inframe_flank3_rtt = rc_pbs_inframe_nuc_codons_flank3+rc_rtt
             rc_pbs_inframe_flank3_rtt_codons = get_codons(rc_pbs_inframe_flank3_rtt)
             rc_pbs_inframe_flank3_rtt_prot = Seq.translate(Seq('').join(rc_pbs_inframe_flank3_rtt))
@@ -1317,31 +1328,32 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_
             prot_befores.append(''.join([str(aa) for aa in rc_rtt_wt_inframe_prot]))
             prot_afters.append(''.join([str(aa) for aa in rc_pbs_inframe_flank3_rtt_prot]))
             if comments:
-                print(f'Expected edit: {pegRNAs.iloc[j]["Edit"]}')
+                print(f'Expected edit: {expected_edit}')
             edit = compare_RTTs(rtt_prot=rc_pbs_inframe_flank3_rtt_prot,
                                 rtt_prot_indexes=rc_pbs_inframe_flank3_rtt_prot_indexes,
                                 rtt_wt_prot=rc_rtt_wt_inframe_prot,
                                 rtt_wt_prot_indexes=rc_rtt_wt_inframe_prot_indexes,
-                                annotation=pegRNAs.iloc[j]['Annotation'],
-                                strand=pegRNAs.iloc[j]['Strand'])
+                                annotation=annotation,
+                                strand=strand,
+                                comments=comments)
             edits.append(edit)
 
             # Compare expected edit to actual edit
-            if edit==pegRNAs.iloc[j]['Edit']: 
+            if edit==expected_edit: 
                 edit_matches.append(True)
                 edit_matches_explain.append(None) # No need to explain matching edits
             else: 
                 edit_matches.append(False)
-                if pegRNAs.iloc[j]['Annotation']=='deletion':
+                if annotation=='deletion':
                     if edit is not None:
                         position = [int(num) for num in re.findall(r'\d+', edit)][0] # Find actual edit position
                         if position==aa_index-1: edit_matches_explain.append('Common pegRNAs_tester() error: AA deletion outside of target sequence boundary results in wrong AA #')
                         else: edit_matches_explain.append('Investigate deletion: common error for pegRNAs_tester() is single deletion of repeated AA results in wrong AA #')
                     else: edit_matches_explain.append('Investigate deletion: common error for pegRNAs_tester() is single deletion of repeated AA results in wrong AA #')
-                elif pegRNAs.iloc[j]['Annotation']=='insertion': 
+                elif annotation=='insertion': 
                     if edit is not None:
                         position = [int(num) for num in re.findall(r'\d+', edit)][0] # Find actual edit position
-                        position_predicted = [int(num) for num in re.findall(r'\d+', pegRNAs.iloc[j]['Edit'])][0] # Find predicted edit position
+                        position_predicted = [int(num) for num in re.findall(r'\d+', expected_edit)][0] # Find predicted edit position
                         if position-1==position_predicted: edit_matches_explain.append('Common pegRNAs_tester() error: inserted AA matches the next (+ strand) or previous (- strand) AA, so compare_RTTs() shifts mutation by 1 AA.')
                         else: edit_matches_explain.append('Investigate insertion: common error for pegRNAs_tester() is single insertion of repeated AA results in wrong AA #')
                     else: edit_matches_explain.append('Investigate insertion: common error for single insertion of final AA in RTT, which matches next AA and returns wildtype sequence')
@@ -1383,7 +1395,7 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_
             
             if comments:
                 print(f'Strand: {strand}')
-                print(f'Annotation: {pegRNAs.iloc[j]["Annotation"]}')
+                print(f'Annotation: {annotation}')
                 print(f'PBS Nucleotides: {pbs}')
                 print(f'PBS Nucleotides 5\' of Codons: {pbs_inframe_nuc_codons_flank5}')
                 print(f'PBS Nucleotides Codons: {pbs_inframe_nuc_codons}')
@@ -1396,7 +1408,7 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_
                 raise(ValueError(f"PBS was not found: {pbs}"))
             
             # Obtain RTT amino sequence
-            rtt = Seq(pegRNAs.iloc[j]['RTT_sequence'].upper()) # rtt (+ strand)
+            rtt = Seq(rtt.upper()) # rtt (+ strand)
             rtt_pbs_inframe_flank5 = rtt+pbs_inframe_nuc_codons_flank5
             rtt_pbs_inframe_flank5_codons = get_codons(rtt_pbs_inframe_flank5,len(rtt_pbs_inframe_flank5)%3)
             rtt_pbs_inframe_flank5_prot = Seq.translate(Seq('').join(rtt_pbs_inframe_flank5_codons))
@@ -1439,31 +1451,32 @@ def pegRNAs_tester(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_
             prot_befores.append(''.join([str(aa) for aa in rtt_wt_inframe_prot]))
             prot_afters.append(''.join([str(aa) for aa in rtt_pbs_inframe_flank5_prot]))
             if comments:
-                print(f'Expected edit: {pegRNAs.iloc[j]["Edit"]}')
+                print(f'Expected edit: {expected_edit}')
             edit = compare_RTTs(rtt_prot=rtt_pbs_inframe_flank5_prot,
                                 rtt_prot_indexes=rtt_pbs_inframe_flank5_prot_indexes,
                                 rtt_wt_prot=rtt_wt_inframe_prot,
                                 rtt_wt_prot_indexes=rtt_wt_inframe_prot_indexes,
-                                annotation=pegRNAs.iloc[j]['Annotation'],
-                                strand=pegRNAs.iloc[j]['Strand'])
+                                annotation=annotation,
+                                strand=strand,
+                                comments=comments)
             edits.append(edit)
             
             # Compare expected edit to actual edit
-            if edit==pegRNAs.iloc[j]['Edit']:
+            if edit==expected_edit:
                 edit_matches.append(True)
                 edit_matches_explain.append(None) # No need to explain matching edits
             else: 
                 edit_matches.append(False)
-                if pegRNAs.iloc[j]['Annotation']=='deletion':
+                if annotation=='deletion':
                     if edit is not None:
                         position = [int(num) for num in re.findall(r'\d+', edit)][0] # Find actual edit position
                         if (position==aa_index-1)&(pegRNAs.iloc[j]['Annotation']=='deletion'): edit_matches_explain.append('Common pegRNAs_tester() error: AA deletion outside of target sequence boundary results in wrong AA #')
                         else: edit_matches_explain.append('Investigate deletion: common error for pegRNAs_tester() is single deletion of repeated AA results in wrong AA #')
                     else: edit_matches_explain.append('Investigate deletion: common error for pegRNAs_tester() is single deletion of repeated AA results in wrong AA #')
-                elif pegRNAs.iloc[j]['Annotation']=='insertion': 
+                elif annotation=='insertion': 
                     if edit is not None:
                         position = [int(num) for num in re.findall(r'\d+', edit)][0] # Find actual edit position
-                        position_predicted = [int(num) for num in re.findall(r'\d+', pegRNAs.iloc[j]['Edit'])][0] # Find predicted edit position
+                        position_predicted = [int(num) for num in re.findall(r'\d+', expected_edit)][0] # Find predicted edit position
                         if position+1==position_predicted: edit_matches_explain.append('Common pegRNAs_tester() error: inserted AA matches the next (+ strand) or previous (- strand) AA, so compare_RTTs() shifts mutation by 1 AA.')
                         else: edit_matches_explain.append('Investigate insertion: common error for pegRNAs_tester() is single insertion of repeated AA results in wrong AA #')
                     else: edit_matches_explain.append('Investigate insertion: common error for single insertion of final AA in RTT, which matches next AA and returns wildtype sequence')
