@@ -143,10 +143,14 @@ def get(pt: str,literal_eval=False,**kwargs):
         if literal_eval: return df_try_parse(pd.read_csv(filepath_or_buffer=pt,sep='\t',**kwargs))
         else: return pd.read_csv(filepath_or_buffer=pt,sep='\t',**kwargs)
     elif suf=='xlsx': 
-        if literal_eval: return {sheet_name:df_try_parse(pd.read_excel(pt,sheet_name,**kwargs))
+        if literal_eval: 
+            dc = {sheet_name:df_try_parse(pd.read_excel(pt,sheet_name,**kwargs))
                                  for sheet_name in pd.ExcelFile(pt).sheet_names}
-        else: return {sheet_name:pd.read_excel(pt,sheet_name,**kwargs)
+        else: 
+            dc = {sheet_name:pd.read_excel(pt,sheet_name,**kwargs)
                                  for sheet_name in pd.ExcelFile(pt).sheet_names}
+        print(f"Excel file: {pt}\nKeys: {', '.join([key for key in dc.keys()])}")
+        return dc
     elif suf=='html': 
         if literal_eval: return df_try_parse(pd.read_html(pt,**kwargs))
         else: return pd.read_html(pt,**kwargs)
@@ -169,7 +173,9 @@ def get_dir(dir: str,suf='.csv',literal_eval=False,**kwargs):
     Dependencies: pandas
     '''
     files = [file for file in os.listdir(dir) if file[-len(suf):]==suf]
-    return {file[:-len(suf)]:get(os.path.join(dir,file),literal_eval,**kwargs) for file in files}
+    dc = {file[:-len(suf)]:get(os.path.join(dir,file),literal_eval,**kwargs) for file in files}
+    print(f"Directory: {dir}\nKeys: {', '.join([key for key in dc.keys()])}")
+    return dc
 
 # Output
 def mkdir(dir: str, sep='/'):

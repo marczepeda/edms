@@ -1293,6 +1293,7 @@ def main():
     parser_fastq_plot_paired.add_argument("--out_dir", help="Output directory", default=f'../out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
     parser_fastq_plot_paired.add_argument("--id_col", default="ID", help="Column name for ID (Default: 'ID')")
     parser_fastq_plot_paired.add_argument("--desired_col", default="desired", help="Column name for desired sequences (Default: 'desired')")
+    parser_fastq_plot_paired.add_argument("--y", default="count", help="y axis for plots (Default: 'count'; Options: 'count' & 'fraction')")
     parser_fastq_plot_paired.add_argument("--plot_suf", default=".pdf", help="Plot file suffix (e.g. .pdf or .png)")
     parser_fastq_plot_paired.add_argument("--show", action="store_true", help="Display plots interactively")
 
@@ -1344,7 +1345,7 @@ def main():
     - merge(): rejoins epeg/ngRNAs & creates ngRNA_groups
     - sensor_designer(): design pegRNA sensors
     - RTT_designer(): design all possible RTT for given spacer & PBS (WT, single insertions, & single deletions)
-    - pegRNAs_tester(): confirm that pegRNAs should create the predicted edit
+    - pegRNA_outcome(): confirm that pegRNAs should create the predicted edit
     '''
     parser_pe = subparsers.add_parser("pe", help="Prime Editing")
     subparsers_pe = parser_pe.add_subparsers()
@@ -1355,7 +1356,7 @@ def main():
     parser_pe_merge = subparsers_pe.add_parser("merge", help="rejoins epeg/ngRNAs & creates ngRNA groups")
     parser_pe_sensor_designer = subparsers_pe.add_parser("sensor_designer", help='Design pegRNA sensors')
     parser_pe_RTT_designer = subparsers_pe.add_parser("RTT_designer", help="Design all possible RTT for given spacer & PBS (WT, single insertions, & single deletions)")
-    parser_pe_pegRNAs_tester = subparsers_pe.add_parser("pegRNAs_tester", help="Confirm that pegRNAs should create the predicted edit")
+    parser_pe_pegRNA_outcome = subparsers_pe.add_parser("pegRNA_outcome", help="Confirm that pegRNAs should create the predicted edit")
 
     # PrimeDesigner():
     parser_pe_PrimeDesigner.add_argument("--name", type=str, dest='target_name',help="Name of the target", required=True)
@@ -1365,14 +1366,16 @@ def main():
 
     parser_pe_PrimeDesigner.add_argument("--pbs_lengths", type=int, dest='pbs_length_pooled_ls', nargs="+", default=[11,13,15],
                         help="List of PBS lengths (Default: 11,13,15)")
+    parser_pe_PrimeDesigner.add_argument("--rtt_max_length", type=int, dest='rtt_max_length_pooled', default=50,
+                        help="Maximum RTT length to design pegRNAs (Default: 50 nt)")
     parser_pe_PrimeDesigner.add_argument("--no_silent_mutation", dest="silent_mutation", action="store_false",
                         help="Disable silent mutation")
     parser_pe_PrimeDesigner.add_argument("--number_of_pegrnas", type=int, default=1,
                         help="Max number of pegRNAs to design (Default: 1)")
     parser_pe_PrimeDesigner.add_argument("--number_of_ngrnas", type=int, default=3,
                         help="Max number of ngRNAs to design (Default: 3)")
-    parser_pe_PrimeDesigner.add_argument("--scaffold_sequence", type=str, default="GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC",
-                        help="sgRNA scaffold sequence (Default: SpCas9 flip + extend + com-modified)")
+    parser_pe_PrimeDesigner.add_argument("--scaffold_sequence", type=str, default="GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC",
+                        help="sgRNA scaffold sequence (Default: SpCas9 flip + extend")
     parser_pe_PrimeDesigner.add_argument("--aa_index", type=int, default=1,
                         help="Index of 1st amino acid in target sequence (Default: 1)")
 
@@ -1418,17 +1421,23 @@ def main():
     
     parser_pe_RTT_designer.add_argument("--aa_index", type=int, default=1, help="Index of 1st amino acid in target sequence (Default: 1)")
     parser_pe_RTT_designer.add_argument("--RTT_length", type=int, default=39, help="Length of RTT (Default: 39)")
+    parser_pe_RTT_designer.add_argument("--include_WT", action='store_true', default=False, help="include wildtype RTT (Default: False)")
     parser_pe_RTT_designer.add_argument("--out_dir", type=str, help="Output directory (Default: ../RTT_Designer)", default='../RTT_Designer')
     parser_pe_RTT_designer.add_argument("--out_file", type=str, help="Name of the output file (Default: pegRNAs.csv)", default='pegRNAs.csv')
+    parser_pe_RTT_designer.add_argument("--comments", action='store_true', help="Print comments (Default: False)", default=False)
 
     # pegRNAs_tester():
-    parser_pe_pegRNAs_tester.add_argument("--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
-    parser_pe_pegRNAs_tester.add_argument("--in_file", type=str, help="Path to PrimeDesign input file", required=True)
+    parser_pe_pegRNA_outcome.add_argument("--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
+    parser_pe_pegRNA_outcome.add_argument("--in_file", type=str, help="Path to PrimeDesign input file", required=True)
 
-    parser_pe_pegRNAs_tester.add_argument("--aa_index", type=int, default=1, help="Index of 1st amino acid in target sequence (Default: 1)")
-    parser_pe_pegRNAs_tester.add_argument("--out_dir", type=str, help="Output directory (Default: ../pegRNAs_tester)", default='../pegRNAs_tester')
-    parser_pe_pegRNAs_tester.add_argument("--out_file", type=str, help="Name of the output file (Default: pegRNAs.csv)", default='pegRNAs.csv')
-    parser_pe_pegRNAs_tester.add_argument("--comments", action='store_true', help="Print comments (Default: False)", default=False)
+    parser_pe_pegRNA_outcome.add_argument("--aa_index", type=int, default=1, help="Index of 1st amino acid in target sequence (Default: 1)")
+    parser_pe_pegRNA_outcome.add_argument("--out_dir", type=str, help="Output directory (Default: ../pegRNA_outcome)", default='../pegRNA_outcome')
+    parser_pe_pegRNA_outcome.add_argument("--out_file", type=str, help="Name of the output file (Default: pegRNAs.csv)", default='pegRNAs.csv')
+    
+    parser_pe_pegRNA_outcome.add_argument("--match_score", type=float, help="Match score for pairwise alignment", default=argparse.SUPPRESS)
+    parser_pe_pegRNA_outcome.add_argument("--mismatch_score", type=float, help="Mismatch score for pairwise alignment", default=argparse.SUPPRESS)
+    parser_pe_pegRNA_outcome.add_argument("--open_gap_score", type=float, help="Open gap score for pairwise alignment", default=argparse.SUPPRESS)
+    parser_pe_pegRNA_outcome.add_argument("--extend_gap_score", type=float, help="Extend gap score for pairwise alignment", default=argparse.SUPPRESS)
 
     # Set defaults
     parser_pe_PrimeDesigner.set_defaults(func=pe.PrimeDesigner)
@@ -1436,7 +1445,7 @@ def main():
     parser_pe_epegRNA_linkers.set_defaults(func=pe.epegRNA_linkers)
     parser_pe_merge.set_defaults(func=pe.merge)
     parser_pe_RTT_designer.set_defaults(func=pe.RTT_designer)
-    parser_pe_pegRNAs_tester.set_defaults(func=pe.pegRNAs_tester)
+    parser_pe_pegRNA_outcome.set_defaults(func=pe.pegRNA_outcome)
     parser_pe_sensor_designer.set_defaults(func=pe.sensor_designer)
 
     # Enable autocomplete

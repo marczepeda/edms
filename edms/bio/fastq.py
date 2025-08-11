@@ -71,6 +71,7 @@ import seaborn as sns
 from adjustText import adjust_text
 from scipy.stats import ttest_ind
 import Levenshtein
+from typing import Literal
 
 from ..gen import io
 from ..gen import tidy as t
@@ -1005,7 +1006,7 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
     if return_dc: return fastqs
 
 def plot_paired(df: pd.DataFrame | str, title: str, out_dir: str,  
-                id_col: str='ID', desired_col: str='desired', 
+                id_col: str='ID', desired_col: str='desired', y: Literal['count','fraction']='count',
                 plot_suf: str='.pdf', show: bool=False, **plot_kwargs):
     ''' 
     plot_paired(): generate stacked bar plots from paired_regions() dataframe
@@ -1016,6 +1017,7 @@ def plot_paired(df: pd.DataFrame | str, title: str, out_dir: str,
     out_dir (str): directory for output files
     id_col (str, optional): id column name in the paired region file (Default: 'ID')
     desired_col (str, optional): desired column name in the paired region file (Default: 'desired')
+    y (str, optional): y axis for plots (Default: 'count', Options: 'count' & 'fraction')
     plot_suf (str, optional): plot type suffix with '.' (Default: '.pdf')
     show (bool, optional): show plots (Default: False)
     **plot_kwargs (optional): plot key word arguments
@@ -1028,10 +1030,12 @@ def plot_paired(df: pd.DataFrame | str, title: str, out_dir: str,
 
     # Create, save & plot alignment status
     paired_regions_alignment_status_df = df[[desired_col,'alignment_status']].value_counts().reset_index()
+    paired_regions_alignment_status_df_sum = sum(paired_regions_alignment_status_df['count'])
+    paired_regions_alignment_status_df['fraction'] = [count/paired_regions_alignment_status_df_sum for count in paired_regions_alignment_status_df['count']]
     
     io.save(dir=os.path.join(out_dir, title),file='alignment_status.csv',obj=paired_regions_alignment_status_df)
     
-    p.stack(df=paired_regions_alignment_status_df,x='alignment_status',y='count',
+    p.stack(df=paired_regions_alignment_status_df,x='alignment_status',y=y,
             cols=desired_col,cols_ord=[True,False],vertical=False,figsize=(6,2),
             title=title,dir=os.path.join(out_dir, title),file=f'alignment_status{plot_suf}',show=show,**plot_kwargs)
 
@@ -1043,11 +1047,17 @@ def plot_paired(df: pd.DataFrame | str, title: str, out_dir: str,
         else: desired_ID.append('not chimera')
     paired_regions_alignment_distribution_df[id_col] = desired_ID
 
+    io.save(dir=os.path.join(out_dir, title),file='alignment_distribution_per_read.csv',obj=paired_regions_alignment_distribution_df)
+
+    paired_regions_alignment_distribution_df = paired_regions_alignment_distribution_df[[id_col,desired_col]].value_counts().reset_index()
+    paired_regions_alignment_distribution_df_sum = sum(paired_regions_alignment_distribution_df['count'])
+    paired_regions_alignment_distribution_df['fraction'] = [count/paired_regions_alignment_distribution_df_sum for count in paired_regions_alignment_distribution_df['count']]
+    
     io.save(dir=os.path.join(out_dir, title),file='alignment_distribution.csv',obj=paired_regions_alignment_distribution_df)
 
-    p.stack(df=paired_regions_alignment_distribution_df[[id_col,'desired']].value_counts().reset_index(),
-            x='desired',y='count',cols=id_col,palette_or_cmap='Spectral',x_ord=[True,False],vertical=False,
-            cols_ord=list(paired_regions_alignment_distribution_df[id_col].value_counts().keys()),
+    p.stack(df=paired_regions_alignment_distribution_df,
+            x=desired_col,y=y,cols=id_col,palette_or_cmap='Spectral',x_ord=[True,False],vertical=False,
+            cols_ord=list(paired_regions_alignment_distribution_df[id_col]),
             legend_ncol=4,legend_bbox_to_anchor=(0,-.3),figsize=(10,2),
             title=title,dir=os.path.join(out_dir, title),file=f'alignment_distribution{plot_suf}',show=show,**plot_kwargs)
 
@@ -1055,7 +1065,7 @@ def paired_regions(meta_dir: str, region1_dir: str, region2_dir: str, out_dir: s
                    id_col: str='ID', desired_col: str='desired', 
                    region1_alignment_col: str='r1_alignment', region2_alignment_col: str='r2_alignment', 
                    reads_aligned_col: str='reads_aligned', reads_processed_col: str='reads_processed',
-                   plot_suf: str='.pdf', show: bool=False, return_dc: bool=False,
+                   y: Literal['count','fraction']='count', plot_suf: str='.pdf', show: bool=False, return_dc: bool=False,
                    **plot_kwargs):
     '''
     paired_regions(): quantify, plot, & return (un)paired regions that aligned to the annotated library
@@ -1071,6 +1081,7 @@ def paired_regions(meta_dir: str, region1_dir: str, region2_dir: str, out_dir: s
     region2_alignment_col (str): region 2 alignment column name in the region & meta files
     reads_aligned_col (str, optional): reads_aligned column name in the region files (Default: 'reads_aligned')
     reads_processed_col (str, optional): reads_processed column name in the region files (Default: 'reads_processed')
+    y (str, optional): y axis for plots (Default: 'count'; Options: 'count' & 'fraction')
     plot_suf (str, optional): plot type suffix with '.' (Default: '.pdf')
     show (bool, optional): show plots (Default: False)
     return_dc (bool, optional): return (un)paired regions dataframe (Default: False)
@@ -1164,7 +1175,7 @@ def paired_regions(meta_dir: str, region1_dir: str, region2_dir: str, out_dir: s
         memories.append(memory_timer(task=meta_file_name[0:file_name_mismatch_ls[i]]))
         io.save(dir=out_dir,file=meta_file_name,obj=paired_regions_file_df)
         plot_paired(df=paired_regions_file_df, title=meta_file_name[0:file_name_mismatch_ls[i]], out_dir=out_dir,
-                    id_col=id_col, desired_col=desired_col, plot_suf=plot_suf, show=show, **plot_kwargs)
+                    id_col=id_col, desired_col=desired_col, y=y, plot_suf=plot_suf, show=show, **plot_kwargs)
         if return_dc: paired_regions_dc[meta_file_name] = paired_regions_file_df
     
     # Save & return
@@ -1396,7 +1407,7 @@ def find_AA_edits(wt: str, res: int, seq: str):
     find_AA_edits(): find amino acid edits compared to wildtype sequence
     
     Parameters:
-    wt (str): expected wildtype nucleotide sequence (in frame AA)
+    wt (str): expected wildtype AA sequence
     res (int): first AA number
     seq (str): amino acid sequence to compare against wildtype
     '''

@@ -48,7 +48,7 @@ def describe(df: pd.DataFrame | str, cols:list=[], group:str='', dir:str=None, f
 
     # Compute descriptive statistics
     descriptive = pd.DataFrame()
-    if group !='': descriptive[group] = [multindex[-1] for multindex in df.mean().keys()] # Group
+    if group !='': descriptive[group] = [multindex for multindex in df.mean().keys()] # Group
     descriptive['mean'] = df.mean().reset_index(drop=True) # Mean
     descriptive['median'] = df.median().reset_index(drop=True) # Median
     descriptive['variance'] = df.var().reset_index(drop=True) # Variance
