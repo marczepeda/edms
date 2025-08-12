@@ -28,13 +28,16 @@ Usage:
 - pcr_mm(): NEB Q5 PCR master mix calculations
 
 [Simulation]
-- pcr_sim(): returns dataframe with simulated pcr product 
+- pcr_sim(): returns dataframe with simulated pcr product
+- off_targets(): Find off-target sequences for a list of sequences using pairwise alignment.
 '''
 
 # Import packages
 import pandas as pd
 import numpy as np
+import os
 import random
+from Bio.Align import PairwiseAligner
 from Bio.Seq import Seq
 import datetime
 from ..gen import io
@@ -254,8 +257,9 @@ def ngRNAs(df: pd.DataFrame | str,id: str, tG=True, order=True,
 def epegRNA_pool(df: pd.DataFrame | str, tG:bool=True, make_extension:bool=True,
                  UMI_df: pd.DataFrame | str='../resources/UMI_15_hamming_4_yield_12525.csv',
                  PCR_df: pd.DataFrame| str='../resources/edms_pcr.csv',
-                 RE_type_IIS_df: pd.DataFrame| str='../resources/RE_type_IIS.csv',enzymes: list=['Esp3I'],
-                 barcode:str='Barcode', barcode_i:int=0, fwd_barcode_t5:str='Forward Barcode',rev_barcode_t3:str='Reverse Barcode',
+                 RE_type_IIS_df: pd.DataFrame| str='../resources/RE_type_IIS.csv',
+                 UMI_i: int=0, enzymes: list=['Esp3I'], barcode:str='Barcode', barcode_i:int=0, 
+                 fwd_barcode_t5:str='Forward Barcode',rev_barcode_t3:str='Reverse Barcode',
                  Esp3I_hU6:str='Esp3I_hU6',tevopreQ1_Esp3I:str='tevopreQ1_Esp3I',
                  epegRNA_spacer:str='Spacer_sequence',
                  epegRNA_extension:str='Extension_sequence',epegRNA_RTT:str='RTT_sequence',
@@ -271,9 +275,10 @@ def epegRNA_pool(df: pd.DataFrame | str, tG:bool=True, make_extension:bool=True,
     UMI_df (dataframe | str, optional): Dataframe with UMI sequences (or file path) (Default: '../resources/UMI_15_hamming_4_yield_12525.csv')
     PCR_df (dataframe | str, optional): Dataframe with PCR primer and subpool barcode information (or file path) (Default: '../resources/edms_pcr.csv')
     RE_type_IIS_df (dataframe | str, optional): Dataframe with Type IIS restriction enzyme information (or file path) (Default: '../resources/RE_typeIIS.csv')
+    UMI_i (int, optional): UMI start index (Default: 0)
     enzymes (list, optional): list of Type IIS restriction enzymes to check for (Default: ['Esp3I'])
     barcode (str, optional): subpool barcode column name (Default: Barcode)
-    barcode_i (int, optional): subpool barcode index (Default: 0)
+    barcode_i (int, optional): subpool barcode start index (Default: 0)
     fwd_barcode_t5 (bool, optional): forward barcode column name (Default: Forward Barcode)
     rev_barcode_t3 (bool, optional): reverse barcode column name (Default: Reverse Barcode)
     Esp3I_hU6 (bool, optional): Esp3I_hU6 column name (Default: Esp3I_hU6)
@@ -308,12 +313,13 @@ def epegRNA_pool(df: pd.DataFrame | str, tG:bool=True, make_extension:bool=True,
 
     # Assign subpool barcodes
     barcodes = sorted(df[barcode].unique())
-    PCR_barcodes = PCR_df.iloc[barcode_i:barcode_i+len(barcodes)]
+    PCR_barcodes = PCR_df.iloc[barcode_i:barcode_i+len(barcodes)] # Get corresponding barcodes from PCR dataframe starting at barcode_i
     PCR_barcodes[barcode] = barcodes
     df = pd.merge(left=df,right=PCR_barcodes,on=barcode)
 
     # Assign UMI to each twist oligo
     UMI_sequences = UMI_df['UMI_sequence'].tolist()
+    UMI_sequences = UMI_sequences[UMI_i:] # Get UMIs starting at UMI_i
     if len(UMI_sequences)<df.shape[0]*2: 
         ValueError(f'{len(UMI_sequences)} UMIs is less than 2x{df.shape[0]} twist oligonucleotides!')
 
@@ -487,7 +493,6 @@ def UMI(length: int = 15, GC_fract: tuple = (0.4, 0.6), hamming: int = 4,
         # Filter sequences based on Hamming distance & compare to previously saved sequences
         filtered_sequences_save = fast_filter_by_hamming(sequences = filtered_sequences_save + filtered_sequences[i:i+nrows],
                                                          min_distance = hamming)
-        
 
         # Save the filtered sequences after each iteration
         print(f'Kept {len(filtered_sequences_save)} sequences so far...')
@@ -618,3 +623,84 @@ def pcr_sim(df: pd.DataFrame | str,template_col: str, fwd_bind_col: str, rev_bin
     if dir is not None and file is not None:
         io.save(dir=dir,file=file,obj=df) 
     return df
+
+def off_targets(df: pd.DataFrame | str, col: str, match_score: float = 2, mismatch_score: float = -1, 
+                     open_gap_score: float = -10, extend_gap_score: float = -0.1, ckpt: int = 100,
+                     dir: str = None, return_df: bool = True):
+    '''
+    off_targets(): Find off-target sequences for a list of sequences of the same length using pairwise alignment.
+    
+    Parameters:
+    df (dataframe | str): DataFrame with sequences (or file path)
+    col (str): Column name containing sequences to align.
+    match_score (float, optional): Score for a match in the alignment (Default: 2).
+    mismatch_score (float, optional): Penalty for a mismatch in the alignment (Default: -1).
+    open_gap_score (float, optional): Penalty for opening a gap in the alignment (Default: -10).
+    extend_gap_score (float, optional): Penalty for extending a gap in the alignment (Default: -0.1).
+    ckpt (int, optional): Checkpoint interval for saving progress (Default: 100).
+    dir (str, optional): Directory to save alignment checkpoints (Default: None).
+    return_df (bool, optional): Whether to return a DataFrame with the results (Default: True).
+    '''
+    # High sequence homology; punish gaps
+    aligner = PairwiseAligner()
+    aligner.mode = "global"
+    aligner.match_score = match_score  # Score for a match
+    aligner.mismatch_score = mismatch_score  # Penalty for a mismatch; applied to both strands
+    aligner.open_gap_score = open_gap_score  # Penalty for opening a gap; applied to both strands
+    aligner.extend_gap_score = extend_gap_score  # Penalty for extending a gap; applied to both strands
+
+    if type(df) == str:  # Get sequences dataframe from file path if needed
+        df = io.get(pt=df)
+    if col not in df.columns:  # Check if the specified column exists
+        raise ValueError(f"Column '{col}' not found in the DataFrame. Available columns: {df.columns.tolist()}")
+    seqs = df[col].tolist()  # Extract sequences from the specified column
+
+    # Store target sequences, off-target sequences, their alignments, and their alignment scores
+    off_target_seqs = []
+    off_target_seqs_scores = []
+    off_target_seqs_alignments = []
+    for s,seq in enumerate(seqs): # Iterate though sequences
+        if s==0: # Initial alignment status
+            print(f'{s+1} out of {len(seqs)}') 
+        elif s%(ckpt)==0: # Alignment status; save checkpoint
+            print(f'{s+1} out of {len(seqs)}')
+            if dir is not None:
+                io.save(dir=os.path.join(dir,'ckpt'),
+                        file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_seqs_{s+1}.csv',
+                        obj=pd.DataFrame({'Target Sequence': seqs[:s],
+                                            'Off Target Sequence': off_target_seqs,
+                                            'Best Alignment Score': off_target_seqs_scores,
+                                            'Best Alignment Formatted': off_target_seqs_alignments}))
+            
+        if seq is None: # Missing region (not applicable to count_alignments())
+            continue
+
+        seq_alignments_scores = []
+        seq_alignments_aligned = []
+        for ref in seqs: # Iterate though reference sequences
+            if ref != seq:
+                seq_alignment = aligner.align(seq,ref) # trim ngs sequence to reference sequence & align
+                seq_alignments_scores.append(seq_alignment[0].score) # Save highest alignment score
+                seq_alignments_aligned.append(seq_alignment.sequences[1]) # Save alignment matches
+            else: # Skip self-alignment
+                continue
+
+        # Isolate maximum score alignment
+        i = seq_alignments_scores.index(max(seq_alignments_scores))
+        off_target_seqs.append(seq_alignments_aligned[i])
+        off_target_seqs_scores.append(seq_alignments_scores[i])
+        off_target_seqs_alignments.append(fq.format_alignment(a=seq, b=off_target_seqs[s], show=False, return_alignment=True))
+
+    if dir is not None:  # Save final results
+        io.save(dir=dir,
+                file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_seqs_{s+1}.csv',
+                obj=pd.DataFrame({'Target Sequence': seqs[:s],
+                                  'Off Target Sequence': off_target_seqs,
+                                  'Best Alignment Score': off_target_seqs_scores,
+                                  'Best Alignment Formatted': off_target_seqs_alignments}))
+    
+    if return_df:  # Return results as a DataFrame
+        return pd.DataFrame({'Target Sequence': seqs,
+                             'Off Target Sequence': off_target_seqs,
+                             'Best Alignment Score': off_target_seqs_scores,
+                             'Best Alignment Formatted': off_target_seqs_alignments})

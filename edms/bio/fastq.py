@@ -1432,14 +1432,15 @@ def trim(seq: str|Seq):
         seq = seq[:-1]
     return seq
 
-def format_alignment(a: str|Seq, b: str|Seq, show: bool=False):
+def format_alignment(a: str|Seq, b: str|Seq, show: bool=False, return_alignment: bool=False):
     '''
     format_alignment(): formats two sequences for alignment display & return the middle.
     
     Parameters:
     a (str|Seq): The first sequence.
     b (str|Seq): The second sequence.
-    show (bool): If True, prints the formatted alignment.
+    show (bool, optional): Print the formatted alignment (Default: False).
+    return_alignment (bool, optional): Returns the full formatted alignment (True) or just the middle alignment (False; Default: False).
     '''
     # Determine the middle of the alignment
     mid = []
@@ -1453,8 +1454,12 @@ def format_alignment(a: str|Seq, b: str|Seq, show: bool=False):
     mid = ''.join(mid)
 
     # Format the sequences for display & return
-    if show: print(f"{a}\n{mid}\n{b}")
-    return mid
+    if show: 
+        print(f"{a}\n{mid}\n{b}")
+    if return_alignment is True:
+        return f"{a}\n{mid}\n{b}"
+    else:
+        return mid
 
 def find_indel(wt:str|Seq, mut:str|Seq, res: int, show:bool=False,
                match_score: float = 2, mismatch_score: float = -1, 
@@ -1484,7 +1489,7 @@ def find_indel(wt:str|Seq, mut:str|Seq, res: int, show:bool=False,
 
     # Get the best protein alignment
     alignment = aligner.align(Seq(trim(wt)).translate(),Seq(trim(mut)).translate())[0]
-    mid = format_alignment(alignment[0], alignment[1], show=show)
+    mid = format_alignment(alignment[0], alignment[1], show=show, return_alignment=False) # Just get the middle alignment
 
     if len(mut)%3!=0: # Frameshift Indel
         

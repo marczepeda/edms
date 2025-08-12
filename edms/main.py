@@ -915,7 +915,8 @@ def main():
     - epegRNAs(): design GG cloning oligonucleotides for prime editing epegRNAs
     - ngRNAs(): design GG cloning oligonucleotides for prime editing ngRNAs
     - epegRNA_pool(): makes twist oligonucleotides for prime editing
-    - pcr_sim(): returns dataframe with simulated pcr product 
+    - pcr_sim(): returns dataframe with simulated pcr product
+    - off_targets(): Find off-target sequences for a list of sequences using pairwise alignment.
     '''
     parser_clone = subparsers.add_parser("clone", help="Molecular cloning")
     subparsers_clone = parser_clone.add_subparsers()
@@ -1001,9 +1002,10 @@ def main():
     parser_clone_epegRNA_pool.add_argument("--UMI_df", type=str, help="UMI sequences file path", default=argparse.SUPPRESS)
     parser_clone_epegRNA_pool.add_argument("--PCR_df", type=str, help="PCR primer and subpool barcode file path", default=argparse.SUPPRESS)
     parser_clone_epegRNA_pool.add_argument("--RE_type_IIS_df", type=str, help="RE Type IIS file path", default=argparse.SUPPRESS)
+    parser_clone_epegRNA_pool.add_argument("--UMI_i", type=int, help="UMI start index (Default: 0)", default=0)
     parser_clone_epegRNA_pool.add_argument("--enzymes", type=str, nargs="+", help="List of Type IIS restriction enzymes to check for (Default: Esp3I)", default='Esp3I')
     parser_clone_epegRNA_pool.add_argument("--barcode", type=str, help="subpool barcode column name (Default: Barcode)", default='Barcode')
-    parser_clone_epegRNA_pool.add_argument("--barcode_i", type=int, help="subpool barcode index (Default: 0)", default=0)
+    parser_clone_epegRNA_pool.add_argument("--barcode_i", type=int, help="subpool barcode start index (Default: 0)", default=0)
     parser_clone_epegRNA_pool.add_argument("--fwd_barcode_t5", type=str, default="Forward Barcode", help="Forward barcode column name")
     parser_clone_epegRNA_pool.add_argument("--rev_barcode_t3", type=str, default="Reverse Barcode", help="Reverse barcode column name")
     parser_clone_epegRNA_pool.add_argument("--Esp3I_hU6", type=str, default="Esp3I_hU6", help="Esp3I_hU6 column name")
@@ -1044,6 +1046,21 @@ def main():
     parser_clone_pcrsim.add_argument("--product_col", type=str, default="PCR Product", help="Column name for output PCR product")
     
     parser_clone_pcrsim.set_defaults(func=cl.pcr_sim)
+
+    # off_targets(): Find off-target sequences for a list of sequences using pairwise alignment.
+    parser_clone_off_targets = subparsers_clone.add_parser("off_targets", help="Find off-target sequences for a list of sequences of the same length using pairwise alignment")
+
+    parser_clone_off_targets.add_argument("--df", type=str, help="Input file path containing sequences", required=True)
+    parser_clone_off_targets.add_argument("--col", type=str, help="Column name containing sequences to align", required=True)
+
+    parser_clone_off_targets.add_argument("--dir", type=str, help="Output directory", default='../out')
+    parser_clone_off_targets.add_argument("--ckpt", type=int, help="Checkpoint interval for saving progress (Default: 100)", default=100)
+    parser_clone_off_targets.add_argument("--match_score", type=float, help="Match score for pairwise alignment", default=argparse.SUPPRESS)
+    parser_clone_off_targets.add_argument("--mismatch_score", type=float, help="Mismatch score for pairwise alignment", default=argparse.SUPPRESS)
+    parser_clone_off_targets.add_argument("--open_gap_score", type=float, help="Open gap score for pairwise alignment", default=argparse.SUPPRESS)
+    parser_clone_off_targets.add_argument("--extend_gap_score", type=float, help="Extend gap score for pairwise alignment", default=argparse.SUPPRESS)
+
+    parser_clone_off_targets.set_defaults(func=cl.off_targets)
 
     '''
     edms.bio.transfect
