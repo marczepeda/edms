@@ -441,10 +441,10 @@ def fast_filter_by_hamming(sequences: list, min_distance: int, dir: str = '../ou
         if np.all(distances > min_distance):
             keep_indices.append(i)
         
-        if len(keep_indices) % 1000 == 0:
+        if len(keep_indices) % 1000 == 0: # Save iteratively every 1000 sequences
             print(f'Kept {len(keep_indices)} sequences so far...')
             io.save(dir=dir, 
-                    file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{len(sequences[0])}_hamming_{min_distance}_compare_{len(sequences)}_yield_{len(keep_indices)}.csv', #_shuffle_hamming_{hamming}
+                    file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{len(sequences[0])}_hamming_{min_distance}_compare_{len(sequences)}_yield_{len(keep_indices)}.csv',
                     obj=pd.DataFrame({'UMI_sequence': [sequences[i] for i in keep_indices]}))
     
     return [sequences[i] for i in keep_indices]
