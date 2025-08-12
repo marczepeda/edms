@@ -21,6 +21,7 @@ Usage:
 - shuffle(): randomly reorganizes a list
 - encode_sequences(): Convert sequences to integer arrays for fast comparison.
 - fast_filter_by_hamming(): fastFilter sequences such that all retained sequences have a Hamming distance 'min_distance' from each other, using NumPy for speed.
+- count_csv_rows(): counts number of rows in a csv file (subtracting 1 for header)
 - UMI(): generates unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance
 
 [Master Mix]
@@ -449,8 +450,18 @@ def fast_filter_by_hamming(sequences: list, min_distance: int, dir: str = '../ou
     
     return [sequences[i] for i in keep_indices]
 
+def count_csv_rows(pt:str):
+    '''
+    count_csv_rows(): counts number of rows in a csv file (subtracting 1 for header)
+
+    Parameters:
+    pt (str): file path to csv file
+    '''
+    with open(pt, 'r') as f:
+        return sum(1 for line in f) - 1  # subtract 1 for header
+
 def UMI(length: int = 15, GC_fract: tuple = (0.4, 0.6), shuffle: bool = True,
-        hamming: int = 5, nrows: int=1000000, pt: str=None, dir: str = '../out'):
+        hamming: int = 5, nrows: int=1000, pt: str=None, dir: str = '../out'):
     '''
     UMI(): generates unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance
     
@@ -458,8 +469,8 @@ def UMI(length: int = 15, GC_fract: tuple = (0.4, 0.6), shuffle: bool = True,
     length (int, optional): length of the unique molecular identifiers (Default: 15)
     GC_fract (tuple, optional): pair of GC content boundaries written as fractions (Default: (0.4, 0.6))
     shuffle (bool, optional): randomly reorganize the list of UMIs (Default: True)
-    hamming (int, optional): number of Hamming distance to filter UMIs (Default: 5)
-    nrows (int, optional): number of UMIs to use for hamming filtering (Default: 1000000)
+    hamming (int, optional): Minimum Hamming distance between UMIs (Default: 5)
+    nrows (int, optional): # of UMIs to compare iteratively for hamming filtering (Default: 1000)
     pt (str, optional): Shuffled UMI file path if already made (Default: None)
     dir (str, optional): save directory
     '''
@@ -478,15 +489,24 @@ def UMI(length: int = 15, GC_fract: tuple = (0.4, 0.6), shuffle: bool = True,
                     file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{length}.csv', 
                     obj=pd.DataFrame({'UMI_sequence': filtered_sequences}))
     
-        filtered_sequences = filtered_sequences[:nrows] # Limit to nrows for hamming filtering
+        #filtered_sequences = filtered_sequences[:nrows] # Limit to nrows for hamming filtering
 
     else: # Load from provided file path
-        filtered_sequences = io.get(pt=pt,nrows=nrows)['UMI_sequence'].tolist()
+        #filtered_sequences = io.get(pt=pt,nrows=nrows)['UMI_sequence'].tolist()
+        filtered_sequences = io.get(pt=pt)['UMI_sequence'].tolist()
     
-    filtered_sequences = fast_filter_by_hamming(sequences=filtered_sequences, min_distance=hamming) # Filter sequences based on Hamming distance
+    filtered_sequences_save = [] # List to save filtered sequences iteratively
+    for i in np.arange(start=0, stop=count_csv_rows(pt), step=nrows): # Process in chunks of nrows
+        filtered_sequences_save.extend( # Filter sequences based on Hamming distance & compare to previously saved sequences
+            fast_filter_by_hamming(sequences = filtered_sequences_save + filtered_sequences[i:i+nrows],
+                                   min_distance = hamming,
+                                   dir = dir)
+        )
+    #filtered_sequences = fast_filter_by_hamming(sequences=filtered_sequences, min_distance=hamming,dir=dir) # Filter sequences based on Hamming distance
+
     io.save(dir=dir, 
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{length}_hamming_{hamming}_compare_{nrows}_yield_{len(filtered_sequences)}.csv', 
-            obj=pd.DataFrame({'UMI_sequence': filtered_sequences}))
+            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{length}_hamming_{hamming}_compare_{nrows}_yield_{len(filtered_sequences_save)}.csv', 
+            obj=pd.DataFrame({'UMI_sequence': filtered_sequences_save}))
 
 # Master Mix
 def pcr_mm(primers: pd.Series, template_uL: int, template='1-2 ng/uL template',

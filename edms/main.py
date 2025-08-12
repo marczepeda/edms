@@ -1023,12 +1023,12 @@ def main():
     parser_clone_UMI.add_argument("--GC_fract", type=parse_tuple_float, default=(0.4,0.6), help="Pair of GC content boundaries written as fractions (Default: 0.4,0.6)")
     parser_clone_UMI.add_argument("--no_shuffle", action='store_false', default=True, dest='shuffle', help="Do not randomly reorganize the list of UMIs")
     parser_clone_UMI.add_argument("--hamming", type=int, help="Minimum Hamming distance between UMIs", default=5)
-    parser_clone_UMI.add_argument("--nrows", type=int, help="# of UMIs to use for hamming filtering (Default: 1000000)", default=100000)
+    parser_clone_UMI.add_argument("--nrows", type=int, help="# of UMIs to compare iteratively for hamming filtering (Default: 1000)", default=1000)
     parser_clone_UMI.add_argument("--pt", type=str, help="Shuffled UMI file path if already made (Default: None)", default=argparse.SUPPRESS)
     parser_clone_UMI.add_argument("--dir", type=str, help="Output directory", default='../out')
 
     parser_clone_UMI.set_defaults(func=cl.UMI)
-    
+
     # pcr_sim(): returns dataframe with simulated pcr product 
     parser_clone_pcrsim = subparsers_clone.add_parser("pcr_sim", help="Simulate PCR product from template and primer sequences")
 
