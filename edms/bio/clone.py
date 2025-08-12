@@ -252,7 +252,7 @@ def ngRNAs(df: pd.DataFrame | str,id: str, tG=True, order=True,
 
 # Library GG cloning
 def epegRNA_pool(df: pd.DataFrame | str, tG:bool=True, make_extension:bool=True,
-                 UMI_df: pd.DataFrame | str='../resources/UMI_15_shuffle_hamming_5_100000.csv',
+                 UMI_df: pd.DataFrame | str='../resources/UMI_15_hamming_4_yield_12525.csv',
                  PCR_df: pd.DataFrame| str='../resources/edms_pcr.csv',
                  RE_type_IIS_df: pd.DataFrame| str='../resources/RE_type_IIS.csv',enzymes: list=['Esp3I'],
                  barcode:str='Barcode', barcode_i:int=0, fwd_barcode_t5:str='Forward Barcode',rev_barcode_t3:str='Reverse Barcode',
@@ -268,7 +268,7 @@ def epegRNA_pool(df: pd.DataFrame | str, tG:bool=True, make_extension:bool=True,
     df (dataframe | str): Dataframe with sequence information for epegRNAs & corresponding ngRNAs (or file path)
     tG (bool, optional): add 5' G to spacer if needed (Default: True)
     make_extension (bool, optional): concatenate RTT, PBS, and linker to make extension sequence (Default: True)
-    UMI_df (dataframe | str, optional): Dataframe with UMI sequences (or file path) (Default: '../resources/UMI_15_shuffle_hamming_5_100000.csv')
+    UMI_df (dataframe | str, optional): Dataframe with UMI sequences (or file path) (Default: '../resources/UMI_15_hamming_4_yield_12525.csv')
     PCR_df (dataframe | str, optional): Dataframe with PCR primer and subpool barcode information (or file path) (Default: '../resources/edms_pcr.csv')
     RE_type_IIS_df (dataframe | str, optional): Dataframe with Type IIS restriction enzyme information (or file path) (Default: '../resources/RE_typeIIS.csv')
     enzymes (list, optional): list of Type IIS restriction enzymes to check for (Default: ['Esp3I'])
@@ -453,16 +453,15 @@ def count_csv_rows(pt:str):
     with open(pt, 'r') as f:
         return sum(1 for line in f) - 1  # subtract 1 for header
 
-def UMI(length: int = 15, GC_fract: tuple = (0.4, 0.6), shuffle: bool = True,
-        hamming: int = 5, nrows: int=1000, pt: str=None, dir: str = '../out'):
+def UMI(length: int = 15, GC_fract: tuple = (0.4, 0.6), hamming: int = 4, 
+        nrows: int=1000, pt: str=None, dir: str = '../out'):
     '''
     UMI(): generates unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance
     
     Parameters:
     length (int, optional): length of the unique molecular identifiers (Default: 15)
     GC_fract (tuple, optional): pair of GC content boundaries written as fractions (Default: (0.4, 0.6))
-    shuffle (bool, optional): randomly reorganize the list of UMIs (Default: True)
-    hamming (int, optional): Minimum Hamming distance between UMIs (Default: 5)
+    hamming (int, optional): Minimum Hamming distance between UMIs (Default: 4)
     nrows (int, optional): # of UMIs to compare iteratively for hamming filtering (Default: 1000)
     pt (str, optional): Shuffled UMI file path if already made (Default: None)
     dir (str, optional): save directory
@@ -472,30 +471,28 @@ def UMI(length: int = 15, GC_fract: tuple = (0.4, 0.6), shuffle: bool = True,
         filtered_sequences = filter_GC(sequences=sequences, GC_fract=GC_fract) # Filter sequences based on GC content
         print(f'Generated {len(filtered_sequences)} sequences of length {length} with GC content between {GC_fract[0]} and {GC_fract[1]}.')
 
-        if shuffle is True: # Shuffle the sequences if specified & save
-            filtered_sequences = shuffle(ls=filtered_sequences)
-            io.save(dir=dir, 
-                    file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{length}_shuffle.csv', 
-                    obj=pd.DataFrame({'UMI_sequence': filtered_sequences}))
-        else:
-            io.save(dir=dir, 
-                    file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{length}.csv', 
-                    obj=pd.DataFrame({'UMI_sequence': filtered_sequences}))
+        filtered_sequences = shuffle(ls=filtered_sequences)
+        io.save(dir=dir, 
+                file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{length}.csv', 
+                obj=pd.DataFrame({'UMI_sequence': filtered_sequences}))
+        
+        stop = len(filtered_sequences)
 
     else: # Load from provided file path
         filtered_sequences = io.get(pt=pt)['UMI_sequence'].tolist()
+        stop = count_csv_rows(pt)
     
     filtered_sequences_save = [] # List to save filtered sequences iteratively
-    for i in np.arange(start=0, stop=count_csv_rows(pt), step=nrows): # Process in chunks of nrows
-        filtered_sequences_save.extend( # Filter sequences based on Hamming distance & compare to previously saved sequences
-            fast_filter_by_hamming(sequences = filtered_sequences_save + filtered_sequences[i:i+nrows],
-                                   min_distance = hamming)
-        )
+    for i in np.arange(start=0, stop=stop, step=nrows): # Process in chunks of nrows
+        # Filter sequences based on Hamming distance & compare to previously saved sequences
+        filtered_sequences_save = fast_filter_by_hamming(sequences = filtered_sequences_save + filtered_sequences[i:i+nrows],
+                                                         min_distance = hamming)
+        
 
         # Save the filtered sequences after each iteration
         print(f'Kept {len(filtered_sequences_save)} sequences so far...')
         io.save(dir=dir, 
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{length}_hamming_{hamming}_compare_{nrows}_yield_{len(filtered_sequences_save)}.csv', 
+            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{length}_hamming_{hamming}_yield_{len(filtered_sequences_save)}.csv', 
             obj=pd.DataFrame({'UMI_sequence': filtered_sequences_save}))
 
 # Master Mix
