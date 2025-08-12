@@ -416,13 +416,14 @@ def encode_sequences(seq_list: list):
     base_to_int = {'A': 0, 'C': 1, 'G': 2, 'T': 3}
     return np.array([[base_to_int[base] for base in seq] for seq in seq_list], dtype=np.uint8)
 
-def fast_filter_by_hamming(sequences: list, min_distance: int):
+def fast_filter_by_hamming(sequences: list, min_distance: int, dir: str = '../out'):
     """
     fast_filter_by_hamming(): fastFilter sequences such that all retained sequences have a Hamming distance 'min_distance' from each other, using NumPy for speed.
     
     Parameters:
     sequences (list of str): List of equal-length DNA sequences (A/C/G/T).
     min_distance (int): Minimum required Hamming distance.
+    dir (str, optional): save directory for intermediate results (Default: '../out')
     """
     if not sequences:
         return []
@@ -439,6 +440,12 @@ def fast_filter_by_hamming(sequences: list, min_distance: int):
         
         if np.all(distances > min_distance):
             keep_indices.append(i)
+        
+        if len(keep_indices) % 1000 == 0:
+            print(f'Kept {len(keep_indices)} sequences so far...')
+            io.save(dir=dir, 
+                    file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{len(sequences[0])}_hamming_{min_distance}_compare_{len(sequences)}_yield_{len(keep_indices)}.csv', #_shuffle_hamming_{hamming}
+                    obj=pd.DataFrame({'UMI_sequence': [sequences[i] for i in keep_indices]}))
     
     return [sequences[i] for i in keep_indices]
 
@@ -461,11 +468,15 @@ def UMI(length: int = 15, GC_fract: tuple = (0.4, 0.6), shuffle: bool = True,
         filtered_sequences = filter_GC(sequences=sequences, GC_fract=GC_fract) # Filter sequences based on GC content
         print(f'Generated {len(filtered_sequences)} sequences of length {length} with GC content between {GC_fract[0]} and {GC_fract[1]}.')
 
-        if shuffle: # Shuffle the sequences if specified & save
+        if shuffle is True: # Shuffle the sequences if specified & save
             filtered_sequences = shuffle(ls=filtered_sequences)
-            io.save(dir=dir, file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{length}_shuffle.csv', obj=pd.DataFrame({'UMI_sequence': filtered_sequences}))
+            io.save(dir=dir, 
+                    file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{length}_shuffle.csv', 
+                    obj=pd.DataFrame({'UMI_sequence': filtered_sequences}))
         else:
-            io.save(dir=dir, file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{length}.csv', obj=pd.DataFrame({'UMI_sequence': filtered_sequences}))
+            io.save(dir=dir, 
+                    file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{length}.csv', 
+                    obj=pd.DataFrame({'UMI_sequence': filtered_sequences}))
     
         filtered_sequences = filtered_sequences[:nrows] # Limit to nrows for hamming filtering
 
@@ -473,7 +484,9 @@ def UMI(length: int = 15, GC_fract: tuple = (0.4, 0.6), shuffle: bool = True,
         filtered_sequences = io.get(pt=pt,nrows=nrows)['UMI_sequence'].tolist()
     
     filtered_sequences = fast_filter_by_hamming(sequences=filtered_sequences, min_distance=hamming) # Filter sequences based on Hamming distance
-    io.save(dir=dir, file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{length}_shuffle_hamming_{hamming}_{len(filtered_sequences)}.csv', obj=pd.DataFrame({'UMI_sequence': filtered_sequences}))
+    io.save(dir=dir, 
+            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{length}_hamming_{hamming}_compare_{nrows}_yield_{len(filtered_sequences)}.csv', 
+            obj=pd.DataFrame({'UMI_sequence': filtered_sequences}))
 
 # Master Mix
 def pcr_mm(primers: pd.Series, template_uL: int, template='1-2 ng/uL template',

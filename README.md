@@ -67,7 +67,8 @@ edms -h # or edms <TAB>
     cd ~/git/edms
     conda activate edms
     pip uninstall edms # Enter 'Y' when prompted
-    
+    rm -rf build/ dist/ *.egg-info
+
     ```
 2. Pull latest version from github and install edms:
     ```shell
