@@ -914,8 +914,7 @@ def main():
     - sgRNAs(): design GG cloning oligonucleotides for cutting and base editing sgRNAs
     - epegRNAs(): design GG cloning oligonucleotides for prime editing epegRNAs
     - ngRNAs(): design GG cloning oligonucleotides for prime editing ngRNAs
-    - ng_epegRNAs(): design GG cloning oligonucleotides for prime editing ng/epegRNAs (all-in-one vector)
-    - pe_twist_oligos(): makes twist oligonucleotides for prime editing
+    - epegRNA_pool(): makes twist oligonucleotides for prime editing
     - pcr_sim(): returns dataframe with simulated pcr product 
     '''
     parser_clone = subparsers.add_parser("clone", help="Molecular cloning")
@@ -989,69 +988,46 @@ def main():
 
     parser_clone_ngRNAs.set_defaults(func=cl.ngRNAs)
 
-    # ng_epegRNAs(): design GG cloning oligonucleotides for prime editing ng/epegRNAs (all-in-one vector)
-    parser_clone_ng_epegRNAs = subparsers_clone.add_parser("ng_epegRNAs", help="Design GG oligos for ng/epegRNAs (all-in-one vector)")
-
-    parser_clone_ng_epegRNAs.add_argument("--df", type=str, help="Input file path", required=True)
-    parser_clone_ng_epegRNAs.add_argument("--id", type=str, help="Column name for unique sequence identifier",required=True)
-
-    parser_clone_ng_epegRNAs.add_argument("--dir", help="Output directory path", type=str, default='../out')
-    parser_clone_ng_epegRNAs.add_argument("--file", help="Output file name", type=str, default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_ng_epegRNAs.csv')
-
-    parser_clone_ng_epegRNAs.add_argument("--dont_tG", dest="tG", default=True, action="store_false", help="Don't add 5' G to spacer if needed")
-    parser_clone_ng_epegRNAs.add_argument("--dont_order", dest="order", default=True, action="store_false", help="Don't format output for ordering oligos")
-    parser_clone_ng_epegRNAs.add_argument("--order_epegRNA_scaffold", action="store_true", help="Include epegRNA scaffold sequence in the oligo order")
-    parser_clone_ng_epegRNAs.add_argument("--dont_make_extension", dest="make_extension", default=True, action="store_false", help="Don't build extension from RTT, PBS, and linker")
-    parser_clone_ng_epegRNAs.add_argument("--ng_spacer", type=str, default="Spacer_sequence_ngRNA", help="Column name for ngRNA spacer sequence")
-    parser_clone_ng_epegRNAs.add_argument("--ng_spacer_t5", type=str, default="GTTT", help="Top 5' overhang for ngRNA spacer")
-    parser_clone_ng_epegRNAs.add_argument("--ng_spacer_t3", type=str, default="", help="Top 3' overhang for ngRNA spacer")
-    parser_clone_ng_epegRNAs.add_argument("--ng_spacer_b5", type=str, default="AAAC", help="Bottom 5' overhang for ngRNA spacer")
-    parser_clone_ng_epegRNAs.add_argument("--ng_spacer_b3", type=str, default="", help="Bottom 3' overhang for ngRNA spacer")
-    parser_clone_ng_epegRNAs.add_argument("--epeg_spacer", type=str, default="Spacer_sequence_epegRNA", help="Column name for epegRNA spacer sequence")
-    parser_clone_ng_epegRNAs.add_argument("--epeg_spacer_t5", type=str, default="CACC", help="Top 5' overhang for epegRNA spacer")
-    parser_clone_ng_epegRNAs.add_argument("--epeg_spacer_t3", type=str, default="GTTTAAGAGC", help="Top 3' overhang for epegRNA spacer")
-    parser_clone_ng_epegRNAs.add_argument("--epeg_spacer_b5", type=str, default="", help="Bottom 5' overhang for epegRNA spacer")
-    parser_clone_ng_epegRNAs.add_argument("--epeg_spacer_b3", type=str, default="", help="Bottom 3' overhang for epegRNA spacer")
-    parser_clone_ng_epegRNAs.add_argument("--extension", type=str, default="Extension_sequence", help="Column name for epegRNA extension sequence")
-    parser_clone_ng_epegRNAs.add_argument("--extension_t5", type=str, default="", help="Top 5' overhang for epegRNA extension")
-    parser_clone_ng_epegRNAs.add_argument("--extension_t3", type=str, default="", help="Top 3' overhang for epegRNA extension")
-    parser_clone_ng_epegRNAs.add_argument("--extension_b5", type=str, default="CGCG", help="Bottom 5' overhang for epegRNA extension")
-    parser_clone_ng_epegRNAs.add_argument("--extension_b3", type=str, default="GCACCGACTC", help="Bottom 3' overhang for epegRNA extension")
-    parser_clone_ng_epegRNAs.add_argument("--RTT", type=str, default="RTT_sequence", help="Column name for RTT (reverse transcriptase template)")
-    parser_clone_ng_epegRNAs.add_argument("--PBS", type=str, default="PBS_sequence", help="Column name for PBS (primer binding site)")
-    parser_clone_ng_epegRNAs.add_argument("--linker", type=str, default="Linker_sequence", help="Column name for linker")
-
-    parser_clone_ng_epegRNAs.set_defaults(func=cl.ng_epegRNAs)
-
-    # pe_twist_oligos(): makes twist oligonucleotides for prime editing
-    parser_clone_pe_twist = subparsers_clone.add_parser("pe_twist", help="Design Twist oligos for PE constructs")
+    # epegRNA_pool(): makes twist oligonucleotides for prime editing
+    parser_clone_epegRNA_pool = subparsers_clone.add_parser("epegRNA_pool", help="Design GG oligos for pooled epegRNAs")
     
-    parser_clone_pe_twist.add_argument("--df", type=str, help="Input file path", required=True)
-    parser_clone_pe_twist.add_argument("--id_pre", type=str, help="Prefix for ID column", required=True)
+    parser_clone_epegRNA_pool.add_argument("--df", type=str, help="Input file path", required=True)
 
-    parser_clone_pe_twist.add_argument("--dir", type=str, help="Output directory", default='../out')
-    parser_clone_pe_twist.add_argument("--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_pe_twist.csv')
+    parser_clone_epegRNA_pool.add_argument("--dir", type=str, help="Output directory", default='../out')
+    parser_clone_epegRNA_pool.add_argument("--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_epegRNA_pool.csv')
 
-    parser_clone_pe_twist.add_argument("--tG", action="store_true", help="Add 5' G to spacers if needed")
-    parser_clone_pe_twist.add_argument("--make_extension", action="store_true", help="Build extension from RTT, PBS, and linker")
-    parser_clone_pe_twist.add_argument("--UMI_length", type=int, default=8, help="Length of UMI (Default: 8)")
-    parser_clone_pe_twist.add_argument("--UMI_GC_fract", nargs=2, type=float, default=(0.4, 0.6), help="Tuple for GC content bounds (e.g. 0.4 0.6)")
-    parser_clone_pe_twist.add_argument("--fwd_barcode_t5", type=str, default="Forward Barcode", help="Forward barcode column name")
-    parser_clone_pe_twist.add_argument("--rev_barcode_t3", type=str, default="Reverse Barcode", help="Reverse barcode column name")
-    parser_clone_pe_twist.add_argument("--homology_arm_t5", type=str, default="Homology Arm 5", help="Homology arm 5' column name")
-    parser_clone_pe_twist.add_argument("--homology_arm_t3", type=str, default="Homology Arm 3", help="Homology arm 3' column name")
-    parser_clone_pe_twist.add_argument("--ngRNA_hU6_gg_insert", type=str, default="GTTTAGAGACGATCGACGTCTCACACC", help="Insert sequence for hU6 Golden Gate ngRNA")
-    parser_clone_pe_twist.add_argument("--epegRNA_gg_insert", type=str, default="GTTTAAGAGCAGGTGCTAGACCTGCGTCGGTGC", help="Insert sequence for Golden Gate epegRNA")
-    parser_clone_pe_twist.add_argument("--ngRNA_spacer", type=str, default="Spacer_sequence_ngRNA", help="ngRNA spacer column")
-    parser_clone_pe_twist.add_argument("--epegRNA_spacer", type=str, default="Spacer_sequence_epegRNA", help="epegRNA spacer column")
-    parser_clone_pe_twist.add_argument("--epegRNA_extension", type=str, default="Extension_sequence", help="epegRNA extension column")
-    parser_clone_pe_twist.add_argument("--epegRNA_RTT", type=str, default="RTT_sequence", help="RTT column name")
-    parser_clone_pe_twist.add_argument("--epegRNA_PBS", type=str, default="PBS_sequence", help="PBS column name")
-    parser_clone_pe_twist.add_argument("--epegRNA_linker", type=str, default="Linker_sequence", help="Linker column name")
-    parser_clone_pe_twist.add_argument("--epegRNA_pbs_length", type=str, default="PBS_length", help="PBS length column name")
-    parser_clone_pe_twist.add_argument("--ngRNA_group", type=str, default="ngRNA_group", help="Group column name for ngRNAs")
+    parser_clone_epegRNA_pool.add_argument("--tG", action="store_true", help="Add 5' G to spacers if needed")
+    parser_clone_epegRNA_pool.add_argument("--make_extension", action="store_true", help="Build extension from RTT, PBS, and linker")
+    parser_clone_epegRNA_pool.add_argument("--UMI_df", type=str, help="UMI sequences file path", default=argparse.SUPPRESS)
+    parser_clone_epegRNA_pool.add_argument("--PCR_df", type=str, help="PCR primer and subpool barcode file path", default=argparse.SUPPRESS)
+    parser_clone_epegRNA_pool.add_argument("--RE_type_IIS_df", type=str, help="RE Type IIS file path", default=argparse.SUPPRESS)
+    parser_clone_epegRNA_pool.add_argument("--enzymes", type=str, nargs="+", help="List of Type IIS restriction enzymes to check for (Default: Esp3I)", default='Esp3I')
+    parser_clone_epegRNA_pool.add_argument("--barcode", type=str, help="subpool barcode column name (Default: Barcode)", default='Barcode')
+    parser_clone_epegRNA_pool.add_argument("--barcode_i", type=int, help="subpool barcode index (Default: 0)", default=0)
+    parser_clone_epegRNA_pool.add_argument("--fwd_barcode_t5", type=str, default="Forward Barcode", help="Forward barcode column name")
+    parser_clone_epegRNA_pool.add_argument("--rev_barcode_t3", type=str, default="Reverse Barcode", help="Reverse barcode column name")
+    parser_clone_epegRNA_pool.add_argument("--Esp3I_hU6", type=str, default="Esp3I_hU6", help="Esp3I_hU6 column name")
+    parser_clone_epegRNA_pool.add_argument("--tevopreQ1_Esp3I", type=str, default="tevopreQ1_Esp3I", help="tevopreQ1_Esp3I column name")
+    parser_clone_epegRNA_pool.add_argument("--epegRNA_spacer", type=str, default="Spacer_sequence", help="epegRNA spacer column")
+    parser_clone_epegRNA_pool.add_argument("--epegRNA_extension", type=str, default="Extension_sequence", help="epegRNA extension column")
+    parser_clone_epegRNA_pool.add_argument("--epegRNA_RTT", type=str, default="RTT_sequence", help="epegRNA RTT column name")
+    parser_clone_epegRNA_pool.add_argument("--epegRNA_PBS", type=str, default="PBS_sequence", help="epegRNA PBS column name")
+    parser_clone_epegRNA_pool.add_argument("--epegRNA_linker", type=str, default="Linker_sequence", help="epegRNA Linker column name")
 
-    parser_clone_pe_twist.set_defaults(func=cl.pe_twist_oligos) 
+    parser_clone_epegRNA_pool.set_defaults(func=cl.epegRNA_pool) 
+    
+    # UMI(): generates unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance
+    parser_clone_UMI = subparsers_clone.add_parser("UMI", help="Generate unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance")
+
+    parser_clone_UMI.add_argument("--length", type=int, help="Length of UMI (Default: 15)", default=15)
+    parser_clone_UMI.add_argument("--GC_fract", type=parse_tuple_float, default=(0.4,0.6), help="Pair of GC content boundaries written as fractions (Default: 0.4,0.6)")
+    parser_clone_UMI.add_argument("--no_shuffle", action='store_false', default=True, dest='shuffle', help="Do not randomly reorganize the list of UMIs")
+    parser_clone_UMI.add_argument("--hamming", type=int, help="Minimum Hamming distance between UMIs", default=5)
+    parser_clone_UMI.add_argument("--nrows", type=int, help="# of UMIs to use for hamming filtering (Default: 1000000)", default=100000)
+    parser_clone_UMI.add_argument("--pt", type=str, help="Shuffled UMI file path if already made (Default: None)", default=argparse.SUPPRESS)
+    parser_clone_UMI.add_argument("--dir", type=str, help="Output directory", default='../out')
+
+    parser_clone_UMI.set_defaults(func=cl.UMI)
     
     # pcr_sim(): returns dataframe with simulated pcr product 
     parser_clone_pcrsim = subparsers_clone.add_parser("pcr_sim", help="Simulate PCR product from template and primer sequences")

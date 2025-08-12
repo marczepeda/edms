@@ -11,15 +11,17 @@ Usage:
 - sgRNAs(): design GG cloning oligonucleotides for cutting and base editing sgRNAs
 - epegRNAs(): design GG cloning oligonucleotides for prime editing epegRNAs
 - ngRNAs(): design GG cloning oligonucleotides for prime editing ngRNAs
-- ng_epegRNAs(): design GG cloning oligonucleotides for prime editing ng/epegRNAs (all-in-one vector)
 
 [Library GG Cloning]
-- pe_pcr1: Dataframe of PE library PCR1 primers
-- RE_typeIIS: Dataframe of TypeIIS restriction enzymes
+- epegRNA_pool(): design GG cloning oligonucleotides for pooled prime editing epegRNAs
+
+[UMIs]
 - generate_sequences(): recursively generates all possible sequences of A, T, C, G of the specified length
 - filter_GC(): filters sequences based on GC content
 - shuffle(): randomly reorganizes a list
-- pe_twist_oligos(): makes twist oligonucleotides for prime editing
+- encode_sequences(): Convert sequences to integer arrays for fast comparison.
+- fast_filter_by_hamming(): fastFilter sequences such that all retained sequences have a Hamming distance 'min_distance' from each other, using NumPy for speed.
+- UMI(): generates unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance
 
 [Master Mix]
 - pcr_mm(): NEB Q5 PCR master mix calculations
@@ -33,6 +35,7 @@ import pandas as pd
 import numpy as np
 import random
 from Bio.Seq import Seq
+import datetime
 from ..gen import io
 from ..gen import tidy as t
 
@@ -246,296 +249,118 @@ def ngRNAs(df: pd.DataFrame | str,id: str, tG=True, order=True,
         io.save(dir=dir,file=file,obj=df)  
     return df
 
-def ng_epegRNAs(df: pd.DataFrame | str,id: str,tG=True, order=True,make_extension=True,
-                ng_spacer='Spacer_sequence_ngRNA', ng_spacer_t5='GTTT',ng_spacer_t3='',ng_spacer_b5='AAAC',ng_spacer_b3='',
-                epeg_spacer='Spacer_sequence_epegRNA',epeg_spacer_t5='CACC',epeg_spacer_t3='GTTTAAGAGC',epeg_spacer_b5='',epeg_spacer_b3='',
-                extension='Extension_sequence',RTT='RTT_sequence',PBS='PBS_sequence',linker='Linker_sequence',extension_t5='',extension_t3='',extension_b5='CGCG',extension_b3='GCACCGACTC',
-                order_epegRNA_scaffold=False, dir:str=None, file:str=None):
+# Library GG cloning
+def epegRNA_pool(df: pd.DataFrame | str, tG:bool=True, make_extension:bool=True,
+                 UMI_df: pd.DataFrame | str='../resources/UMI_15_shuffle_hamming_5_100000.csv',
+                 PCR_df: pd.DataFrame| str='../resources/edms_pcr.csv',
+                 RE_type_IIS_df: pd.DataFrame| str='../resources/RE_type_IIS.csv',enzymes: list=['Esp3I'],
+                 barcode:str='Barcode', barcode_i:int=0, fwd_barcode_t5:str='Forward Barcode',rev_barcode_t3:str='Reverse Barcode',
+                 Esp3I_hU6:str='Esp3I_hU6',tevopreQ1_Esp3I:str='tevopreQ1_Esp3I',
+                 epegRNA_spacer:str='Spacer_sequence',
+                 epegRNA_extension:str='Extension_sequence',epegRNA_RTT:str='RTT_sequence',
+                 epegRNA_PBS:str='PBS_sequence',epegRNA_linker:str='Linker_sequence',
+                 dir:str=None, file:str=None, return_df:bool=False):
     ''' 
-    ng_epegRNAs(): design GG cloning oligonucleotides for prime editing ng/epegRNAs (all-in-one vector)
+    epegRNA_pool(): design GG cloning oligonucleotides for pooled prime editing epegRNAs
     
     Parameters:
-    df (dataframe | str): Dataframe with sequence information for epegRNAs (or file path)
-    id (str): id column name
+    df (dataframe | str): Dataframe with sequence information for epegRNAs & corresponding ngRNAs (or file path)
     tG (bool, optional): add 5' G to spacer if needed (Default: True)
-    order (bool, optional): order format (Default: True)
     make_extension (bool, optional): concatenate RTT, PBS, and linker to make extension sequence (Default: True)
-    ng_spacer (str, optional): ngRNA spacer column name (Default: Spacer_sequence_ngRNA)
-        _t5 (str, optional): top oligonucleotide 5' overhang
-        _t3 (str, optional): top oligonucleotide 3' overhang
-        _b5 (str, optional): bottom oligonucleotide 5' overhang
-        _b3 (str, optional): bottom oligonucleotide 3' overhang
-    epeg_spacer (str, optional): epegRNA spacer column name (Default: Spacer_sequence_epegRNA)
-        _t5 (str, optional): top oligonucleotide 5' overhang
-        _t3 (str, optional): top oligonucleotide 3' overhang
-        _b5 (str, optional): bottom oligonucleotide 5' overhang
-        _b3 (str, optional): bottom oligonucleotide 3' overhang
-    extension (str, optional): epegRNA extension name (Default: Extension_sequence)
-        _t5 (str, optional): top oligonucleotide 5' overhang
-        _t3 (str, optional): top oligonucleotide 3' overhang
-        _b5 (str, optional): bottom oligonucleotide 5' overhang
-        _b3 (str, optional): bottom oligonucleotide 3' overhang
-    RTT (str, optional): epegRNA reverse transcripase template column name (Default: RTT_sequence)
-    PBS (str, optional): epegRNA primer binding site column name (Default: PBS_sequence)
-    linker (str, optional): epegRNA linker column name(Default: Linker_sequence)
-    order_epegRNA_scaffold (bool, optional): order top and bottom oligonucleotide for epegRNA scaffold sequence (Default: False)
+    UMI_df (dataframe | str, optional): Dataframe with UMI sequences (or file path) (Default: '../resources/UMI_15_shuffle_hamming_5_100000.csv')
+    PCR_df (dataframe | str, optional): Dataframe with PCR primer and subpool barcode information (or file path) (Default: '../resources/edms_pcr.csv')
+    RE_type_IIS_df (dataframe | str, optional): Dataframe with Type IIS restriction enzyme information (or file path) (Default: '../resources/RE_typeIIS.csv')
+    enzymes (list, optional): list of Type IIS restriction enzymes to check for (Default: ['Esp3I'])
+    barcode (str, optional): subpool barcode column name (Default: Barcode)
+    barcode_i (int, optional): subpool barcode index (Default: 0)
+    fwd_barcode_t5 (bool, optional): forward barcode column name (Default: Forward Barcode)
+    rev_barcode_t3 (bool, optional): reverse barcode column name (Default: Reverse Barcode)
+    Esp3I_hU6 (bool, optional): Esp3I_hU6 column name (Default: Esp3I_hU6)
+    tevopreQ1_Esp3I (bool, optional): tevopreQ1_Esp3I column name (Default: tevopreQ1_Esp3I)
+    epegRNA_spacer (str, optional): epegRNA spacer column name (Default: Spacer_sequence)
+    epegRNA_extension (str, optional): epegRNA extension name (Default: Extension_sequence)
+    epegRNA_RTT (str, optional): epegRNA reverse transcripase template column name (Default: RTT_sequence)
+    epegRNA_PBS (str, optional): epegRNA primer binding site column name (Default: PBS_sequence)
+    epegRNA_linker (str, optional): epegRNA linker column name (Default: Linker_sequence)
     dir (str, optional): save directory
     file (str, optional): save file
-    
-    Assumptions:
-    1. epegRNA scaffold: GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC
-    2. epegRNA motif: tevoPreQ1 (CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA)
-    3. ngRNA scaffold: GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC
-    
-    Dependencies: pandas, top_bot(), & ord_form()
-    '''
-    if type(df)==str: # Get epegRNAs dataframe from file path if needed
-        df = io.get(pt=df)
-    
-    if make_extension==True: df[extension] = df[RTT]+df[PBS]+df[linker] # Make extension by concatenating RTT, PBS, and linker
-    else: print(f'Warning: Did not make extension sequence!\nMake sure "{extension}" column includes RTT+PBS+linker for epegRNAs.')
-    df=tb(df=df,id=id,seq=ng_spacer,t5=ng_spacer_t5,t3=ng_spacer_t3,b5=ng_spacer_b5,b3=ng_spacer_b3,tG=tG,pre='ns_') # Make top and bottom oligos for ngRNA spacer inserts
-    df=tb(df=df,id=id,seq=epeg_spacer,t5=epeg_spacer_t5,t3=epeg_spacer_t3,b5=epeg_spacer_b5,b3=epeg_spacer_b3,tG=tG,pre='es_') # Make top and bottom oligos for epegRNA spacer inserts
-    df=tb(df=df,id=id,seq=extension,t5=extension_t5,t3=extension_t3,b5=extension_b5,b3=extension_b3,tG=False,pre='ee_') # Make top and bottom oligos for epegRNA extension inserts
-    if order==True: # Sigma order format (or original dataframe with top and bottom oligos)
-        if order_epegRNA_scaffold==True: # Include the epegRNA scaffold sequence in the order
-            df = pd.concat([ord_form(df=df,id=id,seq=ng_spacer,suf='_top',pre='ns_'),
-                            ord_form(df=df,id=id,seq=ng_spacer,suf='_bot',pre='ns_'),
-                            ord_form(df=df,id=id,seq=epeg_spacer,suf='_top',pre='es_'),
-                            ord_form(df=df,id=id,seq=epeg_spacer,suf='_bot',pre='es_'),
-                            ord_form(df=df,id=id,seq=extension,suf='_top',pre='ee_'),
-                            ord_form(df=df,id=id,seq=extension,suf='_bot',pre='ee_'),
-                            pd.DataFrame({'Oligo Name': ['pegRNA_scaffold_top','pegRNA_scaffold_bot'],
-                                          'Sequence': ['TATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC','GGTGCCACTTGGGTGGGATGCTCGCAGGCATTCAGCCAAGTTGATAACGGACTAGCCTTATTTAAACTTGCTATGCTGTTTCCAGCATAGCTCTTAAAC'],
-                                          'Scale (µmol)': [0.05, 0.05],
-                                          'bp': [99, 99]})
-                            ]).reset_index(drop=True)
-        else: # Do not include the epegRNA scaffold sequence in the order
-            df = pd.concat([ord_form(df=df,id=id,seq=ng_spacer,suf='_top',pre='ns_'),
-                            ord_form(df=df,id=id,seq=ng_spacer,suf='_bot',pre='ns_'),
-                            ord_form(df=df,id=id,seq=epeg_spacer,suf='_top',pre='es_'),
-                            ord_form(df=df,id=id,seq=epeg_spacer,suf='_bot',pre='es_'),
-                            ord_form(df=df,id=id,seq=extension,suf='_top',pre='ee_'),
-                            ord_form(df=df,id=id,seq=extension,suf='_bot',pre='ee_')
-                            ]).reset_index(drop=True)
 
+    Assumptions:
+    1. Oligo Template: FWD UMI - FWD Barcode - Esp3I(F) - hU6 - epegRNA_spacer - epegRNA_scaffold - epegRNA_extension - tevopreQ1 motif - Esp3I(R) - REV Barcode - REV UMI
+    2. epegRNA motif: tevoPreQ1 (CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA)
+    
+    Dependencies: pandas,
+    '''
+    # Get dataframes from file path if needed
+    if type(df)==str:
+        df = io.get(pt=df)
+    if type(UMI_df)==str:
+        UMI_df = io.get(pt=UMI_df)
+    if type(PCR_df)==str:
+        PCR_df = io.get(pt=PCR_df)
+    if type(RE_type_IIS_df)==str:
+        RE_type_IIS_df = io.get(pt=RE_type_IIS_df)
+
+    # Make extension by concatenating RTT, PBS, and linker
+    if make_extension==True: df[epegRNA_extension] = df[epegRNA_RTT]+df[epegRNA_PBS]+df[epegRNA_linker]
+    else: print(f'Warning: Did not make extension sequence!\nMake sure "{epegRNA_extension}" column includes RTT+PBS+linker for epegRNAs.')
+
+    # Assign subpool barcodes
+    barcodes = sorted(df[barcode].unique())
+    PCR_barcodes = PCR_df.iloc[barcode_i:barcode_i+len(barcodes)]
+    PCR_barcodes[barcode] = barcodes
+    df = pd.merge(left=df,right=PCR_barcodes,on=barcode)
+
+    # Assign UMI to each twist oligo
+    UMI_sequences = UMI_df['UMI_sequence'].tolist()
+    if len(UMI_sequences)<df.shape[0]*2: 
+        ValueError(f'{len(UMI_sequences)} UMIs is less than 2x{df.shape[0]} twist oligonucleotides!')
+
+    # Make twist oligo & determine length
+    df.sort_values(by=barcode,inplace=True,ignore_index=True)
+    df[f'{epegRNA_spacer}_nt1']=[s[0] for s in df[epegRNA_spacer]]
+    twist_oligos = []
+    for i,(epegRNA_spacer_nt1) in enumerate(df[f'{epegRNA_spacer}_nt1']):
+        if tG==True: # Append 5'G to spacer if not already present
+            if epegRNA_spacer_nt1=='G':
+                twist_oligos.append(df.iloc[i]['Forward UMI']+
+                                    df.iloc[i][fwd_barcode_t5]+df.iloc[i][Esp3I_hU6]+
+                                    df.iloc[i][epegRNA_spacer]+df.iloc[i]['Scaffold_sequence']+
+                                    df.iloc[i][epegRNA_extension]+df.iloc[i]['Sensor_sequence']+
+                                    df.iloc[i][tevopreQ1_Esp3I]+df.iloc[i][rev_barcode_t3]+
+                                    df.iloc[i]['Reverse UMI'])
+            else:
+                twist_oligos.append(df.iloc[i]['Forward UMI']+
+                                    df.iloc[i][fwd_barcode_t5]+df.iloc[i][Esp3I_hU6]+'G'+
+                                    df.iloc[i][epegRNA_spacer]+df.iloc[i]['Scaffold_sequence']+
+                                    df.iloc[i][epegRNA_extension]+df.iloc[i]['Sensor_sequence']+
+                                    df.iloc[i][tevopreQ1_Esp3I]+df.iloc[i][rev_barcode_t3]+
+                                    df.iloc[i]['Reverse UMI'])
+        else: # Do not append 5'G to spacer if not already present
+            twist_oligos.append(df.iloc[i]['Forward UMI']+
+                                df.iloc[i][fwd_barcode_t5]+df.iloc[i][Esp3I_hU6]+
+                                df.iloc[i][epegRNA_spacer]+df.iloc[i]['Scaffold_sequence']+
+                                df.iloc[i][epegRNA_extension]+df.iloc[i]['Sensor_sequence']+
+                                df.iloc[i][tevopreQ1_Esp3I]+df.iloc[i][rev_barcode_t3]+
+                                df.iloc[i]['Reverse UMI'])
+            
+    df['Twist_oligo'] = twist_oligos
+    df['Twist_oligo_length']=[len(twist) for twist in df['Twist_oligo']]
+
+    # Check for 2 recognition sites per enzyme
+    for (enzyme,recognition,recognition_rc) in t.zip_cols(df=RE_type_IIS_df[RE_type_IIS_df['Name'] in enzymes],cols=['Name','Recognition','Recognition_rc']):
+        enzyme_sites = [len(t.find_all(twist_oligo,recognition)) + # Check forward direction
+                        len(t.find_all(twist_oligo,recognition_rc)) # Check reverse direction
+                        for twist_oligo in twist_oligos] # Iterate through Twist product
+        df[enzyme] = enzyme_sites
+    
     # Save & return dataframe
     if dir is not None and file is not None:
-        io.save(dir=dir,file=file,obj=df)  
-    return df
+        io.save(dir=dir,file=file,obj=df)
+    if return_df:
+        return df
 
-# Library GG cloning
-''' pe_pcr1: Dataframe of PE library PCR1 primers
-'''
-pe_pcr1 = pd.DataFrame({
-  0: {
-    'Subpool Number': 1,
-    'Forward Barcode': 'CGAATTCCGT',
-    'Reverse Barcode': 'GCTTAGAACA',
-    'Homology Arm 5': 'GGTCTCTGTTT',
-    'Homology Arm 3': 'CGCGGGAGACC',
-    'Forward PCR1 Template': 'CGAATTCCGTGGTCTCTGTTT',
-    'Reverse PCR1 Template': 'TGTTCTAAGCGGTCTCCCGCG',
-    'Forward PCR1 Primer ID': 'fpMUZ187.1',
-    'Forward PCR1 Primer': 'CGAATTCCGTGGTCTCTG',
-    'Reverse PCR1 Primer ID': 'rpMUZ187.1',
-    'Reverse PCR1 Primer': 'TGTTCTAAGCGGTCTCCC',
-    'Forward PCR1 Primer NEB Tm': 63,
-    'Reverse PCR1 Primer NEB Tm': 64,
-    'PCR1 Primers NEB Ta': 63,
-    'Forward PCR1 Primer IDT Tm': 59.5,
-    'Reverse PCR1 Primer IDT Tm': 60.6,
-    'Forward PCR1 Primer IDT Th': 31.7,
-    'Reverse PCR1 Primer IDT Th': 17.5
-  },
-  1: {
-    'Subpool Number': 2,
-    'Forward Barcode': 'GTTTATCGGG',
-    'Reverse Barcode': 'ACTGACTGTA',
-    'Homology Arm 5': 'GGTCTCTGTTT',
-    'Homology Arm 3': 'CGCGGGAGACC',
-    'Forward PCR1 Template': 'GTTTATCGGGGGTCTCTGTTT',
-    'Reverse PCR1 Template': 'TACAGTCAGTGGTCTCCCGCG',
-    'Forward PCR1 Primer ID': 'fpMUZ187.2',
-    'Forward PCR1 Primer': 'GTTTATCGGGGGTCTCTG',
-    'Reverse PCR1 Primer ID': 'rpMUZ187.2',
-    'Reverse PCR1 Primer': 'TACAGTCAGTGGTCTCCC',
-    'Forward PCR1 Primer NEB Tm': 62,
-    'Reverse PCR1 Primer NEB Tm': 64,
-    'PCR1 Primers NEB Ta': 63,
-    'Forward PCR1 Primer IDT Tm': 58.7,
-    'Reverse PCR1 Primer IDT Tm': 59.6,
-    'Forward PCR1 Primer IDT Th': 2.8,
-    'Reverse PCR1 Primer IDT Th': 36.4
-  },
-  2: {
-    'Subpool Number': 3,
-    'Forward Barcode': 'ACCGATATGG',
-    'Reverse Barcode': 'CTCGTCATAG',
-    'Homology Arm 5': 'GGTCTCTGTTT',
-    'Homology Arm 3': 'CGCGGGAGACC',
-    'Forward PCR1 Template': 'ACCGATATGGGGTCTCTGTTT',
-    'Reverse PCR1 Template': 'CTATGACGAGGGTCTCCCGCG',
-    'Forward PCR1 Primer ID': 'fpMUZ187.3',
-    'Forward PCR1 Primer': 'ACCGATATGGGGTCTCTG',
-    'Reverse PCR1 Primer ID': 'rpMUZ187.3',
-    'Reverse PCR1 Primer': 'CTATGACGAGGGTCTCCC',
-    'Forward PCR1 Primer NEB Tm': 63,
-    'Reverse PCR1 Primer NEB Tm': 63,
-    'PCR1 Primers NEB Ta': 63,
-    'Forward PCR1 Primer IDT Tm': 59.8,
-    'Reverse PCR1 Primer IDT Tm': 59.9,
-    'Forward PCR1 Primer IDT Th': 46.2,
-    'Reverse PCR1 Primer IDT Th': 45.3
-  },
-  3: {
-    'Subpool Number': 4,
-    'Forward Barcode': 'GAGGTCTTTC',
-    'Reverse Barcode': 'CACAACATAC',
-    'Homology Arm 5': 'GGTCTCTGTTT',
-    'Homology Arm 3': 'CGCGGGAGACC',
-    'Forward PCR1 Template': 'GAGGTCTTTCGGTCTCTGTTT',
-    'Reverse PCR1 Template': 'GTATGTTGTGGGTCTCCCGCG',
-    'Forward PCR1 Primer ID': 'fpMUZ187.4',
-    'Forward PCR1 Primer': 'GAGGTCTTTCGGTCTCTG',
-    'Reverse PCR1 Primer ID': 'rpMUZ187.4',
-    'Reverse PCR1 Primer': 'GTATGTTGTGGGTCTCCC',
-    'Forward PCR1 Primer NEB Tm': 62,
-    'Reverse PCR1 Primer NEB Tm': 63,
-    'PCR1 Primers NEB Ta': 63,
-    'Forward PCR1 Primer IDT Tm': 58.5,
-    'Reverse PCR1 Primer IDT Tm': 58.9,
-    'Forward PCR1 Primer IDT Th': 27.1,
-    'Reverse PCR1 Primer IDT Th': 42.6
-  },
-  4: {
-    'Subpool Number': 5,
-    'Forward Barcode': 'GAGTAGCTCA',
-    'Reverse Barcode': 'ATGTACCCAA',
-    'Homology Arm 5': 'GGTCTCTGTTT',
-    'Homology Arm 3': 'CGCGGGAGACC',
-    'Forward PCR1 Template': 'GAGTAGCTCAGGTCTCTGTTT',
-    'Reverse PCR1 Template': 'TTGGGTACATGGTCTCCCGCG',
-    'Forward PCR1 Primer ID': 'fpMUZ187.5',
-    'Forward PCR1 Primer': 'GAGTAGCTCAGGTCTCTG',
-    'Reverse PCR1 Primer ID': 'rpMUZ187.5',
-    'Reverse PCR1 Primer': 'TTGGGTACATGGTCTCCC',
-    'Forward PCR1 Primer NEB Tm': 61,
-    'Reverse PCR1 Primer NEB Tm': 65,
-    'PCR1 Primers NEB Ta': 63,
-    'Forward PCR1 Primer IDT Tm': 57.6,
-    'Reverse PCR1 Primer IDT Tm': 60.4,
-    'Forward PCR1 Primer IDT Th': 39.5,
-    'Reverse PCR1 Primer IDT Th': 42.5
-  },
-  5: {
-    'Subpool Number': 6,
-    'Forward Barcode': 'GGATGCATGA',
-    'Reverse Barcode': 'CATCAAGCTT',
-    'Homology Arm 5': 'GGTCTCTGTTT',
-    'Homology Arm 3': 'CGCGGGAGACC',
-    'Forward PCR1 Template': 'GGATGCATGAGGTCTCTGTTT',
-    'Reverse PCR1 Template': 'AAGCTTGATGGGTCTCCCGCG',
-    'Forward PCR1 Primer ID': 'fpMUZ187.6',
-    'Forward PCR1 Primer': 'GGATGCATGAGGTCTCTG',
-    'Reverse PCR1 Primer ID': 'rpMUZ187.6',
-    'Reverse PCR1 Primer': 'AAGCTTGATGGGTCTCCC',
-    'Forward PCR1 Primer NEB Tm': 62,
-    'Reverse PCR1 Primer NEB Tm': 65,
-    'PCR1 Primers NEB Ta': 63,
-    'Forward PCR1 Primer IDT Tm': 59.0,
-    'Reverse PCR1 Primer IDT Tm': 61.1,
-    'Forward PCR1 Primer IDT Th': 31.9,
-    'Reverse PCR1 Primer IDT Th': 42.6
-  },
-  6: {
-    'Subpool Number': 7,
-    'Forward Barcode': 'ATGAGGACGA',
-    'Reverse Barcode': 'CACATAAAGG',
-    'Homology Arm 5': 'GGTCTCTGTTT',
-    'Homology Arm 3': 'CGCGGGAGACC',
-    'Forward PCR1 Template': 'ATGAGGACGAGGTCTCTGTTT',
-    'Reverse PCR1 Template': 'CCTTTATGTGGGTCTCCCGCG',
-    'Forward PCR1 Primer ID': 'fpMUZ187.7',
-    'Forward PCR1 Primer': 'ATGAGGACGAGGTCTCTG',
-    'Reverse PCR1 Primer ID': 'rpMUZ187.7',
-    'Reverse PCR1 Primer': 'CCTTTATGTGGGTCTCCC',
-    'Forward PCR1 Primer NEB Tm': 63,
-    'Reverse PCR1 Primer NEB Tm': 63,
-    'PCR1 Primers NEB Ta': 63,
-    'Forward PCR1 Primer IDT Tm': 59.7,
-    'Reverse PCR1 Primer IDT Tm': 58.7,
-    'Forward PCR1 Primer IDT Th': 34.0,
-    'Reverse PCR1 Primer IDT Th': 42.6
-  },
-  7: {
-    'Subpool Number': 8,
-    'Forward Barcode': 'GGTAGACACG',
-    'Reverse Barcode': 'TCGACTTAGA',
-    'Homology Arm 5': 'GGTCTCTGTTT',
-    'Homology Arm 3': 'CGCGGGAGACC',
-    'Forward PCR1 Template': 'GGTAGACACGGGTCTCTGTTT',
-    'Reverse PCR1 Template': 'TCTAAGTCGAGGTCTCCCGCG',
-    'Forward PCR1 Primer ID': 'fpMUZ187.8',
-    'Forward PCR1 Primer': 'GGTAGACACGGGTCTCTG',
-    'Reverse PCR1 Primer ID': 'rpMUZ187.8',
-    'Reverse PCR1 Primer': 'TCTAAGTCGAGGTCTCCC',
-    'Forward PCR1 Primer NEB Tm': 64,
-    'Reverse PCR1 Primer NEB Tm': 63,
-    'PCR1 Primers NEB Ta': 63,
-    'Forward PCR1 Primer IDT Tm': 60.4,
-    'Reverse PCR1 Primer IDT Tm': 59.0,
-    'Forward PCR1 Primer IDT Th': 52.1,
-    'Reverse PCR1 Primer IDT Th': 24.3
-  },
-  8: {
-    'Subpool Number': 9,
-    'Forward Barcode': 'AGGCATGACT',
-    'Reverse Barcode': 'GTTACAAGTC',
-    'Homology Arm 5': 'GGTCTCTGTTT',
-    'Homology Arm 3': 'CGCGGGAGACC',
-    'Forward PCR1 Template': 'AGGCATGACTGGTCTCTGTTT',
-    'Reverse PCR1 Template': 'GACTTGTAACGGTCTCCCGCG',
-    'Forward PCR1 Primer ID': 'fpMUZ187.9',
-    'Forward PCR1 Primer': 'AGGCATGACTGGTCTCTG',
-    'Reverse PCR1 Primer ID': 'rpMUZ187.9',
-    'Reverse PCR1 Primer': 'GACTTGTAACGGTCTCCC',
-    'Forward PCR1 Primer NEB Tm': 64,
-    'Reverse PCR1 Primer NEB Tm': 62,
-    'PCR1 Primers NEB Ta': 63,
-    'Forward PCR1 Primer IDT Tm': 60.7,
-    'Reverse PCR1 Primer IDT Tm': 58.8,
-    'Forward PCR1 Primer IDT Th': 31.9,
-    'Reverse PCR1 Primer IDT Th': 30.9
-  }
-}).T
-
-''' RE_typeIIS: Dataframe of TypeIIS restriction enzymes
-'''
-RE_typeIIS = pd.DataFrame({
-  0: {
-      'Name': 'Esp3I',
-      'Sequence_t5': 'N(CGTCTC)N|N',
-      'Sequence_b3': 'N(GCAGAG)NNNNN|N',
-      'Recognition': 'CGTCTC',
-      'Recognition_rc': 'GAGACG'
-  },
-  1: {
-      'Name': 'BsaI',
-      'Sequence_t5': 'N(GGTCTC)N|N',
-      'Sequence_b3': 'N(CCAGAG)NNNNN|N',
-      'Recognition': 'GGTCTC',
-      'Recognition_rc': 'GAGACC'
-  },
-  2: {
-      'Name': 'BspMI',
-      'Sequence_t5': 'N(ACCTGC)NNNN|N',
-      'Sequence_b3': 'N(TGGACG)NNNNNNNN|N',
-      'Recognition': 'ACCTGC',
-      'Recognition_rc': 'GCAGGT'
-  }
-}).T
-
+# UMIs
 def generate_sequences(length:int, current_sequence:str=""):
     """
     generate_sequences(): recursively generates all possible sequences of A, T, C, G of the specified length
@@ -581,160 +406,74 @@ def shuffle(ls: list):
     random.shuffle(ls2)
     return ls2
 
-def pe_twist_oligos(df: pd.DataFrame | str,id_pre:str,tG=True, make_extension=True,UMI_length:int=8,UMI_GC_fract:tuple=(0.4,0.6),
-                    fwd_barcode_t5='Forward Barcode',rev_barcode_t3='Reverse Barcode',
-                    homology_arm_t5='Homology Arm 5',homology_arm_t3='Homology Arm 3',
-                    ngRNA_hU6_gg_insert='GTTTAGAGACGATCGACGTCTCACACC',epegRNA_gg_insert='GTTTAAGAGCAGGTGCTAGACCTGCGTCGGTGC',
-                    ngRNA_spacer='Spacer_sequence_ngRNA',epegRNA_spacer='Spacer_sequence_epegRNA',
-                    epegRNA_extension='Extension_sequence',epegRNA_RTT='RTT_sequence',
-                    epegRNA_PBS='PBS_sequence',epegRNA_linker='Linker_sequence',
-                    epegRNA_pbs_length='PBS_length',ngRNA_group='ngRNA_group',
-                    dir:str=None, file:str=None):
-    ''' 
-    pe_twist_oligos(): makes twist oligonucleotides for prime editing
+def encode_sequences(seq_list: list):
+    """
+    encode_sequences(): Convert sequences to integer arrays for fast comparison.
     
     Parameters:
-    df (dataframe | str): Dataframe with sequence information for epegRNAs & corresponding ngRNAs (or file path)
-    id_pre (str): Prefix for ID column
-    tG (bool, optional): add 5' G to spacer if needed (Default: True)
-    UMI_length (int, optional): unique molecular identifier length (Default: 8; 4^8=65,536 UMIs before GC content filtering; adds 16 nt total)
-    UMI_GC_fract (tuple, optional): unique molecular identifier GC content boundaries written fractions (Default: (0.4,0.6))
-    make_extension (bool, optional): concatenate RTT, PBS, and linker to make extension sequence (Default: True)
-    fwd_barcode_t5 (bool, optional): forward barcode column name (Default: Forward Barcode)
-    rev_barcode_t3 (bool, optional): reverse barcode column name (Default: Reverse Barcode)
-    homology_arm_t5 (bool, optional): homology arm t5 column name (Default: Homology Arm 5)
-    homology_arm_t3 (bool, optional): homology arm t5 column name (Default: Homology Arm 3)
-    ngRNA_hU6_gg_insert (str, optional): ngRNA scaffold to hU6 Golden Gate insert sequence (Default:  ngRNA_scafold_5nt - Esp3I(R) - random_nt - Esp3I(F) - hU6; GTTTAGAGACGATCGACGTCTCACACC)
-    epegRNA_gg_insert (str, optional): epegRNA scaffold Golden Gate insert sequence (Default: epegRNA_scaffold_8nt - BspMI (R) - random_5nt - BspMI - epegRNA_scaffold_8nt; GTTTAAGAGCAGGTGCTAGACCTGCGTCGGTGC)
-    ngRNA_spacer (str, optional): ngRNA spacer column name (Default: ngRNA_Spacer_sequence)
-    epegRNA_spacer (str, optional): epegRNA spacer column name (Default: epegRNA_Spacer_sequence)
-    epegRNA_extension (str, optional): epegRNA extension name (Default: Extension_sequence)
-    epegRNA_RTT (str, optional): epegRNA reverse transcripase template column name (Default: RTT_sequence)
-    epegRNA_PBS (str, optional): epegRNA primer binding site column name (Default: PBS_sequence)
-    epegRNA_linker (str, optional): epegRNA linker column name (Default: Linker_sequence)
-    dir (str, optional): save directory
-    file (str, optional): save file
+    seq_list (list of str): List of DNA sequences (A/C/G/T).
+    """
+    base_to_int = {'A': 0, 'C': 1, 'G': 2, 'T': 3}
+    return np.array([[base_to_int[base] for base in seq] for seq in seq_list], dtype=np.uint8)
 
-    Assumptions:
-    1. Oligo Template: FWD Barcode - BsaI - mU6 - ngRNA_spacer - ngRNA_scaffold_5nt - Esp3I(R) - random_5nt - Esp3I(F) - hU6 - epegRNA_spacer - epegRNA_scaffold_8nt - BspMI (R) - random_5nt - BspMI - epegRNA_scaffold_8nt - epegRNA_extension - tevopreQ1_motif_5nt - BsaI - REV Barcode
-    2. epegRNA motif: tevoPreQ1 (CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA)
+def fast_filter_by_hamming(sequences: list, min_distance: int):
+    """
+    fast_filter_by_hamming(): fastFilter sequences such that all retained sequences have a Hamming distance 'min_distance' from each other, using NumPy for speed.
     
-    Dependencies: pandas,random,generate_sequences(),filter_GC(),shuffle(),pe_pcr1
+    Parameters:
+    sequences (list of str): List of equal-length DNA sequences (A/C/G/T).
+    min_distance (int): Minimum required Hamming distance.
+    """
+    if not sequences:
+        return []
+
+    encoded = encode_sequences(sequences)
+    keep_indices = [0]
+    
+    for i in range(1, len(encoded)):
+        current = encoded[i]
+        kept = encoded[keep_indices]
+        
+        # Compute Hamming distances in batch
+        distances = np.count_nonzero(kept != current, axis=1)
+        
+        if np.all(distances > min_distance):
+            keep_indices.append(i)
+    
+    return [sequences[i] for i in keep_indices]
+
+def UMI(length: int = 15, GC_fract: tuple = (0.4, 0.6), shuffle: bool = True,
+        hamming: int = 5, nrows: int=1000000, pt: str=None, dir: str = '../out'):
     '''
-    if type(df)==str: # Get epeg/ngRNAs dataframe from file path if needed
-        df = io.get(pt=df)
-
-    # Make extension by concatenating RTT, PBS, and linker
-    if make_extension==True: df[epegRNA_extension] = df[epegRNA_RTT]+df[epegRNA_PBS]+df[epegRNA_linker]
-    else: print(f'Warning: Did not make extension sequence!\nMake sure "{epegRNA_extension}" column includes RTT+PBS+linker for epegRNAs.')
-
-    # Assign subpool barcodes to different PBS lengths and ngRNA groups
-    pbs_lengths = sorted(df[epegRNA_pbs_length].value_counts().keys())
-    ngRNA_groups = sorted(df[ngRNA_group].value_counts().keys())
-    pbs_lengths_ls = [val for val in pbs_lengths for _ in np.arange(len(ngRNA_groups))] 
-    ngRNA_groups_ls = ngRNA_groups*len(pbs_lengths)
-    pcr1_barcodes = pe_pcr1.iloc[:len(pbs_lengths_ls)]
-    pcr1_barcodes[epegRNA_pbs_length]=pbs_lengths_ls
-    pcr1_barcodes[ngRNA_group]=ngRNA_groups_ls
-    df = pd.merge(left=df,right=pcr1_barcodes,on=[epegRNA_pbs_length,ngRNA_group])
-
-    # Assign UMI to each twist oligo
-    UMI_sequences = filter_GC(generate_sequences(length=UMI_length),UMI_GC_fract)
-    if len(UMI_sequences)<df.shape[0]: KeyError(f'UMI_length={UMI_length} results in {len(UMI_sequences)} UMIs, which is less than {df.shape[0]} twist oligonucleotides!')
-    df['Forward UMI']=shuffle(ls=UMI_sequences)[:df.shape[0]]
-    df['Reverse UMI']=shuffle(ls=UMI_sequences)[:df.shape[0]]
-
-    # Make twist oligo & determine length
-    df = df.sort_values(by=[epegRNA_pbs_length,ngRNA_group]).reset_index(drop=True)
-    df[f'{epegRNA_spacer}_nt1']=[s[0] for s in df[epegRNA_spacer]]
-    df[f'{ngRNA_spacer}_nt1']=[s[0] for s in df[ngRNA_spacer]]
-    twist_oligos = []
-    twist_products = []
-    for i,(epegRNA_spacer_nt1,ngRNA_spacer_nt1) in enumerate(t.zip_cols(df,[f'{epegRNA_spacer}_nt1',f'{ngRNA_spacer}_nt1'])):
-        if tG==True: # Append 5'G to spacer if not already present
-            if epegRNA_spacer_nt1=='G' and ngRNA_spacer_nt1=='G':
-                twist_oligos.append(df.iloc[i]['Forward UMI']+
-                                    df.iloc[i][fwd_barcode_t5]+df.iloc[i][homology_arm_t5]+
-                                    df.iloc[i][ngRNA_spacer]+ngRNA_hU6_gg_insert+
-                                    df.iloc[i][epegRNA_spacer]+epegRNA_gg_insert+
-                                    df.iloc[i][epegRNA_extension]+
-                                    df.iloc[i][homology_arm_t3]+df.iloc[i][rev_barcode_t3]+
-                                    df.iloc[i]['Reverse UMI'])
-                twist_products.append(df.iloc[i][homology_arm_t5]+
-                                      df.iloc[i][ngRNA_spacer]+ngRNA_hU6_gg_insert+
-                                      df.iloc[i][epegRNA_spacer]+epegRNA_gg_insert+
-                                      df.iloc[i][epegRNA_extension]+
-                                      df.iloc[i][homology_arm_t3])
-            elif ngRNA_spacer_nt1=='G':
-                twist_oligos.append(df.iloc[i]['Forward UMI']+
-                                    df.iloc[i][fwd_barcode_t5]+df.iloc[i][homology_arm_t5]+
-                                    df.iloc[i][ngRNA_spacer]+ngRNA_hU6_gg_insert+
-                                    'G'+df.iloc[i][epegRNA_spacer]+epegRNA_gg_insert+
-                                    df.iloc[i][epegRNA_extension]+
-                                    df.iloc[i][homology_arm_t3]+df.iloc[i][rev_barcode_t3]+
-                                    df.iloc[i]['Reverse UMI'])
-                twist_products.append(df.iloc[i][homology_arm_t5]+
-                                      df.iloc[i][ngRNA_spacer]+ngRNA_hU6_gg_insert+
-                                      'G'+df.iloc[i][epegRNA_spacer]+epegRNA_gg_insert+
-                                      df.iloc[i][epegRNA_extension]+
-                                      df.iloc[i][homology_arm_t3])
-            elif epegRNA_spacer_nt1=='G':
-                twist_oligos.append(df.iloc[i]['Forward UMI']+
-                                    df.iloc[i][fwd_barcode_t5]+df.iloc[i][homology_arm_t5]+
-                                    'G'+df.iloc[i][ngRNA_spacer]+ngRNA_hU6_gg_insert+
-                                    df.iloc[i][epegRNA_spacer]+epegRNA_gg_insert+
-                                    df.iloc[i][epegRNA_extension]+
-                                    df.iloc[i][homology_arm_t3]+df.iloc[i][rev_barcode_t3]+
-                                    df.iloc[i]['Reverse UMI'])
-                twist_products.append(df.iloc[i][homology_arm_t5]+
-                                      'G'+df.iloc[i][ngRNA_spacer]+ngRNA_hU6_gg_insert+
-                                      df.iloc[i][epegRNA_spacer]+epegRNA_gg_insert+
-                                      df.iloc[i][epegRNA_extension]+
-                                      df.iloc[i][homology_arm_t3])
-            else:
-                twist_oligos.append(df.iloc[i]['Forward UMI']+
-                                    df.iloc[i][fwd_barcode_t5]+df.iloc[i][homology_arm_t5]+
-                                    'G'+df.iloc[i][ngRNA_spacer]+ngRNA_hU6_gg_insert+
-                                    'G'+df.iloc[i][epegRNA_spacer]+epegRNA_gg_insert+
-                                    df.iloc[i][epegRNA_extension]+
-                                    df.iloc[i][homology_arm_t3]+df.iloc[i][rev_barcode_t3]+
-                                    df.iloc[i]['Reverse UMI'])
-                twist_products.append(df.iloc[i][homology_arm_t5]+
-                                      'G'+df.iloc[i][ngRNA_spacer]+ngRNA_hU6_gg_insert+
-                                      'G'+df.iloc[i][epegRNA_spacer]+epegRNA_gg_insert+
-                                      df.iloc[i][epegRNA_extension]+
-                                      df.iloc[i][homology_arm_t3])
-        else: # Do not append 5'G to spacer if not already present
-            twist_oligos.append(df.iloc[i]['Forward UMI']+
-                                df.iloc[i][fwd_barcode_t5]+df.iloc[i][homology_arm_t5]+
-                                df.iloc[i][ngRNA_spacer]+ngRNA_hU6_gg_insert+
-                                df.iloc[i][epegRNA_spacer]+epegRNA_gg_insert+
-                                df.iloc[i][epegRNA_extension]+
-                                df.iloc[i][homology_arm_t3]+df.iloc[i][rev_barcode_t3]+
-                                df.iloc[i]['Reverse UMI'])
-            twist_products.append(df.iloc[i][homology_arm_t5]+
-                                  df.iloc[i][ngRNA_spacer]+ngRNA_hU6_gg_insert+
-                                  df.iloc[i][epegRNA_spacer]+epegRNA_gg_insert+
-                                  df.iloc[i][epegRNA_extension]+
-                                  df.iloc[i][homology_arm_t3])
-    df['ngRNA_hU6_GG_insert'] = ngRNA_hU6_gg_insert
-    df['epegRNA_GG_insert'] = epegRNA_gg_insert
-    df['Twist_oligo'] = twist_oligos
-    df['Twist_oligo_length']=[len(twist) for twist in df['Twist_oligo']]
-    df['ID'] = [f'{id_pre}.{i+1}' for i in range(len(df))]
-
-    # Check for 2 recognition sites per enzyme
-    for (enzyme,recognition,recognition_rc) in t.zip_cols(df=RE_typeIIS,cols=['Name','Recognition','Recognition_rc']):
-        enzyme_sites = [len(t.find_all(twist_product,recognition)) + # Check forward direction
-                        len(t.find_all(twist_product,recognition_rc)) # Check reverse direction
-                        for twist_product in twist_products] # Iterate through Twist product
-        df[enzyme] = enzyme_sites
-        print(f"{enzyme} does not have 2 reconition sites for {[id for (id,enzyme_site) in t.zip_cols(df=df,cols=['ID',enzyme]) if enzyme_site!=2]}")
+    UMI(): generates unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance
     
-    # Save & return dataframe
-    if dir is not None and file is not None:
-        io.save(dir=dir,file=file,obj=df) 
-    return df
+    Parameters:
+    length (int, optional): length of the unique molecular identifiers (Default: 15)
+    GC_fract (tuple, optional): pair of GC content boundaries written as fractions (Default: (0.4, 0.6))
+    shuffle (bool, optional): randomly reorganize the list of UMIs (Default: True)
+    hamming (int, optional): number of Hamming distance to filter UMIs (Default: 5)
+    nrows (int, optional): number of UMIs to use for hamming filtering (Default: 1000000)
+    pt (str, optional): Shuffled UMI file path if already made (Default: None)
+    dir (str, optional): save directory
+    '''
+    if pt is None: # Start from scratch if no file path is provided
+        sequences = generate_sequences(length=length) # Generate all possible sequences of specified length
+        filtered_sequences = filter_GC(sequences=sequences, GC_fract=GC_fract) # Filter sequences based on GC content
+        print(f'Generated {len(filtered_sequences)} sequences of length {length} with GC content between {GC_fract[0]} and {GC_fract[1]}.')
+
+        if shuffle: # Shuffle the sequences if specified & save
+            filtered_sequences = shuffle(ls=filtered_sequences)
+            io.save(dir=dir, file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{length}_shuffle.csv', obj=pd.DataFrame({'UMI_sequence': filtered_sequences}))
+        else:
+            io.save(dir=dir, file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{length}.csv', obj=pd.DataFrame({'UMI_sequence': filtered_sequences}))
+    
+        filtered_sequences = filtered_sequences[:nrows] # Limit to nrows for hamming filtering
+
+    else: # Load from provided file path
+        filtered_sequences = io.get(pt=pt,nrows=nrows)['UMI_sequence'].tolist()
+    
+    filtered_sequences = fast_filter_by_hamming(sequences=filtered_sequences, min_distance=hamming) # Filter sequences based on Hamming distance
+    io.save(dir=dir, file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{length}_shuffle_hamming_{hamming}_{len(filtered_sequences)}.csv', obj=pd.DataFrame({'UMI_sequence': filtered_sequences}))
 
 # Master Mix
 def pcr_mm(primers: pd.Series, template_uL: int, template='1-2 ng/uL template',
