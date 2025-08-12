@@ -417,14 +417,13 @@ def encode_sequences(seq_list: list):
     base_to_int = {'A': 0, 'C': 1, 'G': 2, 'T': 3}
     return np.array([[base_to_int[base] for base in seq] for seq in seq_list], dtype=np.uint8)
 
-def fast_filter_by_hamming(sequences: list, min_distance: int, dir: str = '../out'):
+def fast_filter_by_hamming(sequences: list, min_distance: int):
     """
     fast_filter_by_hamming(): fastFilter sequences such that all retained sequences have a Hamming distance 'min_distance' from each other, using NumPy for speed.
     
     Parameters:
     sequences (list of str): List of equal-length DNA sequences (A/C/G/T).
     min_distance (int): Minimum required Hamming distance.
-    dir (str, optional): save directory for intermediate results (Default: '../out')
     """
     if not sequences:
         return []
@@ -441,12 +440,6 @@ def fast_filter_by_hamming(sequences: list, min_distance: int, dir: str = '../ou
         
         if np.all(distances > min_distance):
             keep_indices.append(i)
-        
-        if len(keep_indices) % 1000 == 0: # Save iteratively every 1000 sequences
-            print(f'Kept {len(keep_indices)} sequences so far...')
-            io.save(dir=dir, 
-                    file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{len(sequences[0])}_hamming_{min_distance}_compare_{len(sequences)}_yield_{len(keep_indices)}.csv',
-                    obj=pd.DataFrame({'UMI_sequence': [sequences[i] for i in keep_indices]}))
     
     return [sequences[i] for i in keep_indices]
 
@@ -488,11 +481,8 @@ def UMI(length: int = 15, GC_fract: tuple = (0.4, 0.6), shuffle: bool = True,
             io.save(dir=dir, 
                     file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{length}.csv', 
                     obj=pd.DataFrame({'UMI_sequence': filtered_sequences}))
-    
-        #filtered_sequences = filtered_sequences[:nrows] # Limit to nrows for hamming filtering
 
     else: # Load from provided file path
-        #filtered_sequences = io.get(pt=pt,nrows=nrows)['UMI_sequence'].tolist()
         filtered_sequences = io.get(pt=pt)['UMI_sequence'].tolist()
     
     filtered_sequences_save = [] # List to save filtered sequences iteratively
@@ -502,9 +492,10 @@ def UMI(length: int = 15, GC_fract: tuple = (0.4, 0.6), shuffle: bool = True,
                                    min_distance = hamming,
                                    dir = dir)
         )
-    #filtered_sequences = fast_filter_by_hamming(sequences=filtered_sequences, min_distance=hamming,dir=dir) # Filter sequences based on Hamming distance
 
-    io.save(dir=dir, 
+        # Save the filtered sequences after each iteration
+        print(f'Kept {len(filtered_sequences_save)} sequences so far...')
+        io.save(dir=dir, 
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{length}_hamming_{hamming}_compare_{nrows}_yield_{len(filtered_sequences_save)}.csv', 
             obj=pd.DataFrame({'UMI_sequence': filtered_sequences_save}))
 
