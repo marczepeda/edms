@@ -72,7 +72,7 @@ edms -h # or edms <TAB>
     ```
 2. Pull latest version from github and install edms:
     ```shell
-    git pull orgin main
+    git pull origin main
     pip install -e . # Include the "."
     conda deactivate
     ```

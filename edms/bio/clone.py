@@ -489,8 +489,7 @@ def UMI(length: int = 15, GC_fract: tuple = (0.4, 0.6), shuffle: bool = True,
     for i in np.arange(start=0, stop=count_csv_rows(pt), step=nrows): # Process in chunks of nrows
         filtered_sequences_save.extend( # Filter sequences based on Hamming distance & compare to previously saved sequences
             fast_filter_by_hamming(sequences = filtered_sequences_save + filtered_sequences[i:i+nrows],
-                                   min_distance = hamming,
-                                   dir = dir)
+                                   min_distance = hamming)
         )
 
         # Save the filtered sequences after each iteration
