@@ -42,6 +42,7 @@ from Bio.Seq import Seq
 import datetime
 from ..gen import io
 from ..gen import tidy as t
+from ..utils import load_resource_csv
 
 # Individual GG cloning
 def ord_form(df:pd.DataFrame,id:str,seq:str,suf:str,pre:str):
@@ -255,16 +256,16 @@ def ngRNAs(df: pd.DataFrame | str,id: str, tG=True, order=True,
 
 # Library GG cloning
 def epegRNA_pool(df: pd.DataFrame | str, tG:bool=True, make_extension:bool=True,
-                 UMI_df: pd.DataFrame | str='../resources/UMI_15_hamming_4_yield_12525.csv',
-                 PCR_df: pd.DataFrame| str='../resources/edms_pcr.csv',
-                 RE_type_IIS_df: pd.DataFrame| str='../resources/RE_type_IIS.csv',
+                 UMI_df: pd.DataFrame | str=None,
+                 PCR_df: pd.DataFrame| str=None,
+                 RE_type_IIS_df: pd.DataFrame| str=None,
                  UMI_i: int=0, enzymes: list=['Esp3I'], barcode:str='Barcode', barcode_i:int=0, 
                  fwd_barcode_t5:str='Forward Barcode',rev_barcode_t3:str='Reverse Barcode',
                  Esp3I_hU6:str='Esp3I_hU6',tevopreQ1_Esp3I:str='tevopreQ1_Esp3I',
-                 epegRNA_spacer:str='Spacer_sequence',
+                 epegRNA_spacer:str='Spacer_sequence',epegRNA_scaffold:str='Scaffold_sequence',
                  epegRNA_extension:str='Extension_sequence',epegRNA_RTT:str='RTT_sequence',
                  epegRNA_PBS:str='PBS_sequence',epegRNA_linker:str='Linker_sequence',
-                 dir:str=None, file:str=None, return_df:bool=False):
+                 dir:str=None, file:str=None, return_df:bool=True):
     ''' 
     epegRNA_pool(): design GG cloning oligonucleotides for pooled prime editing epegRNAs
     
@@ -272,9 +273,9 @@ def epegRNA_pool(df: pd.DataFrame | str, tG:bool=True, make_extension:bool=True,
     df (dataframe | str): Dataframe with sequence information for epegRNAs & corresponding ngRNAs (or file path)
     tG (bool, optional): add 5' G to spacer if needed (Default: True)
     make_extension (bool, optional): concatenate RTT, PBS, and linker to make extension sequence (Default: True)
-    UMI_df (dataframe | str, optional): Dataframe with UMI sequences (or file path) (Default: '../resources/UMI_15_hamming_4_yield_12525.csv')
-    PCR_df (dataframe | str, optional): Dataframe with PCR primer and subpool barcode information (or file path) (Default: '../resources/edms_pcr.csv')
-    RE_type_IIS_df (dataframe | str, optional): Dataframe with Type IIS restriction enzyme information (or file path) (Default: '../resources/RE_typeIIS.csv')
+    UMI_df (dataframe | str, optional): Dataframe with UMI sequences (or file path)
+    PCR_df (dataframe | str, optional): Dataframe with PCR primer and subpool barcode information (or file path)
+    RE_type_IIS_df (dataframe | str, optional): Dataframe with Type IIS restriction enzyme information (or file path)
     UMI_i (int, optional): UMI start index (Default: 0)
     enzymes (list, optional): list of Type IIS restriction enzymes to check for (Default: ['Esp3I'])
     barcode (str, optional): subpool barcode column name (Default: Barcode)
@@ -284,12 +285,14 @@ def epegRNA_pool(df: pd.DataFrame | str, tG:bool=True, make_extension:bool=True,
     Esp3I_hU6 (bool, optional): Esp3I_hU6 column name (Default: Esp3I_hU6)
     tevopreQ1_Esp3I (bool, optional): tevopreQ1_Esp3I column name (Default: tevopreQ1_Esp3I)
     epegRNA_spacer (str, optional): epegRNA spacer column name (Default: Spacer_sequence)
+    epegRNA_scaffold (str, optional): epegRNA scaffold sequence column name (Default: Scaffold_sequence)
     epegRNA_extension (str, optional): epegRNA extension name (Default: Extension_sequence)
     epegRNA_RTT (str, optional): epegRNA reverse transcripase template column name (Default: RTT_sequence)
     epegRNA_PBS (str, optional): epegRNA primer binding site column name (Default: PBS_sequence)
     epegRNA_linker (str, optional): epegRNA linker column name (Default: Linker_sequence)
-    dir (str, optional): save directory
-    file (str, optional): save file
+    dir (str, optional): save directory (Default: None)
+    file (str, optional): save file (Default: None)
+    return_df (bool, optional): return dataframe (Default: True)
 
     Assumptions:
     1. Oligo Template: FWD UMI - FWD Barcode - Esp3I(F) - hU6 - epegRNA_spacer - epegRNA_scaffold - epegRNA_extension - tevopreQ1 motif - Esp3I(R) - REV Barcode - REV UMI
@@ -297,15 +300,31 @@ def epegRNA_pool(df: pd.DataFrame | str, tG:bool=True, make_extension:bool=True,
     
     Dependencies: pandas,
     '''
-    # Get dataframes from file path if needed
+    # Get dataframes from file paths if needed
     if type(df)==str:
         df = io.get(pt=df)
     if type(UMI_df)==str:
         UMI_df = io.get(pt=UMI_df)
     if type(PCR_df)==str:
         PCR_df = io.get(pt=PCR_df)
-    if type(RE_type_IIS_df)==str:
+    if type(RE_type_IIS_df)==str: # Get dataframe from file path if needed
         RE_type_IIS_df = io.get(pt=RE_type_IIS_df)
+    
+    # Load UMI and PCR dataframes from resources if not provided
+    save_time = False
+    if UMI_df is None and PCR_df is None and RE_type_IIS_df is None and enzymes == ['Esp3I']: # Default UMI, PCR, Enzyme dataframes, and enzymes (save time)
+        UMI_df = load_resource_csv(filename='UMI_15_hamming_4_yield_19242_Esp3I_0.csv')
+        PCR_df = load_resource_csv(filename='edms_pcr.csv')
+        RE_type_IIS_df = load_resource_csv(filename='RE_type_IIS.csv')
+        save_time = True
+    
+    else: # Not default (checking for RE sites)
+        if UMI_df is None: # Get UMI dataframe from resources if not provided
+            UMI_df = load_resource_csv(filename='UMI_15_hamming_4_yield_19356.csv')
+        if PCR_df is None: # Get PCR dataframe from resources if not provided
+            PCR_df = load_resource_csv(filename='edms_pcr.csv')
+        if RE_type_IIS_df is None: # Get from resources if not provided
+            RE_type_IIS_df = load_resource_csv(filename='RE_type_IIS.csv')
 
     # Make extension by concatenating RTT, PBS, and linker
     if make_extension==True: df[epegRNA_extension] = df[epegRNA_RTT]+df[epegRNA_PBS]+df[epegRNA_linker]
@@ -317,49 +336,97 @@ def epegRNA_pool(df: pd.DataFrame | str, tG:bool=True, make_extension:bool=True,
     PCR_barcodes[barcode] = barcodes
     df = pd.merge(left=df,right=PCR_barcodes,on=barcode)
 
-    # Assign UMI to each twist oligo
-    UMI_sequences = UMI_df['UMI_sequence'].tolist()
-    UMI_sequences = UMI_sequences[UMI_i:] # Get UMIs starting at UMI_i
-    if len(UMI_sequences)<df.shape[0]*2: 
-        ValueError(f'{len(UMI_sequences)} UMIs is less than 2x{df.shape[0]} twist oligonucleotides!')
+    # Check for RE sites in UMI sequences + subpool barcodes (discard UMIs with RE sites)
+    if save_time == False: # Not default UMI, PCR, Enzyme dataframes, and enzymes (do not save time)
+        fwd_UMI_ls = []
+        fwd_barcode_ls = []
+        fwd_UMI_barcode_ls = []
 
-    # Make twist oligo & determine length
+        rev_UMI_ls = []
+        rev_barcode_ls = []
+        rev_UMI_barcode_ls = []
+
+        for umi in UMI_df['UMI_sequence']: # Iterate through UMIs
+            for fwd_barcode in PCR_barcodes[fwd_barcode_t5]: # Iterate through FWD barcodes
+                fwd_UMI_ls.append(umi)
+                fwd_barcode_ls.append(fwd_barcode)
+                fwd_UMI_barcode_ls.append(umi+fwd_barcode)
+            
+            for rev_barcode in PCR_barcodes[rev_barcode_t3]: # Iterate through REV barcodes
+                rev_UMI_ls.append(umi)
+                rev_barcode_ls.append(rev_barcode)
+                rev_UMI_barcode_ls.append(umi+rev_barcode)
+        
+        UMI_barcode_df = pd.DataFrame({'Forward UMI':fwd_UMI_ls,
+                                    'Forward Barcode':fwd_barcode_ls,
+                                    'Forward UMI+Barcode':fwd_UMI_barcode_ls,
+                                    'Reverse UMI':rev_UMI_ls,
+                                    'Reverse Barcode':rev_barcode_ls,
+                                    'Reverse UMI+Barcode':rev_UMI_barcode_ls})
+
+        for (enzyme,recognition,recognition_rc) in t.zip_cols(df=RE_type_IIS_df[RE_type_IIS_df['Name'].isin(enzymes)], # Just Esp3I by default
+                                                            cols=['Name','Recognition','Recognition_rc']):
+            # Check Forward UMI+Barcode for RE sites
+            UMI_barcode_df[f'{enzyme} Forward UMI+Barcode'] = [len(t.find_all(oligo,recognition))+len(t.find_all(oligo,recognition_rc)) for oligo in UMI_barcode_df['Forward UMI+Barcode']] # Iterate through oligonucleotides
+            
+            # Check Forward UMI+Barcode for RE sites
+            UMI_barcode_df[f'{enzyme} Reverse UMI+Barcode'] = [len(t.find_all(oligo,recognition))+len(t.find_all(oligo,recognition_rc)) for oligo in UMI_barcode_df['Reverse UMI+Barcode']] # Iterate through oligonucleotides
+
+            # Count number of RE sites (should be 0)
+            RE_ls = []
+            for umi in UMI_df['UMI_sequence']:
+                RE_ls.append(sum(UMI_barcode_df[(UMI_barcode_df['Forward UMI']==umi)][f'{enzyme} Forward UMI+Barcode']) + sum(UMI_barcode_df[(UMI_barcode_df['Reverse UMI']==umi)][f'{enzyme} Reverse UMI+Barcode']))
+            UMI_df[enzyme] = RE_ls
+        
+        # Keep UMIs with no RE sites
+        UMI_df = UMI_df[UMI_df[enzymes].sum(axis=1)==0]
+
+    # Assign UMI to each oligo
+    UMI_sequences = UMI_df['UMI_sequence'].tolist()
+    if len(UMI_sequences[UMI_i:])<df.shape[0]*2: # Check if there are enough UMIs for the number of oligos
+        ValueError(f'{len(UMI_sequences)} UMIs is less than 2x{df.shape[0]} oligonucleotides!')
+    UMI_sequences = UMI_sequences[UMI_i:UMI_i+df.shape[0]*2] # Get UMIs starting at UMI_i
+    print(f'{len(UMI_sequences)} UMIs: index = [{UMI_i}:{UMI_i+df.shape[0]*2}]')
+    df['Forward UMI'] = UMI_sequences[:df.shape[0]] # Assign forward UMIs
+    df['Reverse UMI'] = UMI_sequences[df.shape[0]:] # Assign reverse UMIs
+
+    # Make oligo & determine length
     df.sort_values(by=barcode,inplace=True,ignore_index=True)
     df[f'{epegRNA_spacer}_nt1']=[s[0] for s in df[epegRNA_spacer]]
-    twist_oligos = []
+    oligos = []
     for i,(epegRNA_spacer_nt1) in enumerate(df[f'{epegRNA_spacer}_nt1']):
         if tG==True: # Append 5'G to spacer if not already present
             if epegRNA_spacer_nt1=='G':
-                twist_oligos.append(df.iloc[i]['Forward UMI']+
-                                    df.iloc[i][fwd_barcode_t5]+df.iloc[i][Esp3I_hU6]+
-                                    df.iloc[i][epegRNA_spacer]+df.iloc[i]['Scaffold_sequence']+
-                                    df.iloc[i][epegRNA_extension]+df.iloc[i]['Sensor_sequence']+
-                                    df.iloc[i][tevopreQ1_Esp3I]+df.iloc[i][rev_barcode_t3]+
-                                    df.iloc[i]['Reverse UMI'])
+                oligos.append(df.iloc[i]['Forward UMI']+df.iloc[i][fwd_barcode_t5]+df.iloc[i][Esp3I_hU6]+
+                                    df.iloc[i][epegRNA_spacer]+df.iloc[i][epegRNA_scaffold]+df.iloc[i][epegRNA_extension]+
+                                    df.iloc[i][tevopreQ1_Esp3I]+df.iloc[i][rev_barcode_t3]+df.iloc[i]['Reverse UMI'])
             else:
-                twist_oligos.append(df.iloc[i]['Forward UMI']+
-                                    df.iloc[i][fwd_barcode_t5]+df.iloc[i][Esp3I_hU6]+'G'+
-                                    df.iloc[i][epegRNA_spacer]+df.iloc[i]['Scaffold_sequence']+
-                                    df.iloc[i][epegRNA_extension]+df.iloc[i]['Sensor_sequence']+
-                                    df.iloc[i][tevopreQ1_Esp3I]+df.iloc[i][rev_barcode_t3]+
-                                    df.iloc[i]['Reverse UMI'])
+                oligos.append(df.iloc[i]['Forward UMI']+df.iloc[i][fwd_barcode_t5]+df.iloc[i][Esp3I_hU6]+'G'+
+                                    df.iloc[i][epegRNA_spacer]+df.iloc[i][epegRNA_scaffold]+df.iloc[i][epegRNA_extension]+
+                                    df.iloc[i][tevopreQ1_Esp3I]+df.iloc[i][rev_barcode_t3]+df.iloc[i]['Reverse UMI'])
         else: # Do not append 5'G to spacer if not already present
-            twist_oligos.append(df.iloc[i]['Forward UMI']+
-                                df.iloc[i][fwd_barcode_t5]+df.iloc[i][Esp3I_hU6]+
-                                df.iloc[i][epegRNA_spacer]+df.iloc[i]['Scaffold_sequence']+
-                                df.iloc[i][epegRNA_extension]+df.iloc[i]['Sensor_sequence']+
-                                df.iloc[i][tevopreQ1_Esp3I]+df.iloc[i][rev_barcode_t3]+
-                                df.iloc[i]['Reverse UMI'])
+            oligos.append(df.iloc[i]['Forward UMI']+df.iloc[i][fwd_barcode_t5]+df.iloc[i][Esp3I_hU6]+
+                                df.iloc[i][epegRNA_spacer]+df.iloc[i][epegRNA_scaffold]+df.iloc[i][epegRNA_extension]+
+                                df.iloc[i][tevopreQ1_Esp3I]+df.iloc[i][rev_barcode_t3]+df.iloc[i]['Reverse UMI'])
             
-    df['Twist_oligo'] = twist_oligos
-    df['Twist_oligo_length']=[len(twist) for twist in df['Twist_oligo']]
+    df['Oligonucleotide'] = oligos
+    df['Oligonucleotide_length']=[len(twist) for twist in df['Oligonucleotide']]
 
     # Check for 2 recognition sites per enzyme
-    for (enzyme,recognition,recognition_rc) in t.zip_cols(df=RE_type_IIS_df[RE_type_IIS_df['Name'] in enzymes],cols=['Name','Recognition','Recognition_rc']):
-        enzyme_sites = [len(t.find_all(twist_oligo,recognition)) + # Check forward direction
-                        len(t.find_all(twist_oligo,recognition_rc)) # Check reverse direction
-                        for twist_oligo in twist_oligos] # Iterate through Twist product
+    for (enzyme,recognition,recognition_rc) in t.zip_cols(df=RE_type_IIS_df[RE_type_IIS_df['Name'].isin(enzymes)], # Just Esp3I by default
+                                                          cols=['Name','Recognition','Recognition_rc']):
+        # Check forward direction for recognition sites
+        enzyme_sites_fwd = [t.find_all(oligo,recognition) for oligo in oligos] # Iterate through oligonucleotides
+
+        # Check reverse direction for recognition sites
+        enzyme_sites_rc = [t.find_all(oligo,recognition_rc) for oligo in oligos] # Iterate through oligonucleotides
+        
+        # Sum recognition sites in both directions
+        enzyme_sites = [len(enzyme_site_fwd)+len(enzyme_site_rc) for (enzyme_site_fwd,enzyme_site_rc) in zip(enzyme_sites_fwd,enzyme_sites_rc)]
+        
         df[enzyme] = enzyme_sites
+        df[f'{enzyme}_fwd_i'] = enzyme_sites_fwd
+        df[f'{enzyme}_rc_i'] = enzyme_sites_rc
     
     # Save & return dataframe
     if dir is not None and file is not None:

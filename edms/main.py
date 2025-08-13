@@ -1011,6 +1011,7 @@ def main():
     parser_clone_epegRNA_pool.add_argument("--Esp3I_hU6", type=str, default="Esp3I_hU6", help="Esp3I_hU6 column name")
     parser_clone_epegRNA_pool.add_argument("--tevopreQ1_Esp3I", type=str, default="tevopreQ1_Esp3I", help="tevopreQ1_Esp3I column name")
     parser_clone_epegRNA_pool.add_argument("--epegRNA_spacer", type=str, default="Spacer_sequence", help="epegRNA spacer column")
+    parser_clone_epegRNA_pool.add_argument("--epegRNA_scaffold", type=str, default="Scaffold_sequence", help="epegRNA scaffold column")
     parser_clone_epegRNA_pool.add_argument("--epegRNA_extension", type=str, default="Extension_sequence", help="epegRNA extension column")
     parser_clone_epegRNA_pool.add_argument("--epegRNA_RTT", type=str, default="RTT_sequence", help="epegRNA RTT column name")
     parser_clone_epegRNA_pool.add_argument("--epegRNA_PBS", type=str, default="PBS_sequence", help="epegRNA PBS column name")
@@ -1381,6 +1382,8 @@ def main():
     parser_pe_epegRNA_linkers.add_argument('--pegRNAs', help='Path to pegRNAs file',required=True)
 
     parser_pe_epegRNA_linkers.add_argument('--epegRNA_motif_sequence', default='CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA', help='epegRNA motif sequence (Default: tevopreQ1)')
+    parser_pe_epegRNA_linkers.add_argument('--linker_pattern', type=str, default=argparse.SUPPRESS, help='epegRNA linker pattern (Default: NNNNNNNN)')
+    parser_pe_epegRNA_linkers.add_argument('--excluded_motifs', type=str, nargs="+", default=argparse.SUPPRESS, help='list of motifs or type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to exclude from linker generation (Default: None)')
     parser_pe_epegRNA_linkers.add_argument('--ckpt_dir', type=str, help='Checkpoint directory path (Default: ../epegRNAs/ckpt)', default='../epegRNAs/ckpt')
     parser_pe_epegRNA_linkers.add_argument('--ckpt_file', help='Checkpoint file name (Default: YYMMDD_HHMMSS_epegRNA_linkers.csv)', default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_epegRNA_linkers.csv')
     parser_pe_epegRNA_linkers.add_argument('--ckpt_pt', type=str, default='', help='Previous checkpoint full path (Example: ../epegRNAs/ckpt/YYMMDD_HHMMSS_epegRNA_linkers.csv)')

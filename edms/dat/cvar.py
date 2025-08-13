@@ -88,6 +88,10 @@ def priority_muts(pegRNAs_shared: pd.DataFrame, df_clinvar: pd.DataFrame | str,
     if type(df_clinvar)==str:
         df_clinvar = io.get(pt=df_clinvar)
     
+    # Check if ClinVar mutations dataframe has 'Protein change' column without NaN values
+    if df_clinvar["Protein change"].isna().any() == True:
+        df_clinvar = mutations(df=df_clinvar, gene_name=pegRNAs_shared['Target_name'][0]) # Get ClinVar mutations dataframe for the gene in pegRNAs shared sequences library
+
     # Get list of priority mutants
     mut_priority_ls = prevalence(df=df_clinvar)
 
@@ -146,6 +150,10 @@ def priority_edits(pegRNAs: pd.DataFrame | str, pegRNAs_shared: pd.DataFrame | s
         pegRNAs_shared = io.get(pt=pegRNAs_shared)
     if type(df_clinvar)==str:
         df_clinvar = io.get(pt=df_clinvar)
+
+    # Check if ClinVar mutations dataframe has 'Protein change' column without NaN values
+    if df_clinvar["Protein change"].isna().any() == True:
+        df_clinvar = mutations(df=df_clinvar, gene_name=pegRNAs_shared['Target_name'][0]) # Get ClinVar mutations dataframe for the gene in pegRNAs shared sequences library
 
     # Determine priority pegRNAs based on priority mutations from pegRNAs shared sequences library
     pegRNAs_priority = pd.DataFrame()

@@ -54,7 +54,7 @@ from ..gen import plot as p
 from ..dat import cosmic as co 
 from ..dat import cvar
 from ..bio import fastq as fq
-from ..utils import memory_timer
+from ..utils import memory_timer,load_resource_csv
 
 # Biological Dictionaries
 ''' dna_aa_codon_table: DNA to AA codon table'''
@@ -275,11 +275,12 @@ def PrimeDesignOutput(pt: str, scaffold_sequence: str, saturation_mutagenesis:st
         pegRNAs['Scaffold_sequence']=[scaffold_sequence]*len(pegRNAs)
         pegRNAs['RTT_sequence']=[pegRNAs.iloc[i]['Extension_sequence'][0:int(pegRNAs.iloc[i]['RTT_length'])] for i in range(len(pegRNAs))]
         pegRNAs['PBS_sequence']=[pegRNAs.iloc[i]['Extension_sequence'][int(pegRNAs.iloc[i]['RTT_length']):]  for i in range(len(pegRNAs))]
+        pegRNAs['AA Number'] = [int(re.findall(r'-?\d+',edit)[0]) if edit is not None else aa_index for edit in pegRNAs['Edit']]
         pegRNAs = t.reorder_cols(df=pegRNAs,
-                                cols=['pegRNA_number','gRNA_type','Strand','Edit', # Important metadata
+                                 cols=['pegRNA_number','gRNA_type','Strand','Edit','AA Number', # Important metadata
                                     'Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence',  # Sequence information
                                     'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide'], # Less important metadata
-                                keep=False) 
+                                 keep=False) 
         
         # Generate ngRNAs
         ngRNAs['Edit']=[str(target_name.split('_')[-1].split('to')[0]) + # AA Before
@@ -290,8 +291,9 @@ def PrimeDesignOutput(pt: str, scaffold_sequence: str, saturation_mutagenesis:st
             ngRNAs['Target_name']=[target_name]*len(ngRNAs)
         ngRNAs['Scaffold_sequence']=[scaffold_sequence]*len(ngRNAs)
         ngRNAs['ngRNA_number']=list(np.arange(1,len(ngRNAs)+1))
+        ngRNAs['AA Number'] = [int(re.findall(r'-?\d+',edit)[0]) if edit is not None else aa_index for edit in ngRNAs['Edit']]
         ngRNAs = t.reorder_cols(df=ngRNAs,
-                                cols=['pegRNA_number','ngRNA_number','gRNA_type','Strand','Edit', # Important metadata
+                                cols=['pegRNA_number','ngRNA_number','gRNA_type','Strand','Edit','AA Number', # Important metadata
                                     'Spacer_sequence','Scaffold_sequence',  # Sequence information
                                     'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Annotation','Nick_index','ngRNA-to-pegRNA_distance'], # Less important metadata
                                 keep=False) 
@@ -371,7 +373,7 @@ def PrimeDesigner(target_name: str, flank5_sequence: str, target_sequence: str, 
     
     # Save pegRNAs and ngRNAs
     io.save_dir(dir='../pegRNAs', suf='.csv', dc=pegRNAs)
-    io.save_dir(dir='../ngRNAs', suf='.csv', dc=pegRNAs)
+    io.save_dir(dir='../ngRNAs', suf='.csv', dc=ngRNAs)
 
 def merge(epegRNAs: str | dict | pd.DataFrame, ngRNAs: str | dict | pd.DataFrame, ngRNAs_groups_max: int=3,
           epegRNA_suffix: str='_epegRNA', ngRNA_suffix: str='_ngRNA', dir: str=None, file: str=None):
@@ -432,6 +434,7 @@ def merge(epegRNAs: str | dict | pd.DataFrame, ngRNAs: str | dict | pd.DataFrame
 
 # pegRNA
 def epegRNA_linkers(pegRNAs: str | pd.DataFrame, epegRNA_motif_sequence: str='CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA',
+                    linker_pattern: str='NNNNNNNN', excluded_motifs: list=None,
                     ckpt_dir: str=None, ckpt_file=None, ckpt_pt: str='',
                     out_dir: str=None, out_file: str=None):
     ''' 
@@ -440,6 +443,8 @@ def epegRNA_linkers(pegRNAs: str | pd.DataFrame, epegRNA_motif_sequence: str='CG
     Parameters:
     pegRNAs (str | dataframe): pegRNAs DataFrame or file path
     epegRNA_motif_sequence (str, optional): epegRNA motif sequence (Optional, Default: tevopreQ1)
+    linker_pattern (str, optional): epegRNA linker pattern (Default: NNNNNNNN)
+    excluded_motifs (list, optional): list of motifs or type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to exclude from linker generation (Default: None)
     ckpt_dir (str, optional): Checkpoint directory
     ckpt_file (str, optional): Checkpoint file name
     ckpt_pt (str, optional): Previous ckpt path
@@ -449,6 +454,15 @@ def epegRNA_linkers(pegRNAs: str | pd.DataFrame, epegRNA_motif_sequence: str='CG
     if type(pegRNAs)==str: # Get pegRNAs dataframe from file path if needed
         pegRNAs = io.get(pt=pegRNAs)
 
+    # Parse excluded_motifs
+    if excluded_motifs is not None: # Check if excluded_motifs is a list 
+        RE_type_IIS_df = load_resource_csv(filename='RE_type_IIS.csv')
+        for motif in excluded_motifs: # Find type IIS RE and replace with recognition sequence (+ reverse complement)
+            if motif in list(RE_type_IIS_df['Name']):
+                excluded_motifs.remove(motif)
+                excluded_motifs.append(RE_type_IIS_df[RE_type_IIS_df['Name']==motif]['Recognition'].values[0])
+                excluded_motifs.append(RE_type_IIS_df[RE_type_IIS_df['Name']==motif]['Recognition_rc'].values[0])
+    
     # Get or make ckpt DataFrame & linkers
     linkers = []
     if ckpt_dir is not None and ckpt_file is not None: # Save ckpts
@@ -464,8 +478,8 @@ def epegRNA_linkers(pegRNAs: str | pd.DataFrame, epegRNA_motif_sequence: str='CG
     for i in range(len(pegRNAs)):
         if i>=len(ckpt):
             linkers.extend(pegLIT.pegLIT(seq_spacer=pegRNAs.iloc[i]['Spacer_sequence'],seq_scaffold=pegRNAs.iloc[i]['Scaffold_sequence'],
-                                        seq_template=pegRNAs.iloc[i]['RTT_sequence'],seq_pbs=pegRNAs.iloc[i]['PBS_sequence'],
-                                        seq_motif=epegRNA_motif_sequence))
+                                         seq_template=pegRNAs.iloc[i]['RTT_sequence'],seq_pbs=pegRNAs.iloc[i]['PBS_sequence'],
+                                         seq_motif=epegRNA_motif_sequence,linker_pattern=linker_pattern,excluded_motifs=excluded_motifs))
             if ckpt_dir is not None and ckpt_file is not None: # Save ckpts
                 ckpt = pd.concat([ckpt,pd.DataFrame({'pegRNA_number': [i], 'Linker_sequence': [linkers[i]]})])
                 io.save(dir=ckpt_dir,file=ckpt_file,obj=ckpt)
@@ -502,15 +516,17 @@ def shared_sequences(pegRNAs: pd.DataFrame | str, hist_plot:bool=True, hist_dir:
 
     # Reduce PE library to the set shared of spacers and PBS motifs
     shared = sorted({(pegRNAs.iloc[i]['Spacer_sequence'],pegRNAs.iloc[i]['PBS_sequence']) for i in range(len(pegRNAs))})
-    shared_pegRNAs_lib = pd.DataFrame(columns=['pegRNA_numbers','Strand','Edits','Spacer_sequence','PBS_sequence'])
+    shared_pegRNAs_lib = pd.DataFrame(columns=['Target_name','pegRNA_numbers','Strand','Edits','Spacer_sequence','PBS_sequence'])
     for (spacer,pbs) in shared:
         shared_pegRNAs = pegRNAs[(pegRNAs['Spacer_sequence']==spacer)&(pegRNAs['PBS_sequence']==pbs)]
-        shared_pegRNAs_lib = pd.concat([shared_pegRNAs_lib,pd.DataFrame({'pegRNA_numbers': [shared_pegRNAs['pegRNA_number'].to_list()],
-                                                        'Strand': [shared_pegRNAs.iloc[0]['Strand']],
-                                                        'Edits': [shared_pegRNAs['Edit'].to_list()],
-                                                        'Spacer_sequence': [spacer],
-                                                        'PBS_sequence': [pbs],
-                                                        'RTT_lengths': [sorted(int(rtt) for rtt in set(shared_pegRNAs['RTT_length'].to_list()))]})]).reset_index(drop=True)
+        shared_pegRNAs_lib = pd.concat([shared_pegRNAs_lib,
+                                        pd.DataFrame({'Target_name': [shared_pegRNAs.iloc[0]['Target_name']],
+                                                      'pegRNA_numbers': [shared_pegRNAs['pegRNA_number'].to_list()],
+                                                      'Strand': [shared_pegRNAs.iloc[0]['Strand']],
+                                                      'Edits': [shared_pegRNAs['Edit'].to_list()],
+                                                      'Spacer_sequence': [spacer],
+                                                      'PBS_sequence': [pbs],
+                                                      'RTT_lengths': [sorted(int(rtt) for rtt in set(shared_pegRNAs['RTT_length'].to_list()))]})]).reset_index(drop=True)
     
     # Find shared AAs within the reduced PE library
     aa_numbers_ls=[]
@@ -538,7 +554,7 @@ def shared_sequences(pegRNAs: pd.DataFrame | str, hist_plot:bool=True, hist_dir:
         for i,aa_numbers in enumerate(shared_pegRNAs_lib['AA_numbers']):
             shared_hist = pd.concat([shared_hist,pd.DataFrame({'Group_Spacer_PBS': [f'{str(i)}_{shared_pegRNAs_lib.iloc[i]["Spacer_sequence"]}_{shared_pegRNAs_lib.iloc[i]["PBS_sequence"]}']*len(aa_numbers),
                                                                'AA_number': aa_numbers})]).reset_index(drop=True)
-        p.dist(typ='hist',df=shared_hist,x='AA_number',cols='Group_Spacer_PBS',x_axis='AA number',title='Shared Spacers & PBS Sequences in the PE Library',
+        p.dist(typ='hist',df=shared_hist,x='AA_number',cols='Group_Spacer_PBS',x_axis='AA number',title=f'Shared Spacers & PBS Sequences in the {shared_pegRNAs_lib.iloc[0]['Target_name']} PE Library',
                x_axis_dims=(min(shared_hist['AA_number']),max(shared_hist['AA_number'])),figsize=(10,2),bins=max(shared_hist['AA_number'])-min(shared_hist['AA_number'])+1,
                legend_loc='upper center',legend_bbox_to_anchor=(0.5, -.3),dir=hist_dir,file=hist_file,legend_ncol=2,**kwargs)
 

@@ -1,4 +1,6 @@
-''' From: https://www.nature.com/articles/s41587-021-01039-7 '''
+''' From: https://www.nature.com/articles/s41587-021-01039-7 
+    Modified by Marc Zepeda (2025-8-13)
+'''
 from math import prod
 import random
 import heapq
@@ -15,11 +17,11 @@ BASE_SYMBOLS = {
 "B": ("C", "G", "T"), "D": ("A", "G", "T"), "H": ("A", "C", "T"), "V": ("A", "C", "G"),
 "N": ("A", "C", "G", "T")}
 
-def apply_filters(seq_pre, seq_linker, seq_post, ac_thresh, u_thresh, n_thresh):
+def apply_filters(seq_pre, seq_linker, seq_post, ac_thresh, u_thresh, n_thresh, excluded_motifs):
     """
     Returns False if any filter is failed i.e. AC content < ac_thresh OR consecutive Us > u_thresh
-    OR consecutive Ns > n_thresh. Otherwise, True if all filters are passed. All thresholds have
-    units nt (i.e. ac_thresh is not a percent). Ts are treated as Us.
+    OR consecutive Ns > n_thresh OR excluded motifs are present. Otherwise, True if all filters are passed. 
+    All thresholds have units nt (i.e. ac_thresh is not a percent). Ts are treated as Us (except excluded_motifs).
     """
     # AC content
     if seq_linker.count("A") + seq_linker.count("C") < ac_thresh:
@@ -36,6 +38,13 @@ def apply_filters(seq_pre, seq_linker, seq_post, ac_thresh, u_thresh, n_thresh):
     seq_neighborhood = seq_neighborhood.replace("T", "U")
     if any(nt * (n_thresh + 1) in seq_neighborhood for nt in set(seq_linker)):
         return False
+    
+    # Excluded Motif
+    if excluded_motifs is not None:
+        seq_neighborhood = seq_pre[-(len(excluded_motifs)):] + seq_linker + seq_post[:len(excluded_motifs)]
+        for motif in excluded_motifs:
+            if motif in seq_neighborhood:
+                return False
     
     return True
 
@@ -103,7 +112,7 @@ def apply_score(seq_spacer, seq_scaffold, seq_template, seq_pbs, seq_linker, sco
 
 def optimize(seq_spacer, seq_scaffold, seq_template, seq_pbs, seq_motif,
 linker_pattern, ac_thresh, u_thresh, n_thresh, topn, epsilon,
-num_repeats, num_steps, temp_init, temp_decay, seed):
+num_repeats, num_steps, temp_init, temp_decay, seed, excluded_motifs):
     """
     Simulated annealing optimization of linkers
     """
@@ -141,7 +150,7 @@ num_repeats, num_steps, temp_init, temp_decay, seed):
                 keep_going = (
                     (seq_linker in linker_skip
                     or not apply_filters(seq_pre, seq_linker, seq_post,
-                        ac_thresh, u_thresh, n_thresh))
+                        ac_thresh, u_thresh, n_thresh, excluded_motifs))
                     and len(linker_skip) < len_sequence_space) # already screened whole seq space
                 linker_skip[seq_linker] = True
     
@@ -209,7 +218,7 @@ def apply_bottleneck(heap_scores, heap, bottleneck, seed):
     return output
 
 def pegLIT(seq_spacer, seq_scaffold, seq_template, seq_pbs, seq_motif,
-linker_pattern="NNNNNNNN", ac_thresh=0.5, u_thresh=3, n_thresh=3, topn=100,
+linker_pattern="NNNNNNNN", excluded_motifs=[], ac_thresh=0.5, u_thresh=3, n_thresh=3, topn=100,
 epsilon=1e-2, num_repeats=10, num_steps=250, temp_init=0.15, temp_decay=0.95,
 bottleneck=1, seed=2020):
     """
@@ -220,7 +229,8 @@ bottleneck=1, seed=2020):
     seq_spacer, seq_scaffold, seq_template, seq_pbs, seq_motif,
     linker_pattern=linker_pattern, ac_thresh=ac_thresh, u_thresh=u_thresh,
     n_thresh=n_thresh, topn=topn, epsilon=epsilon, num_repeats=num_repeats,
-    num_steps=num_steps, temp_init=temp_init, temp_decay=temp_decay, seed=seed)
+    num_steps=num_steps, temp_init=temp_init, temp_decay=temp_decay, seed=seed, 
+    excluded_motifs=excluded_motifs)
     
     # Sample diverse sequences
     linker_output = apply_bottleneck(linker_heap_scores, linker_heap,

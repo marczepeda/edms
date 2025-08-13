@@ -9,15 +9,20 @@ Usage:
 - memory(): report current memory
 - timer(): report elapsed time
 - memory_timer(): report current memory & elapsed time
+
+[Package .csv files]
+- load_resource_csv(): load .csv file from resources
 '''
 # Import packages
 import os
 import psutil
 import time
-
-process = psutil.Process(os.getpid())
+import importlib.resources
+import pandas as pd
 
 # Computation
+process = psutil.Process(os.getpid())
+
 def memory(task: str='unspecified'):
     '''
     memory(): report current memory
@@ -79,3 +84,16 @@ def memory_timer(task: str='unspecified', reset: bool=False):
         return task,mem,elapsed
     else: # Start timer
         timer.last_time = now
+
+# Package .csv files
+def load_resource_csv(filename: str):
+    '''
+    laod_resource_csv(): load .csv file from resources
+    
+    Parameters:
+    filename (str): name of .csv file in resources folder
+
+    Dependencies: importlib.resources, pandas
+    '''
+    with importlib.resources.files("edms.resources").joinpath(filename).open("r", encoding="utf-8") as f:
+        return pd.read_csv(f)

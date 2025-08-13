@@ -41,3 +41,9 @@ classifiers = [
 
 [project.scripts]
 edms = "edms.main:main"
+
+[tool.setuptools]
+packages = ["edms"]
+
+[tool.setuptools.package-data]
+"edms.resources" = ["*.csv"]

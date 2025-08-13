@@ -133,6 +133,10 @@ def priority_muts(pegRNAs_shared: pd.DataFrame, df_cosmic: str, dir:str=None, fi
     if type(df_cosmic)==str:
         df_cosmic = io.get(pt=df_cosmic)
 
+    # Check if COSMIC mutations() dataframe has been processed
+    if 'AA_mut' not in df_cosmic.columns:
+        df_cosmic = mutations(df=df_cosmic)
+    
     # Get list of priority mutants
     mut_priority_ls = prevalence(df=df_cosmic)
 
@@ -191,6 +195,10 @@ def priority_edits(pegRNAs: pd.DataFrame | str, pegRNAs_shared: pd.DataFrame | s
         pegRNAs_shared = io.get(pt=pegRNAs_shared)
     if type(df_cosmic)==str:
         df_cosmic = io.get(pt=df_cosmic)
+    
+    # Check if COSMIC mutations() dataframe has been processed
+    if 'AA_mut' not in df_cosmic.columns:
+        df_cosmic = mutations(df=df_cosmic)
     
     # Determine priority pegRNAs based on priority mutations from pegRNAs shared sequences library
     pegRNAs_priority = pd.DataFrame()
