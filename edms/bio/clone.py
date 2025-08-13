@@ -42,6 +42,7 @@ from Bio.Seq import Seq
 import datetime
 from ..gen import io
 from ..gen import tidy as t
+from ..bio import fastq as fq
 from ..utils import load_resource_csv
 
 # Individual GG cloning
