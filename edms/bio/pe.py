@@ -13,7 +13,7 @@ Usage:
 - get_codons(): returns all codons within a specified frame for a nucleotide sequence
 - get_codon_frames(): returns all codon frames for a nucleotide sequence
 - found_list_in_order(): returns index of sub_ls found consecutive order in main_ls or -1
-    
+ 
 [PrimeDesign]
 - PrimeDesignInput(): creates and checks PrimeDesign saturation mutagenesis input file
 - PrimeDesign(): run PrimeDesign using Docker (NEED TO BE RUNNING DESKTOP APP)
@@ -193,7 +193,7 @@ def PrimeDesignInput(target_name: str, flank5_sequence: str,
             file=file,
             obj=pd.DataFrame({'target_name': [target_name],'target_sequence': [f"{flank5_sequence}({target_sequence}){flank3_sequence}"]}))
 
-def PrimeDesign(file: str,pbs_length_list: list = [],rtt_length_list: list = [],nicking_distance_minimum: int = 0,
+def PrimeDesign(file: str, pbs_length_list: list = [],rtt_length_list: list = [],nicking_distance_minimum: int = 0,
                 nicking_distance_maximum: int = 100,filter_c1_extension: bool = False,silent_mutation: bool = False,
                 genome_wide_design: bool = False,saturation_mutagenesis: str = None,number_of_pegrnas: int = 3,number_of_ngrnas: int = 3,
                 nicking_distance_pooled: int = 75,homology_downstream: int = 10,pbs_length_pooled: int = 14,rtt_max_length_pooled: int = 50,
@@ -243,7 +243,8 @@ def PrimeDesign(file: str,pbs_length_list: list = [],rtt_length_list: list = [],
 
     os.system(cmd) # Execute PrimeDesign Command Line
 
-def PrimeDesignOutput(pt: str, scaffold_sequence: str, saturation_mutagenesis:str=None, aa_index: int=1, target_name: str=None):
+def PrimeDesignOutput(pt: str, scaffold_sequence: str, saturation_mutagenesis:str=None, 
+                      aa_index: int=1, target_name: str=None, enzymes: list[str]=['Esp3I'], remove: bool=True):
     ''' 
     PrimeDesignOutput(): splits peg/ngRNAs from PrimeDesign output & finishes annotations
     
@@ -255,6 +256,8 @@ def PrimeDesignOutput(pt: str, scaffold_sequence: str, saturation_mutagenesis:st
     saturation_mutagenesis (str, optional): saturation mutagenesis design with prime editing (Options: 'aa', 'base').
     aa_index (int, optional): 1st amino acid in target sequence index (Default: 1)
     target_name (str, optional): name of target (Default: None)
+    enzymes (list, optional): list of type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to check for in pegRNAs and ngRNAs (Default: ['Esp3I'])
+    remove (bool, optional): remove pegRNAs and ngRNAs with enzymes (Default: True)
     
     Dependencies: io, numpy, & pandas
     '''
@@ -325,7 +328,77 @@ def PrimeDesignOutput(pt: str, scaffold_sequence: str, saturation_mutagenesis:st
                                 cols=['Target_name','pegRNA_number','gRNA_type','Strand', # Important metadata
                                     'Spacer_sequence','Scaffold_sequence',  # Sequence information
                                     'Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','Nick_index','ngRNA-to-pegRNA_distance'], # Less important metadata
-                                keep=False) 
+                                keep=False)
+    
+    # Temporarily make pegRNAs and ngRNAs oligonucleotides
+    pegRNAs['Oligonucleotide'] = [str(spacer+scaffold+rtt+pbs).upper() for (spacer, scaffold, rtt, pbs) in t.zip_cols(df=pegRNAs,cols=['Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence'])]
+    ngRNAs['Oligonucleotide'] = [str(spacer+scaffold).upper() for (spacer, scaffold) in t.zip_cols(df=ngRNAs,cols=['Spacer_sequence','Scaffold_sequence'])]
+    
+    # Check for 0 recognition sites per enzyme
+    RE_type_IIS_df = load_resource_csv(filename='RE_type_IIS.csv') # Load type IIS REs
+    for (enzyme,recognition,recognition_rc) in t.zip_cols(df=RE_type_IIS_df[RE_type_IIS_df['Name'].isin(enzymes)], # Just Esp3I by default
+                                                          cols=['Name','Recognition','Recognition_rc']):
+        # Check forward & reverse direction for recognition sites on pegRNAs
+        pegRNA_enzyme_sites_fwd = [t.find_all(oligo,recognition) for oligo in pegRNAs['Oligonucleotide']] # Iterate through oligonucleotides
+        pegRNA_enzyme_sites_rc = [t.find_all(oligo,recognition_rc) for oligo in pegRNAs['Oligonucleotide']] # Iterate through oligonucleotides
+        pegRNA_enzyme_sites = [len(enzyme_site_fwd)+len(enzyme_site_rc) for (enzyme_site_fwd,enzyme_site_rc) in zip(pegRNA_enzyme_sites_fwd,pegRNA_enzyme_sites_rc)] # Sum forward & reverse direction
+        
+        pegRNAs[enzyme] = pegRNA_enzyme_sites
+        pegRNAs[f'{enzyme}_fwd_i'] = pegRNA_enzyme_sites_fwd
+        pegRNAs[f'{enzyme}_rc_i'] = pegRNA_enzyme_sites_rc
+
+        # Check forward & reverse direction for recognition sites on ngRNAs
+        ngRNA_enzyme_sites_fwd = [t.find_all(oligo,recognition) for oligo in pegRNAs['Oligonucleotide']] # Iterate through oligonucleotides
+        ngRNA_enzyme_sites_rc = [t.find_all(oligo,recognition_rc) for oligo in pegRNAs['Oligonucleotide']] # Iterate through oligonucleotides
+        ngRNA_enzyme_sites = [len(enzyme_site_fwd)+len(enzyme_site_rc) for (enzyme_site_fwd,enzyme_site_rc) in zip(ngRNA_enzyme_sites_fwd,ngRNA_enzyme_sites_rc)] # Sum forward & reverse direction
+        
+        ngRNAs[enzyme] = ngRNA_enzyme_sites
+        ngRNAs[f'{enzyme}_fwd_i'] = ngRNA_enzyme_sites_fwd
+        ngRNAs[f'{enzyme}_rc_i'] = ngRNA_enzyme_sites_rc
+
+    if remove: # Remove pegRNAs and ngRNAs with recognition sites for enzymes
+        for enzyme in enzymes:
+            # Store pegRNAs and ngRNAs with recognition sites for enzymes
+            pegRNAs_enzyme = pegRNAs[pegRNAs[enzyme]!=0]
+            ngRNAs_enzyme = ngRNAs[ngRNAs[enzyme]!=0]
+
+            # Store rmeoved edits
+            remove_pegRNAs_edits = pegRNAs[pegRNAs['Edit'].isin(pegRNAs_enzyme['Edit'])]['Edit'].unique()
+            remove_ngRNAs_edits = ngRNAs[ngRNAs['Edit'].isin(ngRNAs_enzyme['Edit'])]['Edit'].unique()
+            
+            # Drop pegRNAs and ngRNAs with recognition sites for enzymes
+            pegRNAs = pegRNAs[pegRNAs[enzyme]==0].reset_index(drop=True)
+            ngRNAs = ngRNAs[ngRNAs[enzyme]==0].reset_index(drop=True)
+            
+            # Get all remaining pegRNA and ngRNA edit values
+            pegRNAs_edits = pegRNAs['Edit'].unique()
+            ngRNAs_edits = ngRNAs['Edit'].unique()
+
+            # Print & save lost edits
+            lost_pegRNAs_edits = [remove_edit for remove_edit in remove_pegRNAs_edits if remove_edit not in pegRNAs_edits]
+            lost_ngRNAs_edits = [remove_edit for remove_edit in remove_ngRNAs_edits if remove_edit not in ngRNAs_edits]
+            if len(lost_pegRNAs_edits) > 0 or len(lost_ngRNAs_edits) > 0:
+                print(f"\n{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}: {pt}")
+
+                if len(lost_pegRNAs_edits) > 0: # Save lost pegRNAs edits
+                    print(f"pegRNAs edits lost due to {enzyme} recognition site: {lost_pegRNAs_edits}")
+                    io.save(dir=f'../pegRNAs/{enzyme}/',
+                            file=f'{int(pegRNAs.iloc[0]['PBS_length'])}.csv',
+                            obj=pegRNAs_enzyme[pegRNAs_enzyme['Edit'].isin(lost_pegRNAs_edits)])
+                
+                if len(lost_ngRNAs_edits) > 0: # Save lost ngRNAs edits
+                    print(f"ngRNAs edits lost due to {enzyme} recognition site: {lost_ngRNAs_edits}")
+                    io.save(dir=f'../ngRNAs/{enzyme}/',
+                            file=f'{int(pegRNAs.iloc[0]['PBS_length'])}.csv',
+                            obj=ngRNAs_enzyme[ngRNAs_enzyme['Edit'].isin(lost_ngRNAs_edits)])
+                
+            # Drop enzyme column
+            pegRNAs.drop(columns=[enzyme,f'{enzyme}_fwd_i',f'{enzyme}_rc_i'],inplace=True)
+            ngRNAs.drop(columns=[enzyme,f'{enzyme}_fwd_i',f'{enzyme}_rc_i'],inplace=True)
+
+    # Remove oligonucleotide column
+    pegRNAs = pegRNAs.drop(columns=['Oligonucleotide'])
+    ngRNAs = ngRNAs.drop(columns=['Oligonucleotide'])
 
     return pegRNAs,ngRNAs
 
@@ -333,7 +406,7 @@ def PrimeDesigner(target_name: str, flank5_sequence: str, target_sequence: str, 
                   pbs_length_pooled_ls: list = [11,13,15], rtt_max_length_pooled: int = 50, silent_mutation: bool = True,
                   number_of_pegrnas: int = 1, number_of_ngrnas: int = 3,
                   scaffold_sequence: str='GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC', 
-                  aa_index: int=1):
+                  aa_index: int=1, enzymes: list[str]=['Esp3I'], remove: bool=True):
     '''
     PrimeDesigner(): execute PrimeDesign saturation mutagenesis for EDMS using Docker (NEED TO BE RUNNING DESKTOP APP)
     
@@ -350,6 +423,8 @@ def PrimeDesigner(target_name: str, flank5_sequence: str, target_sequence: str, 
     scaffold_sequence (str, optional): sgRNA scaffold sequence (Default: SpCas9 flip + extend = GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC)
         Alternative option for VLPs: SpCas9 flip + extend + com-modified = GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC
     aa_index (int, optional): 1st amino acid in target sequence index (Default: 1)
+    enzymes (list, optional): list of type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to check for in pegRNAs and ngRNAs (Default: ['Esp3I'])
+    remove (bool, optional): remove pegRNAs and ngRNAs with enzymes (Default: True)
 
     Dependencies: PrimeDesignInput(), PrimeDesign(), & PrimeDesignOutput()
     '''
@@ -369,7 +444,8 @@ def PrimeDesigner(target_name: str, flank5_sequence: str, target_sequence: str, 
         # Obtain pegRNAs and ngRNAs from PrimeDesign output
         pegRNAs[pbs_length_pooled],ngRNAs[pbs_length_pooled] = PrimeDesignOutput(
             pt=sorted([file for file in io.relative_paths('.') if "PrimeDesign.csv" in file], reverse= True)[0], 
-            scaffold_sequence=scaffold_sequence, saturation_mutagenesis='aa', aa_index=aa_index, target_name=target_name)
+            scaffold_sequence=scaffold_sequence, saturation_mutagenesis='aa', aa_index=aa_index, target_name=target_name,
+            enzymes=enzymes, remove=remove)
     
     # Save pegRNAs and ngRNAs
     io.save_dir(dir='../pegRNAs', suf='.csv', dc=pegRNAs)
@@ -718,7 +794,8 @@ def sensor_designer(pegRNAs: pd.DataFrame | str, in_file: str, sensor_length: in
         io.save(dir=out_dir,file=out_file,obj=pegRNAs)
     if return_df==True: return pegRNAs
 
-def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_index: int=1, rtt_length: int=39, include_WT: bool=False,
+def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_index: int=1, rtt_length: int=39, 
+                 include_WT: bool=False, enzymes: list[str]=['Esp3I'], remove: bool=True,
                  out_dir: str=None, out_file: str=None, return_df: bool=True, comments: bool=False):
     ''' 
     RTT_designer(): design all possible RTT for given spacer & PBS (WT, single insertions, & single deletions)
@@ -729,6 +806,8 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_in
     aa_index (int, optional): 1st amino acid in target sequence index (Default: start codon = 1)
     RTT_length (int, optional): Reverse transcriptase template length (bp)
     include_WT (bool, optional): include wildtype RTT (Default: False)
+    enzymes (list, optional): list of type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to check for in pegRNAs and ngRNAs (Default: ['Esp3I'])
+    remove (bool, optional): remove pegRNAs and ngRNAs with enzymes (Default: True)
     out_dir (str, optional): output directory
     out_file (str, optional): output filename
     return_df (bool, optional): return dataframe (Default: True)
@@ -1106,6 +1185,50 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_in
     # Remove pegRNAs that make edits outside in_file target sequence
     pegRNAs['AA Number'] = [int(re.findall(r'-?\d+',edit)[0]) if edit is not None else aa_index for edit in pegRNAs['Edit']]
     pegRNAs = pegRNAs[(pegRNAs['AA Number'] >= aa_index) & (pegRNAs['AA Number'] <= aa_index+len(seq)/3-1)]
+
+    # Temporarily make pegRNAs and ngRNAs oligonucleotides
+    pegRNAs['Oligonucleotide'] = [str(spacer+scaffold+rtt+pbs).upper() for (spacer, scaffold, rtt, pbs) in t.zip_cols(df=pegRNAs,cols=['Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence'])]
+    
+    # Check for 0 recognition sites per enzyme
+    RE_type_IIS_df = load_resource_csv(filename='RE_type_IIS.csv') # Load type IIS REs
+    for (enzyme,recognition,recognition_rc) in t.zip_cols(df=RE_type_IIS_df[RE_type_IIS_df['Name'].isin(enzymes)], # Just Esp3I by default
+                                                          cols=['Name','Recognition','Recognition_rc']):
+        # Check forward & reverse direction for recognition sites on pegRNAs
+        pegRNA_enzyme_sites_fwd = [t.find_all(oligo,recognition) for oligo in pegRNAs['Oligonucleotide']] # Iterate through oligonucleotides
+        pegRNA_enzyme_sites_rc = [t.find_all(oligo,recognition_rc) for oligo in pegRNAs['Oligonucleotide']] # Iterate through oligonucleotides
+        pegRNA_enzyme_sites = [len(enzyme_site_fwd)+len(enzyme_site_rc) for (enzyme_site_fwd,enzyme_site_rc) in zip(pegRNA_enzyme_sites_fwd,pegRNA_enzyme_sites_rc)] # Sum forward & reverse direction
+        
+        pegRNAs[enzyme] = pegRNA_enzyme_sites
+        pegRNAs[f'{enzyme}_fwd_i'] = pegRNA_enzyme_sites_fwd
+        pegRNAs[f'{enzyme}_rc_i'] = pegRNA_enzyme_sites_rc
+    
+    if remove: # Remove pegRNAs with enzymes
+        for enzyme in enzymes:
+            # Store pegRNAs with recognition sites for enzymes
+            pegRNAs_enzyme = pegRNAs[pegRNAs[enzyme]!=0]
+
+            # Store rmeoved edits
+            remove_pegRNAs_edits = pegRNAs[pegRNAs['Edit'].isin(pegRNAs_enzyme['Edit'])]['Edit'].unique()
+            
+            # Drop pegRNAs with recognition sites for enzymes
+            pegRNAs = pegRNAs[pegRNAs[enzyme]==0].reset_index(drop=True)
+            
+            # Get all remaining pegRNA edit values
+            pegRNAs_edits = pegRNAs['Edit'].unique()
+
+            # Print lost edits
+            lost_pegRNAs_edits = [remove_edit for remove_edit in remove_pegRNAs_edits if remove_edit not in pegRNAs_edits]
+            if len(lost_pegRNAs_edits) > 0:
+                print(f"pegRNAs edits lost due to {enzyme} recognition site: {lost_pegRNAs_edits}")
+                io.save(dir=f'../RTT_designer/{enzyme}/',
+                            file=f'{int(pegRNAs_enzyme.iloc[0]['PBS_length'])}.csv',
+                            obj=pegRNAs_enzyme[pegRNAs_enzyme['Edit'].isin(lost_pegRNAs_edits)])
+                
+            # Drop enzyme column
+            pegRNAs.drop(columns=[enzyme,f'{enzyme}_fwd_i',f'{enzyme}_rc_i'],inplace=True)
+
+    # Remove oligonucleotide column
+    pegRNAs = pegRNAs.drop(columns=['Oligonucleotide'])
 
     # Save & Return
     memories.append(memory_timer(task=f"RTT_designer()"))

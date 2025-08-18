@@ -1371,6 +1371,8 @@ def main():
                         help="sgRNA scaffold sequence (Default: SpCas9 flip + extend")
     parser_pe_PrimeDesigner.add_argument("--aa_index", type=int, default=1,
                         help="Index of 1st amino acid in target sequence (Default: 1)")
+    parser_pe_PrimeDesigner.add_argument("--enzymes", type=str, nargs="+", help="list of type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to check for in pegRNAs and ngRNAs (Default: ['Esp3I'])", default=['Esp3I'])
+    parser_pe_PrimeDesigner.add_argument("--no_remove", action='store_false',dest='remove', help="Do not remove pegRNAs and ngRNAs with enzymes", default=True)
 
     # Pilot_Screen():
     parser_pe_PilotScreen.add_argument("--pegRNAs", type=str, dest='pegRNAs_dir',help="Directory with pegRNAs from PrimeDesigner() output", required=True)
@@ -1420,6 +1422,8 @@ def main():
     parser_pe_RTT_designer.add_argument("--out_dir", type=str, help="Output directory (Default: ../RTT_Designer)", default='../RTT_Designer')
     parser_pe_RTT_designer.add_argument("--out_file", type=str, help="Name of the output file (Default: pegRNAs.csv)", default='pegRNAs.csv')
     parser_pe_RTT_designer.add_argument("--comments", action='store_true', help="Print comments (Default: False)", default=False)
+    parser_pe_RTT_designer.add_argument("--enzymes", type=str, nargs="+", help="list of type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to check for in pegRNAs and ngRNAs (Default: ['Esp3I'])", default=['Esp3I'])
+    parser_pe_RTT_designer.add_argument("--no_remove", action='store_false',dest='remove', help="Do not remove pegRNAs and ngRNAs with enzymes", default=True)
 
     # pegRNAs_tester():
     parser_pe_pegRNA_outcome.add_argument("--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
