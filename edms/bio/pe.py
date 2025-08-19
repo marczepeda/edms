@@ -1710,7 +1710,7 @@ def pegRNA_outcome(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_
                 # Look for next AA(s) that match the deleted AA in the edit
                 i_ls = [i]
                 for j,aa_j in enumerate(f5_seq_f3_prot[i+1:]):
-                    if aa_j==edit[-1]:
+                    if aa_j==edit[0]:
                         i_ls.append(i+j+1)
                     else:
                         break
