@@ -822,7 +822,7 @@ def merge(epegRNAs: str | dict | pd.DataFrame, ngRNAs: str | dict | pd.DataFrame
 
 # pegRNA
 def epegRNA_linkers(pegRNAs: str | pd.DataFrame, epegRNA_motif_sequence: str='CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA',
-                    linker_pattern: str='NNNNNNNN', excluded_motifs: list=None,
+                    linker_pattern: str='NNNNNNNN', excluded_motifs: list=['Esp3I'],
                     ckpt_dir: str=None, ckpt_file=None, ckpt_pt: str='',
                     out_dir: str=None, out_file: str=None, literal_eval: bool=True):
     ''' 
@@ -832,7 +832,7 @@ def epegRNA_linkers(pegRNAs: str | pd.DataFrame, epegRNA_motif_sequence: str='CG
     pegRNAs (str | dataframe): pegRNAs DataFrame or file path
     epegRNA_motif_sequence (str, optional): epegRNA motif sequence (Optional, Default: tevopreQ1)
     linker_pattern (str, optional): epegRNA linker pattern (Default: NNNNNNNN)
-    excluded_motifs (list, optional): list of motifs or type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to exclude from linker generation (Default: None)
+    excluded_motifs (list, optional): list of motifs or type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to exclude from linker generation (Default: ['Esp3I'])
     ckpt_dir (str, optional): Checkpoint directory
     ckpt_file (str, optional): Checkpoint file name
     ckpt_pt (str, optional): Previous ckpt path

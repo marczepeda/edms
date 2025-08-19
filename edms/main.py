@@ -1386,7 +1386,7 @@ def main():
 
     parser_pe_epegRNA_linkers.add_argument('--epegRNA_motif_sequence', default='CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA', help='epegRNA motif sequence (Default: tevopreQ1)')
     parser_pe_epegRNA_linkers.add_argument('--linker_pattern', type=str, default=argparse.SUPPRESS, help='epegRNA linker pattern (Default: NNNNNNNN)')
-    parser_pe_epegRNA_linkers.add_argument('--excluded_motifs', type=str, nargs="+", default=argparse.SUPPRESS, help='list of motifs or type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to exclude from linker generation (Default: None)')
+    parser_pe_epegRNA_linkers.add_argument('--excluded_motifs', type=str, nargs="+", default=['Esp3I'], help="list of motifs or type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to exclude from linker generation (Default: ['Esp3I'])")
     parser_pe_epegRNA_linkers.add_argument('--ckpt_dir', type=str, help='Checkpoint directory path (Default: ../epegRNAs/ckpt)', default='../epegRNAs/ckpt')
     parser_pe_epegRNA_linkers.add_argument('--ckpt_file', help='Checkpoint file name (Default: YYMMDD_HHMMSS_epegRNA_linkers.csv)', default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_epegRNA_linkers.csv')
     parser_pe_epegRNA_linkers.add_argument('--ckpt_pt', type=str, default='', help='Previous checkpoint full path (Example: ../epegRNAs/ckpt/YYMMDD_HHMMSS_epegRNA_linkers.csv)')
