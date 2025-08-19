@@ -66,7 +66,7 @@ edms -h # or edms <TAB>
     ```shell
     cd ~/git/edms
     conda activate edms
-    pip uninstall edms # Enter 'Y' when prompted
+    pip uninstall -y edms
     rm -rf build/ dist/ *.egg-info
 
     ```

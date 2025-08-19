@@ -45,5 +45,9 @@ edms = "edms.main:main"
 [tool.setuptools]
 packages = ["edms"]
 
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["edms*"]
+
 [tool.setuptools.package-data]
 "edms.resources" = ["*.csv"]
