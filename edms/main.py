@@ -1372,13 +1372,14 @@ def main():
     parser_pe_PrimeDesigner.add_argument("--aa_index", type=int, default=1,
                         help="Index of 1st amino acid in target sequence (Default: 1)")
     parser_pe_PrimeDesigner.add_argument("--enzymes", type=str, nargs="+", help="list of type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to check for in pegRNAs and ngRNAs (Default: ['Esp3I'])", default=['Esp3I'])
-    parser_pe_PrimeDesigner.add_argument("--no_remove", action='store_false',dest='remove', help="Do not remove pegRNAs and ngRNAs with enzymes", default=True)
+    parser_pe_PrimeDesigner.add_argument("--dont_replace", action='store_false',dest='replace', help="Do not replace pegRNAs and remove ngRNAs with RE enzyme sites", default=True)
 
     # Pilot_Screen():
     parser_pe_PilotScreen.add_argument("--pegRNAs", type=str, dest='pegRNAs_dir',help="Directory with pegRNAs from PrimeDesigner() output", required=True)
     parser_pe_PilotScreen.add_argument("--mutations", type=str, dest='mutations_pt', help="Path to mutations file (COSMIC or ClinVar)", required=True)
     
     parser_pe_PilotScreen.add_argument("--database", type=str, choices=['COSMIC', 'ClinVar'], default='COSMIC', help="Database to use for priority mutations (Default: 'COSMIC')")
+    parser_pe_PilotScreen.add_argument("--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
 
     # epegRNA_linkers():
     parser_pe_epegRNA_linkers.add_argument('--pegRNAs', help='Path to pegRNAs file',required=True)
@@ -1391,6 +1392,7 @@ def main():
     parser_pe_epegRNA_linkers.add_argument('--ckpt_pt', type=str, default='', help='Previous checkpoint full path (Example: ../epegRNAs/ckpt/YYMMDD_HHMMSS_epegRNA_linkers.csv)')
     parser_pe_epegRNA_linkers.add_argument("--out_dir", type=str, help="Output directory (Default: ../epegRNAs)", default='../epegRNAs')
     parser_pe_epegRNA_linkers.add_argument("--out_file", type=str, help="Name of the output file (Default: epegRNAs.csv)", default='epegRNAs.csv')
+    parser_pe_epegRNA_linkers.add_argument("--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
 
     # MergePrimeDesignOutput():
     parser_pe_merge.add_argument("--epegRNAs", type=str, help="Directory or file with epegRNAs", required=True)
@@ -1401,6 +1403,7 @@ def main():
     parser_pe_merge.add_argument("--ngRNA_suffix", type=str, help="Suffix for ngRNAs columns (Default: _ngRNA)", default='_ngRNA')
     parser_pe_merge.add_argument("--out_dir", type=str, dest='dir', help="Output directory (Default: ../epeg_ngRNAs)", default='../epeg_ngRNAs')
     parser_pe_merge.add_argument("--out_file", type=str, dest='file', help="Name of the output file (Default: epeg_ngRNAs.csv)", default='epeg_ngRNAs.csv')
+    parser_pe_merge.add_argument("--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
 
     # sensor_designer():
     parser_pe_sensor_designer.add_argument("--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
@@ -1411,6 +1414,7 @@ def main():
     parser_pe_sensor_designer.add_argument("--sensor_orientation", type=str, default='revcom', help="Orientation of the sensor relative to the protospacer (Options: 'revcom' [Default b/c minimize recombination] or ’forward’")
     parser_pe_sensor_designer.add_argument("--out_dir", type=str, help="Output directory (Default: ../pegRNAs_tester)", default='../sensor_designer')
     parser_pe_sensor_designer.add_argument("--out_file", type=str, help="Name of the output file (Default: pegRNAs.csv)", default='pegRNAs.csv')
+    parser_pe_sensor_designer.add_argument("--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
 
     # RTT_designer():
     parser_pe_RTT_designer.add_argument("--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
@@ -1423,7 +1427,8 @@ def main():
     parser_pe_RTT_designer.add_argument("--out_file", type=str, help="Name of the output file (Default: pegRNAs.csv)", default='pegRNAs.csv')
     parser_pe_RTT_designer.add_argument("--comments", action='store_true', help="Print comments (Default: False)", default=False)
     parser_pe_RTT_designer.add_argument("--enzymes", type=str, nargs="+", help="list of type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to check for in pegRNAs and ngRNAs (Default: ['Esp3I'])", default=['Esp3I'])
-    parser_pe_RTT_designer.add_argument("--no_remove", action='store_false',dest='remove', help="Do not remove pegRNAs and ngRNAs with enzymes", default=True)
+    parser_pe_RTT_designer.add_argument("--dont_replace", action='store_false',dest='replace', help="Do not replace pegRNAs with RE enzyme sites", default=True)
+    parser_pe_RTT_designer.add_argument("--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
 
     # pegRNAs_tester():
     parser_pe_pegRNA_outcome.add_argument("--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
@@ -1432,7 +1437,8 @@ def main():
     parser_pe_pegRNA_outcome.add_argument("--aa_index", type=int, default=1, help="Index of 1st amino acid in target sequence (Default: 1)")
     parser_pe_pegRNA_outcome.add_argument("--out_dir", type=str, help="Output directory (Default: ../pegRNA_outcome)", default='../pegRNA_outcome')
     parser_pe_pegRNA_outcome.add_argument("--out_file", type=str, help="Name of the output file (Default: pegRNAs.csv)", default='pegRNAs.csv')
-    
+    parser_pe_pegRNA_outcome.add_argument("--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
+
     parser_pe_pegRNA_outcome.add_argument("--match_score", type=float, help="Match score for pairwise alignment", default=argparse.SUPPRESS)
     parser_pe_pegRNA_outcome.add_argument("--mismatch_score", type=float, help="Mismatch score for pairwise alignment", default=argparse.SUPPRESS)
     parser_pe_pegRNA_outcome.add_argument("--open_gap_score", type=float, help="Open gap score for pairwise alignment", default=argparse.SUPPRESS)
