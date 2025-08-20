@@ -398,17 +398,17 @@ def epegRNA_pool(df: pd.DataFrame | str, tG:bool=True, make_extension:bool=True,
     oligos = []
     for i,(epegRNA_spacer_nt1) in enumerate(df[f'{epegRNA_spacer}_nt1']):
         if (tG==True) & (epegRNA_spacer_nt1!='G'): # Append 5'G to spacer if not already present
-            oligo = df.iloc[i]['Forward UMI']+df.iloc[i][fwd_barcode_t5]+df.iloc[i][Esp3I_hU6]+ \
+            oligo = df.iloc[i]['Forward UMI']+df.iloc[i][fwd_barcode_t5]+df.iloc[i][Esp3I_hU6]+'G'+ \
                     df.iloc[i][epegRNA_spacer]+df.iloc[i][epegRNA_scaffold]+df.iloc[i][epegRNA_extension]+ \
                     df.iloc[i][tevopreQ1_Esp3I]+df.iloc[i][rev_barcode_t3]+df.iloc[i]['Reverse UMI']
         else: # Do not append 5'G to spacer if not already present or not wanted
             oligo = df.iloc[i]['Forward UMI']+df.iloc[i][fwd_barcode_t5]+df.iloc[i][Esp3I_hU6]+ \
-                    'G'+df.iloc[i][epegRNA_spacer]+df.iloc[i][epegRNA_scaffold]+df.iloc[i][epegRNA_extension]+ \
+                    df.iloc[i][epegRNA_spacer]+df.iloc[i][epegRNA_scaffold]+df.iloc[i][epegRNA_extension]+ \
                     df.iloc[i][tevopreQ1_Esp3I]+df.iloc[i][rev_barcode_t3]+df.iloc[i]['Reverse UMI']
         oligos.append(oligo.upper()) # Make sure oligos are uppercase
             
     df['Oligonucleotide'] = oligos
-    df['Oligonucleotide_length']=[len(twist) for twist in df['Oligonucleotide']]
+    df['Oligonucleotide_length']=[len(oligo) for oligo in df['Oligonucleotide']]
 
     # Check for 2 recognition sites per enzyme
     for (enzyme,recognition,recognition_rc) in t.zip_cols(df=RE_type_IIS_df[RE_type_IIS_df['Name'].isin(enzymes)], # Just Esp3I by default
