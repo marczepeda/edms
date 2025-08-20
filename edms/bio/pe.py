@@ -30,6 +30,7 @@ Usage:
 - sensor_designer(): Design pegRNA sensors
 - RTT_designer(): design all possible RTT for given spacer & PBS (WT, single insertions, & single deletions)
 - pegRNA_outcome(): confirm that pegRNAs should create the predicted edit
+- pegRNA_signature(): create signatures for pegRNA outcomes using alignments
 
 [Comparing pegRNA libraries]
 - print_shared_sequences(): prints spacer and PBS sequences from dictionary of shared_sequences libraries
@@ -49,7 +50,9 @@ from typing import Literal
 from Bio.Seq import Seq
 from Bio.Align import PairwiseAligner
 import math
+from typing import Literal
 
+from ..bio.signature import SNV, Indel, Signature, signature_from_alignment
 from ..bio import pegLIT as pegLIT
 from ..gen import io as io
 from ..gen import tidy as t
@@ -1755,9 +1758,71 @@ def pegRNA_outcome(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str,
     print(f"All pegRNAs passed edit check: {all(pegRNAs['Edit_check_match'])}")
 
     # Save & Return
-    memories.append(memory_timer(task=f"pegRNAs_outcome(): {len(pegRNAs)} out of {len(pegRNAs)}"))
+    memories.append(memory_timer(task=f"pegRNA_outcome(): {len(pegRNAs)} out of {len(pegRNAs)}"))
     if out_dir is not None and out_file is not None:
-        io.save(dir=os.path.join(out_dir,f'.pegRNAs_outcome'),
+        io.save(dir=os.path.join(out_dir,f'.pegRNA_outcome'),
+                file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
+                obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+        io.save(dir=out_dir,file=out_file,obj=pegRNAs)
+    if return_df==True: return pegRNAs
+
+def pegRNA_signature(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, 
+                     match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, extend_gap_score: float = -0.1,
+                     out_dir: str=None, out_file: str=None, return_df: bool=True, literal_eval: bool=True):
+    ''' 
+    pegRNA_signature(): create signatures for pegRNA outcomes using alignments
+    
+    pegRNAs (dataframe | str): pegRNAs DataFrame (or file path)
+    in_file (dataframe | str): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)
+    match_score (float, optional): match score for pairwise alignment (Default: 2)
+    mismatch_score (float, optional): mismatch score for pairwise alignment (Default: -1)
+    open_gap_score (float, optional): open gap score for pairwise alignment (Default: -10)
+    extend_gap_score (float, optional): extend gap score for pairwise alignment (Default: -0.1)
+    out_dir (str, optional): output directory
+    out_file (str, optional): output filename
+    return_df (bool, optional): return dataframe (Default: True)
+    literal_eval (bool, optional): convert string representations (Default: True)
+    '''
+    # Initialize timer; memory reporting
+    memory_timer(reset=True)
+    memories = []
+
+    # Get pegRNAs & PrimeDesign input DataFrame from file path if needed
+    if type(pegRNAs)==str:
+        pegRNAs = io.get(pt=pegRNAs,literal_eval=literal_eval)
+    if type(in_file)==str:
+        in_file = io.get(pt=in_file,literal_eval=literal_eval)
+
+    # High sequence homology; punish gaps
+    aligner = PairwiseAligner()
+    aligner.mode = "global"
+    aligner.match_score = match_score  # Score for a match
+    aligner.mismatch_score = mismatch_score  # Penalty for a mismatch; applied to both strands
+    aligner.open_gap_score = open_gap_score  # Penalty for opening a gap; applied to both strands
+    aligner.extend_gap_score = extend_gap_score  # Penalty for extending a gap; applied to both strands
+
+    # Get wt sequence
+    target_sequence = in_file.iloc[0]['target_sequence'] 
+    seq = target_sequence.split('(')[1].split(')')[0] # Break apart target sequences
+    if len(seq)%3 != 0: raise(ValueError(f"Length of target sequence ({len(seq)}) must divisible by 3. Check input file."))
+    flank5 = target_sequence.split('(')[0]
+    if len(flank5)%3 != 0: raise(ValueError(f"Length of flank5 ({len(flank5)}) must divisible by 3. Check input file."))
+    flank3 = target_sequence.split(')')[1]
+    if len(flank3)%3 != 0: raise(ValueError(f"Length of flank3 ({len(flank3)}) must divisible by 3. Check input file."))
+
+    # Create alignments and Signatures
+    start_i = len(flank5)
+    end_i = start_i + len(seq)
+    pegRNAs['Alignment'] = [aligner.align(Seq(seq),
+                                          Seq((post_RTT_sequence[start_i:end_i])))[0] for post_RTT_sequence in pegRNAs['post_RTT_sequence']]
+    pegRNAs['Signature'] = [signature_from_alignment(ref_seq=seq,
+                                                     alt_seq=post_RTT_sequence[start_i:end_i],
+                                                     alignment=alignment) for alignment,post_RTT_sequence in t.zip_cols(df=pegRNAs, cols=['Alignment', 'post_RTT_sequence'])]
+    
+    # Save & Return
+    memories.append(memory_timer(task=f"pegRNA_signature(): {len(pegRNAs)} out of {len(pegRNAs)}"))
+    if out_dir is not None and out_file is not None:
+        io.save(dir=os.path.join(out_dir,f'.pegRNA_signature'),
                 file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
                 obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
         io.save(dir=out_dir,file=out_file,obj=pegRNAs)

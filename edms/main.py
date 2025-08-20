@@ -1350,6 +1350,7 @@ def main():
     parser_pe_sensor_designer = subparsers_pe.add_parser("sensor_designer", help='Design pegRNA sensors')
     parser_pe_RTT_designer = subparsers_pe.add_parser("RTT_designer", help="Design all possible RTT for given spacer & PBS (WT, single insertions, & single deletions)")
     parser_pe_pegRNA_outcome = subparsers_pe.add_parser("pegRNA_outcome", help="Confirm that pegRNAs should create the predicted edit")
+    parser_pe_pegRNA_signature = subparsers_pe.add_parser("pegRNA_signature", help="Create signatures for pegRNA outcomes using alignments")
 
     # prime_designer():
     parser_pe_prime_designer.add_argument("--name", type=str, dest='target_name',help="Name of the target", required=True)
@@ -1442,14 +1443,28 @@ def main():
     parser_pe_pegRNA_outcome.add_argument("--open_gap_score", type=float, help="Open gap score for pairwise alignment", default=argparse.SUPPRESS)
     parser_pe_pegRNA_outcome.add_argument("--extend_gap_score", type=float, help="Extend gap score for pairwise alignment", default=argparse.SUPPRESS)
 
+    # pegRNA_signature():
+    parser_pe_pegRNA_signature.add_argument("--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
+    parser_pe_pegRNA_signature.add_argument("--in_file", type=str, help="Path to PrimeDesign input file (required columns: target_name, target_sequence, aa_index)", required=True)
+
+    parser_pe_pegRNA_signature.add_argument("--out_dir", type=str, help="Output directory (Default: ../pegRNA_signature)", default='../pegRNA_signature')
+    parser_pe_pegRNA_signature.add_argument("--out_file", type=str, help="Name of the output file (Default: pegRNAs.csv)", default='pegRNAs.csv')
+    parser_pe_pegRNA_signature.add_argument("--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
+
+    parser_pe_pegRNA_signature.add_argument("--match_score", type=float, help="Match score for pairwise alignment", default=argparse.SUPPRESS)
+    parser_pe_pegRNA_signature.add_argument("--mismatch_score", type=float, help="Mismatch score for pairwise alignment", default=argparse.SUPPRESS)
+    parser_pe_pegRNA_signature.add_argument("--open_gap_score", type=float, help="Open gap score for pairwise alignment", default=argparse.SUPPRESS)
+    parser_pe_pegRNA_signature.add_argument("--extend_gap_score", type=float, help="Extend gap score for pairwise alignment", default=argparse.SUPPRESS)
+
     # Set defaults
     parser_pe_prime_designer.set_defaults(func=pe.prime_designer)
     parser_pe_pilot_screen.set_defaults(func=pe.pilot_screen)
     parser_pe_epegRNA_linkers.set_defaults(func=pe.epegRNA_linkers)
     parser_pe_merge.set_defaults(func=pe.merge)
+    parser_pe_sensor_designer.set_defaults(func=pe.sensor_designer)
     parser_pe_RTT_designer.set_defaults(func=pe.RTT_designer)
     parser_pe_pegRNA_outcome.set_defaults(func=pe.pegRNA_outcome)
-    parser_pe_sensor_designer.set_defaults(func=pe.sensor_designer)
+    parser_pe_pegRNA_signature.set_defaults(func=pe.pegRNA_signature)
 
     # Enable autocomplete
     argcomplete.autocomplete(parser)
