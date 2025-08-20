@@ -17,16 +17,16 @@ Usage:
 - enzyme_codon_swap(): modify pegRNA RTT sequences to disrupt a RE recognition site
  
 [PrimeDesign]
-- PrimeDesignInput(): creates and checks PrimeDesign saturation mutagenesis input file
-- PrimeDesign(): run PrimeDesign using Docker (NEED TO BE RUNNING DESKTOP APP)
-- PrimeDesignOutput(): splits peg/ngRNAs from PrimeDesign output & finishes annotations
-- PrimeDesigner(): execute PrimeDesign for EDMS using Docker (NEED TO BE RUNNING DESKTOP APP)
+- prime_design_input(): creates and checks PrimeDesign saturation mutagenesis input file
+- prime_design(): run PrimeDesign using Docker (NEED TO BE RUNNING DESKTOP APP)
+- prime_design_output(): splits peg/ngRNAs from PrimeDesign output & finishes annotations
+- prime_designer(): execute PrimeDesign for EDMS using Docker (NEED TO BE RUNNING DESKTOP APP)
 - merge(): rejoins epeg/ngRNAs & creates ngRNA_groups
 
 [pegRNA]
 - epegRNA_linkers(): generate epegRNA linkers between PBS and 3' hairpin motif & finish annotations
 - shared_sequences(): Reduce PE library into shared spacers and PBS sequences
-- PilotScreen(): Create pilot screen for EDMS
+- pilot_screen(): Create pilot screen for EDMS
 - sensor_designer(): Design pegRNA sensors
 - RTT_designer(): design all possible RTT for given spacer & PBS (WT, single insertions, & single deletions)
 - pegRNA_outcome(): confirm that pegRNAs should create the predicted edit
@@ -467,17 +467,19 @@ def enzyme_codon_swap(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, 
     if return_df==True: return pegRNAs
 
 # PrimeDesign
-def PrimeDesignInput(target_name: str, flank5_sequence: str, 
+def prime_design_input(target_name: str, flank5_sequence: str, 
                      target_sequence: str, flank3_sequence: str,
-                     dir: str='.', file: str='PrimeDesignInput.csv'):
+                     aa_index: int=1,
+                     dir: str='.', file: str='prime_design_input.csv'):
     ''' 
-    PrimeDesignInput(): creates and checks PrimeDesign saturation mutagenesis input file
+    prime_design_input(): creates and checks PrimeDesign saturation mutagenesis input file
     
     Parameters:
     target_name (str): name of target
     flank5_sequence: in-frame nucleotide sequence with 5' of saturation mutagensis region (length must be divisible by 3)
     target_sequence (str): in-frame nucleotide sequence for the saturation mutagensis region (length must be divisible by 3)
     flank3_sequence: in-frame nucleotide sequence with 3' of saturation mutagensis region (length must be divisible by 3)
+    aa_index (int, optional): 1st amino acid in target sequence index (Default: 1)
     dir (str, optional): name of the output directory 
     file (str, optional): name of the output file
     
@@ -493,15 +495,17 @@ def PrimeDesignInput(target_name: str, flank5_sequence: str,
     # Create PrimeDesign saturation mutagenesis input file
     io.save(dir=dir,
             file=file,
-            obj=pd.DataFrame({'target_name': [target_name],'target_sequence': [f"{flank5_sequence}({target_sequence}){flank3_sequence}"]}))
+            obj=pd.DataFrame({'target_name': [target_name],
+                              'target_sequence': [f"{flank5_sequence}({target_sequence}){flank3_sequence}"],
+                              'aa_index': [aa_index]}))
 
-def PrimeDesign(file: str, pbs_length_list: list = [],rtt_length_list: list = [],nicking_distance_minimum: int = 0,
+def prime_design(file: str, pbs_length_list: list = [],rtt_length_list: list = [],nicking_distance_minimum: int = 0,
                 nicking_distance_maximum: int = 100,filter_c1_extension: bool = False,silent_mutation: bool = False,
                 genome_wide_design: bool = False,saturation_mutagenesis: str = None,number_of_pegrnas: int = 3,number_of_ngrnas: int = 3,
                 nicking_distance_pooled: int = 75,homology_downstream: int = 10,pbs_length_pooled: int = 14,rtt_max_length_pooled: int = 50,
                 out_dir: str = './DATETIMESTAMP_PrimeDesign'):
     ''' 
-    PrimeDesign(): run PrimeDesign using Docker (NEED TO BE RUNNING DESKTOP APP)
+    prime_design(): run PrimeDesign
     
     Parameters:
     file (str): input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)
@@ -524,7 +528,7 @@ def PrimeDesign(file: str, pbs_length_list: list = [],rtt_length_list: list = []
     Dependencies: os, numpy, & https://github.com/pinellolab/PrimeDesign
     '''
     # Write PrimeDesign Command Line
-    cmd = 'docker run -v ${PWD}/:/DATA -w /DATA pinellolab/primedesign primedesign_cli' # prefix
+    cmd = 'python -m edms.bio.primedesign'
     cmd += f' -f {file}' # Append required parameters
     if pbs_length_list: cmd += f' -pbs {" ".join([str(val) for val in pbs_length_list])}' # Append optional parameters
     if rtt_length_list: cmd += f' -rtt {" ".join([str(val) for val in rtt_length_list])}'
@@ -542,13 +546,13 @@ def PrimeDesign(file: str, pbs_length_list: list = [],rtt_length_list: list = []
     if rtt_max_length_pooled!=50: cmd += f' -rtt_pooled {rtt_max_length_pooled}'
     if out_dir!='./DATETIMESTAMP_PrimeDesign': cmd+= f' -out {out_dir}'
     print(cmd)
-
+    
     os.system(cmd) # Execute PrimeDesign Command Line
 
-def PrimeDesignOutput(pt: str, scaffold_sequence: str, in_file: pd.DataFrame | str, saturation_mutagenesis:str=None, 
+def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame | str, saturation_mutagenesis:str=None, 
                       aa_index: int=1, enzymes: list[str]=['Esp3I'], replace: bool=True):
     ''' 
-    PrimeDesignOutput(): splits peg/ngRNAs from PrimeDesign output & finishes annotations
+    prime_design_output(): splits peg/ngRNAs from PrimeDesign output & finishes annotations
     
     Parameters:
     pt (str): path to primeDesign output
@@ -713,13 +717,13 @@ def PrimeDesignOutput(pt: str, scaffold_sequence: str, in_file: pd.DataFrame | s
 
     return pegRNAs,ngRNAs
 
-def PrimeDesigner(target_name: str, flank5_sequence: str, target_sequence: str, flank3_sequence: str,
+def prime_designer(target_name: str, flank5_sequence: str, target_sequence: str, flank3_sequence: str,
                   pbs_length_pooled_ls: list = [11,13,15], rtt_max_length_pooled: int = 50, silent_mutation: bool = True,
                   number_of_pegrnas: int = 1, number_of_ngrnas: int = 3,
                   scaffold_sequence: str='GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC', 
                   aa_index: int=1, enzymes: list[str]=['Esp3I'], replace: bool=True):
     '''
-    PrimeDesigner(): execute PrimeDesign saturation mutagenesis for EDMS using Docker (NEED TO BE RUNNING DESKTOP APP)
+    prime_designer(): execute PrimeDesign saturation mutagenesis for EDMS
     
     Parameters:
     target_name (str): name of target
@@ -737,11 +741,11 @@ def PrimeDesigner(target_name: str, flank5_sequence: str, target_sequence: str, 
     enzymes (list, optional): list of type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to check for in pegRNAs and ngRNAs (Default: ['Esp3I'])
     replace (bool, optional): replace pegRNAs and remove ngRNAs with RE sites (Default: True)
 
-    Dependencies: PrimeDesignInput(), PrimeDesign(), & PrimeDesignOutput()
+    Dependencies: prime_design_input(), prime_design(), & prime_design_output()
     '''
     # Create PrimeDesign input file
-    PrimeDesignInput(target_name=target_name, flank5_sequence=flank5_sequence, target_sequence=target_sequence, 
-                     flank3_sequence=flank3_sequence, dir='.', file=f'{"_".join(target_name.split(" "))}.csv')
+    prime_design_input(target_name=target_name, flank5_sequence=flank5_sequence, target_sequence=target_sequence, 
+                     flank3_sequence=flank3_sequence, aa_index=aa_index, dir='.', file=f'{"_".join(target_name.split(" "))}.csv')
 
     # Iterate through PBS lengths
     pegRNAs=dict()
@@ -749,11 +753,11 @@ def PrimeDesigner(target_name: str, flank5_sequence: str, target_sequence: str, 
     for pbs_length_pooled in pbs_length_pooled_ls:
 
         # Run PrimeDesign in saturation mutatgenesis mode
-        PrimeDesign(file=f'{"_".join(target_name.split(" "))}.csv', silent_mutation=silent_mutation, saturation_mutagenesis="aa",
-                    number_of_pegrnas=number_of_pegrnas, number_of_ngrnas=number_of_ngrnas, pbs_length_pooled=pbs_length_pooled, rtt_max_length_pooled=rtt_max_length_pooled)
+        prime_design(file=f'{"_".join(target_name.split(" "))}.csv', silent_mutation=silent_mutation, saturation_mutagenesis="aa",
+                     number_of_pegrnas=number_of_pegrnas, number_of_ngrnas=number_of_ngrnas, pbs_length_pooled=pbs_length_pooled, rtt_max_length_pooled=rtt_max_length_pooled)
         
         # Obtain pegRNAs and ngRNAs from PrimeDesign output
-        pegRNAs[pbs_length_pooled],ngRNAs[pbs_length_pooled] = PrimeDesignOutput(
+        pegRNAs[pbs_length_pooled],ngRNAs[pbs_length_pooled] = prime_design_output(
             pt=sorted([file for file in io.relative_paths('.') if "PrimeDesign.csv" in file], reverse= True)[0], 
             scaffold_sequence=scaffold_sequence, in_file=f'./{"_".join(target_name.split(" "))}.csv', 
             saturation_mutagenesis='aa', aa_index=aa_index, enzymes=enzymes, replace=replace)
@@ -950,19 +954,19 @@ def shared_sequences(pegRNAs: pd.DataFrame | str, hist_plot:bool=True, hist_dir:
 
     return shared_pegRNAs_lib
 
-def PilotScreen(pegRNAs_dir: str, mutations_pt: str, database: Literal['COSMIC','ClinVar']='COSMIC', literal_eval: bool=True):
+def pilot_screen(pegRNAs_dir: str, mutations_pt: str, database: Literal['COSMIC','ClinVar']='COSMIC', literal_eval: bool=True):
     ''' 
-    Pilot_Screen(): Determine pilot screen for EDMS
+    pilot_screen(): Determine pilot screen for EDMS
     
     Parameters:
-    pegRNAs_dir (str): directory with pegRNAs from PrimeDesigner() output
+    pegRNAs_dir (str): directory with pegRNAs from prime_designer() output
     mutations_pt (str): path to mutations file (COSMIC or ClinVar)
     database (str, optional): database to use for priority mutations (Default: 'COSMIC')
     literal_eval (bool, optional): convert string representations (Default: True)
     
     Dependencies: io, cosmic, cvar, shared_sequences(), priority_muts(), & priority_edits()
     '''
-    # Get pegRNAs from PrimeDesigner() output
+    # Get pegRNAs from prime_designer() output
     pegRNAs = io.get_dir(pegRNAs_dir,literal_eval=literal_eval)
 
     # Get mutations from COSMIC or ClinVar file
@@ -1110,7 +1114,7 @@ def sensor_designer(pegRNAs: pd.DataFrame | str, in_file: str, sensor_length: in
         io.save(dir=out_dir,file=out_file,obj=pegRNAs)
     if return_df==True: return pegRNAs
 
-def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_index: int=1, rtt_length: int=39, 
+def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, rtt_length: int=39, 
                  include_WT: bool=False, enzymes: list[str]=['Esp3I'], replace: bool=True,
                  out_dir: str=None, out_file: str=None, return_df: bool=True, literal_eval: bool=True, comments: bool=False):
     ''' 
@@ -1119,7 +1123,6 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_in
     Parameters:
     pegRNAs (dataframe | str): pegRNAs DataFrame (or file path)
     in_file (dataframe | str): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)
-    aa_index (int, optional): 1st amino acid in target sequence index (Default: start codon = 1)
     RTT_length (int, optional): Reverse transcriptase template length (bp)
     include_WT (bool, optional): include wildtype RTT (Default: False)
     enzymes (list, optional): list of type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to check for in pegRNAs (Default: ['Esp3I'])
@@ -1151,6 +1154,8 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_in
     flank3 = Seq(target_sequence.split(')')[1])
     if len(flank3)%3 != 0: raise(ValueError(f"Length of 3' flank ({len(flank3)}) must divisible by 3. Check input file."))
     target_name = in_file.iloc[0]['target_name'] # Get target name
+
+    aa_index = in_file.iloc[0]['aa_index']
 
     f5_seq_f3_nuc = flank5 + seq + flank3  # Join full nucleotide reference sequence
     rc_f5_seq_f3_nuc = Seq.reverse_complement(f5_seq_f3_nuc) # Full nucleotide reference reverse complement sequence
@@ -1557,7 +1562,7 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_in
         io.save(dir=out_dir,file=out_file,obj=pegRNAs)
     if return_df==True: return pegRNAs
 
-def pegRNA_outcome(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_index: int=1,
+def pegRNA_outcome(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str,
                    match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, extend_gap_score: float = -0.1,
                    out_dir: str=None, out_file: str=None, return_df: bool=True, literal_eval: bool=True):
     ''' 
@@ -1566,7 +1571,6 @@ def pegRNA_outcome(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_
     Parameters:
     pegRNAs (dataframe | str): pegRNAs DataFrame (or file path)
     in_file (dataframe | str): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)
-    aa_index (int, optional): 1st amino acid in target sequence index (Optional, Default: start codon = 1)
     match_score (float, optional): match score for pairwise alignment (Default: 2)
     mismatch_score (float, optional): mismatch score for pairwise alignment (Default: -1)
     open_gap_score (float, optional): open gap score for pairwise alignment (Default: -10)
@@ -1594,11 +1598,13 @@ def pegRNA_outcome(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, aa_
    # Get reference sequence & codons (+ reverse complement)
     target_sequence = in_file.iloc[0]['target_sequence'] 
     seq = Seq(target_sequence.split('(')[1].split(')')[0]) # Break apart target sequences
-    if len(seq)%3 != 0: raise(ValueError(f"Length of target_sequence ({len(seq)}) must divisible by 3. Check input file."))
+    if len(seq)%3 != 0: raise(ValueError(f"Length of target sequence ({len(seq)}) must divisible by 3. Check input file."))
     flank5 = Seq(target_sequence.split('(')[0])
-    if len(flank5)%3 != 0: raise(ValueError(f"Length of target_sequence ({len(flank5)}) must divisible by 3. Check input file."))
+    if len(flank5)%3 != 0: raise(ValueError(f"Length of flank5 ({len(flank5)}) must divisible by 3. Check input file."))
     flank3 = Seq(target_sequence.split(')')[1])
-    if len(flank3)%3 != 0: raise(ValueError(f"Length of target_sequence ({len(flank3)}) must divisible by 3. Check input file."))
+    if len(flank3)%3 != 0: raise(ValueError(f"Length of flank3 ({len(flank3)}) must divisible by 3. Check input file."))
+
+    aa_index = in_file.iloc[0]['aa_index']
 
     f5_seq_f3_nuc = flank5 + seq + flank3  # Join full nucleotide reference sequence
     rc_f5_seq_f3_nuc = Seq.reverse_complement(f5_seq_f3_nuc) # Full nucleotide reference reverse complement sequence

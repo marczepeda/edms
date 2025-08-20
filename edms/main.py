@@ -1332,8 +1332,8 @@ def main():
 
     '''
     Add pe.py
-    - PrimeDesigner(): Execute PrimeDesign saturation mutagenesis for EDMS using Docker (NEED TO BE RUNNING DESKTOP APP)
-    - PilotScreen(): Create pilot screen for EDMS
+    - prime_designer(): Execute PrimeDesign saturation mutagenesis for EDMS using Docker (NEED TO BE RUNNING DESKTOP APP)
+    - pilot_screen(): Create pilot screen for EDMS
     - epegRNA_linkers(): Generate epegRNA linkers between PBS and 3' hairpin motif & finish annotations
     - merge(): rejoins epeg/ngRNAs & creates ngRNA_groups
     - sensor_designer(): design pegRNA sensors
@@ -1343,43 +1343,43 @@ def main():
     parser_pe = subparsers.add_parser("pe", help="Prime Editing")
     subparsers_pe = parser_pe.add_subparsers()
 
-    parser_pe_PrimeDesigner = subparsers_pe.add_parser("PrimeDesigner", help="Execute PrimeDesign saturation mutagenesis for EDMS using Docker (NEED TO BE RUNNING DESKTOP APP)")
-    parser_pe_PilotScreen = subparsers_pe.add_parser("PilotScreen", help="Determine pilot screen for EDMS")
+    parser_pe_prime_designer = subparsers_pe.add_parser("prime_designer", help="Execute PrimeDesign saturation mutagenesis for EDMS")
+    parser_pe_pilot_screen = subparsers_pe.add_parser("pilot_screen", help="Determine pilot screen for EDMS")
     parser_pe_epegRNA_linkers = subparsers_pe.add_parser("epegRNA_linkers", help="Generate epegRNA linkers between PBS and 3' hairpin motif")
     parser_pe_merge = subparsers_pe.add_parser("merge", help="rejoins epeg/ngRNAs & creates ngRNA groups")
     parser_pe_sensor_designer = subparsers_pe.add_parser("sensor_designer", help='Design pegRNA sensors')
     parser_pe_RTT_designer = subparsers_pe.add_parser("RTT_designer", help="Design all possible RTT for given spacer & PBS (WT, single insertions, & single deletions)")
     parser_pe_pegRNA_outcome = subparsers_pe.add_parser("pegRNA_outcome", help="Confirm that pegRNAs should create the predicted edit")
 
-    # PrimeDesigner():
-    parser_pe_PrimeDesigner.add_argument("--name", type=str, dest='target_name',help="Name of the target", required=True)
-    parser_pe_PrimeDesigner.add_argument("--flank5", type=str, dest='flank5_sequence', help="5' flank sequence (in-frame, length divisible by 3)", required=True)
-    parser_pe_PrimeDesigner.add_argument("--target", type=str, dest='target_sequence', help="Target sequence (in-frame, length divisible by 3)", required=True)
-    parser_pe_PrimeDesigner.add_argument("--flank3", type=str, dest='flank3_sequence', help="3' flank sequence (in-frame, length divisible by 3)", required=True)
+    # prime_designer():
+    parser_pe_prime_designer.add_argument("--name", type=str, dest='target_name',help="Name of the target", required=True)
+    parser_pe_prime_designer.add_argument("--flank5", type=str, dest='flank5_sequence', help="5' flank sequence (in-frame, length divisible by 3)", required=True)
+    parser_pe_prime_designer.add_argument("--target", type=str, dest='target_sequence', help="Target sequence (in-frame, length divisible by 3)", required=True)
+    parser_pe_prime_designer.add_argument("--flank3", type=str, dest='flank3_sequence', help="3' flank sequence (in-frame, length divisible by 3)", required=True)
 
-    parser_pe_PrimeDesigner.add_argument("--pbs_lengths", type=int, dest='pbs_length_pooled_ls', nargs="+", default=[11,13,15],
+    parser_pe_prime_designer.add_argument("--pbs_lengths", type=int, dest='pbs_length_pooled_ls', nargs="+", default=[11,13,15],
                         help="List of PBS lengths (Default: 11,13,15)")
-    parser_pe_PrimeDesigner.add_argument("--rtt_max_length", type=int, dest='rtt_max_length_pooled', default=50,
+    parser_pe_prime_designer.add_argument("--rtt_max_length", type=int, dest='rtt_max_length_pooled', default=50,
                         help="Maximum RTT length to design pegRNAs (Default: 50 nt)")
-    parser_pe_PrimeDesigner.add_argument("--no_silent_mutation", dest="silent_mutation", action="store_false",
+    parser_pe_prime_designer.add_argument("--no_silent_mutation", dest="silent_mutation", action="store_false",
                         help="Disable silent mutation")
-    parser_pe_PrimeDesigner.add_argument("--number_of_pegrnas", type=int, default=1,
+    parser_pe_prime_designer.add_argument("--number_of_pegrnas", type=int, default=1,
                         help="Max number of pegRNAs to design (Default: 1)")
-    parser_pe_PrimeDesigner.add_argument("--number_of_ngrnas", type=int, default=3,
+    parser_pe_prime_designer.add_argument("--number_of_ngrnas", type=int, default=3,
                         help="Max number of ngRNAs to design (Default: 3)")
-    parser_pe_PrimeDesigner.add_argument("--scaffold_sequence", type=str, default="GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC",
+    parser_pe_prime_designer.add_argument("--scaffold_sequence", type=str, default="GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC",
                         help="sgRNA scaffold sequence (Default: SpCas9 flip + extend")
-    parser_pe_PrimeDesigner.add_argument("--aa_index", type=int, default=1,
+    parser_pe_prime_designer.add_argument("--aa_index", type=int, default=1,
                         help="Index of 1st amino acid in target sequence (Default: 1)")
-    parser_pe_PrimeDesigner.add_argument("--enzymes", type=str, nargs="+", help="list of type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to check for in pegRNAs and ngRNAs (Default: ['Esp3I'])", default=['Esp3I'])
-    parser_pe_PrimeDesigner.add_argument("--dont_replace", action='store_false',dest='replace', help="Do not replace pegRNAs and remove ngRNAs with RE enzyme sites", default=True)
+    parser_pe_prime_designer.add_argument("--enzymes", type=str, nargs="+", help="list of type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to check for in pegRNAs and ngRNAs (Default: ['Esp3I'])", default=['Esp3I'])
+    parser_pe_prime_designer.add_argument("--dont_replace", action='store_false',dest='replace', help="Do not replace pegRNAs and remove ngRNAs with RE enzyme sites", default=True)
 
     # Pilot_Screen():
-    parser_pe_PilotScreen.add_argument("--pegRNAs", type=str, dest='pegRNAs_dir',help="Directory with pegRNAs from PrimeDesigner() output", required=True)
-    parser_pe_PilotScreen.add_argument("--mutations", type=str, dest='mutations_pt', help="Path to mutations file (COSMIC or ClinVar)", required=True)
+    parser_pe_pilot_screen.add_argument("--pegRNAs", type=str, dest='pegRNAs_dir',help="Directory with pegRNAs from prime_designer() output", required=True)
+    parser_pe_pilot_screen.add_argument("--mutations", type=str, dest='mutations_pt', help="Path to mutations file (COSMIC or ClinVar)", required=True)
     
-    parser_pe_PilotScreen.add_argument("--database", type=str, choices=['COSMIC', 'ClinVar'], default='COSMIC', help="Database to use for priority mutations (Default: 'COSMIC')")
-    parser_pe_PilotScreen.add_argument("--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
+    parser_pe_pilot_screen.add_argument("--database", type=str, choices=['COSMIC', 'ClinVar'], default='COSMIC', help="Database to use for priority mutations (Default: 'COSMIC')")
+    parser_pe_pilot_screen.add_argument("--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
 
     # epegRNA_linkers():
     parser_pe_epegRNA_linkers.add_argument('--pegRNAs', help='Path to pegRNAs file',required=True)
@@ -1394,7 +1394,7 @@ def main():
     parser_pe_epegRNA_linkers.add_argument("--out_file", type=str, help="Name of the output file (Default: epegRNAs.csv)", default='epegRNAs.csv')
     parser_pe_epegRNA_linkers.add_argument("--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
 
-    # MergePrimeDesignOutput():
+    # merge():
     parser_pe_merge.add_argument("--epegRNAs", type=str, help="Directory or file with epegRNAs", required=True)
     parser_pe_merge.add_argument("--ngRNAs", type=str, help="Directory or file with ngRNAs", required=True)
     
@@ -1407,7 +1407,7 @@ def main():
 
     # sensor_designer():
     parser_pe_sensor_designer.add_argument("--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
-    parser_pe_sensor_designer.add_argument("--in_file", type=str, help="Path to PrimeDesign input file", required=True)
+    parser_pe_sensor_designer.add_argument("--in_file", type=str, help="Path to PrimeDesign input file (required columns: target_name, target_sequence, aa_index)", required=True)
 
     parser_pe_sensor_designer.add_argument("--sensor_length", type=int, default=60, help="Total length of the sensor in bp (Default: 60)")
     parser_pe_sensor_designer.add_argument("--before_spacer", type=int, default=5, help="Amount of nucleotide context to put before the protospacer in the sensor (Default = 5)")
@@ -1418,9 +1418,8 @@ def main():
 
     # RTT_designer():
     parser_pe_RTT_designer.add_argument("--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
-    parser_pe_RTT_designer.add_argument("--in_file", type=str, help="Path to PrimeDesign input file", required=True)
+    parser_pe_RTT_designer.add_argument("--in_file", type=str, help="Path to PrimeDesign input file (required columns: target_name, target_sequence, aa_index)", required=True)
     
-    parser_pe_RTT_designer.add_argument("--aa_index", type=int, default=1, help="Index of 1st amino acid in target sequence (Default: 1)")
     parser_pe_RTT_designer.add_argument("--RTT_length", type=int, default=39, help="Length of RTT (Default: 39)")
     parser_pe_RTT_designer.add_argument("--include_WT", action='store_true', default=False, help="include wildtype RTT (Default: False)")
     parser_pe_RTT_designer.add_argument("--out_dir", type=str, help="Output directory (Default: ../RTT_Designer)", default='../RTT_Designer')
@@ -1430,11 +1429,10 @@ def main():
     parser_pe_RTT_designer.add_argument("--dont_replace", action='store_false',dest='replace', help="Do not replace pegRNAs with RE enzyme sites", default=True)
     parser_pe_RTT_designer.add_argument("--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
 
-    # pegRNAs_tester():
+    # pegRNA_outcome():
     parser_pe_pegRNA_outcome.add_argument("--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
-    parser_pe_pegRNA_outcome.add_argument("--in_file", type=str, help="Path to PrimeDesign input file", required=True)
+    parser_pe_pegRNA_outcome.add_argument("--in_file", type=str, help="Path to PrimeDesign input file (required columns: target_name, target_sequence, aa_index)", required=True)
 
-    parser_pe_pegRNA_outcome.add_argument("--aa_index", type=int, default=1, help="Index of 1st amino acid in target sequence (Default: 1)")
     parser_pe_pegRNA_outcome.add_argument("--out_dir", type=str, help="Output directory (Default: ../pegRNA_outcome)", default='../pegRNA_outcome')
     parser_pe_pegRNA_outcome.add_argument("--out_file", type=str, help="Name of the output file (Default: pegRNAs.csv)", default='pegRNAs.csv')
     parser_pe_pegRNA_outcome.add_argument("--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
@@ -1445,8 +1443,8 @@ def main():
     parser_pe_pegRNA_outcome.add_argument("--extend_gap_score", type=float, help="Extend gap score for pairwise alignment", default=argparse.SUPPRESS)
 
     # Set defaults
-    parser_pe_PrimeDesigner.set_defaults(func=pe.PrimeDesigner)
-    parser_pe_PilotScreen.set_defaults(func=pe.PilotScreen)
+    parser_pe_prime_designer.set_defaults(func=pe.prime_designer)
+    parser_pe_pilot_screen.set_defaults(func=pe.pilot_screen)
     parser_pe_epegRNA_linkers.set_defaults(func=pe.epegRNA_linkers)
     parser_pe_merge.set_defaults(func=pe.merge)
     parser_pe_RTT_designer.set_defaults(func=pe.RTT_designer)

@@ -79,10 +79,6 @@ from ..gen import plot as p
 from ..utils import memory_timer
 from .. import config
 
-# Get rid of warnings
-import warnings
-warnings.filterwarnings("ignore")
-
 # Supporting methods for sequences
 def fuzzy_substring_search(text: str, pattern: str, max_distance: int):
     """

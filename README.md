@@ -57,10 +57,7 @@ edms -h # or edms <TAB>
     bash autocomplete.sh # Optional: follow CLI instructions
     conda deactivate
     ```
-5. (Optional) Install PrimeDesign by downloading Docker: https://www.docker.com/
-    ```shell
-    docker pull pinellolab/primedesign # Docker desktop app needs to be open
-    ```
+
 ### Update
 1. Enter the environment and uninstall edms:
     ```shell
