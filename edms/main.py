@@ -1153,6 +1153,7 @@ def main():
     - count_alignments(): align reads from fastq directory to annotated library with mismatches; plot and return fastq alignments dictionary
     - plot_paired(): generate stacked bar plots from paired_regions() dataframe
     - paired_regions(): quantify, plot, & return (un)paired regions that aligned to the annotated library
+    - count_signatures(): generate signatures from fastq read region alignments to WT sequence; count signatures, plot and return fastq signatures dataframe
     - editing_per_library(): Determine editing relative library abundance
     '''
     parser_fastq = subparsers.add_parser("fastq", help="FASTQ files")
@@ -1170,6 +1171,7 @@ def main():
     parser_fastq_count_alignments = subparsers_fastq.add_parser("count_alignments", help="Count alignments in FASTQ files")
     parser_fastq_plot_paired = subparsers_fastq.add_parser("plot_paired", help="Plot paired regions from FASTQ files")
     parser_fastq_paired_regions = subparsers_fastq.add_parser("paired_regions", help="Extract paired regions from FASTQ files")
+    parser_fastq_count_signatures = subparsers_fastq.add_parser("count_signatures", help="Generate signatures from fastq read region alignments to WT sequence")
     parser_fastq_editing_per_library = subparsers_fastq.add_parser("editing_per_library", help="Determine editing relative library abundance")
 
     # Add common arguments: revcom_fastqs(), unzip_fastqs(), comb_fastqs(), and genotyping()
@@ -1306,6 +1308,31 @@ def main():
     parser_fastq_paired_regions.add_argument("--show", action="store_true", help="Display plots interactively")
     parser_fastq_paired_regions.add_argument("--return_dc", action="store_true", help="Return paired/unpaired dataframe")
 
+    # count_signatures():
+    parser_fastq_count_signatures.add_argument("--df_ref", help="Annotated reference library file path", required=True)
+    parser_fastq_count_signatures.add_argument("--in_file", help="Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence,aa_index (column names required)", required=True)
+    parser_fastq_count_signatures.add_argument("--fastq_dir", help="Directory containing FASTQ files", required=True)
+    parser_fastq_count_signatures.add_argument("--df_motif5", help="5' motif file path", required=True)
+    parser_fastq_count_signatures.add_argument("--df_motif3", help="3' motif file path", required=True)
+    
+    parser_fastq_count_signatures.add_argument("--meta", help="Meta file path", default=argparse.SUPPRESS)
+    parser_fastq_count_signatures.add_argument("--out_dir", help="Output directory", default='../out/')
+    parser_fastq_count_signatures.add_argument("--out_file", help="Output filename", default=f"{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_count_signatures.csv")
+    parser_fastq_count_signatures.add_argument("--signature_col", help="Signature column name in the annotated reference library (Default: 'Signature')", default='Signature')
+    parser_fastq_count_signatures.add_argument("--id_col", help="ID column name in the annotated reference library (Default: 'ID')", default='ID')
+    parser_fastq_count_signatures.add_argument("--edit_col", help="Edit column name in the annotated reference library (Default: 'Edit')", default='Edit')
+    parser_fastq_count_signatures.add_argument("--fastq_col", help="Fastq column name in the annotated reference library (Default: None)", default=None)
+    parser_fastq_count_signatures.add_argument("--match_score", type=float, default=2, help="Score for matches (Default: 2)")
+    parser_fastq_count_signatures.add_argument("--mismatch_score", type=float, default=-1, help="Score for mismatches (Default: -1)")
+    parser_fastq_count_signatures.add_argument("--open_gap_score", type=float, default=-10, help="Gap opening score (Default: -10)")
+    parser_fastq_count_signatures.add_argument("--extend_gap_score", type=float, default=-0.1, help="Gap extension score (Default: -0.1)")
+    parser_fastq_count_signatures.add_argument("--align_dims", type=parse_tuple_int, default=(0, 0), help="Alignment range formatted as 'start,end' (Default: 0,0 = all reads)")
+    parser_fastq_count_signatures.add_argument("--align_ckpt", type=int, default=10000, help="Checkpoint frequency (Default: 10000)")
+    parser_fastq_count_signatures.add_argument("--save_alignments", action="store_true", help="Save alignments (Default: False, save memory)", default=False)
+    parser_fastq_count_signatures.add_argument("--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
+    parser_fastq_count_signatures.add_argument("--plot_suf", type=str, help="Plot suffix type (Default: 'pdf')", default='.pdf')
+    parser_fastq_count_signatures.add_argument("--show", action="store_true", help="Display plots interactively", default=False)
+    
     # editing_per_library():
     parser_fastq_editing_per_library.add_argument("--edit_dc", help="Path to directory with edit outcomes files", required=True)
     parser_fastq_editing_per_library.add_argument("--paired_regions_dc", help="Path to directory with paired regions files", required=True)
@@ -1328,6 +1355,7 @@ def main():
     parser_fastq_count_alignments.set_defaults(func=fq.count_alignments)
     parser_fastq_plot_paired.set_defaults(func=fq.plot_paired)
     parser_fastq_paired_regions.set_defaults(func=fq.paired_regions)
+    parser_fastq_count_signatures.set_defaults(func=fq.count_signatures)
     parser_fastq_editing_per_library.set_defaults(func=fq.editing_per_library)
 
     '''
@@ -1339,6 +1367,7 @@ def main():
     - sensor_designer(): design pegRNA sensors
     - RTT_designer(): design all possible RTT for given spacer & PBS (WT, single insertions, & single deletions)
     - pegRNA_outcome(): confirm that pegRNAs should create the predicted edit
+    - pegRNA_signature(): create signatures for pegRNA outcomes using alignments
     '''
     parser_pe = subparsers.add_parser("pe", help="Prime Editing")
     subparsers_pe = parser_pe.add_subparsers()

@@ -393,7 +393,6 @@ def epegRNA_pool(df: pd.DataFrame | str, tG:bool=True, make_extension:bool=True,
     df['Reverse UMI'] = UMI_sequences[df.shape[0]:] # Assign reverse UMIs
 
     # Make oligo & determine length
-    df.sort_values(by=barcode,inplace=True,ignore_index=True)
     df[f'{epegRNA_spacer}_nt1']=[s[0] for s in df[epegRNA_spacer]]
     oligos = []
     for i,(epegRNA_spacer_nt1) in enumerate(df[f'{epegRNA_spacer}_nt1']):

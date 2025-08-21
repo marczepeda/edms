@@ -52,7 +52,7 @@ from Bio.Align import PairwiseAligner
 import math
 from typing import Literal
 
-from ..bio.signature import SNV, Indel, Signature, signature_from_alignment
+from ..bio.signature import signature_from_alignment
 from ..bio import pegLIT as pegLIT
 from ..gen import io as io
 from ..gen import tidy as t
@@ -1768,18 +1768,19 @@ def pegRNA_outcome(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str,
 
 def pegRNA_signature(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, 
                      match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, extend_gap_score: float = -0.1,
-                     out_dir: str=None, out_file: str=None, return_df: bool=True, literal_eval: bool=True):
+                     out_dir: str=None, out_file: str=None, save_alignments: bool=False, return_df: bool=True, literal_eval: bool=True):
     ''' 
     pegRNA_signature(): create signatures for pegRNA outcomes using alignments
     
     pegRNAs (dataframe | str): pegRNAs DataFrame (or file path)
-    in_file (dataframe | str): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)
+    in_file (dataframe | str): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence,aa_index (column names required)
     match_score (float, optional): match score for pairwise alignment (Default: 2)
     mismatch_score (float, optional): mismatch score for pairwise alignment (Default: -1)
     open_gap_score (float, optional): open gap score for pairwise alignment (Default: -10)
     extend_gap_score (float, optional): extend gap score for pairwise alignment (Default: -0.1)
     out_dir (str, optional): output directory
     out_file (str, optional): output filename
+    save_alignments (bool, optional): save alignments (Default: False, save memory)
     return_df (bool, optional): return dataframe (Default: True)
     literal_eval (bool, optional): convert string representations (Default: True)
     '''
@@ -1816,9 +1817,11 @@ def pegRNA_signature(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str,
     pegRNAs['Alignment'] = [aligner.align(Seq(seq),
                                           Seq((post_RTT_sequence[start_i:end_i])))[0] for post_RTT_sequence in pegRNAs['post_RTT_sequence']]
     pegRNAs['Signature'] = [signature_from_alignment(ref_seq=seq,
-                                                     alt_seq=post_RTT_sequence[start_i:end_i],
+                                                     query_seq=post_RTT_sequence[start_i:end_i],
                                                      alignment=alignment) for alignment,post_RTT_sequence in t.zip_cols(df=pegRNAs, cols=['Alignment', 'post_RTT_sequence'])]
-    
+    if save_alignments==False:
+        pegRNAs.drop(columns=['Alignment'],inplace=True)
+
     # Save & Return
     memories.append(memory_timer(task=f"pegRNA_signature(): {len(pegRNAs)} out of {len(pegRNAs)}"))
     if out_dir is not None and out_file is not None:
