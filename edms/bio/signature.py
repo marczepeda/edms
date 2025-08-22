@@ -23,7 +23,6 @@ Usage:
 '''
 
 # Import packages
-from Bio.Align import PairwiseAligner
 from typing import Tuple, List, Dict, Any
 from dataclasses import dataclass, is_dataclass
 import ast

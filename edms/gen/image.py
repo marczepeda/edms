@@ -145,7 +145,7 @@ def combine(in_dir: str, out_dir: str, out_file: str):
         print(f"Error creating PDF: {e}")
 
 # Image information
-def info(dir: str):
+def info(dir: str) -> pd.DataFrame:
     """
     info(): Extract information from images in a directory as a dataframe
     

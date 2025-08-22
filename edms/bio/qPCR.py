@@ -16,7 +16,7 @@ import numpy as np
 from ..gen import io as io
 
 # qPCR data retrieval and analysis
-def cfx_Cq(pt: str, sample_col:str='Sample', cols=['Well','Fluor','Target','Sample','Cq']):
+def cfx_Cq(pt: str, sample_col:str='Sample', cols: list=['Well','Fluor','Target','Sample','Cq']) -> pd.DataFrame:
     ''' 
     cfx_Cq(): retrieve RT-qPCR data from CFX Cq csv
     
@@ -32,7 +32,7 @@ def cfx_Cq(pt: str, sample_col:str='Sample', cols=['Well','Fluor','Target','Samp
     return data
 
 def ddCq(data: pd.DataFrame | str, sample_col:str='Sample', target_col:str='Target', Cq_col:str='Cq',
-         dir:str=None, file:str=None):
+         dir:str=None, file:str=None) -> pd.DataFrame:
     ''' 
     ddCq(): computes ΔΔCq mean and error for all samples holding target pairs constant
     

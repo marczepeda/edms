@@ -225,7 +225,7 @@ def comb_fastqs(in_dir: str, out_dir: str, out_file: str):
 ### Motif search: mU6,...
 def count_motif(fastq_dir: str, pattern: str, out_dir: str, motif:str="motif", 
                 max_distance:int=0, max_reads:int=0, meta: pd.DataFrame | str=None,
-                return_df:bool=False):
+                return_df:bool=False) -> pd.DataFrame:
     ''' 
     count_motif(): returns a dataframe with the sequence motif location with mismatches per read for every fastq file in a directory
 
@@ -349,7 +349,7 @@ def count_motif(fastq_dir: str, pattern: str, out_dir: str, motif:str="motif",
 
 def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.pdf',numeric: str='count',
                id_col: str='fastq_file', id_axis: str='fastq', stack_figsize: tuple=(7,3), heat_figsize: tuple=None,
-               cutoff_frac:float=0.01, return_df:bool=False, show:bool=True):
+               cutoff_frac:float=0.01, return_df:bool=False, show:bool=True) -> tuple[pd.DataFrame]:
     '''
     plot_motif(): generate plots highlighting motif mismatches, locations, and sequences
     
@@ -471,7 +471,7 @@ def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.pdf',numeri
 def mismatch_alignments(align_col: str, out_dir: str, fastq_name: str,
                         fastq_df_ref: pd.DataFrame, dc_alignments: dict, dc_aligned_reads: dict,
                         dc_alignments_mismatch_pos: dict, dc_alignments_mismatch_num: dict,
-                        return_df: bool=False):
+                        return_df: bool=False) -> pd.DataFrame:
     '''
     mismatch_alignments(): Compute & save mismatch number and position per alignment; enables checkpoints
 
@@ -520,7 +520,7 @@ def mismatch_alignments(align_col: str, out_dir: str, fastq_name: str,
     if return_df: return df_fastq
 
 def perform_alignments(align_col: str, out_dir: str, fastq_name: str, fastq_df_ref: pd.DataFrame,
-                       aligner: PairwiseAligner, seqs: list, memories: list, align_ckpt: int):
+                       aligner: PairwiseAligner, seqs: list, memories: list, align_ckpt: int) -> pd.DataFrame:
     '''
     perform_alignments(): perform alignments on fastq reads using PairwiseAligner and compute mismatches using mismatch_alignments()
 
@@ -648,7 +648,7 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
                  out_dir: str, fastq_col: str=None, match_score: float = 2, mismatch_score: float = -1, 
                  open_gap_score: float = -10, extend_gap_score: float = -0.1, align_dims: tuple=(0,0),
                  align_ckpt: int=10000, plot_suf: str=None, show: bool=False, return_dc: bool=False,
-                 **plot_kwargs):
+                 **plot_kwargs) -> dict[pd.DataFrame]:
     ''' 
     count_region(): align read region from fastq directory to the annotated library with mismatches; plot and return fastq alignments dictionary
 
@@ -866,7 +866,7 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
                      fastq_dir: str, out_dir: str, fastq_col: str=None, match_score: float = 2, mismatch_score: float = -1, 
                      open_gap_score: float = -10, extend_gap_score: float = -0.1, align_dims: tuple=(0,0),
                      align_ckpt: int=10000, plot_suf: str=None, show: bool=False, return_dc: bool=False,
-                     **plot_kwargs):
+                     **plot_kwargs) -> dict[pd.DataFrame]:
     ''' 
     count_alignments(): align reads from fastq directory to annotated library with mismatches; plot and return fastq alignments dictionary
     
@@ -1066,7 +1066,7 @@ def paired_regions(meta_dir: str, region1_dir: str, region2_dir: str, out_dir: s
                    region1_alignment_col: str='r1_alignment', region2_alignment_col: str='r2_alignment', 
                    reads_aligned_col: str='reads_aligned', reads_processed_col: str='reads_processed',
                    y: Literal['count','fraction']='count', plot_suf: str='.pdf', show: bool=False, return_dc: bool=False,
-                   **plot_kwargs):
+                   **plot_kwargs) -> dict[pd.DataFrame]:
     '''
     paired_regions(): quantify, plot, & return (un)paired regions that aligned to the annotated library
 
@@ -1186,18 +1186,17 @@ def paired_regions(meta_dir: str, region1_dir: str, region2_dir: str, out_dir: s
     if return_dc: return paired_regions_dc  
 
 ### Signature 
-def count_signatures(df_ref: pd.DataFrame | str, in_file: pd.DataFrame | str, signature_col: str, id_col: str, edit_col: str,
-                     fastq_dir: str, df_motif5: pd.DataFrame | str, df_motif3: pd.DataFrame | str,
-                     out_dir: str, out_file: str, fastq_col: str=None,  meta: pd.DataFrame | str=None, match_score: float = 2, mismatch_score: float = -1, 
-                     open_gap_score: float = -10, extend_gap_score: float = -0.1, align_dims: tuple=(0,0),
-                     align_ckpt: int=10000, save_alignments: bool=False, return_df: bool=False, literal_eval: bool=True, plot_suf: bool=None, show: bool=False,
-                     **plot_kwargs):
+def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str, edit_col: str, fastq_dir: str, 
+                     df_motif5: pd.DataFrame | str, df_motif3: pd.DataFrame | str, out_dir: str, out_file: str, 
+                     target_sequence: str=None, in_file: pd.DataFrame | str=None, fastq_col: str=None,  meta: pd.DataFrame | str=None, 
+                     match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, extend_gap_score: float = -0.1, 
+                     align_dims: tuple=(0,0), align_ckpt: int=10000, save_alignments: bool=False, return_df: bool=False, 
+                     literal_eval: bool=True, plot_suf: bool=None, show: bool=False, **plot_kwargs) -> pd.DataFrame:
     ''' 
     count_signatures(): generate signatures from fastq read region alignments to WT sequence; count signatures, plot and return fastq signatures dataframe
 
     Parameters:
     df_ref (dataframe | str): annotated reference library dataframe (or file path)
-    in_file (dataframe | str): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence,aa_index (column names required)
     signature_col (str): signature column name in the annotated reference library
     id_col (str): id column name in the annotated reference library
     edit_col (str): edit column name in the annotated reference library
@@ -1206,6 +1205,10 @@ def count_signatures(df_ref: pd.DataFrame | str, in_file: pd.DataFrame | str, si
     df_motif3 (dataframe | str): 3' motif dataframe (or file path)
     out_dir (str): directory for output files
     out_file (str): output filename
+
+    target_sequence (str, option 1): Target sequence; retrieved from input file if not provided
+    in_file (dataframe | str, option 2): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence,aa_index (column names required)
+    
     fastq_col (str, optional): fastq column name in the annotated reference library (Default: None)
     meta (DataFrame | str, optional): meta dataframe (or file path) must have 'fastq_file' column (Default: None)
     match_score (float, optional): match score for pairwise alignment (Default: 2)
@@ -1221,6 +1224,10 @@ def count_signatures(df_ref: pd.DataFrame | str, in_file: pd.DataFrame | str, si
     show (bool, optional): show plots (Default: False)
     **plot_kwargs (optional): plot keyword arguments
     '''
+    # Check target_sequence or in_file was provided
+    if target_sequence is None and in_file is None:
+        raise(ValueError("'target_sequence' or 'in_file' are required. If both are provided, 'target_sequence' will be used."))
+
     # Initialize timer
     memory_timer(reset=True)
 
@@ -1235,8 +1242,13 @@ def count_signatures(df_ref: pd.DataFrame | str, in_file: pd.DataFrame | str, si
     # Get dataframes from file path if needed
     if type(df_ref)==str: 
         df_ref = io.get(df_ref,literal_eval=literal_eval)
-    if type(in_file)==str:
-        in_file = io.get(in_file)
+    if target_sequence is None: 
+        if type(in_file)==str:
+            in_file = io.get(in_file)
+        target_sequence = in_file.iloc[0]['target_sequence']
+        ref_seq = target_sequence.split('(')[1].split(')')[0] # Get wt reference sequence
+    else:
+        ref_seq = target_sequence
     if type(df_motif5)==str: 
         df_motif5 = io.get(df_motif5)
     if type(df_motif3)==str: 
@@ -1281,10 +1293,6 @@ def count_signatures(df_ref: pd.DataFrame | str, in_file: pd.DataFrame | str, si
     # Memory & stats reporting
     memories = []
     stats = []
-
-    # Get wt sequence
-    target_sequence = in_file.iloc[0]['target_sequence'] 
-    ref_seq = target_sequence.split('(')[1].split(')')[0] # Break apart target sequences
     
     # Convert string representations into Signature objects
     df_ref[signature_col] = [parse_signature_literal(signature) for signature in df_ref[signature_col]]
@@ -1529,7 +1537,8 @@ def count_signatures(df_ref: pd.DataFrame | str, in_file: pd.DataFrame | str, si
     if return_df: return out_df
 
 # Quantify edit outcomes
-def trim_filter(record,qall:int,qavg:int,qtrim:int,qmask:int,alls:int,avgs:int,trims:int,masks:int):
+def trim_filter(record, qall:int, qavg:int, qtrim:int, qmask:int, alls:int,
+                avgs:int, trims:int, masks:int) -> tuple:
     '''
     trim_filter(): trim and filter fastq sequence based on quality scores
     
@@ -1579,7 +1588,8 @@ def trim_filter(record,qall:int,qavg:int,qtrim:int,qmask:int,alls:int,avgs:int,t
         else: return None,None,None,None,alls,avgs+1,trims,masks # Avg threshold not met
     else: return None,None,None,None,alls+1,avgs,trims,masks # All threshold not met
 
-def get_fastqs(in_dir: str,qall:int=10,qavg:int=30,qtrim:int=0,qmask:int=0,save:bool=True, return_memories: bool=False, out_dir: str=None):
+def get_fastqs(in_dir: str, qall:int=10, qavg:int=30, qtrim:int=0, qmask:int=0, save:bool=True, 
+               return_memories: bool=False, out_dir: str=None) -> tuple[dict[pd.DataFrame], list] | dict[pd.DataFrame]:
     ''' 
     get_fastqs(): get fastq files from directory and store records in dataframes in a dictionary
     
@@ -1663,7 +1673,8 @@ def get_fastqs(in_dir: str,qall:int=10,qavg:int=30,qtrim:int=0,qmask:int=0,save:
     if return_memories: return fastqs,memories
     else: return fastqs
 
-def region(fastqs: dict, flank5: str, flank3: str, save: bool=True, masks: bool=False, return_memories: bool=False, out_dir: str=None):
+def region(fastqs: dict, flank5: str, flank3: str, save: bool=True, masks: bool=False, 
+           return_memories: bool=False, out_dir: str=None) -> tuple[dict[pd.DataFrame], list] | dict[pd.DataFrame]:
     ''' 
     region(): gets DNA and AA sequence for records within flanks
     
@@ -1745,7 +1756,7 @@ def region(fastqs: dict, flank5: str, flank3: str, save: bool=True, masks: bool=
     else: return fastqs_1
 
 ### Supporting methods for genotype()
-def find_AA_edits(wt: str, res: int, seq: str):
+def find_AA_edits(wt: str, res: int, seq: str) -> str:
     '''
     find_AA_edits(): find amino acid edits compared to wildtype sequence
     
@@ -1764,7 +1775,7 @@ def find_AA_edits(wt: str, res: int, seq: str):
     elif len(e)==1: return e[0]
     else: return 'Unknown'
 
-def trim(seq: str|Seq):
+def trim(seq: str|Seq) -> str|Seq:
     """
     trim(): trim the sequence to a multiple of 3.
 
@@ -1775,7 +1786,7 @@ def trim(seq: str|Seq):
         seq = seq[:-1]
     return seq
 
-def format_alignment(a: str|Seq, b: str|Seq, show: bool=False, return_alignment: bool=False):
+def format_alignment(a: str|Seq, b: str|Seq, show: bool=False, return_alignment: bool=False) -> str:
     '''
     format_alignment(): formats two sequences for alignment display & return the middle.
     
@@ -1806,7 +1817,7 @@ def format_alignment(a: str|Seq, b: str|Seq, show: bool=False, return_alignment:
 
 def find_indel(wt:str|Seq, mut:str|Seq, res: int, show:bool=False,
                match_score: float = 2, mismatch_score: float = -1, 
-               open_gap_score: float = -10, extend_gap_score: float = -0.1):
+               open_gap_score: float = -10, extend_gap_score: float = -0.1) -> tuple[str, str]:
     '''
     find_indel(): aligns two sequences and returns the indel edit.
 
@@ -1954,7 +1965,7 @@ def find_indel(wt:str|Seq, mut:str|Seq, res: int, show:bool=False,
 
 def genotype(fastqs: dict, res: int, wt: str, save: bool=False, masks: bool=False, keepX: bool=False,
              match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, 
-             extend_gap_score: float = -0.1, return_memories: bool=False, out_dir: str=None):
+             extend_gap_score: float = -0.1, return_memories: bool=False, out_dir: str=None) -> tuple[dict[pd.DataFrame], list] | dict[pd.DataFrame]:
     ''' 
     genotype(): assign genotypes to sequence records
     
@@ -2044,7 +2055,7 @@ def genotype(fastqs: dict, res: int, wt: str, save: bool=False, masks: bool=Fals
     if return_memories: return fastqs,memories
     else: return fastqs
 
-def outcomes(fastqs: dict, col: str='edit',return_memories: bool=False):
+def outcomes(fastqs: dict, col: str='edit', return_memories: bool=False) -> tuple[pd.DataFrame, list] | pd.DataFrame:
     ''' 
     outcomes(): returns edit count & fraction per sample (tidy format)
 
@@ -2071,7 +2082,7 @@ def outcomes(fastqs: dict, col: str='edit',return_memories: bool=False):
     else: return df
 
 def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=None,
-               out_dir: str=None, out_file_prefix: str=None, return_dc:bool=False, **kwargs):
+               out_dir: str=None, out_file_prefix: str=None, return_dc:bool=False, **kwargs) -> dict[pd.DataFrame]:
     ''' 
     genotying(): quantify edit outcomes workflow
     
@@ -2166,7 +2177,7 @@ def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=N
 
 def abundances(df: pd.DataFrame | str, desired_edits: list, sample_col: str='sample',
                edit_col: str='edit', count_col: str='count', fraction_col: str='fraction',
-               combinations: int=1, return_memories: bool=False):
+               combinations: int=1, return_memories: bool=False) -> pd.DataFrame | tuple[pd.DataFrame, list]:
     ''' 
     abundances(): quantify desired edits count & fraction per sample
 
@@ -2236,7 +2247,7 @@ def abundances(df: pd.DataFrame | str, desired_edits: list, sample_col: str='sam
     else: return df_desired
 
 def editing_per_library(edit_dc: dict | str, paired_regions_dc: dict | str, fastq_ids: pd.DataFrame | str, 
-                        out_dir: str=None, count: str='count', psuedocount: int=1, return_df: bool=True):
+                        out_dir: str=None, count: str='count', psuedocount: int=1, return_df: bool=True) -> pd.DataFrame:
     '''
     editing_per_library(): Determine editing relative library abundance
 
@@ -2347,7 +2358,7 @@ aa_props = {
     '*': {'name': 'Stop', 'hydrophobicity': None, 'weight': None, 'polarity': None, 'charge': None}
 }
 
-def edit_1(df: pd.DataFrame,col='edit'):
+def edit_1(df: pd.DataFrame, col: str='edit') -> pd.DataFrame:
     ''' 
     edit_1(): split edit column to before, after, and amino acid number
     
@@ -2363,7 +2374,8 @@ def edit_1(df: pd.DataFrame,col='edit'):
     df_1['number']=df_1[col].str[1:-1].astype(int)
     return df_1.reset_index(drop=True)
 
-def dms_cond(df: pd.DataFrame, cond: str, wt:str, res: int, sample='sample', edit='edit', psuedocount=0):
+def dms_cond(df: pd.DataFrame, cond: str, wt:str, res: int, 
+             sample: str='sample', edit: str='edit', psuedocount: int=0) -> pd.DataFrame:
     ''' 
     dms_cond(): returns DMS grid data in tidy format grouped by condition
     
@@ -2457,7 +2469,8 @@ def dms_cond(df: pd.DataFrame, cond: str, wt:str, res: int, sample='sample', edi
                                                 cond:[key_cond]*len(number_ls)})])
     return df_cond_stat.drop_duplicates(subset=['edit','Description']).reset_index(drop=True)
 
-def dms_comp(df: pd.DataFrame, cond: str, cond_comp: str, wt:str, res: int, sample='sample', edit='edit', psuedocount=1):
+def dms_comp(df: pd.DataFrame, cond: str, cond_comp: str, wt: str, res: int, 
+             sample: str='sample', edit: str='edit', psuedocount: int=1) -> pd.DataFrame:
     ''' 
     dms_comp(): returns comparison DMS grid dataframe in tidy format split by condition
     
@@ -2495,7 +2508,7 @@ def dms_comp(df: pd.DataFrame, cond: str, cond_comp: str, wt:str, res: int, samp
     df_stat['compare'] = [cond_comp]*df_stat.shape[0]
     return df_stat[[edit,'before','after','number','FC','pval','tstat','fraction_avg','fraction_avg_compare','count_avg','count_avg_compare',cond,'compare']].sort_values(by=['number','after']).reset_index(drop=True)
 
-def subscript(df: pd.DataFrame,tick='before',tick_sub='number'):
+def subscript(df: pd.DataFrame, tick: str='before',tick_sub: str='number') -> pd.DataFrame:
     ''' 
     subscript(): returns dataframe with subscripts to tick labels
     
@@ -2514,12 +2527,12 @@ def subscript(df: pd.DataFrame,tick='before',tick_sub='number'):
     return pd.DataFrame({'tick':ticks,'label':labels}).sort_values(by='tick').reset_index(drop=True)
 
 # Plot methods
-def scat(typ: str,df: pd.DataFrame,x: str,y: str,cols=None,cols_ord=None,stys=None,cutoff=0.01,cols_exclude=None,
-         file=None,dir=None,palette_or_cmap='colorblind',edgecol='black',
-         figsize=(10,6),title='',title_size=18,title_weight='bold',title_font='Arial',
-         x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_font='Arial',x_axis_scale='linear',x_axis_dims=(0,100),x_ticks_rot=0,x_ticks_font='Arial',x_ticks=[],
-         y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_font='Arial',y_axis_scale='linear',y_axis_dims=(0,100),y_ticks_rot=0,y_ticks_font='Arial',y_ticks=[],
-         legend_title='',legend_title_size=12,legend_size=9,legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_items=(0,0),show=True,
+def scat(typ: str,df: pd.DataFrame,x: str,y: str, cols:bool=None, cols_ord:bool=None, stys:bool=None, cutoff: float=0.01, cols_exclude: list|str=None,
+         file: bool=None, dir: bool=None, palette_or_cmap: str='colorblind', edgecol: str='black',
+         figsize: tuple=(10,6), title: str='', title_size=18, title_weight: str='bold', title_font: str='Arial',
+         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_scale: str='linear', x_axis_dims: tuple=(0,100),x_ticks_rot: int=0, x_ticks_font: str='Arial',x_ticks: list=[],
+         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_scale: str='linear', y_axis_dims: tuple=(0,100),y_ticks_rot: int=0, y_ticks_font: str='Arial',y_ticks: list=[],
+         legend_title: str='', legend_title_size: int=12, legend_size: int=9, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_items: tuple=(0,0), show: bool=True, space_capitalized: bool=True,
          **kwargs):
     '''
     scat(): creates scatter plot related graphs
@@ -2567,6 +2580,7 @@ def scat(typ: str,df: pd.DataFrame,x: str,y: str,cols=None,cols_ord=None,stys=No
     legend_loc (str): legend location
     legend_ncol (tuple, optional): # of columns
     show (bool, optional): show plot (Default: True)
+    space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     
     Dependencies: os, matplotlib, seaborn, & plot
     '''
@@ -2596,20 +2610,20 @@ def scat(typ: str,df: pd.DataFrame,x: str,y: str,cols=None,cols_ord=None,stys=No
                                'genotypes':genotypes})
         cols_ord = list(assign.sort_values(by='positions')['genotypes'])
 
-    p.scat(typ=typ,df=df_cut,x=x,y=y,cols=cols,cols_ord=cols_ord,cols_exclude=cols_exclude,
+    p.scat(typ=typ,df=df_cut,x=x,y=y,cols=cols,cols_ord=cols_ord,cols_exclude=cols_exclude, stys=stys,
            file=file,dir=dir,palette_or_cmap=palette_or_cmap,edgecol=edgecol,
            figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
            x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,x_ticks=x_ticks,
            y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_scale=y_axis_scale,y_axis_dims=y_axis_dims,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,y_ticks=y_ticks,
-           legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_items=legend_items,show=show, 
+           legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_items=legend_items,show=show,space_capitalize=space_capitalized,
            **kwargs)
 
-def cat(typ: str,df: pd.DataFrame,x: str,y: str,errorbar=None,cols=None,cols_ord=None,cutoff=0.01,cols_exclude=None,
-        file=None,dir=None,palette_or_cmap='colorblind',edgecol='black',lw=1,
-        figsize=(10,6),title='',title_size=18,title_weight='bold',title_font='Arial',
-        x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_font='Arial',x_axis_scale='linear',x_axis_dims=(0,1),x_ticks_rot=0,x_ticks_font='Arial',x_ticks=[],
-        y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_font='Arial',y_axis_scale='linear',y_axis_dims=(0,1),y_ticks_rot=0,y_ticks_font='Arial',y_ticks=[],
-        legend_title='',legend_title_size=12,legend_size=9,legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_items=(0,0),show=True,
+def cat(typ: str, df: pd.DataFrame, x: str, y: str, errorbar: str=None, cols: str=None, cols_ord: list=None, cutoff: float=0.01, cols_exclude: list|str=None,
+        file: str=None, dir: str=None, palette_or_cmap: str='colorblind', edgecol: str='black', lw: int=1,
+        figsize: tuple=(10,6), title: str='', title_size: int=18, title_weight: str='bold', title_font: str='Arial',
+        x_axis: str='', x_axis_size=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_scale: str='linear', x_axis_dims: tuple=(0,1), x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
+        y_axis: str='', y_axis_size=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_scale: str='linear', y_axis_dims: tuple=(0,1), y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
+        legend_title: str='', legend_title_size: int=12, legend_size: int=9, legend_bbox_to_anchor=(1,1), legend_loc: str='upper left', legend_items: tuple=(0,0), show: bool=True, space_capitalize: bool=True,
         **kwargs):
     ''' 
     cat: creates category dependent graphs
@@ -2660,6 +2674,7 @@ def cat(typ: str,df: pd.DataFrame,x: str,y: str,errorbar=None,cols=None,cols_ord
     legend_loc (str): legend location
     legend_ncol (tuple, optional): # of columns
     show (bool, optional): show plot (Default: True)
+    space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     
     Dependencies: os, matplotlib, seaborn, & plot
     '''
@@ -2694,16 +2709,16 @@ def cat(typ: str,df: pd.DataFrame,x: str,y: str,errorbar=None,cols=None,cols_ord
           figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
           x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,x_ticks=x_ticks,
           y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_scale=y_axis_scale,y_axis_dims=y_axis_dims,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,y_ticks=y_ticks,
-          legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_items=legend_items,show=show, 
+          legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_items=legend_items,show=show,space_capitalize=space_capitalize,
           **kwargs)
 
-def stack(df: pd.DataFrame,x='sample',y='fraction',cols='edit',cutoff=0.01,cols_ord=[],x_ord=[],
-          file=None,dir=None,palette_or_cmap='Set2',repeats=1,errcap=4,vertical=True,
-          figsize=(10,6),title='Editing Outcomes',title_size=18,title_weight='bold',title_font='Arial',
-          x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_font='Arial',x_ticks_rot=0,x_ticks_font='Arial',
-          y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_font='Arial',y_axis_dims=(0,0),y_ticks_rot=0,y_ticks_font='Arial',
-          legend_title='',legend_title_size=12,legend_size=12,
-          legend_bbox_to_anchor=(1,1),legend_loc='upper left',legend_ncol=1,show=True,space_capitalize=True,**kwargs):
+def stack(df: pd.DataFrame, x: str='sample', y: str='fraction', cols: str='edit', cutoff: float=0.01, cols_ord: list=[], x_ord: list=[],
+          file: str=None, dir: str=None, palette_or_cmap: str='tab20', repeats: int=1, errcap: int=4, vertical: bool=True,
+          figsize=(10,6), title: str='Editing Outcomes', title_size: int=18, title_weight: str='bold', title_font: str='Arial',
+          x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_ticks_rot: int=0, x_ticks_font: str='Arial',
+          y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_ticks_rot: int=0, y_ticks_font: str='Arial',
+          legend_title: str='', legend_title_size: int=12, legend_size: int=12,
+          legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1, show: bool=True, space_capitalize: bool=True, **kwargs):
     ''' 
     stack(): creates stacked bar plot
 
@@ -2780,12 +2795,12 @@ def stack(df: pd.DataFrame,x='sample',y='fraction',cols='edit',cutoff=0.01,cols_
             legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,
             legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_ncol=legend_ncol,show=show,space_capitalize=space_capitalize,**kwargs)
 
-def heat(df: pd.DataFrame, cond: str,x='number',y='after',vals='fraction_avg',vals_dims:tuple=None,
-         file=None,dir=None,edgecol='black',lw=1,annot=False,cmap="bone_r",sq=True,cbar=True,
-         title='',title_size=12,title_weight='bold',title_font='Arial',figsize=(20,7),
-         x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_font='Arial',x_ticks_rot=45,x_ticks_font='Arial',
-         y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_font='Arial',y_ticks_rot=0,y_ticks_font='Arial',
-         show=True,space_capitalize=True,**kwargs):
+def heat(df: pd.DataFrame, cond: str, x: str='number', y: str='after', vals: str='fraction_avg', vals_dims:tuple=None,
+         file=None, dir=None, edgecol: str='black', lw: int=1, annot=False, cmap: str="bone_r", sq: bool=True, cbar: bool=True,
+         title: str='', title_size: int=12, title_weight: str='bold', title_font: str='Arial', figsize: tuple=(20,7),
+         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_ticks_rot: int=45, x_ticks_font: str='Arial',
+         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_ticks_rot: int=0, y_ticks_font: str='Arial',
+         show: bool=True, space_capitalize: bool=True, **kwargs):
     ''' 
     heat(): creates heatmap
     
@@ -2868,14 +2883,14 @@ def heat(df: pd.DataFrame, cond: str,x='number',y='after',vals='fraction_avg',va
         plt.savefig(fname=os.path.join(dir, file), dpi=600, bbox_inches='tight', format=f'{file.split(".")[-1]}')
     if show: plt.show()
 
-def vol(df: pd.DataFrame,x: str,y: str,size:str=None,size_dims:tuple=None,include_wt=False,
-        FC_threshold=2,pval_threshold=0.05,file=None,dir=None,color='lightgray',alpha=0.5,edgecol='black',vertical=True,
-        figsize=(10,6),title='',title_size=18,title_weight='bold',title_font='Arial',
-        x_axis='',x_axis_size=12,x_axis_weight='bold',x_axis_font='Arial',x_axis_dims=(0,0),x_ticks_rot=0,x_ticks_font='Arial',x_ticks=[],
-        y_axis='',y_axis_size=12,y_axis_weight='bold',y_axis_font='Arial',y_axis_dims=(0,0),y_ticks_rot=0,y_ticks_font='Arial',y_ticks=[],
-        legend_title='',legend_title_size=12,legend_size=9,legend_bbox_to_anchor=(1,1),legend_loc='upper left',
-        legend_items=(0,0),legend_ncol=1,display_size=True,display_labels=True,return_df=True,show=True,space_capitalize=True,
-        **kwargs):
+def vol(df: pd.DataFrame, x: str, y: str, size: str=None, size_dims: tuple=None, include_wt: bool=False,
+        FC_threshold: float=2, pval_threshold: float=0.05, file: str=None, dir: str=None, color: str='lightgray', alpha: float=0.5, edgecol: str='black', vertical: bool=True,
+        figsize=(10,6), title: str='', title_size: int=18, title_weight: str='bold', title_font: str='Arial',
+        x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
+        y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
+        legend_title: str='',legend_title_size: int=12, legend_size: int=9, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left',
+        legend_items: tuple=(0,0), legend_ncol: int=1, display_size: bool=True, display_labels: bool=True, return_df: bool=True, show: bool=True, space_capitalize: bool=True,
+        **kwargs) -> pd.DataFrame:
     ''' 
     vol(): creates volcano plot
     

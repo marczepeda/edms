@@ -1310,10 +1310,13 @@ def main():
 
     # count_signatures():
     parser_fastq_count_signatures.add_argument("--df_ref", help="Annotated reference library file path", required=True)
-    parser_fastq_count_signatures.add_argument("--in_file", help="Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence,aa_index (column names required)", required=True)
     parser_fastq_count_signatures.add_argument("--fastq_dir", help="Directory containing FASTQ files", required=True)
     parser_fastq_count_signatures.add_argument("--df_motif5", help="5' motif file path", required=True)
     parser_fastq_count_signatures.add_argument("--df_motif3", help="3' motif file path", required=True)
+    
+    parser_fastq_count_signatures_group = parser_fastq_count_signatures.add_mutually_exclusive_group(required=True)
+    parser_fastq_count_signatures_group.add_argument("--target_sequence", help="[Required (Option 1)] Target sequence; retrieved from input file if not provided")
+    parser_fastq_count_signatures_group.add_argument("--in_file", help="[Required (Option 2)] Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence,aa_index (column names required)")
     
     parser_fastq_count_signatures.add_argument("--meta", help="Meta file path", default=argparse.SUPPRESS)
     parser_fastq_count_signatures.add_argument("--out_dir", help="Output directory", default='../out/')

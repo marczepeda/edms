@@ -22,9 +22,9 @@ warnings.filterwarnings("ignore")
 # Transfection calculation
 def PE3(plasmids: pd.DataFrame | str, epegRNAs: pd.DataFrame | str, ngRNAs: pd.DataFrame | str,
         dir:str=None, file:str=None, 
-        pegRNA_number_col='pegRNA_number',epegRNAs_name_col='Name',ngRNAs_name_col='Name',
-        plasmid_col='Plasmid',description_col='Description',colony_col='Colony',ng_uL_col='ng/uL',
-        PE_plasmid='pMUZ86.7',reps=3,mm_x=1.1,epegRNA_ng=66,ngRNA_ng=22,PE_ng=200,well_uL=10):
+        pegRNA_number_col: str='pegRNA_number', epegRNAs_name_col: str='Name', ngRNAs_name_col: str='Name',
+        plasmid_col: str='Plasmid', description_col: str='Description', colony_col: str='Colony', ng_uL_col: str='ng/uL',
+        PE_plasmid: str='pMUZ86.7', reps: int=3, mm_x: float=1.1, epegRNA_ng: int=66, ngRNA_ng: int=22, PE_ng: int=200, well_uL:int=10) -> dict[pd.DataFrame]:
     '''
     PE3(): generates PE3 transfection plan for HEK293T cells (Default: 96-well plate in triplicate using L2000)
 
@@ -149,10 +149,10 @@ def PE3(plasmids: pd.DataFrame | str, epegRNAs: pd.DataFrame | str, ngRNAs: pd.D
                 sr += len(pivot)+2 # Skip 2 lines after each pivot
     return pivots
 
-def virus(plasmids: pd.DataFrame | str, plasmid_col='Plasmid',description_col='Description',colony_col='Colony',
-          ng_uL_col='ng/uL',VSVG_plasmid='pMUZ26.6',GagPol_plasmid='pMUZ26.7',
-          reps=1,mm_x=1.1,VSVG_ng=750,GagPol_ng=1500,transfer_ng=750,well_uL=500,
-          dir:str=None,file:str=None):
+def virus(plasmids: pd.DataFrame | str, plasmid_col: str='Plasmid', description_col: str='Description', colony_col: str='Colony',
+          ng_uL_col: str='ng/uL', VSVG_plasmid: str='pMUZ26.6',GagPol_plasmid: str='pMUZ26.7',
+          reps: int=1, mm_x: float=1.1, VSVG_ng: int=750, GagPol_ng: int=1500, transfer_ng: int=750, well_uL: int=500,
+          dir:str=None, file:str=None) -> pd.DataFrame:
     '''
     virus(): generates transfection plan for virus production from HEK293T cells (Default: 6-well plate using L3000)
 

@@ -34,7 +34,7 @@ def get_info():
     if 'max_tries' in list(info_ncbi.keys()): Entrez.max_tries = info_ncbi['max_tries']
     if 'sleep_between_tries' in list(info_ncbi.keys()): Entrez.sleep_between_tries = info_ncbi['sleep_between_tries']
 
-def set_info(email:str=None,tool:str=None,api_key:str=None,max_tries:int=None,sleep_between_tries:int=None):
+def set_info(email:str=None, tool:str=None, api_key:str=None, max_tries:int=None, sleep_between_tries:int=None):
     '''
     set_info(): Set NCBI information
     

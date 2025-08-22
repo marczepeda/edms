@@ -17,13 +17,13 @@ from ..gen import io
 from ..gen import plot as p
 
 # Visualize
-def viewer(pt: str, feature_colors:dict=None, exclude=[], region:tuple=None,
-           file=None, dir=None, fig_width=10,
-           title='',title_size=18,title_weight='bold',
-           x_axis='bp',x_axis_size=12,x_axis_weight='bold',xticks=[],
-           legend_title:str=None,legend_title_size=12,legend_bbox_to_anchor=(0.5,-0.25),
-           legend_loc='upper center',legend_frame_on=True,legend_ncol=4,
-           return_features=False,show=True):
+def viewer(pt: str, feature_colors: dict=None, exclude: list=[], region:tuple=None,
+           file: str=None, dir: str=None, fig_width: int=10,
+           title: str='',title_size: int=18, title_weight: str='bold',
+           x_axis: str='bp', x_axis_size: int=12, x_axis_weight: str='bold', xticks: list=[],
+           legend_title: str=None, legend_title_size: int=12,legend_bbox_to_anchor: tuple=(0.5,-0.25),
+           legend_loc: str='upper center',legend_frame_on: bool=True,legend_ncol: int=4,
+           return_features: bool=False, show: bool=True) -> list[tuple[str, GraphicFeature]]:
     '''
     viewer(): visualize genbank file
 
@@ -137,7 +137,7 @@ def viewer(pt: str, feature_colors:dict=None, exclude=[], region:tuple=None,
 
     # Add a legend
     if legend_title is not None:
-        feature_types = sorted({(feature[0],color_scheme.get(feature[0], "#cccccc")) for feature in features}) # Get features and associated colors
+        feature_types = sorted({(feature[0], color_scheme.get(feature[0], "#cccccc")) for feature in features}) # Get features and associated colors
         legend_elements = [plt.Line2D([0], [0], color=color, lw=4, label=label) for label,color in feature_types] # Make legend
         plt.legend(handles=legend_elements, bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, fontsize=legend_title_size, frameon=legend_frame_on, title=legend_title, ncol=legend_ncol)
 

@@ -46,7 +46,7 @@ from ..bio import fastq as fq
 from ..utils import load_resource_csv
 
 # Individual GG cloning
-def ord_form(df:pd.DataFrame,id:str,seq:str,suf:str,pre:str):
+def ord_form(df:pd.DataFrame, id:str, seq:str, suf:str, pre:str) -> pd.DataFrame:
     ''' 
     ord_form(): Sigma Alrich ordering formatter
     
@@ -71,7 +71,8 @@ def ord_form(df:pd.DataFrame,id:str,seq:str,suf:str,pre:str):
     ord['bp']=bp
     return ord
 
-def tb(df:pd.DataFrame,id:str,seq:str,t5:str,t3:str,b5:str,b3:str,tG:bool,pre:str):
+def tb(df:pd.DataFrame, id:str, seq:str, t5:str, t3:str, 
+       b5:str, b3:str, tG:bool, pre:str) -> pd.DataFrame:
     ''' 
     tb(): designs top & bottom oligonucleotides
     
@@ -105,8 +106,9 @@ def tb(df:pd.DataFrame,id:str,seq:str,t5:str,t3:str,b5:str,b3:str,tG:bool,pre:st
     
     return df
 
-def sgRNAs(df:pd.DataFrame | str,id:str,spacer='Spacer_sequence',t5='CACC',t3='',b5='AAAC',b3='',tG=True,order=True,
-           dir:str=None, file:str=None):
+def sgRNAs(df:pd.DataFrame | str,id:str, spacer: str='Spacer_sequence', 
+           t5: str='CACC', t3: str='',b5: str='AAAC',b3: str='',tG: bool=True, 
+           order: bool=True, dir:str=None, file:str=None) -> pd.DataFrame:
     ''' 
     sgRNAs(): design GG cloning oligonucleotides for cutting and base editing sgRNAs
     
@@ -138,10 +140,12 @@ def sgRNAs(df:pd.DataFrame | str,id:str,spacer='Spacer_sequence',t5='CACC',t3=''
         io.save(dir=dir,file=file,obj=df)  
     return df
 
-def epegRNAs(df: pd.DataFrame | str,id: str,tG=True, order=True,make_extension=True,
-             spacer='Spacer_sequence',spacer_t5='CACC',spacer_t3='GTTTAAGAGC',spacer_b5='',spacer_b3='',
-             extension='Extension_sequence',RTT='RTT_sequence',PBS='PBS_sequence',linker='Linker_sequence',extension_t5='',extension_t3='',extension_b5='CGCG',extension_b3='GCACCGACTC',
-             order_scaffold=False, dir:str=None, file:str=None):
+def epegRNAs(df: pd.DataFrame | str, id: str, tG: str=True, order: bool=True, make_extension: bool=True,
+             spacer: str='Spacer_sequence', spacer_t5: str='CACC', spacer_t3: str='GTTTAAGAGC', 
+             spacer_b5: str='', spacer_b3: str='', extension: str='Extension_sequence', RTT: str='RTT_sequence',
+             PBS: str='PBS_sequence', linker: str='Linker_sequence', extension_t5: str='', extension_t3: str='',
+             extension_b5: str='CGCG', extension_b3: str='GCACCGACTC',
+             order_scaffold: bool=False, dir:str=None, file:str=None) -> pd.DataFrame:
     ''' 
     epegRNAs(): design GG cloning oligonucleotides for prime editing epegRNAs
     
@@ -207,9 +211,10 @@ def epegRNAs(df: pd.DataFrame | str,id: str,tG=True, order=True,make_extension=T
         io.save(dir=dir,file=file,obj=df)  
     return df
 
-def ngRNAs(df: pd.DataFrame | str,id: str, tG=True, order=True,
-           spacer='Spacer_sequence', spacer_t5='CACC',spacer_t3='GTTTAAGAGC',spacer_b5='',spacer_b3='',
-           order_scaffold=False, dir:str=None, file:str=None):
+def ngRNAs(df: pd.DataFrame | str, id: str, tG: bool=True, order: bool=True,
+           spacer: str='Spacer_sequence', spacer_t5: str='CACC', spacer_t3: str='GTTTAAGAGC',
+           spacer_b5: str='', spacer_b3: str='', order_scaffold: bool=False, 
+           dir:str=None, file:str=None) -> pd.DataFrame:
     ''' 
     ngRNAs(): design GG cloning oligonucleotides for prime editing ngRNAs
     
@@ -266,7 +271,7 @@ def epegRNA_pool(df: pd.DataFrame | str, tG:bool=True, make_extension:bool=True,
                  epegRNA_spacer:str='Spacer_sequence', epegRNA_scaffold:str='Scaffold_sequence',
                  epegRNA_extension:str='Extension_sequence', epegRNA_RTT:str='RTT_sequence',
                  epegRNA_PBS:str='PBS_sequence', epegRNA_linker:str='Linker_sequence',
-                 dir:str=None, file:str=None, return_df:bool=True):
+                 dir:str=None, file:str=None, return_df:bool=True) -> pd.DataFrame:
     ''' 
     epegRNA_pool(): design GG cloning oligonucleotides for pooled prime editing epegRNAs
     
@@ -432,7 +437,7 @@ def epegRNA_pool(df: pd.DataFrame | str, tG:bool=True, make_extension:bool=True,
         return df
 
 # UMIs
-def generate_sequences(length:int, current_sequence:str=""):
+def generate_sequences(length:int, current_sequence:str="") -> list:
     """
     generate_sequences(): recursively generates all possible sequences of A, T, C, G of the specified length
 
@@ -454,7 +459,7 @@ def generate_sequences(length:int, current_sequence:str=""):
     # Return final list containing all unique molecular identifiers of specified length
     return sequences
 
-def filter_GC(sequences: list, GC_fract: tuple):
+def filter_GC(sequences: list, GC_fract: tuple) -> list:
     '''
     filter_GC(): filters sequences based on GC content
     
@@ -464,7 +469,7 @@ def filter_GC(sequences: list, GC_fract: tuple):
     '''
     return [sequence for sequence in sequences if ((len(t.find_all(sequence,'G'))+len(t.find_all(sequence,'C')))/len(sequence)>GC_fract[0])&((len(t.find_all(sequence,'G'))+len(t.find_all(sequence,'C')))/len(sequence)<GC_fract[1])]
 
-def shuffle(ls: list):
+def shuffle(ls: list) -> list:
     """
     shuffle(): randomly reorganizes a list
 
@@ -477,7 +482,7 @@ def shuffle(ls: list):
     random.shuffle(ls2)
     return ls2
 
-def encode_sequences(seq_list: list):
+def encode_sequences(seq_list: list) -> np.ndarray:
     """
     encode_sequences(): Convert sequences to integer arrays for fast comparison.
     
@@ -487,7 +492,7 @@ def encode_sequences(seq_list: list):
     base_to_int = {'A': 0, 'C': 1, 'G': 2, 'T': 3}
     return np.array([[base_to_int[base] for base in seq] for seq in seq_list], dtype=np.uint8)
 
-def fast_filter_by_hamming(sequences: list, min_distance: int):
+def fast_filter_by_hamming(sequences: list, min_distance: int) -> list:
     """
     fast_filter_by_hamming(): fastFilter sequences such that all retained sequences have a Hamming distance 'min_distance' from each other, using NumPy for speed.
     
@@ -513,7 +518,7 @@ def fast_filter_by_hamming(sequences: list, min_distance: int):
     
     return [sequences[i] for i in keep_indices]
 
-def count_csv_rows(pt:str):
+def count_csv_rows(pt:str) -> int:
     '''
     count_csv_rows(): counts number of rows in a csv file (subtracting 1 for header)
 
@@ -565,10 +570,10 @@ def UMI(length: int = 15, GC_fract: tuple = (0.4, 0.6), hamming: int = 4,
             obj=pd.DataFrame({'UMI_sequence': filtered_sequences_save}))
 
 # Master Mix
-def pcr_mm(primers: pd.Series, template_uL: int, template='1-2 ng/uL template',
-           Q5_mm_x_stock=5,dNTP_mM_stock=10,fwd_uM_stock=10,rev_uM_stock=10,Q5_U_uL_stock=2,
-           Q5_mm_x_desired=1,dNTP_mM_desired=0.2,fwd_uM_desired=0.5,rev_uM_desired=0.5,Q5_U_uL_desired=0.02,
-           total_uL=25,mm_x=1.1):
+def pcr_mm(primers: pd.Series, template_uL: int, template: str='1-2 ng/uL template',
+           Q5_mm_x_stock: int=5, dNTP_mM_stock: int=10, fwd_uM_stock: int=10, rev_uM_stock: int=10, Q5_U_uL_stock: int=2,
+           Q5_mm_x_desired: int=1, dNTP_mM_desired: float=0.2,fwd_uM_desired: float=0.5, rev_uM_desired: float=0.5, Q5_U_uL_desired: float=0.02,
+           total_uL: int=25, mm_x: float=1.1) -> dict[pd.DataFrame]:
     '''
     pcr_mm(): NEB Q5 PCR master mix calculations
     
@@ -618,8 +623,8 @@ def pcr_mm(primers: pd.Series, template_uL: int, template='1-2 ng/uL template',
 
 # Simulation
 def pcr_sim(df: pd.DataFrame | str,template_col: str, fwd_bind_col: str, rev_bind_col: str,
-            fwd_ext_col: str=None, rev_ext_col: str=None, product_col='PCR Product',
-            dir:str=None, file:str=None):
+            fwd_ext_col: str=None, rev_ext_col: str=None, product_col: str='PCR Product',
+            dir:str=None, file:str=None) -> pd.DataFrame:
     '''
     pcr_sim(): returns dataframe with simulated pcr product 
     
@@ -689,8 +694,8 @@ def pcr_sim(df: pd.DataFrame | str,template_col: str, fwd_bind_col: str, rev_bin
     return df
 
 def off_targets(df: pd.DataFrame | str, col: str, match_score: float = 2, mismatch_score: float = -1, 
-                     open_gap_score: float = -10, extend_gap_score: float = -0.1, ckpt: int = 100,
-                     dir: str = None, return_df: bool = True):
+                open_gap_score: float = -10, extend_gap_score: float = -0.1, ckpt: int = 100,
+                dir: str = None, return_df: bool = True) -> pd.DataFrame:
     '''
     off_targets(): Find off-target sequences for a list of sequences of the same length using pairwise alignment.
     

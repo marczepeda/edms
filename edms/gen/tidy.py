@@ -36,7 +36,7 @@ import pandas as pd
 import re
 
 # Dataframe methods
-def reorder_cols(df: pd.DataFrame, cols: list, keep=True):
+def reorder_cols(df: pd.DataFrame, cols: list, keep: bool=True) -> pd.DataFrame:
     ''' 
     reorder_cols(): returns dataframe with columns reorganized 
     
@@ -50,7 +50,7 @@ def reorder_cols(df: pd.DataFrame, cols: list, keep=True):
     if keep==True: cols.extend([c for c in list(df.columns) if c not in cols]) # Append remaining columns
     return df[cols]
 
-def zip_cols(df: pd.DataFrame, cols: list):
+def zip_cols(df: pd.DataFrame, cols: list) -> zip:
     ''' 
     zip_cols(): returns zip(dataframe[cols[0]],dataframe[cols[1]],...) for tuple loops
     
@@ -62,7 +62,7 @@ def zip_cols(df: pd.DataFrame, cols: list):
     ''' 
     return zip(*[df[col] for col in cols])
 
-def missing_cols(df: pd.DataFrame, cols: list):
+def missing_cols(df: pd.DataFrame, cols: list) -> list:
     '''
     missing_cols(): returns values from a list if they are not dataframe columns
 
@@ -74,7 +74,7 @@ def missing_cols(df: pd.DataFrame, cols: list):
     '''
     return [col for col in cols if col not in df.columns]
 
-def merge(data: pd.DataFrame, meta: pd.DataFrame, id, cols: list):
+def merge(data: pd.DataFrame, meta: pd.DataFrame, id, cols: list) -> pd.DataFrame:
     ''' 
     merge(): adds metadata columns to data dataframe using metadata dataframe
     
@@ -113,7 +113,7 @@ def shared_group(df: pd.DataFrame, shared: str, group: list | str, suffixes = ('
                     how='left', 
                     suffixes=suffixes)
 
-def unique_tuples(df: pd.DataFrame, cols: list | str):
+def unique_tuples(df: pd.DataFrame, cols: list | str) -> list:
     ''' 
     unique_tuples(): returns a list of unique tuples of value(s) from a dataframe column(s) in order
     
@@ -126,7 +126,7 @@ def unique_tuples(df: pd.DataFrame, cols: list | str):
     if type(cols)==str: cols=[cols]
     return list(df[cols].drop_duplicates().itertuples(index=False, name=None))
 
-def vcs_ordered(df: pd.DataFrame, cols: list | str):
+def vcs_ordered(df: pd.DataFrame, cols: list | str) -> pd.Series:
     ''' 
     vcs_ordered(): returns dataframe.value_counts() in order
     
@@ -142,7 +142,7 @@ def vcs_ordered(df: pd.DataFrame, cols: list | str):
     return pd.Series([vcs[pair] for pair in order], index=order)
 
 # Dictionary methods
-def filter_kwargs(keywords: list, **kwargs):
+def filter_kwargs(keywords: list, **kwargs) -> dict:
     '''
     filter_kwargs(): filter **kwargs by specified keywords
 
@@ -152,7 +152,7 @@ def filter_kwargs(keywords: list, **kwargs):
     '''
     return {kw:arg for kw,arg in kwargs.items() if kw in keywords and arg is not None}
 
-def comb_dcs(ls: list):
+def comb_dcs(ls: list) -> dict:
     """
     comb_dcs(): Combine a list of dictionaries with the same keys into a single dictionary where keys map to a list of values.
 
@@ -167,7 +167,7 @@ def comb_dcs(ls: list):
     return combined
 
 # Methods for dictionary containing dataframes
-def split_by(series, by=', '):
+def split_by(series: list | set | pd.Series, by: str=', ') -> list:
     ''' 
     split_by(): splits elements of list, set, or series by specified seperator
     
@@ -180,7 +180,7 @@ def split_by(series, by=', '):
         if isinstance(element, str): split_elements.extend(element.split(by))
     return split_elements
 
-def isolate(dc: dict, col: str, get, get_col='', get_col_split_by='', want=True, exact=True):
+def isolate(dc: dict, col: str, get, get_col: str='', get_col_split_by: str='', want: bool=True, exact: bool=True) -> dict[pd.DataFrame]:
     ''' 
     isolate(): isolate rows in dataframes based specified value(s)
     
@@ -230,7 +230,7 @@ def isolate(dc: dict, col: str, get, get_col='', get_col_split_by='', want=True,
                 else: return {key:df[df[col].str.contains('|'.join(re.escape(sub) for sub in split_by(get[key][get_col],by=get_col_split_by)),case=False, na=False)==False].reset_index(drop=True) for key,df in dc.items()}
         else: return {key:df[df[col]!=get].reset_index(drop=True) for key,df in dc.items()}
 
-def modify(dc: dict, col: str, val, axis=1, **kwargs):
+def modify(dc: dict, col: str, val, axis: int=1, **kwargs) -> dict:
     ''' 
     modify(): Returns dictionary containing dataframes new or updated column with specified value(s) or function
     
@@ -249,12 +249,12 @@ def modify(dc: dict, col: str, val, axis=1, **kwargs):
         dc2[key]=df2
     return dc2
 
-def melt(dc: dict,id_vars:list=None,value_vars:list=None,**kwargs):
+def melt(dc: dict, id_vars:list=None, value_vars:list=None, **kwargs) -> dict[pd.DataFrame]:
     ''' 
     melt(): returns dictionary containing tidy dataframes
     
     Parameters:
-    dc: dictionary of dataframes
+    dc (dict): dictionary of dataframes
     id_vars (list, optional 1): metadata columns
     value_vars (list, optional 2): data columns
     
@@ -289,7 +289,7 @@ def melt(dc: dict,id_vars:list=None,value_vars:list=None,**kwargs):
     
     return dc2
 
-def join(dc: dict, col='key'):
+def join(dc: dict, col: str='key') -> pd.DataFrame:
     ''' 
     join(): returns a single dataframe from a dictionary of dataframes
     
@@ -298,35 +298,33 @@ def join(dc: dict, col='key'):
     col (str, optional): name for keys column
     
     Dependencies: pandas
-'''
+    '''
     df = pd.DataFrame()
     for key,val in dc.items():
         val[col]=key
         df=pd.concat([df,val]).reset_index(drop=True)
     return df
 
-def split(df: pd.DataFrame, key: str):
+def split(df: pd.DataFrame, key: str) -> dict[pd.DataFrame]:
     ''' 
     split(): returns from a dictionary of dataframes from a single dataframe
     
     Parameters:
-    df: dataframe
-    key: column for spliting dataframe
+    df (dataframe): dataframe
+    key (str): column for spliting dataframe
     
     Dependencies: pandas
-'''
+    '''
     return {k:df[df[key]==k] for k in list(df[key].value_counts().keys())} 
 
 # Methods for interconverting dictionaries and lists
-def dc_to_ls(dc: dict,sep='.'):
+def dc_to_ls(dc: dict, sep: str='.') -> list:
     ''' 
     dc_to_ls(): convert a dictionary containing several subdictionaries into a list with all the key value relationships stored as individual values
     
     Parameters:
     dc (dict): dictionary
     sep (str, optional): seperator for subdictionaries for values in the list
-    
-    Dependencies: 
     '''
     ls = [] # Initialize final list
     
@@ -339,15 +337,13 @@ def dc_to_ls(dc: dict,sep='.'):
     recursive_items(dc,sep) # Initialized recursive processing
     return ls
 
-def ls_to_dc(ls: list, sep='.'):
+def ls_to_dc(ls: list, sep: str='.') -> dict:
     ''' 
     ls_to_dc(): convert a list with all the key value relationships stored as individual values into a dictionary containing several subdictionaries
     
     Parameters:
     ls (list): list
     sep (str, optional): seperator for subdictionaries for values in the list
-    
-    Dependencies:
     '''
 
     dc = {} # Initialize final dict
@@ -363,11 +359,11 @@ def ls_to_dc(ls: list, sep='.'):
     return dc
 
 # String methods
-def find_all(string: str, substring: str):
+def find_all(string: str, substring: str) -> list:
     """
     find_all(): Find all indexes of a substring in a string
     
-    Parameter:
+    Parameters:
     string (str): the string to search within
     substring (str): the substring to search for
     """

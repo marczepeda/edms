@@ -28,7 +28,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # Sanger Thermocycler
-def group_boundaries(nums: list[int]):
+def group_boundaries(nums: list[int]) -> list[tuple[int,int]]:
     '''
     group_boundaries(nums): Group a list of integers into segments where each segment contains consecutive numbers.
     
@@ -50,7 +50,7 @@ def group_boundaries(nums: list[int]):
     groups.append((start, nums[-1]))  # Close the final segment
     return groups
 
-def min_sec(decimal_minutes: float):
+def min_sec(decimal_minutes: float) -> tuple[int,int]:
     '''
     min_sec(): Convert decimal minutes to a tuple of (minutes, seconds).
 
@@ -61,7 +61,7 @@ def min_sec(decimal_minutes: float):
     seconds = int(round((decimal_minutes - minutes) * 60))
     return minutes, seconds
 
-def thermocycler(df: pd.DataFrame, n: Literal[1] = 1, cycles: int | str = None, pcr_fwd_col: str=None, pcr_rev_col: str=None):
+def thermocycler(df: pd.DataFrame, n: Literal[1] = 1, cycles: int | str = None, pcr_fwd_col: str=None, pcr_rev_col: str=None) -> dict[pd.DataFrame]:
     """
     thermocycler(): Creates a dictionary of thermocycler objects from a DataFrame.
 
@@ -73,7 +73,7 @@ def thermocycler(df: pd.DataFrame, n: Literal[1] = 1, cycles: int | str = None, 
     pcr_rev_col (str, optional): PCR REV column name (Default: None -> f'PCR{n} REV').
     
     Dependencies: math, pandas, typing.Literal, tidy, min_sec(), group_boundaries()
- """
+    """
     dc = dict() # Initialize an empty dictionary to hold thermocycler dataframes
      # Set cycles and primer columns based on the PCR number
     if n==1: # PCR1
@@ -116,10 +116,10 @@ def thermocycler(df: pd.DataFrame, n: Literal[1] = 1, cycles: int | str = None, 
              index=pd.Index(['1','2','2','2','3','4',f'{title[:-2]}'], name="Step"))
     return dc
 # Sanger calculation
-def pcr_mm(primers: pd.Series, template: str, template_uL: int,
-           Q5_mm_x_stock=5,dNTP_mM_stock=10,fwd_uM_stock=10,rev_uM_stock=10,Q5_U_uL_stock=2,
-           Q5_mm_x_desired=1,dNTP_mM_desired=0.2,fwd_uM_desired=0.5,rev_uM_desired=0.5,Q5_U_uL_desired=0.02,
-           total_uL=20,mm_x=1.1):
+def pcr_mm(primers: pd.Series,  template: str, template_uL: int,
+           Q5_mm_x_stock: int=5, dNTP_mM_stock: int=10, fwd_uM_stock: int=10, rev_uM_stock: int=10, Q5_U_uL_stock: int=2,
+           Q5_mm_x_desired: int=1, dNTP_mM_desired: float=0.2,fwd_uM_desired: float=0.5, rev_uM_desired: float=0.5, Q5_U_uL_desired: float=0.02,
+           total_uL: int=25, mm_x: float=1.1) -> dict[pd.DataFrame]:
     '''
     pcr_mm(): NEB Q5 PCR master mix calculations
     
@@ -165,11 +165,12 @@ def pcr_mm(primers: pd.Series, template: str, template_uL: int,
                                                                  round(total_uL*primers.iloc[i]*mm_x,2)]
                                                      },index=pd.Index(list(np.arange(1,9)), name=f"{pcr1_fwd}_{pcr1_rev}"))
         return pcr_mm_dc
+
 def pcr_mm_ultra(primers: pd.Series, template: str, template_uL: int,
-                 Q5_mm_x_stock=2,fwd_uM_stock=10,rev_uM_stock=10,
-                 Q5_mm_x_desired=1,fwd_uM_desired=0.5,rev_uM_desired=0.5,
-                 total_uL=20,mm_x=1.1):
-     '''
+                 Q5_mm_x_stock: int=2, fwd_uM_stock: int=10, rev_uM_stock: int=10,
+                 Q5_mm_x_desired: int=1,fwd_uM_desired: float=0.5, rev_uM_desired: float=0.5,
+                 total_uL: int=20, mm_x: float=1.1) -> dict[pd.DataFrame]:
+    '''
     pcr_mm_ultra(): NEBNext Ultra II Q5 PCR master mix calculations
     
     Parameters:
@@ -187,33 +188,33 @@ def pcr_mm_ultra(primers: pd.Series, template: str, template_uL: int,
 
     Dependencies: pandas
     '''
-     pcr_mm_dc = dict()
-     for i,(pcr1_fwd,pcr1_rev) in enumerate(primers.keys()):
-            pcr_mm_dc[(pcr1_fwd,pcr1_rev)] = pd.DataFrame({'Component':['Nuclease-free H2O',f'NEBNext Ultra II Q5 {Q5_mm_x_stock}x MM',pcr1_fwd,pcr1_rev,template,'Total'],
-                                                           'Stock':['',Q5_mm_x_stock,fwd_uM_stock,rev_uM_stock,'',''],
-                                                       'Desired':['',Q5_mm_x_desired,fwd_uM_desired,rev_uM_desired,'',''],
-                                                       'Unit':['','x','uM','uM','',''],
-                                                       'uL': [round(total_uL-sum([Q5_mm_x_desired/Q5_mm_x_stock,fwd_uM_desired/fwd_uM_stock,rev_uM_desired/rev_uM_stock,template_uL/total_uL]*total_uL),2),
-                                                              round(Q5_mm_x_desired/Q5_mm_x_stock*total_uL,2),
-                                                              round(fwd_uM_desired/fwd_uM_stock*total_uL,2),
-                                                              round(rev_uM_desired/rev_uM_stock*total_uL,2),
-                                                              round(template_uL,2),
-                                                              round(total_uL,2)],
-                                                       'uL MM': [round((total_uL-sum([Q5_mm_x_desired/Q5_mm_x_stock,fwd_uM_desired/fwd_uM_stock,rev_uM_desired/rev_uM_stock,template_uL/total_uL]*total_uL))*primers.iloc[i]*mm_x,2),
-                                                                 round(Q5_mm_x_desired/Q5_mm_x_stock*total_uL*primers.iloc[i]*mm_x,2),
-                                                                 round(fwd_uM_desired/fwd_uM_stock*total_uL*primers.iloc[i]*mm_x,2),
-                                                                 round(rev_uM_desired/rev_uM_stock*total_uL*primers.iloc[i]*mm_x,2),
-                                                                 round(template_uL*primers.iloc[i]*mm_x,2),
-                                                                 round(total_uL*primers.iloc[i]*mm_x,2)]
-                                                     },index=pd.Index(list(np.arange(1,7)), name=f"{pcr1_fwd}_{pcr1_rev}"))
-     return pcr_mm_dc
+    pcr_mm_dc = dict()
+    for i,(pcr1_fwd,pcr1_rev) in enumerate(primers.keys()):
+        pcr_mm_dc[(pcr1_fwd,pcr1_rev)] = pd.DataFrame({'Component':['Nuclease-free H2O',f'NEBNext Ultra II Q5 {Q5_mm_x_stock}x MM',pcr1_fwd,pcr1_rev,template,'Total'],
+                                                        'Stock':['',Q5_mm_x_stock,fwd_uM_stock,rev_uM_stock,'',''],
+                                                        'Desired':['',Q5_mm_x_desired,fwd_uM_desired,rev_uM_desired,'',''],
+                                                        'Unit':['','x','uM','uM','',''],
+                                                        'uL': [round(total_uL-sum([Q5_mm_x_desired/Q5_mm_x_stock,fwd_uM_desired/fwd_uM_stock,rev_uM_desired/rev_uM_stock,template_uL/total_uL]*total_uL),2),
+                                                                round(Q5_mm_x_desired/Q5_mm_x_stock*total_uL,2),
+                                                                round(fwd_uM_desired/fwd_uM_stock*total_uL,2),
+                                                                round(rev_uM_desired/rev_uM_stock*total_uL,2),
+                                                                round(template_uL,2),
+                                                                round(total_uL,2)],
+                                                        'uL MM': [round((total_uL-sum([Q5_mm_x_desired/Q5_mm_x_stock,fwd_uM_desired/fwd_uM_stock,rev_uM_desired/rev_uM_stock,template_uL/total_uL]*total_uL))*primers.iloc[i]*mm_x,2),
+                                                                    round(Q5_mm_x_desired/Q5_mm_x_stock*total_uL*primers.iloc[i]*mm_x,2),
+                                                                    round(fwd_uM_desired/fwd_uM_stock*total_uL*primers.iloc[i]*mm_x,2),
+                                                                    round(rev_uM_desired/rev_uM_stock*total_uL*primers.iloc[i]*mm_x,2),
+                                                                    round(template_uL*primers.iloc[i]*mm_x,2),
+                                                                    round(total_uL*primers.iloc[i]*mm_x,2)]
+                                                        },index=pd.Index(list(np.arange(1,7)), name=f"{pcr1_fwd}_{pcr1_rev}"))
+    return pcr_mm_dc
 
-def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col='ID', 
-         pcr1_id_col='PCR1 ID', pcr1_fwd_col='PCR1 FWD', pcr1_rev_col='PCR1 REV', 
-         Q5_mm_x_stock=5,dNTP_mM_stock=10,fwd_uM_stock=10,rev_uM_stock=10,Q5_U_uL_stock=2,
-         Q5_mm_x_desired=1,dNTP_mM_desired=0.2,fwd_uM_desired=0.5,rev_uM_desired=0.5,Q5_U_uL_desired=0.02,
-         total_uL=20,mm_x=1.1,cycles: int | str = None,ultra=False):
-       '''
+def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col: str='ID', 
+         pcr1_id_col: str='PCR1 ID', pcr1_fwd_col: str='PCR1 FWD', pcr1_rev_col: str='PCR1 REV', 
+         Q5_mm_x_stock: int=5, dNTP_mM_stock: int=10, fwd_uM_stock: int=10, rev_uM_stock: int=10, Q5_U_uL_stock: int=2,
+         Q5_mm_x_desired: int=1,dNTP_mM_desired: float=0.2, fwd_uM_desired: float=0.5, rev_uM_desired: float=0.5, Q5_U_uL_desired: float=0.02,
+         total_uL:int=20, mm_x: float=1.1, cycles: int | str = None, ultra: bool=False) -> tuple[dict[pd.DataFrame]]:
+    '''
     pcrs(): generates Sanger PCR plan automatically
     
     Parameters:
@@ -245,22 +246,23 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col='ID',
 
     Dependencies: pandas,numpy,os,io,tidy,thermocycler(),pcr_mm(),pcr_mm_ultra()
     '''
-       # Get samples dataframe from file path if needed
-       if type(df)==str:
+    # Get samples dataframe from file path if needed
+    if type(df)==str:
         df = io.get(pt=df)
-         # Define 96-well plate axis
-        rows_96_well = ['A','B','C','D','E','F','G','H']
-        cols_96_well = np.arange(1,13,1)
+    
+    # Define 96-well plate axis
+    rows_96_well = ['A','B','C','D','E','F','G','H']
+    cols_96_well = np.arange(1,13,1)
         
-        # Store gDNA and PCR locations on 96-well plate
-       plate_ls = []
-       row_ls = []
-       col_ls = []
+    # Store gDNA and PCR locations on 96-well plate
+    plate_ls = []
+    row_ls = []
+    col_ls = []
 
-       plate_i = 1
-       row_i = 0
-       col_i = 0
-       for i in range(df.shape[0]):
+    plate_i = 1
+    row_i = 0
+    col_i = 0
+    for i in range(df.shape[0]):
         if col_i >= len(cols_96_well):
             if row_i >= len(rows_96_well)-1:
                 row_i = 0
@@ -274,22 +276,23 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col='ID',
         col_ls.append(cols_96_well[col_i])
         col_i += 1
 
-       df['96-well plate'] = plate_ls
-       df['row'] = row_ls
-       df['column'] = col_ls
+    df['96-well plate'] = plate_ls
+    df['row'] = row_ls
+    df['column'] = col_ls
 
-        # Define PCR strip axis
-       rows_8_strip = ['A','B','C','D','E','F']
-       cols_8_strip = np.arange(1,9,1)
-        # Store gDNA and PCR locations on PCR strip tubes plate(s)
-       ls_df_fwd_rev = []
-       primers_ls = []
-       plate_ls = []
-       row_ls = []
-       col_ls = []
+    # Define PCR strip axis
+    rows_8_strip = ['A','B','C','D','E','F']
+    cols_8_strip = np.arange(1,9,1)
 
-       plate_i = 1
-       for (fwd,rev) in t.unique_tuples(df=df,cols=[pcr1_fwd_col,pcr1_rev_col]):
+    # Store gDNA and PCR locations on PCR strip tubes plate(s)
+    ls_df_fwd_rev = []
+    primers_ls = []
+    plate_ls = []
+    row_ls = []
+    col_ls = []
+
+    plate_i = 1
+    for (fwd,rev) in t.unique_tuples(df=df,cols=[pcr1_fwd_col,pcr1_rev_col]):
         df_fwd_rev = df[(df[pcr1_fwd_col]==fwd) & (df[pcr1_rev_col]==rev)]
         ls_df_fwd_rev.append(df_fwd_rev)
         row_i = 0
@@ -310,39 +313,40 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col='ID',
             col_i += 1
         plate_i += 1
 
-        df_8_strip = pd.concat(ls_df_fwd_rev,ignore_index=True) # Concatenate all PCR1 FWD/REV dataframes
-       df_8_strip['8-strip plate'] = [f"{plate}_{primers}" for (primers,plate) in zip(primers_ls,plate_ls)]
-       df_8_strip['row'] = row_ls
-       df_8_strip['column'] = col_ls
+    df_8_strip = pd.concat(ls_df_fwd_rev,ignore_index=True) # Concatenate all PCR1 FWD/REV dataframes
+    df_8_strip['8-strip plate'] = [f"{plate}_{primers}" for (primers,plate) in zip(primers_ls,plate_ls)]
+    df_8_strip['row'] = row_ls
+    df_8_strip['column'] = col_ls
 
-       # Create pivot tables for gDNA and PCR1
-       pivots = {f"96-well_{gDNA_id_col}": pd.pivot_table(data=df,values=gDNA_id_col,index=['96-well plate','row'],columns='column',aggfunc='first'),
-              f"96-well_{pcr1_id_col}": pd.pivot_table(data=df,values=pcr1_id_col,index=['96-well plate','row'],columns='column',aggfunc='first'),
-              f"96-well_{pcr1_fwd_col}": pd.pivot_table(data=df,values=pcr1_fwd_col,index=['96-well plate','row'],columns='column',aggfunc='first'),
-              f"96-well_{pcr1_rev_col}": pd.pivot_table(data=df,values=pcr1_rev_col,index=['96-well plate','row'],columns='column',aggfunc='first'),
-              f"8-strip_{gDNA_id_col}": pd.pivot_table(data=df_8_strip,values=gDNA_id_col,index=['8-strip plate','row'],columns='column',aggfunc='first'),
-              f"8-strip_{pcr1_id_col}": pd.pivot_table(data=df_8_strip,values=pcr1_id_col,index=['8-strip plate','row'],columns='column',aggfunc='first'),
-              }
-        # Get unique primer pairs and their value counts for PCR1
-       pcr1_primers_vcs = t.vcs_ordered(df=df,cols=[pcr1_fwd_col,pcr1_rev_col])
-       if ultra:
+    # Create pivot tables for gDNA and PCR1
+    pivots = {f"96-well_{gDNA_id_col}": pd.pivot_table(data=df,values=gDNA_id_col,index=['96-well plate','row'],columns='column',aggfunc='first'),
+            f"96-well_{pcr1_id_col}": pd.pivot_table(data=df,values=pcr1_id_col,index=['96-well plate','row'],columns='column',aggfunc='first'),
+            f"96-well_{pcr1_fwd_col}": pd.pivot_table(data=df,values=pcr1_fwd_col,index=['96-well plate','row'],columns='column',aggfunc='first'),
+            f"96-well_{pcr1_rev_col}": pd.pivot_table(data=df,values=pcr1_rev_col,index=['96-well plate','row'],columns='column',aggfunc='first'),
+            f"8-strip_{gDNA_id_col}": pd.pivot_table(data=df_8_strip,values=gDNA_id_col,index=['8-strip plate','row'],columns='column',aggfunc='first'),
+            f"8-strip_{pcr1_id_col}": pd.pivot_table(data=df_8_strip,values=pcr1_id_col,index=['8-strip plate','row'],columns='column',aggfunc='first'),
+            }
+    
+    # Get unique primer pairs and their value counts for PCR1
+    pcr1_primers_vcs = t.vcs_ordered(df=df,cols=[pcr1_fwd_col,pcr1_rev_col])
+    if ultra:
         Q5_mm_x_stock = 2 # NEBNext Ultra II Q5 master mix stock
         pcr1_mms = pcr_mm_ultra(primers=pcr1_primers_vcs,template='gDNA Extract',template_uL=total_uL-sum([Q5_mm_x_desired/Q5_mm_x_stock,fwd_uM_desired/fwd_uM_stock,rev_uM_desired/rev_uM_stock]*total_uL),
                                 Q5_mm_x_stock=Q5_mm_x_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
                                 Q5_mm_x_desired=Q5_mm_x_desired,fwd_uM_desired=fwd_uM_desired,rev_uM_desired=rev_uM_desired,
                                 total_uL=total_uL,mm_x=mm_x)
         
-       else:
+    else:
         pcr1_mms = pcr_mm(primers=pcr1_primers_vcs,template='gDNA Extract',template_uL=5,
                           Q5_mm_x_stock=Q5_mm_x_stock,dNTP_mM_stock=dNTP_mM_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
                           Q5_U_uL_stock=Q5_U_uL_stock,Q5_mm_x_desired=Q5_mm_x_desired,dNTP_mM_desired=dNTP_mM_desired,fwd_uM_desired=fwd_uM_desired,
                           rev_uM_desired=rev_uM_desired,Q5_U_uL_desired=Q5_U_uL_desired,total_uL=total_uL,mm_x=mm_x)
         
-         # Create thermocycler objects for PCR1 and PCR2
-        pcr1_thermo = thermocycler(df=df, n=1, cycles=cycles, pcr_fwd_col=pcr1_fwd_col, pcr_rev_col=pcr1_rev_col)
+    # Create thermocycler objects for PCR1 and PCR2
+    pcr1_thermo = thermocycler(df=df, n=1, cycles=cycles, pcr_fwd_col=pcr1_fwd_col, pcr_rev_col=pcr1_rev_col)
         
-        if dir is not None and file is not None: # Save file if dir & file are specified
-         io.mkdir(dir=dir)
+    if dir is not None and file is not None: # Save file if dir & file are specified
+        io.mkdir(dir=dir)
         with pd.ExcelWriter(os.path.join(dir,file)) as writer:
             sr = 0 # starting row
             for key,pivot in pivots.items():
@@ -358,5 +362,5 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col='ID',
                 thermo.to_excel(writer,sheet_name=key) # Thermocyler object per sheet
                 sr += thermo.shape[0]+2 # Skip 2 lines after each thermocyler object
             
-       return pivots,pcr1_mms,pcr1_thermo,
+    return pivots,pcr1_mms,pcr1_thermo,
 

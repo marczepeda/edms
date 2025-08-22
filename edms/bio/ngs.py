@@ -32,7 +32,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # NGS Thermocycler
-def group_boundaries(nums: list[int]):
+def group_boundaries(nums: list[int]) -> list[tuple[int, int]]:
     '''
     group_boundaries(nums): Group a list of integers into segments where each segment contains consecutive numbers.
     
@@ -54,7 +54,7 @@ def group_boundaries(nums: list[int]):
     groups.append((start, nums[-1]))  # Close the final segment
     return groups
 
-def min_sec(decimal_minutes: float):
+def min_sec(decimal_minutes: float) -> tuple[int, int]:
     '''
     min_sec(): Convert decimal minutes to a tuple of (minutes, seconds).
 
@@ -65,7 +65,7 @@ def min_sec(decimal_minutes: float):
     seconds = int(round((decimal_minutes - minutes) * 60))
     return minutes, seconds
 
-def thermocycler(df: pd.DataFrame, n: Literal[1,2] = 1, cycles: int | str = None, pcr_fwd_col: str=None, pcr_rev_col: str=None):
+def thermocycler(df: pd.DataFrame, n: Literal[1,2] = 1, cycles: int | str = None, pcr_fwd_col: str=None, pcr_rev_col: str=None) -> dict[pd.DataFrame]:
     """
     thermocycler(): Creates a dictionary of thermocycler objects from a DataFrame.
 
@@ -131,11 +131,11 @@ def thermocycler(df: pd.DataFrame, n: Literal[1,2] = 1, cycles: int | str = None
 
     return dc
 
-# NGS PCR calculation
-def pcr_mm(primers: pd.Series, template: str, template_uL: int,
-           Q5_mm_x_stock=5,dNTP_mM_stock=10,fwd_uM_stock=10,rev_uM_stock=10,Q5_U_uL_stock=2,
-           Q5_mm_x_desired=1,dNTP_mM_desired=0.2,fwd_uM_desired=0.5,rev_uM_desired=0.5,Q5_U_uL_desired=0.02,
-           total_uL=20,mm_x=1.1):
+# NGS PCR calculation  
+def pcr_mm(primers: pd.Series,  template: str, template_uL: int,
+           Q5_mm_x_stock: int=5, dNTP_mM_stock: int=10, fwd_uM_stock: int=10, rev_uM_stock: int=10, Q5_U_uL_stock: int=2,
+           Q5_mm_x_desired: int=1, dNTP_mM_desired: float=0.2,fwd_uM_desired: float=0.5, rev_uM_desired: float=0.5, Q5_U_uL_desired: float=0.02,
+           total_uL: int=25, mm_x: float=1.1) -> dict[pd.DataFrame]:
     '''
     pcr_mm(): NEB Q5 PCR master mix calculations
     
@@ -185,9 +185,9 @@ def pcr_mm(primers: pd.Series, template: str, template_uL: int,
     return pcr_mm_dc
                                             
 def pcr_mm_ultra(primers: pd.Series, template: str, template_uL: int,
-                 Q5_mm_x_stock=2,fwd_uM_stock=10,rev_uM_stock=10,
-                 Q5_mm_x_desired=1,fwd_uM_desired=0.5,rev_uM_desired=0.5,
-                 total_uL=20,mm_x=1.1):
+                 Q5_mm_x_stock: int=2, fwd_uM_stock: int=10, rev_uM_stock: int=10,
+                 Q5_mm_x_desired: int=1,fwd_uM_desired: float=0.5, rev_uM_desired: float=0.5,
+                 total_uL: int=20, mm_x: float=1.1) -> dict[pd.DataFrame]:
     '''
     pcr_mm_ultra(): NEBNext Ultra II Q5 PCR master mix calculations
     
@@ -227,12 +227,12 @@ def pcr_mm_ultra(primers: pd.Series, template: str, template_uL: int,
                                                      },index=pd.Index(list(np.arange(1,7)), name=f"{pcr1_fwd}_{pcr1_rev}"))
     return pcr_mm_dc
 
-def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col='ID', 
-         pcr1_id_col='PCR1 ID', pcr1_fwd_col='PCR1 FWD', pcr1_rev_col='PCR1 REV', 
-         pcr2_id_col='PCR2 ID', pcr2_fwd_col='PCR2 FWD', pcr2_rev_col='PCR2 REV',
-         Q5_mm_x_stock=5,dNTP_mM_stock=10,fwd_uM_stock=10,rev_uM_stock=10,Q5_U_uL_stock=2,
-         Q5_mm_x_desired=1,dNTP_mM_desired=0.2,fwd_uM_desired=0.5,rev_uM_desired=0.5,Q5_U_uL_desired=0.02,
-         pcr1_total_uL=20,pcr2_total_uL=20,mm_x=1.1,cycles: int | str = None,ultra=False):
+def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col: str='ID', 
+         pcr1_id_col: str='PCR1 ID', pcr1_fwd_col: str='PCR1 FWD', pcr1_rev_col: str='PCR1 REV', 
+         pcr2_id_col: str='PCR2 ID', pcr2_fwd_col: str='PCR2 FWD', pcr2_rev_col: str='PCR2 REV',
+         Q5_mm_x_stock: int=5, dNTP_mM_stock: int=10, fwd_uM_stock: int=10, rev_uM_stock: int=10, Q5_U_uL_stock: int=2,
+         Q5_mm_x_desired: int=1,dNTP_mM_desired: float=0.2, fwd_uM_desired: float=0.5, rev_uM_desired: float=0.5, Q5_U_uL_desired: float=0.02,
+         pcr1_total_uL: int=20, pcr2_total_uL: int=20, mm_x: float=1.1, cycles: int | str = None, ultra: bool=False) -> tuple[dict[pd.DataFrame]]:
     '''
     pcrs(): generates NGS PCR plan automatically
     
@@ -412,7 +412,7 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col='ID',
     return pivots,pcr1_mms,pcr2_mms,pcr1_thermo,pcr2_thermo
 
 # Hamming distance calculation
-def hamming_distance(seq1: str | Seq, seq2: str | Seq):
+def hamming_distance(seq1: str | Seq, seq2: str | Seq) -> int:
     """
     hamming_distance(): returns the Hamming distance between two sequences
 
@@ -425,7 +425,7 @@ def hamming_distance(seq1: str | Seq, seq2: str | Seq):
     return sum(c1 != c2 for c1, c2 in zip(seq1, seq2))
 
 
-def hamming_distance_matrix(df: pd.DataFrame | str, id: str, seqs: str, dir:str=None, file:str=None):
+def hamming_distance_matrix(df: pd.DataFrame | str, id: str, seqs: str, dir:str=None, file:str=None) -> pd.DataFrame:
     """
     hamming_distance_matrix(): compute pairwise Hamming distance matrix for a list of sequences stored in a dataframe
 

@@ -26,7 +26,7 @@ from ..gen import tidy as t
 from ..gen import plot as p
 
 # COSMIC database
-def mutations(df: pd.DataFrame | str, dir:str=None, file:str=None):
+def mutations(df: pd.DataFrame | str, dir:str=None, file:str=None) -> pd.DataFrame:
     ''' 
     mutations(): returns COSMIC mutations dataframe for a given gene
     
@@ -63,7 +63,7 @@ def mutations(df: pd.DataFrame | str, dir:str=None, file:str=None):
         io.save(dir=dir,file=file,obj=df) 
     return df
 
-def prevalence(df: pd.DataFrame):
+def prevalence(df: pd.DataFrame) -> list:
     ''' 
     prevalence(): returns list of mutations sorted by prevalence on COSMIC
     
@@ -114,7 +114,7 @@ def cds_group(df_cosmic: pd.DataFrame | str, df_cds: pd.DataFrame | str, out_dir
            **plot_kwargs)
 
 # Prime editing
-def priority_muts(pegRNAs_shared: pd.DataFrame, df_cosmic: str, dir:str=None, file:str=None):
+def priority_muts(pegRNAs_shared: pd.DataFrame, df_cosmic: str, dir:str=None, file:str=None) -> pd.DataFrame:
     ''' 
     priority_muts: returns the shared sequences library dataframe with priority mutations
     
@@ -177,7 +177,7 @@ def priority_muts(pegRNAs_shared: pd.DataFrame, df_cosmic: str, dir:str=None, fi
     return pegRNAs_shared
 
 def priority_edits(pegRNAs: pd.DataFrame | str, pegRNAs_shared: pd.DataFrame | str, df_cosmic: pd.DataFrame | str, 
-                   dir:str=None, file:str=None):
+                   dir:str=None, file:str=None) -> pd.DataFrame:
     ''' 
     priority_edits(): returns a dataframe with the most clinically-relevant prime edits to prioritize from the shared sequences library
     

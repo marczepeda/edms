@@ -109,7 +109,7 @@ aa_dna_codon_table = {
 }
 
 # Helper Functions 
-def get_codons(sequence, frame:int=0):
+def get_codons(sequence: str, frame: int=0) -> list[str]:
     ''' 
     get_codons(): returns all codons within a specified frame for a nucleotide sequence
     
@@ -121,7 +121,7 @@ def get_codons(sequence, frame:int=0):
     '''
     return [sequence[i:i+3] for i in range(frame, len(sequence) - 2, 3)]
 
-def get_codon_frames(sequence: str):
+def get_codon_frames(sequence: str) -> list[list[str]]:
     ''' 
     get_codon_frames(): returns all codon frames for a nucleotide sequence
     
@@ -132,7 +132,7 @@ def get_codon_frames(sequence: str):
     ''' 
     return [get_codons(sequence,frame) for frame in range(3)]
 
-def found_list_in_order(main_ls: list, sub_ls: list):
+def found_list_in_order(main_ls: list, sub_ls: list) -> int:
     ''' 
     found_list_in_order(): returns index of sub_ls found consecutive order in main_ls or -1
     
@@ -170,7 +170,7 @@ def found_list_in_order(main_ls: list, sub_ls: list):
     
     return -1 # Not found
 
-def find_enzyme_sites(df: pd.DataFrame | str, enzyme: str, RE_type_IIS_df: pd.DataFrame | str = None, literal_eval: bool=True):
+def find_enzyme_sites(df: pd.DataFrame | str, enzyme: str, RE_type_IIS_df: pd.DataFrame | str = None, literal_eval: bool=True) -> pd.DataFrame:
     ''' 
     find_enzyme_sites(): find enzyme sites in pegRNAs or ngRNAs
     
@@ -202,7 +202,7 @@ def find_enzyme_sites(df: pd.DataFrame | str, enzyme: str, RE_type_IIS_df: pd.Da
 
 def enzyme_codon_swap(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, enzyme: str, 
                       RE_type_IIS_df: pd.DataFrame | str = None, out_dir: str = None, 
-                      out_file: str = None, return_df: bool = True, literal_eval: bool=True, comments: bool=False):
+                      out_file: str = None, return_df: bool = True, literal_eval: bool=True, comments: bool=False) -> pd.DataFrame:
     '''
     enzyme_codon_swap(): modify pegRNA RTT sequences to disrupt a RE recognition site
 
@@ -503,10 +503,10 @@ def prime_design_input(target_name: str, flank5_sequence: str,
                               'target_sequence': [f"{flank5_sequence}({target_sequence}){flank3_sequence}"],
                               'aa_index': [aa_index]}))
 
-def prime_design(file: str, pbs_length_list: list = [],rtt_length_list: list = [],nicking_distance_minimum: int = 0,
-                nicking_distance_maximum: int = 100,filter_c1_extension: bool = False,silent_mutation: bool = False,
-                genome_wide_design: bool = False,saturation_mutagenesis: str = None,number_of_pegrnas: int = 3,number_of_ngrnas: int = 3,
-                nicking_distance_pooled: int = 75,homology_downstream: int = 10,pbs_length_pooled: int = 14,rtt_max_length_pooled: int = 50,
+def prime_design(file: str, pbs_length_list: list = [],rtt_length_list: list = [], nicking_distance_minimum: int = 0,
+                nicking_distance_maximum: int = 100, filter_c1_extension: bool = False, silent_mutation: bool = False,
+                genome_wide_design: bool = False, saturation_mutagenesis: str = None, number_of_pegrnas: int = 3, number_of_ngrnas: int = 3,
+                nicking_distance_pooled: int = 75, homology_downstream: int = 10, pbs_length_pooled: int = 14, rtt_max_length_pooled: int = 50,
                 out_dir: str = './DATETIMESTAMP_PrimeDesign'):
     ''' 
     prime_design(): run PrimeDesign
@@ -554,7 +554,7 @@ def prime_design(file: str, pbs_length_list: list = [],rtt_length_list: list = [
     os.system(cmd) # Execute PrimeDesign Command Line
 
 def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame | str, saturation_mutagenesis:str=None, 
-                      aa_index: int=1, enzymes: list[str]=['Esp3I'], replace: bool=True):
+                        aa_index: int=1, enzymes: list[str]=['Esp3I'], replace: bool=True) -> dict[pd.DataFrame]:
     ''' 
     prime_design_output(): splits peg/ngRNAs from PrimeDesign output & finishes annotations
     
@@ -771,7 +771,7 @@ def prime_designer(target_name: str, flank5_sequence: str, target_sequence: str,
     io.save_dir(dir='../ngRNAs', suf='.csv', dc=ngRNAs)
 
 def merge(epegRNAs: str | dict | pd.DataFrame, ngRNAs: str | dict | pd.DataFrame, ngRNAs_groups_max: int=3,
-          epegRNA_suffix: str='_epegRNA', ngRNA_suffix: str='_ngRNA', dir: str=None, file: str=None, literal_eval: bool=True):
+          epegRNA_suffix: str='_epegRNA', ngRNA_suffix: str='_ngRNA', dir: str=None, file: str=None, literal_eval: bool=True) -> pd.DataFrame:
     '''
     merge(): rejoins epeg/ngRNAs & creates ngRNA_groups
     
@@ -832,7 +832,7 @@ def merge(epegRNAs: str | dict | pd.DataFrame, ngRNAs: str | dict | pd.DataFrame
 def epegRNA_linkers(pegRNAs: str | pd.DataFrame, epegRNA_motif_sequence: str='CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA',
                     linker_pattern: str='NNNNNNNN', excluded_motifs: list=['Esp3I'],
                     ckpt_dir: str=None, ckpt_file=None, ckpt_pt: str='',
-                    out_dir: str=None, out_file: str=None, literal_eval: bool=True):
+                    out_dir: str=None, out_file: str=None, literal_eval: bool=True) -> pd.DataFrame:
     ''' 
     epegRNA_linkers(): generate epegRNA linkers between PBS and 3' hairpin motif & finish annotations
     
@@ -895,7 +895,7 @@ def epegRNA_linkers(pegRNAs: str | pd.DataFrame, epegRNA_motif_sequence: str='CG
     
     return epegRNAs
 
-def shared_sequences(pegRNAs: pd.DataFrame | str, hist_plot:bool=True, hist_dir: str=None, hist_file: str=None, literal_eval: bool=True, **kwargs):
+def shared_sequences(pegRNAs: pd.DataFrame | str, hist_plot:bool=True, hist_dir: str=None, hist_file: str=None, literal_eval: bool=True, **kwargs) -> pd.DataFrame:
     ''' 
     shared_sequences(): Reduce PE library into shared spacers and PBS sequences
     
@@ -1020,7 +1020,7 @@ def pilot_screen(pegRNAs_dir: str, mutations_pt: str, database: Literal['COSMIC'
                 dc=pegRNAs_priority)
 
 def sensor_designer(pegRNAs: pd.DataFrame | str, in_file: str, sensor_length: int=60, before_spacer: int=5, sensor_orientation: Literal['revcom','forward']='revcom',
-                    out_dir: str=None, out_file: str=None, return_df: bool=True, literal_eval: bool=True):
+                    out_dir: str=None, out_file: str=None, return_df: bool=True, literal_eval: bool=True) -> pd.DataFrame:
     ''' 
     sensor_designer(): design pegRNA sensors
     
@@ -1120,7 +1120,7 @@ def sensor_designer(pegRNAs: pd.DataFrame | str, in_file: str, sensor_length: in
 
 def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, rtt_length: int=39, 
                  include_WT: bool=False, enzymes: list[str]=['Esp3I'], replace: bool=True,
-                 out_dir: str=None, out_file: str=None, return_df: bool=True, literal_eval: bool=True, comments: bool=False):
+                 out_dir: str=None, out_file: str=None, return_df: bool=True, literal_eval: bool=True, comments: bool=False) -> pd.DataFrame:
     ''' 
     RTT_designer(): design all possible RTT for given spacer & PBS (WT, single insertions, & single deletions)
     
@@ -1568,7 +1568,7 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, rtt_l
 
 def pegRNA_outcome(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str,
                    match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, extend_gap_score: float = -0.1,
-                   out_dir: str=None, out_file: str=None, return_df: bool=True, literal_eval: bool=True):
+                   out_dir: str=None, out_file: str=None, return_df: bool=True, literal_eval: bool=True) -> pd.DataFrame:
     ''' 
     pegRNA_outcome(): confirm that pegRNAs should create the predicted edit
     
@@ -1768,7 +1768,7 @@ def pegRNA_outcome(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str,
 
 def pegRNA_signature(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, 
                      match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, extend_gap_score: float = -0.1,
-                     out_dir: str=None, out_file: str=None, save_alignments: bool=False, return_df: bool=True, literal_eval: bool=True):
+                     out_dir: str=None, out_file: str=None, save_alignments: bool=False, return_df: bool=True, literal_eval: bool=True) -> pd.DataFrame:
     ''' 
     pegRNA_signature(): create signatures for pegRNA outcomes using alignments
     
@@ -1875,9 +1875,9 @@ def print_shared_sequences_mutant(dc: dict):
     print(text)
 
 # Comparing pegRNAs
-def group_pe(df: pd.DataFrame, other_cols: list, epegRNA_id_col='epegRNA',ngRNA_id_col='ngRNA',
-             epegRNA_spacer_col='Spacer_sequence_epegRNA',epegRNA_RTT_col='RTT_sequence',epegRNA_PBS_col='PBS_sequence',
-             match_score=1, mismatch_score=-1):
+def group_pe(df: pd.DataFrame, other_cols: list, epegRNA_id_col: str='epegRNA', ngRNA_id_col: str='ngRNA',
+             epegRNA_spacer_col: str='Spacer_sequence_epegRNA', epegRNA_RTT_col: str='RTT_sequence',epegRNA_PBS_col: str='PBS_sequence',
+             match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, extend_gap_score: float = -0.1):
     '''
     group_pe(): returns a dataframe containing groups of (epegRNA,ngRNA) pairs that share spacers and have similar PBS and performs pairwise alignment for RTT
     
@@ -1889,18 +1889,20 @@ def group_pe(df: pd.DataFrame, other_cols: list, epegRNA_id_col='epegRNA',ngRNA_
     epegRNA_spacer_col (str, optional): epegRNA spacer column name (Default: Spacer_sequence_epegRNA)
     epegRNA_RTT_col (str, optional): epegRNA reverse transcripase template column name (Default: RTT_sequence_epegRNA)
     epegRNA_PBS_col (str, optional): epegRNA primer binding site column name (Default: PBS_sequence_epegRNA
-    match_score (int, optional): match score for pairwise alignment (Default: 1)
-    mismatch_score (int, optional): mismatch score for pairwise alignment (Default: -1)
+    match_score (float, optional): match score for pairwise alignment (Default: 2)
+    mismatch_score (float, optional): mismatch score for pairwise alignment (Default: -1)
+    open_gap_score (float, optional): open gap score for pairwise alignment (Default: -10)
+    extend_gap_score (float, optional): extend gap score for pairwise alignment (Default: -0.1)
     
     Dependencies: pandas,Bio
     '''
-    # Intialize the aligner
+    # High sequence homology; punish gaps
     aligner = PairwiseAligner()
-    aligner.mode = 'global'  # Use 'local' for local alignment
+    aligner.mode = "global"
     aligner.match_score = match_score  # Score for a match
-    aligner.mismatch_score = mismatch_score/2  # Penalty for a mismatch; applied to both strands
-    aligner.open_gap_score = mismatch_score  # Penalty for opening a gap; applied to both strands
-    aligner.extend_gap_score = mismatch_score  # Penalty for extending a gap; applied to both strands
+    aligner.mismatch_score = mismatch_score  # Penalty for a mismatch; applied to both strands
+    aligner.open_gap_score = open_gap_score  # Penalty for opening a gap; applied to both strands
+    aligner.extend_gap_score = extend_gap_score  # Penalty for extending a gap; applied to both strands
 
     # Isolate desired columns
     other_cols.extend([epegRNA_id_col,ngRNA_id_col,epegRNA_spacer_col,epegRNA_RTT_col,epegRNA_PBS_col])

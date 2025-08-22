@@ -26,7 +26,7 @@ from . import io
 from . import tidy as t
 
 # Statistics
-def describe(df: pd.DataFrame | str, cols:list=[], group:str='', dir:str=None, file:str=None):
+def describe(df: pd.DataFrame | str, cols:list=[], group:str='', dir:str=None, file:str=None) -> pd.DataFrame:
     ''' 
     describe(): returns descriptive statistics for numerical columns in a DataFrame
     
@@ -70,9 +70,9 @@ def describe(df: pd.DataFrame | str, cols:list=[], group:str='', dir:str=None, f
         io.save(dir=dir,file=file,obj=descriptive)  
     return descriptive
 
-def difference(df: pd.DataFrame | str,data_col: str,compare_col: str,compare: list,
-               same=False,para=True,alpha=0.05,within_cols:list=[],method:str='holm',
-               dir:str=None, file:str=None):
+def difference(df: pd.DataFrame | str,data_col: str, compare_col: str, compare: list,
+               same: bool=False, para: bool=True, alpha: float=0.05, within_cols:list=[], method:str='holm',
+               dir: str=None, file: str=None) -> pd.DataFrame:
     ''' 
     difference(): computes the appropriate statistical test(s) and returns the p-value(s)
     
@@ -242,8 +242,8 @@ def difference(df: pd.DataFrame | str,data_col: str,compare_col: str,compare: li
         io.save(dir=dir,file=file,obj=inference)  
     return inference
 
-def correlation(df: pd.DataFrame | str, var_cols=[], value_cols=[], method='pearson',numeric_only=True,
-                dir:str=None, file:str=None):
+def correlation(df: pd.DataFrame | str, var_cols: list=[], value_cols: list=[], method: str='pearson', numeric_only: bool=True,
+                dir:str=None, file:str=None) -> pd.DataFrame:
     ''' 
     correlation(): returns a correlation matrix
     
@@ -272,8 +272,8 @@ def correlation(df: pd.DataFrame | str, var_cols=[], value_cols=[], method='pear
     return df_corr
 
 # Comparison
-def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str, var: str, count: str, psuedocount=1, 
-            dir:str=None, file:str=None):
+def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str, var: str, count: str, psuedocount: int=1, 
+            dir:str=None, file:str=None) -> pd.DataFrame:
     ''' 
     compare(): computes FC, pval, and log transformations relative to a specified condition
 
