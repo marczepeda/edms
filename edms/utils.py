@@ -23,7 +23,7 @@ import pandas as pd
 # Computation
 process = psutil.Process(os.getpid())
 
-def memory(task: str='unspecified'):
+def memory(task: str='unspecified') -> tuple:
     '''
     memory(): report current memory
 

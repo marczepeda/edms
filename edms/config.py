@@ -60,7 +60,7 @@ dir = os.path.expanduser("~/.config/edms") # Make directory for configuration fi
 mkdir(dir)
 CONFIG_FILE = os.path.join(dir,".config.json") # Define the path for the configuration file
 
-def load_config():
+def load_config() -> dict:
     """
     load_config(): Load configuration from the file
     
@@ -81,7 +81,7 @@ def save_config(config):
         json.dump(config, file, indent=4)
 
 # Information
-def get_info(id: str=None):
+def get_info(id: str=None) -> str | dict:
     """
     get_info(): Retrieve information based on id
     
