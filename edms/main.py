@@ -811,6 +811,7 @@ def main():
     '''
     edms.bio.ngs:
     - pcrs(): generates NGS PCR plan automatically
+    - umis(): determine the ug of gDNA and reads required for genotyping with UMIs.
     - compute_distance_matrix(): compute pairwise Hamming distance matrix for a list of sequences stored in a dataframe
     '''
     parser_ngs = subparsers.add_parser("ngs", help="Next generation sequencing")
@@ -824,8 +825,11 @@ def main():
     
     parser_ngs_pcrs.add_argument("--dir", help="Output directory path", type=str, default='../out')
     parser_ngs_pcrs.add_argument("--file", help="Output file name (.xlsx)", type=str, default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_NGS_plan.xlsx')
-    parser_ngs_pcrs.add_argument("--cycles", help="Number of cycles for PCR1", type=str, default='30')
     parser_ngs_pcrs.add_argument("--ultra", help="Using NEB Ultra II reagents", action="store_true")
+    parser_ngs_pcrs.add_argument("--pcr1_cycles", help="Number of cycles for PCR1", type=str, default='30')
+    parser_ngs_pcrs.add_argument("--pcr2_cycles", help="Number of cycles for PCR2", type=str, default='8')
+    parser_ngs_pcrs.add_argument("--umi_cycles", help="Number of cycles for PCR1", type=str, default='3')
+    parser_ngs_pcrs.add_argument("--pcr1.5_Tm",dest='pcr1_5_Tm', help="Annealing temperature for PCR1.5", type=str, default='65')
     parser_ngs_pcrs.add_argument('--pcr1_total_uL', type=int, default=20, help='PCR1 Total reaction volume (uL)')
     parser_ngs_pcrs.add_argument('--pcr2_total_uL', type=int, default=20, help='PCR2 Total reaction volume (uL)')
     parser_ngs_pcrs.add_argument('--mm_x', type=float, default=1.1, help='Master mix multiplier')
@@ -838,6 +842,7 @@ def main():
     parser_ngs_pcrs.add_argument('--pcr2_id_col', default='PCR2 ID', help='PCR2 ID column name')
     parser_ngs_pcrs.add_argument('--pcr2_fwd_col', default='PCR2 FWD', help='PCR2 FWD column name')
     parser_ngs_pcrs.add_argument('--pcr2_rev_col', default='PCR2 REV', help='PCR2 REV column name')
+    parser_ngs_pcrs.add_argument('--umi_col', default='UMI', help='UMI column name')
 
     # pcrs(): Stock concentrations
     parser_ngs_pcrs.add_argument('--Q5_mm_x_stock', type=float, default=5, help='Q5 reaction master mix stock (X)')
@@ -854,6 +859,19 @@ def main():
     parser_ngs_pcrs.add_argument('--Q5_U_uL_desired', type=float, default=0.02, help='Q5 Polymerase desired amount (U/uL)')
 
     parser_ngs_pcrs.set_defaults(func=ngs.pcrs)
+    
+    # umis(): determine the ug of gDNA and reads required for genotyping with UMIs.
+    parser_ngs_umis = subparsers_ngs.add_parser("umis", help="Determine ug of gDNA and reads required for genotyping with UMIs")
+
+    parser_ngs_umis.add_argument("--genotypes", help="# of intended genotypes per sample", type=int, required=True)
+
+    parser_ngs_umis.add_argument("--samples", help="# of samples to be processed (Default: 1", type=int, default=1)
+    parser_ngs_umis.add_argument("--cell_coverage", help="Desired coverage per genotype (Default: 1000)", type=int, default=1000)
+    parser_ngs_umis.add_argument("--ug_gDNA_per_cell", help="Amount of genomic DNA per cell in micrograms (Default: 6x10^(-6) ug/cell)", type=float, default=6*10**-6)
+    parser_ngs_umis.add_argument("--ploidy_per_cell", help="Ploidy level of the cells (Default: 2 for diploid)", type=int, default=2)
+    parser_ngs_umis.add_argument("--umi_coverage", help="Average # of reads per UMI (Default: 5)", type=int, default=5)
+
+    parser_ngs_umis.set_defaults(func=ngs.umis)
     
     # hamming_distance_matrix(): compute pairwise Hamming distance matrix for a list of sequences stored in a dataframe
     parser_ngs_hamming = subparsers_ngs.add_parser("hamming", help="Compute pairwise Hamming distance matrix")
