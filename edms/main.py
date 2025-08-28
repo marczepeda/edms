@@ -1393,7 +1393,7 @@ def main():
     parser_fastq_trim_motifs.add_argument("--motif_length", type=int, help="Trim 'in_file' motifs to this length (Default: 21)", default=21)
     parser_fastq_trim_motifs.add_argument("--error_rate", type=float, help="Maximum error rate allowed in each motif (Default: 0.1 = 10%)", default=0.1)
     parser_fastq_trim_motifs.add_argument("--max_distance", type=int, help="Maximum number of errors allowed in each motif (Default: 2)", default=2)
-    parser_fastq_trim_motifs.add_argument("--env", help="Conda environment with cutadapt installed (Default: cutadapt)", default="cutadapt")
+    parser_fastq_trim_motifs.add_argument("--env", help="Conda environment with cutadapt installed (Default: cutadapt)", default="umi_tools")
 
     # make_SAMs():
     parser_fastq_make_SAMs.add_argument("--fastq_dir", help="Directory containing FASTQ files", required=True)
