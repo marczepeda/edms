@@ -2547,7 +2547,7 @@ def make_BAMs(sam_dir: str, out_dir: str='./make_BAMs', env: str='umi_tools'):
     for file in os.listdir(path=sam_dir):
         if file.endswith('.sam'):
             # Convert SAM to sorted BAM using samtools
-            command = f'conda run -n {env} samtools view -bS {os.path.join(sam_dir,file)} | samtools sort -o {os.path.join(out_dir,file.replace(".sam",".sorted.bam"))} > {os.path.join(out_dir,".make_BAMs",file)}.log'
+            command = f'conda run -n {env} samtools view -bS {os.path.join(sam_dir,file)} | conda run -n {env} samtools sort -o {os.path.join(out_dir,file.replace(".sam",".sorted.bam"))} > {os.path.join(out_dir,".make_BAMs",file)}.log'
             print(f"{command}")
             result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
             
