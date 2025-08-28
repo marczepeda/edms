@@ -70,7 +70,7 @@ Usage:
 from Bio.Seq import Seq
 from Bio import SeqIO
 from Bio.Align import PairwiseAligner
-from Bio import SeqRecord
+from Bio.SeqRecord import SeqRecord
 import gzip
 import os
 import re
