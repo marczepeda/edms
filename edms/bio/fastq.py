@@ -2496,7 +2496,7 @@ def make_SAMs(fastq_dir: str, out_dir: str='./make_SAMs',
     # Create bowtie2 index
     command = f'conda run -n {env} bowtie2-build {fasta} {".".join(fasta.split(".")[:-1])}'
     print(f"{command}")
-    result = subprocess.run(f"{command}", shell=True, env=env, cwd='.', capture_output=True, text=True)
+    result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
     
     # Print output/errors
     if result.stdout: print(f"output:\n{result.stdout}")
@@ -2511,7 +2511,7 @@ def make_SAMs(fastq_dir: str, out_dir: str='./make_SAMs',
             # Generate SAM files using bowtie2
             command = f'conda run -n {env} bowtie2 -x {".".join(fasta.split(".")[:-1])} -U {os.path.join(fastq_dir,file)} -S {os.path.join(out_dir,file)}.sam --{sensitivity} > {os.path.join(out_dir,".make_SAMs",file)}.log'
             print(f"{command}")
-            result = subprocess.run(f"{command}", shell=True, env=env, cwd='.', capture_output=True, text=True)
+            result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
             
             # Print output/errors
             if result.stdout: print(f"output:\n{result.stdout}")
@@ -2549,7 +2549,7 @@ def make_BAMs(sam_dir: str, out_dir: str='./make_BAMs', env: str='umi_tools'):
             # Convert SAM to sorted BAM using samtools
             command = f'conda run -n {env} samtools view -bS {os.path.join(sam_dir,file)} | samtools sort -o {os.path.join(out_dir,file.replace(".sam",".sorted.bam"))} > {os.path.join(out_dir,".make_BAMs",file)}.log'
             print(f"{command}")
-            result = subprocess.run(f"{command}", shell=True, env=env, cwd='.', capture_output=True, text=True)
+            result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
             
             # Print output/errors
             if result.stdout: print(f"output:\n{result.stdout}")
@@ -2561,7 +2561,7 @@ def make_BAMs(sam_dir: str, out_dir: str='./make_BAMs', env: str='umi_tools'):
             # Make BAM index using samtools
             command = f'conda run -n {env} samtools index {os.path.join(out_dir,file.replace(".sam",".sorted.bam"))} > {os.path.join(out_dir,".make_BAMs",file)}.index.log'
             print(f"{command}")
-            result = subprocess.run(f"{command}", shell=True, env=env, cwd='.', capture_output=True, text=True)
+            result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
 
             # Print output/errors
             if result.stdout: print(f"output:\n{result.stdout}")
@@ -2615,7 +2615,7 @@ def group_UMIs(bam_dir: str, out_dir: str='./group_UMIs',
             # Group BAM files by UMI using fgbio
             command = f'conda run -n {env} fgbio GroupReadsByUmi -i {os.path.join(bam_dir,file)} -o {os.path.join(out_dir,file.replace(".bam",".grouped.bam"))} --strategy={strategy} --edits={edits} --log={os.path.join(out_dir,".group_UMIs",file)}.log'
             print(f"{command}")
-            result = subprocess.run(f"{command}", shell=True, env=env, cwd='.', capture_output=True, text=True)
+            result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
             
             # Print output/errors
             if result.stdout: print(f"output:\n{result.stdout}")
@@ -2655,7 +2655,7 @@ def consensus_UMIs(bam_dir: str, out_dir: str='./consensus_UMIs',
             # Generate consensus reads from grouped BAM files using fgbio
             command = f'conda run -n {env} fgbio CallMolecularConsensusReads -i {os.path.join(bam_dir,file)} -o {os.path.join(out_dir,file.replace(".grouped.bam",".consensus.bam"))} --min-reads={min_reads} --log={os.path.join(out_dir,".consensus_UMIs",file)}.log'
             print(f"{command}")
-            result = subprocess.run(f"{command}", shell=True, env=env, cwd='.', capture_output=True, text=True)
+            result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
             
             # Print output/errors
             if result.stdout: print(f"output:\n{result.stdout}")
