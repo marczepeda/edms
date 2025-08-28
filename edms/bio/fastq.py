@@ -2359,7 +2359,7 @@ def extract_UMIs(fastq_dir: str, out_dir: str='./extract_UMIs',
     for file in os.listdir(path=fastq_dir):
         if file.endswith('.fastq') or file.endswith('.fastq.gz'):
             # Extract UMIs using umi_tools
-            command = f'conda run -n {env} umi_tools extract --bc-pattern={bc_pattern} --stdin={os.path.join(fastq_dir,file)} --stdout={os.path.join(out_dir,file)} --log={os.path.join(out_dir,".extract_UMI",file)}.log'
+            command = f'conda run -n {env} umi_tools extract --bc-pattern={bc_pattern} --stdin={os.path.join(fastq_dir,file)} --stdout={os.path.join(out_dir,file.replace(".gz",""))} --log={os.path.join(out_dir,".extract_UMI",file)}.log'
             print(f"{command}")
             result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
             
@@ -2420,7 +2420,7 @@ def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs',
     for file in os.listdir(path=fastq_dir):
         if file.endswith('.fastq') or file.endswith('.fastq.gz'):
             # Trim motifs using cutadapt (only keep reads with both motifs (up to 2 errors or 10% error rate))
-            command = f'conda run -n {env} cutadapt -g {motif5} -a {motif3} -e {error_rate} --max-ee {max_distance} --trimmed-only -o {os.path.join(out_dir,file)} {os.path.join(fastq_dir,file)} > {os.path.join(out_dir,".trim_motifs",file)}.log'
+            command = f'conda run -n {env} cutadapt -g {motif5} -a {motif3} -e {error_rate} --max-ee {max_distance} --trimmed-only -o {os.path.join(out_dir,file.replace(".gz",""))} {os.path.join(fastq_dir,file)} > {os.path.join(out_dir,".trim_motifs",file)}.log'
             print(f"{command}")
             result = subprocess.run(f"{command}", shell=True, env=env, cwd='.', capture_output=True, text=True)
             
