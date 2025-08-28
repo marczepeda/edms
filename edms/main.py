@@ -1173,6 +1173,12 @@ def main():
     - paired_regions(): quantify, plot, & return (un)paired regions that aligned to the annotated library
     - count_signatures(): generate signatures from fastq read region alignments to WT sequence; count signatures, plot and return fastq signatures dataframe
     - editing_per_library(): Determine editing relative library abundance
+    - extract_UMIs(): extract UMIs using umi_tools
+    - trim_motifs(): trimming motifs with cutadapt
+    - make_SAMs(): generates alignments saved as a SAM files using bowtie2
+    - make_BAMs(): converts SAM files to BAM files using samtools
+    - group_UMIs(): group BAM files by UMI using fgbio
+    - consensus_UMIs(): generate consensus sequences from grouped UMIs using fgbio
     '''
     parser_fastq = subparsers.add_parser("fastq", help="FASTQ files")
     subparsers_fastq = parser_fastq.add_subparsers()
@@ -1191,6 +1197,12 @@ def main():
     parser_fastq_paired_regions = subparsers_fastq.add_parser("paired_regions", help="Extract paired regions from FASTQ files")
     parser_fastq_count_signatures = subparsers_fastq.add_parser("count_signatures", help="Generate signatures from fastq read region alignments to WT sequence")
     parser_fastq_editing_per_library = subparsers_fastq.add_parser("editing_per_library", help="Determine editing relative library abundance")
+    parser_fastq_extract_UMIs = subparsers_fastq.add_parser("extract_UMIs", help="Extract UMIs using umi_tools")
+    parser_fastq_trim_motifs = subparsers_fastq.add_parser("trim_motifs", help="Trim motifs with cutadapt")
+    parser_fastq_make_SAMs = subparsers_fastq.add_parser("make_SAMs", help="Generate alignments saved as SAM files using bowtie2")
+    parser_fastq_make_BAMs = subparsers_fastq.add_parser("make_BAMs", help="Convert SAM files to BAM files using samtools")
+    parser_fastq_group_UMIs = subparsers_fastq.add_parser("group_UMIs", help="Group BAM files by UMI using fgbio")
+    parser_fastq_consensus_UMIs = subparsers_fastq.add_parser("consensus_UMIs", help="Generate consensus sequences from grouped UMIs using fgbio")
 
     # Add common arguments: revcom_fastqs(), unzip_fastqs(), comb_fastqs(), and genotyping()
     for parser_fastq_common in [parser_fastq_revcom,parser_fastq_unzip,parser_fastq_comb,parser_fastq_genotyping]:
@@ -1363,6 +1375,62 @@ def main():
     parser_fastq_editing_per_library.add_argument("--count", default="count", help="Column to use for epeg-ngRNA counts (Default: 'count')")
     parser_fastq_editing_per_library.add_argument("--psuedocount", type=int, default=1, help="Pseudocount to add to all counts (Default: 1)")
 
+    # extract_UMIs():
+    parser_fastq_extract_UMIs.add_argument("--fastq_dir", help="Directory containing FASTQ files", required=True)
+
+    parser_fastq_extract_UMIs.add_argument("--out_dir", help="Output directory (Default: ./extract_UMIs)", default=f'extract_UMIs')
+    parser_fastq_extract_UMIs.add_argument("--bc_pattern", help="UMI barcode pattern (Default: NNNNNNNNNNNNNNNN)", default="NNNNNNNNNNNNNNNN")
+    parser_fastq_extract_UMIs.add_argument("--env", help="Conda environment with umi_tools installed (Default: umi_tools)", default="umi_tools")
+
+    # trim_motifs():
+    parser_fastq_trim_motifs.add_argument("--fastq_dir", help="Directory containing FASTQ files (with UMIs extracted)", required=True)
+
+    parser_fastq_trim_motifs.add_argument("--out_dir", help="Output directory (Default: ./trim_motifs)", default=f'trim_motifs')
+
+    parser_fastq_trim_motifs.add_argument("--in_file", help="[Required option 1] Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)", default=argparse.SUPPRESS)
+    parser_fastq_trim_motifs.add_argument("--motif5", help="[Required option 2] 5' motif sequence to trim", default=argparse.SUPPRESS)
+    parser_fastq_trim_motifs.add_argument("--motif3", help="[Required option 2] 3' motif sequence to trim", default=argparse.SUPPRESS)
+
+    parser_fastq_trim_motifs.add_argument("--motif_length", type=int, help="Trim 'in_file' motifs to this length (Default: 21)", default=21)
+    parser_fastq_trim_motifs.add_argument("--error_rate", type=float, help="Maximum error rate allowed in each motif (Default: 0.1 = 10%)", default=0.1)
+    parser_fastq_trim_motifs.add_argument("--max_distance", type=int, help="Maximum number of errors allowed in each motif (Default: 2)", default=2)
+    parser_fastq_trim_motifs.add_argument("--env", help="Conda environment with cutadapt installed (Default: cutadapt)", default="cutadapt")
+
+    # make_SAMs():
+    parser_fastq_make_SAMs.add_argument("--fastq_dir", help="Directory containing FASTQ files", required=True)
+
+    parser_fastq_make_SAMs.add_argument("--out_dir", help="Output directory (Default: ./make_SAMs)", default=f'make_SAMs')
+
+    parser_fastq_make_SAMs_group = parser_fastq_make_SAMs.add_mutually_exclusive_group(required=True)
+    parser_fastq_make_SAMs_group.add_argument("--in_file", help="Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)", default=argparse.SUPPRESS)
+    parser_fastq_make_SAMs_group.add_argument("--fasta", help="Reference FASTA file for alignment", default=argparse.SUPPRESS)
+
+    parser_fastq_make_SAMs.add_argument("--sensitivity", choices=["very-sensitive", "sensitive", "fast", "very-fast", "very-sensitive-local", "sensitive-local", "fast-local", "very-fast-local"], 
+                                        default="very-sensitive", help="Bowtie2 sensitivity setting (Default: very-sensitive)")
+
+    parser_fastq_make_SAMs.add_argument("--env", help="Conda environment with bowtie2 installed (Default: umi_tools)", default="umi_tools")
+
+    # make_BAMs():
+    parser_fastq_make_BAMs.add_argument("--sam_dir", help="Directory containing SAM files", required=True)
+
+    parser_fastq_make_BAMs.add_argument("--out_dir", help="Output directory (Default: ./make_BAMs)", default=f'make_BAMs')
+    parser_fastq_make_BAMs.add_argument("--env", help="Conda environment with samtools installed (Default: umi_tools)", default="umi_tools")
+
+    # group_UMIs():
+    parser_fastq_group_UMIs.add_argument("--bam_dir", help="Directory containing BAM files", required=True)
+
+    parser_fastq_group_UMIs.add_argument("--out_dir", help="Output directory (Default: ./group_UMIs)", default=f'group_UMIs')
+    parser_fastq_group_UMIs.add_argument("--strategy", choices=["identical","edit","adjacency", "paired"], help="UMI grouping strategy (Default: adjacency)", default="adjacency")
+    parser_fastq_group_UMIs.add_argument("--edits", type=int, help="Maximum edit distance to group UMIs (Default: 1)", default=1)
+    parser_fastq_group_UMIs.add_argument("--env", help="Conda environment with fgbio installed (Default: umi_tools)", default="umi_tools")
+
+    # consensus_UMIs():
+    parser_fastq_consensus_UMIs.add_argument("--bam_dir", help="Directory containing grouped BAM files", required=True)
+
+    parser_fastq_consensus_UMIs.add_argument("--out_dir", help="Output directory (Default: ./consensus_UMIs)", default=f'consensus_UMIs')
+    parser_fastq_consensus_UMIs.add_argument("--min_reads", type=int, help="Minimum reads per UMI to call consensus (Default: 1)", default=1)
+    parser_fastq_consensus_UMIs.add_argument("--env", help="Conda environment with fgbio installed (Default: umi_tools)", default="umi_tools")
+
     # Set defaults
     parser_fastq_revcom.set_defaults(func=fq.revcom_fastqs)
     parser_fastq_unzip.set_defaults(func=fq.unzip_fastqs)
@@ -1378,6 +1446,12 @@ def main():
     parser_fastq_paired_regions.set_defaults(func=fq.paired_regions)
     parser_fastq_count_signatures.set_defaults(func=fq.count_signatures)
     parser_fastq_editing_per_library.set_defaults(func=fq.editing_per_library)
+    parser_fastq_extract_UMIs.set_defaults(func=fq.extract_UMIs)
+    parser_fastq_trim_motifs.set_defaults(func=fq.trim_motifs)
+    parser_fastq_make_SAMs.set_defaults(func=fq.make_SAMs)
+    parser_fastq_make_BAMs.set_defaults(func=fq.make_BAMs)
+    parser_fastq_group_UMIs.set_defaults(func=fq.group_UMIs)
+    parser_fastq_consensus_UMIs.set_defaults(func=fq.consensus_UMIs)
 
     '''
     Add pe.py

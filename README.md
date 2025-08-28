@@ -6,23 +6,26 @@ edms -h # or edms <TAB>
 ## Package Organization
 - gen: input/output, data wrangling, generating plots, and statistics.
     ```shell
+    import edms.gen.cli as cli
+    import edms.gen.image as im
     import edms.gen.io as io
-    import edms.gen.tidy as t
     import edms.gen.plot as p
     import edms.gen.stat as st
-    import edms.gen.image as im
-    import edms.gen.cli as cli
+    import edms.gen.tidy as t
     ```
 - bio: molecular biology & tissue culture workflows.
     ```shell
-    import edms.bio.transfect as tf
-    import edms.bio.ngs as ngs
-    import edms.bio.fastq as fq
     import edms.bio.clone as cl
+    import edms.bio.fastq as fq
+    import edms.bio.genbank as gb
+    import edms.bio.ngs as ngs
     import edms.bio.pe as pe
     import edms.bio.pegLIT as pegLIT
+    import edms.bio.primedesign as primedesign
     import edms.bio.qPCR as qPCR
-    import edms.bio.genbank as gb
+    import edms.bio.sanger as sanger
+    import edms.bio.signature as signature
+    import edms.bio.transfect as tf
     ```
 - dat: interacting with databases.
     ```shell
@@ -30,9 +33,6 @@ edms -h # or edms <TAB>
     import edms.dat.cvar as cv
     import edms.dat.ncbi as ncbi
     ```
-
-## Examples
-- See https://github.com/marczepeda/edms_ex
 
 ## Instructions
 ### Install
@@ -56,6 +56,10 @@ edms -h # or edms <TAB>
     pip install -e . # Include the "."
     bash autocomplete.sh # Optional: follow CLI instructions
     conda deactivate
+    ```
+5. Optional: fastq.py UMI methods need umi_tools, cutadapt, samtools, bowtie2, and fgbio in a seperate environment
+    ```shell
+    conda create -n umi_tools umi_tools cutadapt samtools bowtie2 fgbio
     ```
 
 ### Update
