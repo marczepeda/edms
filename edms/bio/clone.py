@@ -96,9 +96,12 @@ def tb(df:pd.DataFrame, id:str, seq:str, t5:str, t3:str,
     for i,s in enumerate(df[seq]):
         top_ids.append(pre+str(df.iloc[i][id])+'_top')
         bot_ids.append(pre+str(df.iloc[i][id])+'_bot')
-        if (tG==True)&(s[0]!='G'): top_seqs.append(t5+'G'+s+t3)
-        else: top_seqs.append(t5+s+t3)
-        bot_seqs.append(b5+str(Seq(s).reverse_complement()+b3))
+        if (tG==True)&(s[0]!='G'): 
+            top_seqs.append(t5+'G'+s+t3)
+            bot_seqs.append(b5+str(Seq('G'+s).reverse_complement()+b3))
+        else: 
+            top_seqs.append(t5+s+t3)
+            bot_seqs.append(b5+str(Seq(s).reverse_complement()+b3))
     df[pre+id+'_top']=top_ids
     df[pre+id+'_bot']=bot_ids
     df[pre+seq+'_top']=top_seqs

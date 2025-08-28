@@ -947,8 +947,8 @@ def main():
     parser_clone_sgRNAs.add_argument("--dir", type=str, help="Output directory", default='../out')
     parser_clone_sgRNAs.add_argument("--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_sgRNAs.csv')
 
-    parser_clone_sgRNAs.add_argument("--tG", action="store_true", help="Add 5' G to spacer if needed")
-    parser_clone_sgRNAs.add_argument("--order", action="store_true", help="Format output for ordering oligos")
+    parser_clone_sgRNAs.add_argument("--dont_tG", dest="tG", default=True, action="store_false", help="Don't add 5' G to spacer if needed")
+    parser_clone_sgRNAs.add_argument("--dont_order", dest="order", default=True, action="store_false", help="Don't format output for ordering oligos")
     parser_clone_sgRNAs.add_argument("--spacer", type=str, default="Spacer_sequence", help="Column name for spacer sequence")
     parser_clone_sgRNAs.add_argument("--t5", type=str, default="CACC", help="Top oligo 5' overhang")
     parser_clone_sgRNAs.add_argument("--t3", type=str, default="", help="Top oligo 3' overhang")
