@@ -314,6 +314,7 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col: str='
         Parameters:
         df (pd.DataFrame): DataFrame containing PCR data.
         group (Literal['96-well plate','8-strip_plate']): Type of plate layout to create.
+        pcr (Literal['1','2']): The PCR number to process.
         '''
         if group == '96-well plate': # Define 96-well plate axis
             rows = ['A','B','C','D','E','F','G','H']

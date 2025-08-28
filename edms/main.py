@@ -888,7 +888,6 @@ def main():
     '''
     edms.bio.sanger:
     - pcrs(): generates Sanger PCR plan automatically
-    - compute_distance_matrix(): compute pairwise Hamming distance matrix for a list of sequences stored in a dataframe
     '''
     parser_sanger = subparsers.add_parser("sanger", help="Sanger sequencing")
     subparsers_sanger = parser_sanger.add_subparsers()

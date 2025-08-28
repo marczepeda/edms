@@ -85,36 +85,40 @@ def thermocycler(df: pd.DataFrame, n: Literal[1] = 1, cycles: int | str = None, 
             pcr_rev_col = 'PCR1 REV'
     else: 
         raise ValueError("n must be 1")
+    
     # Iterate through unique combinations of FWD and REV primers for the specified PCR number
     for (fwd,rev) in t.unique_tuples(df=df, cols=[pcr_fwd_col,pcr_rev_col]):
+
         title = f"{fwd}_{rev}: " # Initialize the thermocycler title for the set of primers
 
-    # Group the IDs based on the set of primers; determine the temperature and anneal_time
-    ls = group_boundaries(list(df[(df[pcr_fwd_col]==fwd) & (df[pcr_rev_col]==rev)]['ID'].keys()))
-    tm = df[(df[pcr_fwd_col]==fwd) & (df[pcr_rev_col]==rev)].iloc[0][f'PCR{n} Tm']
-    bp = df[(df[pcr_fwd_col]==fwd) & (df[pcr_rev_col]==rev)].iloc[0]['PCR1 bp']
-    (min,sec) = min_sec(math.floor(bp/500)/2+0.5)
-    if min == 0:
-            anneal_time = f"{sec}s"
-    else:
-            if sec == 0:
-                anneal_time = f"{min}min"
-            else:
-                anneal_time = f"{min}min {sec}s"
+        # Group the IDs based on the set of primers; determine the temperature and anneal_time
+        ls = group_boundaries(list(df[(df[pcr_fwd_col]==fwd) & (df[pcr_rev_col]==rev)]['ID'].keys()))
+        tm = df[(df[pcr_fwd_col]==fwd) & (df[pcr_rev_col]==rev)].iloc[0][f'PCR{n} Tm']
+        bp = df[(df[pcr_fwd_col]==fwd) & (df[pcr_rev_col]==rev)].iloc[0]['PCR1 bp']
+        (min,sec) = min_sec(math.floor(bp/500)/2+0.5)
+        if min == 0:
+                anneal_time = f"{sec}s"
+        else:
+                if sec == 0:
+                    anneal_time = f"{min}min"
+                else:
+                    anneal_time = f"{min}min {sec}s"
 
-        # Append grouped IDs to the thermocycler title
-    for (start, end) in ls:
-         if start == end:
-                title += f"{df.iloc[start][f'PCR{n} ID']}, "
-         else:
-                title += f"{df.iloc[start][f'PCR{n} ID']} -> {df.iloc[end][f'PCR{n} ID']}, "
-         # Create a DataFrame for the thermocycler steps
-         dc[f'{fwd}_{rev}_{tm}°C'] = pd.DataFrame(
-            {'Temperature':['98°C', '98°C', f'{tm}°C', '72°C', '72°C', '4°C', ''],
-             'Time':['30s', '10s', '30s', anneal_time, '2min', '∞', ''],
-             'Repeat':['', f'{cycles} cycles', f'{cycles} cycles', f'{cycles} cycles', '', '', '']},
-             index=pd.Index(['1','2','2','2','3','4',f'{title[:-2]}'], name="Step"))
+            # Append grouped IDs to the thermocycler title
+        for (start, end) in ls:
+            if start == end:
+                    title += f"{df.iloc[start][f'PCR{n} ID']}, "
+            else:
+                    title += f"{df.iloc[start][f'PCR{n} ID']} -> {df.iloc[end][f'PCR{n} ID']}, "
+            # Create a DataFrame for the thermocycler steps
+            dc[f'{fwd}_{rev}_{tm}°C'] = pd.DataFrame(
+                {'Temperature':['98°C', '98°C', f'{tm}°C', '72°C', '72°C', '4°C', ''],
+                'Time':['30s', '10s', '30s', anneal_time, '2min', '∞', ''],
+                'Repeat':['', f'{cycles} cycles', f'{cycles} cycles', f'{cycles} cycles', '', '', '']},
+                index=pd.Index(['1','2','2','2','3','4',f'{title[:-2]}'], name="Step"))
+    
     return dc
+
 # Sanger calculation
 def pcr_mm(primers: pd.Series,  template: str, template_uL: int,
            Q5_mm_x_stock: int=5, dNTP_mM_stock: int=10, fwd_uM_stock: int=10, rev_uM_stock: int=10, Q5_U_uL_stock: int=2,
@@ -164,7 +168,7 @@ def pcr_mm(primers: pd.Series,  template: str, template_uL: int,
                                                                  round(Q5_U_uL_desired/Q5_U_uL_stock*total_uL*primers.iloc[i]*mm_x,2),
                                                                  round(total_uL*primers.iloc[i]*mm_x,2)]
                                                      },index=pd.Index(list(np.arange(1,9)), name=f"{pcr1_fwd}_{pcr1_rev}"))
-        return pcr_mm_dc
+    return pcr_mm_dc
 
 def pcr_mm_ultra(primers: pd.Series, template: str, template_uL: int,
                  Q5_mm_x_stock: int=2, fwd_uM_stock: int=10, rev_uM_stock: int=10,
@@ -249,82 +253,70 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col: str='
     # Get samples dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
-    
-    # Define 96-well plate axis
-    rows_96_well = ['A','B','C','D','E','F','G','H']
-    cols_96_well = np.arange(1,13,1)
+
+    # Define plate axis method
+    def plate(df: pd.DataFrame, group: Literal['96-well plate','8-strip_plate']) -> pd.DataFrame:
+        ''' 
+        plate(): Creates a DataFrame representing a 96-well plate or 8-strip plate layout.
+
+        Parameters:
+        df (pd.DataFrame): DataFrame containing PCR data.
+        group (Literal['96-well plate','8-strip_plate']): Type of plate layout to create.
+        '''
+        if group == '96-well plate': # Define 96-well plate axis
+            rows = ['A','B','C','D','E','F','G','H']
+            cols = np.arange(1,13,1)
+        elif group == '8-strip plate': # Define PCR strip axis
+            rows = ['A','B','C','D','E','F']
+            cols = np.arange(1,9,1)
+        else:
+            raise ValueError("group must be '96-well plate' or '8-strip plate'")
+
+        # Store gDNA and PCR locations on plate
+        ls_df_fwd_rev = []
+        primers_ls = []
+        plate_ls = []
+        row_ls = []
+        col_ls = []
+
+        plate_i = 1
+        for (fwd,rev) in t.unique_tuples(df=df,cols=[pcr1_fwd_col,pcr1_rev_col]):
+            df_fwd_rev = df[(df[pcr1_fwd_col]==fwd) & (df[pcr1_rev_col]==rev)]
+            ls_df_fwd_rev.append(df_fwd_rev)
+            row_i = 0
+            col_i = 0
+            for i in range(df_fwd_rev.shape[0]):
+                if col_i >= len(cols):
+                    if row_i >= len(rows)-1:
+                        row_i = 0
+                        col_i = 0
+                        plate_i += 1
+                    else:
+                        row_i += 1
+                        col_i = 0
+                primers_ls.append(f"{fwd}_{rev}")
+                plate_ls.append(plate_i)
+                row_ls.append(rows[row_i])
+                col_ls.append(cols[col_i])
+                col_i += 1
+            plate_i += 1
         
-    # Store gDNA and PCR locations on 96-well plate
-    plate_ls = []
-    row_ls = []
-    col_ls = []
+        df_plate = pd.concat(ls_df_fwd_rev,ignore_index=True) # Concatenate all PCR1 FWD/REV dataframes
+        df_plate[f'{group} (PCR1)'] = [f"{plate}_{primers}" for (primers,plate) in zip(primers_ls,plate_ls)]
+        df_plate['row'] = row_ls
+        df_plate['column'] = col_ls
 
-    plate_i = 1
-    row_i = 0
-    col_i = 0
-    for i in range(df.shape[0]):
-        if col_i >= len(cols_96_well):
-            if row_i >= len(rows_96_well)-1:
-                row_i = 0
-                col_i = 0
-                plate_i += 1
-            else:
-                row_i += 1
-                col_i = 0
-        plate_ls.append(plate_i)
-        row_ls.append(rows_96_well[row_i])
-        col_ls.append(cols_96_well[col_i])
-        col_i += 1
-
-    df['96-well plate'] = plate_ls
-    df['row'] = row_ls
-    df['column'] = col_ls
-
-    # Define PCR strip axis
-    rows_8_strip = ['A','B','C','D','E','F']
-    cols_8_strip = np.arange(1,9,1)
-
-    # Store gDNA and PCR locations on PCR strip tubes plate(s)
-    ls_df_fwd_rev = []
-    primers_ls = []
-    plate_ls = []
-    row_ls = []
-    col_ls = []
-
-    plate_i = 1
-    for (fwd,rev) in t.unique_tuples(df=df,cols=[pcr1_fwd_col,pcr1_rev_col]):
-        df_fwd_rev = df[(df[pcr1_fwd_col]==fwd) & (df[pcr1_rev_col]==rev)]
-        ls_df_fwd_rev.append(df_fwd_rev)
-        row_i = 0
-        col_i = 0
-        for i in range(df_fwd_rev.shape[0]):
-            if col_i >= len(cols_8_strip):
-                if row_i >= len(rows_8_strip)-1:
-                    row_i = 0
-                    col_i = 0
-                    plate_i += 1
-                else:
-                    row_i += 1
-                    col_i = 0
-            primers_ls.append(f"{fwd}_{rev}")
-            plate_ls.append(plate_i)
-            row_ls.append(rows_8_strip[row_i])
-            col_ls.append(cols_8_strip[col_i])
-            col_i += 1
-        plate_i += 1
-
-    df_8_strip = pd.concat(ls_df_fwd_rev,ignore_index=True) # Concatenate all PCR1 FWD/REV dataframes
-    df_8_strip['8-strip plate'] = [f"{plate}_{primers}" for (primers,plate) in zip(primers_ls,plate_ls)]
-    df_8_strip['row'] = row_ls
-    df_8_strip['column'] = col_ls
+        return df_plate
+    
+    # Create 96-well and 8-strip plate layouts
+    df_96_well_pcr1 = plate(df=df,group='96-well plate')
+    df_8_strip_pcr1 = plate(df=df,group='8-strip plate')
 
     # Create pivot tables for gDNA and PCR1
-    pivots = {f"96-well_{gDNA_id_col}": pd.pivot_table(data=df,values=gDNA_id_col,index=['96-well plate','row'],columns='column',aggfunc='first'),
-            f"96-well_{pcr1_id_col}": pd.pivot_table(data=df,values=pcr1_id_col,index=['96-well plate','row'],columns='column',aggfunc='first'),
-            f"96-well_{pcr1_fwd_col}": pd.pivot_table(data=df,values=pcr1_fwd_col,index=['96-well plate','row'],columns='column',aggfunc='first'),
-            f"96-well_{pcr1_rev_col}": pd.pivot_table(data=df,values=pcr1_rev_col,index=['96-well plate','row'],columns='column',aggfunc='first'),
-            f"8-strip_{gDNA_id_col}": pd.pivot_table(data=df_8_strip,values=gDNA_id_col,index=['8-strip plate','row'],columns='column',aggfunc='first'),
-            f"8-strip_{pcr1_id_col}": pd.pivot_table(data=df_8_strip,values=pcr1_id_col,index=['8-strip plate','row'],columns='column',aggfunc='first'),
+    pivots = {f"96-well_{gDNA_id_col}": pd.pivot_table(data=df_96_well_pcr1,values=gDNA_id_col,index=['96-well plate (PCR1)','row'],columns='column',aggfunc='first'),
+            f"96-well_{pcr1_id_col}": pd.pivot_table(data=df_96_well_pcr1,values=pcr1_id_col,index=['96-well plate (PCR1)','row'],columns='column',aggfunc='first'),
+            f"8-strip_{gDNA_id_col}": pd.pivot_table(data=df_8_strip_pcr1,values=gDNA_id_col,index=['8-strip plate (PCR1)','row'],columns='column',aggfunc='first'),
+            f"8-strip_{pcr1_id_col}": pd.pivot_table(data=df_8_strip_pcr1,values=pcr1_id_col,index=['8-strip plate (PCR1)','row'],columns='column',aggfunc='first'),
             }
     
     # Get unique primer pairs and their value counts for PCR1
@@ -362,5 +354,5 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col: str='
                 thermo.to_excel(writer,sheet_name=key) # Thermocyler object per sheet
                 sr += thermo.shape[0]+2 # Skip 2 lines after each thermocyler object
             
-    return pivots,pcr1_mms,pcr1_thermo,
+    return pivots,pcr1_mms,pcr1_thermo
 
