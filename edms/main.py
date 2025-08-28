@@ -1377,14 +1377,14 @@ def main():
     # extract_UMIs():
     parser_fastq_extract_UMIs.add_argument("--fastq_dir", help="Directory containing FASTQ files", required=True)
 
-    parser_fastq_extract_UMIs.add_argument("--out_dir", help="Output directory (Default: ./extract_UMIs)", default=f'extract_UMIs')
+    parser_fastq_extract_UMIs.add_argument("--out_dir", help="Output directory (Default: ./extract_UMIs)", default=f'./extract_UMIs')
     parser_fastq_extract_UMIs.add_argument("--bc_pattern", help="UMI barcode pattern (Default: NNNNNNNNNNNNNNNN)", default="NNNNNNNNNNNNNNNN")
     parser_fastq_extract_UMIs.add_argument("--env", help="Conda environment with umi_tools installed (Default: umi_tools)", default="umi_tools")
 
     # trim_motifs():
     parser_fastq_trim_motifs.add_argument("--fastq_dir", help="Directory containing FASTQ files (with UMIs extracted)", required=True)
 
-    parser_fastq_trim_motifs.add_argument("--out_dir", help="Output directory (Default: ./trim_motifs)", default=f'trim_motifs')
+    parser_fastq_trim_motifs.add_argument("--out_dir", help="Output directory (Default: ./trim_motifs)", default=f'./trim_motifs')
 
     parser_fastq_trim_motifs.add_argument("--in_file", help="[Required option 1] Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)", default=argparse.SUPPRESS)
     parser_fastq_trim_motifs.add_argument("--motif5", help="[Required option 2] 5' motif sequence to trim", default=argparse.SUPPRESS)
@@ -1398,7 +1398,7 @@ def main():
     # make_SAMs():
     parser_fastq_make_SAMs.add_argument("--fastq_dir", help="Directory containing FASTQ files", required=True)
 
-    parser_fastq_make_SAMs.add_argument("--out_dir", help="Output directory (Default: ./make_SAMs)", default=f'make_SAMs')
+    parser_fastq_make_SAMs.add_argument("--out_dir", help="Output directory (Default: ./make_SAMs)", default=f'./make_SAMs')
 
     parser_fastq_make_SAMs_group = parser_fastq_make_SAMs.add_mutually_exclusive_group(required=True)
     parser_fastq_make_SAMs_group.add_argument("--in_file", help="Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)", default=argparse.SUPPRESS)
@@ -1412,13 +1412,13 @@ def main():
     # make_BAMs():
     parser_fastq_make_BAMs.add_argument("--sam_dir", help="Directory containing SAM files", required=True)
 
-    parser_fastq_make_BAMs.add_argument("--out_dir", help="Output directory (Default: ./make_BAMs)", default=f'make_BAMs')
+    parser_fastq_make_BAMs.add_argument("--out_dir", help="Output directory (Default: ./make_BAMs)", default=f'./make_BAMs')
     parser_fastq_make_BAMs.add_argument("--env", help="Conda environment with samtools installed (Default: umi_tools)", default="umi_tools")
 
     # group_UMIs():
     parser_fastq_group_UMIs.add_argument("--bam_dir", help="Directory containing BAM files", required=True)
 
-    parser_fastq_group_UMIs.add_argument("--out_dir", help="Output directory (Default: ./group_UMIs)", default=f'group_UMIs')
+    parser_fastq_group_UMIs.add_argument("--out_dir", help="Output directory (Default: ./group_UMIs)", default=f'./group_UMIs')
     parser_fastq_group_UMIs.add_argument("--strategy", choices=["identical","edit","adjacency", "paired"], help="UMI grouping strategy (Default: adjacency)", default="adjacency")
     parser_fastq_group_UMIs.add_argument("--edits", type=int, help="Maximum edit distance to group UMIs (Default: 1)", default=1)
     parser_fastq_group_UMIs.add_argument("--env", help="Conda environment with fgbio installed (Default: umi_tools)", default="umi_tools")
@@ -1426,7 +1426,7 @@ def main():
     # consensus_UMIs():
     parser_fastq_consensus_UMIs.add_argument("--bam_dir", help="Directory containing grouped BAM files", required=True)
 
-    parser_fastq_consensus_UMIs.add_argument("--out_dir", help="Output directory (Default: ./consensus_UMIs)", default=f'consensus_UMIs')
+    parser_fastq_consensus_UMIs.add_argument("--out_dir", help="Output directory (Default: ./consensus_UMIs)", default=f'./consensus_UMIs')
     parser_fastq_consensus_UMIs.add_argument("--min_reads", type=int, help="Minimum reads per UMI to call consensus (Default: 1)", default=1)
     parser_fastq_consensus_UMIs.add_argument("--env", help="Conda environment with fgbio installed (Default: umi_tools)", default="umi_tools")
 

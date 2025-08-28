@@ -2337,7 +2337,7 @@ def editing_per_library(edit_dc: dict | str, paired_regions_dc: dict | str, fast
         return out_df
 
 # UMI methods
-def extract_UMIs(fastq_dir: str, out_dir: str='extract_UMIs', 
+def extract_UMIs(fastq_dir: str, out_dir: str='./extract_UMIs', 
                  bc_pattern: str='NNNNNNNNNNNNNNNN', env: str='umi_tools'):
     ''' 
     extract_UMIs(): extract UMIs using umi_tools
@@ -2376,7 +2376,7 @@ def extract_UMIs(fastq_dir: str, out_dir: str='extract_UMIs',
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))     
     
-def trim_motifs(fastq_dir: str, out_dir: str='trim_motifs', 
+def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs', 
                 in_file: pd.DataFrame | str = None, motif5: str=None, motif3: str=None, 
                 motif_length: int=21, error_rate: float=0.1,
                 max_distance: int=2, env: str='umi_tools'):
@@ -2437,7 +2437,7 @@ def trim_motifs(fastq_dir: str, out_dir: str='trim_motifs',
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))  
 
-def make_SAMs(fastq_dir: str, out_dir: str='make_SAMs', 
+def make_SAMs(fastq_dir: str, out_dir: str='./make_SAMs', 
               in_file: pd.DataFrame | str = None, fasta: str=None,
               sensitivity: Literal['very-fast','fast','sensitive','very-sensitive','very-fast-local','fast-local','sensitive-local','very-sensitive-local']='very-sensitive', 
               env: str='umi_tools'):
@@ -2527,13 +2527,13 @@ def make_SAMs(fastq_dir: str, out_dir: str='make_SAMs',
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
 
-def make_BAMs(sam_dir: str, out_dir: str='make_BAMs', env: str='umi_tools'):
+def make_BAMs(sam_dir: str, out_dir: str='./make_BAMs', env: str='umi_tools'):
     '''
     make_BAMs(): converts SAM files to BAM files using samtools
     
     Parameters:
     sam_dir (str): directory with SAM files
-    out_dir (str): output directory (Default: make_BAMs)
+    out_dir (str): output directory (Default: ./make_BAMs)
     env (str, optional): Conda environment with samtools installed (Default: umi_tools)
     '''
     # Memory reporting
@@ -2576,7 +2576,7 @@ def make_BAMs(sam_dir: str, out_dir: str='make_BAMs', env: str='umi_tools'):
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
 
-def group_UMIs(bam_dir: str, out_dir: str='group_UMIs', 
+def group_UMIs(bam_dir: str, out_dir: str='./group_UMIs', 
                strategy: Literal['identical','edit','adjacency','paired']='adjacency',
                edits: int=1,
                env: str='umi_tools'):
@@ -2585,7 +2585,7 @@ def group_UMIs(bam_dir: str, out_dir: str='group_UMIs',
     
     Parameters:
     bam_dir (str): directory with BAM files
-    out_dir (str): output directory (Default: dedup_UMIs)
+    out_dir (str): output directory (Default: ./group_UMIs)
     strategy (str, optional): UMI grouping strategy (Default: adjacency). Options: identical, edit, adjacency, paired
         1. identity: only reads with identical UMI sequences are grouped together. This strategy may be useful for evaluating
            data, but should generally be avoided as it will generate multiple UMI groups per original molecule in the presence
@@ -2630,7 +2630,7 @@ def group_UMIs(bam_dir: str, out_dir: str='group_UMIs',
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
 
-def consensus_UMIs(bam_dir: str, out_dir: str='consensus_UMIs', 
+def consensus_UMIs(bam_dir: str, out_dir: str='./consensus_UMIs', 
                    min_reads: int=1,
                    env: str='umi_tools'):
     '''
@@ -2638,7 +2638,7 @@ def consensus_UMIs(bam_dir: str, out_dir: str='consensus_UMIs',
     
     Parameters:
     bam_dir (str): directory with grouped BAM files
-    out_dir (str): output directory (Default: consensus_UMIs)
+    out_dir (str): output directory (Default: ./consensus_UMIs)
     min_reads (int, optional): minimum reads per UMI group to generate consensus (Default: 1)
     env (str, optional): Conda environment with fgbio installed (Default: umi_tools)
     '''
