@@ -1036,17 +1036,17 @@ def main():
 
     parser_clone_epegRNA_pool.set_defaults(func=cl.epegRNA_pool) 
     
-    # UMI(): generates unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance
-    parser_clone_UMI = subparsers_clone.add_parser("UMI", help="Generate unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance")
+    # umi(): generates unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance
+    parser_clone_umi = subparsers_clone.add_parser("umi", help="Generate unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance")
 
-    parser_clone_UMI.add_argument("--length", type=int, help="Length of UMI (Default: 15)", default=15)
-    parser_clone_UMI.add_argument("--GC_fract", type=parse_tuple_float, default=(0.4,0.6), help="Pair of GC content boundaries written as fractions (Default: 0.4,0.6)")
-    parser_clone_UMI.add_argument("--hamming", type=int, help="Minimum Hamming distance between UMIs (Default: 4)", default=4)
-    parser_clone_UMI.add_argument("--nrows", type=int, help="# of UMIs to compare iteratively for hamming filtering (Default: 1000)", default=1000)
-    parser_clone_UMI.add_argument("--pt", type=str, help="Shuffled UMI file path if already made (Default: None)", default=argparse.SUPPRESS)
-    parser_clone_UMI.add_argument("--dir", type=str, help="Output directory", default='../out')
+    parser_clone_umi.add_argument("--length", type=int, help="Length of UMI (Default: 15)", default=15)
+    parser_clone_umi.add_argument("--GC_fract", type=parse_tuple_float, default=(0.4,0.6), help="Pair of GC content boundaries written as fractions (Default: 0.4,0.6)")
+    parser_clone_umi.add_argument("--hamming", type=int, help="Minimum Hamming distance between UMIs (Default: 4)", default=4)
+    parser_clone_umi.add_argument("--nrows", type=int, help="# of UMIs to compare iteratively for hamming filtering (Default: 1000)", default=1000)
+    parser_clone_umi.add_argument("--pt", type=str, help="Shuffled UMI file path if already made (Default: None)", default=argparse.SUPPRESS)
+    parser_clone_umi.add_argument("--dir", type=str, help="Output directory", default='../out')
 
-    parser_clone_UMI.set_defaults(func=cl.UMI)
+    parser_clone_umi.set_defaults(func=cl.umi)
 
     # pcr_sim(): returns dataframe with simulated pcr product 
     parser_clone_pcrsim = subparsers_clone.add_parser("pcr_sim", help="Simulate PCR product from template and primer sequences")
@@ -1172,13 +1172,14 @@ def main():
     - paired_regions(): quantify, plot, & return (un)paired regions that aligned to the annotated library
     - count_signatures(): generate signatures from fastq read region alignments to WT sequence; count signatures, plot and return fastq signatures dataframe
     - editing_per_library(): Determine editing relative library abundance
-    - extract_UMIs(): extract UMIs using umi_tools
+    - extract_umis(): extract UMIs using umi_tools
     - trim_motifs(): trimming motifs with cutadapt
-    - make_SAMs(): generates alignments saved as a SAM files using bowtie2
-    - make_BAMs(): converts SAM files to BAM files using samtools
-    - BAM_UMI_tags(): copy UMI in read ID to RX tag in BAM files using fgbio
-    - group_UMIs(): group BAM files by UMI using fgbio
-    - consensus_UMIs(): generate consensus sequences from grouped UMIs using fgbio
+    - make_sams(): generates alignments saved as a SAM files using bowtie2
+    - make_bams(): converts SAM files to BAM files using samtools
+    - bam_umi_tags(): copy UMI in read ID to RX tag in BAM files using fgbio
+    - group_umis(): group BAM files by UMI using fgbio
+    - consensus_umis(): generate consensus sequences from grouped UMIs using fgbio
+    - bam_to_fastq(): convert BAM files to FASTQ files using samtools
     '''
     parser_fastq = subparsers.add_parser("fastq", help="FASTQ files")
     subparsers_fastq = parser_fastq.add_subparsers()
@@ -1197,14 +1198,15 @@ def main():
     parser_fastq_paired_regions = subparsers_fastq.add_parser("paired_regions", help="Extract paired regions from FASTQ files")
     parser_fastq_count_signatures = subparsers_fastq.add_parser("count_signatures", help="Generate signatures from fastq read region alignments to WT sequence")
     parser_fastq_editing_per_library = subparsers_fastq.add_parser("editing_per_library", help="Determine editing relative library abundance")
-    parser_fastq_extract_UMIs = subparsers_fastq.add_parser("extract_UMIs", help="Extract UMIs using umi_tools")
+    parser_fastq_extract_umis = subparsers_fastq.add_parser("extract_umis", help="Extract UMIs using umi_tools")
     parser_fastq_trim_motifs = subparsers_fastq.add_parser("trim_motifs", help="Trim motifs with cutadapt")
-    parser_fastq_make_SAMs = subparsers_fastq.add_parser("make_SAMs", help="Generate alignments saved as SAM files using bowtie2")
-    parser_fastq_make_BAMs = subparsers_fastq.add_parser("make_BAMs", help="Convert SAM files to BAM files using samtools")
-    parser_fastq_BAM_UMI_tags = subparsers_fastq.add_parser("BAM_UMI_tags", help="Copy UMI in read ID to RX tag in BAM files using fgbio")
-    parser_fastq_group_UMIs = subparsers_fastq.add_parser("group_UMIs", help="Group BAM files by UMI using fgbio")
-    parser_fastq_consensus_UMIs = subparsers_fastq.add_parser("consensus_UMIs", help="Generate consensus sequences from grouped UMIs using fgbio")
-    
+    parser_fastq_make_sams = subparsers_fastq.add_parser("make_sams", help="Generate alignments saved as SAM files using bowtie2")
+    parser_fastq_make_bams = subparsers_fastq.add_parser("make_bams", help="Convert SAM files to BAM files using samtools")
+    parser_fastq_bam_umi_tags = subparsers_fastq.add_parser("bam_umi_tags", help="Copy UMI in read ID to RX tag in BAM files using fgbio")
+    parser_fastq_group_umis = subparsers_fastq.add_parser("group_umis", help="Group BAM files by UMI using fgbio")
+    parser_fastq_consensus_umis = subparsers_fastq.add_parser("consensus_umis", help="Generate consensus sequences from grouped UMIs using fgbio")
+    parser_fastq_bam_to_fastq = subparsers_fastq.add_parser("bam_to_fastq", help="Convert BAM files to FASTQ files using samtools")
+
     # Add common arguments: revcom_fastqs(), unzip_fastqs(), comb_fastqs(), and genotyping()
     for parser_fastq_common in [parser_fastq_revcom,parser_fastq_unzip,parser_fastq_comb,parser_fastq_genotyping]:
         parser_fastq_common.add_argument("--in_dir", type=str, help="Input directory containing FASTQ files",default='.')
@@ -1342,13 +1344,13 @@ def main():
     # count_signatures():
     parser_fastq_count_signatures.add_argument("--df_ref", help="Annotated reference library file path", required=True)
     parser_fastq_count_signatures.add_argument("--fastq_dir", help="Directory containing FASTQ files", required=True)
-    parser_fastq_count_signatures.add_argument("--df_motif5", help="5' motif file path", required=True)
-    parser_fastq_count_signatures.add_argument("--df_motif3", help="3' motif file path", required=True)
     
     parser_fastq_count_signatures_group = parser_fastq_count_signatures.add_mutually_exclusive_group(required=True)
     parser_fastq_count_signatures_group.add_argument("--target_sequence", help="[Required (Option 1)] Target sequence; retrieved from input file if not provided")
     parser_fastq_count_signatures_group.add_argument("--in_file", help="[Required (Option 2)] Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence,aa_index (column names required)")
     
+    parser_fastq_count_signatures.add_argument("--df_motif5", help="5' motif file path", default=argparse.SUPPRESS)
+    parser_fastq_count_signatures.add_argument("--df_motif3", help="3' motif file path", default=argparse.SUPPRESS)
     parser_fastq_count_signatures.add_argument("--meta", help="Meta file path", default=argparse.SUPPRESS)
     parser_fastq_count_signatures.add_argument("--out_dir", help="Output directory", default='../out/')
     parser_fastq_count_signatures.add_argument("--out_file", help="Output filename", default=f"{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_count_signatures.csv")
@@ -1376,12 +1378,12 @@ def main():
     parser_fastq_editing_per_library.add_argument("--count", default="count", help="Column to use for epeg-ngRNA counts (Default: 'count')")
     parser_fastq_editing_per_library.add_argument("--psuedocount", type=int, default=1, help="Pseudocount to add to all counts (Default: 1)")
 
-    # extract_UMIs():
-    parser_fastq_extract_UMIs.add_argument("--fastq_dir", help="Directory containing FASTQ files", required=True)
+    # extract_umis():
+    parser_fastq_extract_umis.add_argument("--fastq_dir", help="Directory containing FASTQ files", required=True)
 
-    parser_fastq_extract_UMIs.add_argument("--out_dir", help="Output directory (Default: ./extract_UMIs)", default=f'./extract_UMIs')
-    parser_fastq_extract_UMIs.add_argument("--bc_pattern", help="UMI barcode pattern (Default: NNNNNNNNNNNNNNNN)", default="NNNNNNNNNNNNNNNN")
-    parser_fastq_extract_UMIs.add_argument("--env", help="Conda environment with umi_tools installed (Default: umi_tools)", default="umi_tools")
+    parser_fastq_extract_umis.add_argument("--out_dir", help="Output directory (Default: ./extract_umis)", default=f'./extract_umis')
+    parser_fastq_extract_umis.add_argument("--bc_pattern", help="UMI barcode pattern (Default: NNNNNNNNNNNNNNNN)", default="NNNNNNNNNNNNNNNN")
+    parser_fastq_extract_umis.add_argument("--env", help="Conda environment with umi_tools installed (Default: umi_tools)", default="umi_tools")
 
     # trim_motifs():
     parser_fastq_trim_motifs.add_argument("--fastq_dir", help="Directory containing FASTQ files (with UMIs extracted)", required=True)
@@ -1397,47 +1399,52 @@ def main():
     parser_fastq_trim_motifs.add_argument("--max_distance", type=int, help="Maximum number of errors allowed in each motif (Default: 2)", default=2)
     parser_fastq_trim_motifs.add_argument("--env", help="Conda environment with cutadapt installed (Default: cutadapt)", default="umi_tools")
 
-    # make_SAMs():
-    parser_fastq_make_SAMs.add_argument("--fastq_dir", help="Directory containing FASTQ files", required=True)
+    # make_sams():
+    parser_fastq_make_sams.add_argument("--fastq_dir", help="Directory containing FASTQ files", required=True)
 
-    parser_fastq_make_SAMs.add_argument("--out_dir", help="Output directory (Default: ./make_SAMs)", default=f'./make_SAMs')
+    parser_fastq_make_sams.add_argument("--out_dir", help="Output directory (Default: ./make_sams)", default=f'./make_sams')
 
-    parser_fastq_make_SAMs_group = parser_fastq_make_SAMs.add_mutually_exclusive_group(required=True)
-    parser_fastq_make_SAMs_group.add_argument("--in_file", help="Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)", default=argparse.SUPPRESS)
-    parser_fastq_make_SAMs_group.add_argument("--fasta", help="Reference FASTA file for alignment", default=argparse.SUPPRESS)
+    parser_fastq_make_sams_group = parser_fastq_make_sams.add_mutually_exclusive_group(required=True)
+    parser_fastq_make_sams_group.add_argument("--in_file", help="Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)", default=argparse.SUPPRESS)
+    parser_fastq_make_sams_group.add_argument("--fasta", help="Reference FASTA file for alignment", default=argparse.SUPPRESS)
 
-    parser_fastq_make_SAMs.add_argument("--sensitivity", choices=["very-sensitive", "sensitive", "fast", "very-fast", "very-sensitive-local", "sensitive-local", "fast-local", "very-fast-local"], 
+    parser_fastq_make_sams.add_argument("--sensitivity", choices=["very-sensitive", "sensitive", "fast", "very-fast", "very-sensitive-local", "sensitive-local", "fast-local", "very-fast-local"], 
                                         default="very-sensitive", help="Bowtie2 sensitivity setting (Default: very-sensitive)")
 
-    parser_fastq_make_SAMs.add_argument("--env", help="Conda environment with bowtie2 installed (Default: umi_tools)", default="umi_tools")
+    parser_fastq_make_sams.add_argument("--env", help="Conda environment with bowtie2 installed (Default: umi_tools)", default="umi_tools")
 
-    # make_BAMs():
-    parser_fastq_make_BAMs.add_argument("--sam_dir", help="Directory containing SAM files", required=True)
+    # make_bams():
+    parser_fastq_make_bams.add_argument("--sam_dir", help="Directory containing SAM files", required=True)
 
-    parser_fastq_make_BAMs.add_argument("--out_dir", help="Output directory (Default: ./make_BAMs)", default=f'./make_BAMs')
-    parser_fastq_make_BAMs.add_argument("--env", help="Conda environment with samtools installed (Default: umi_tools)", default="umi_tools")
+    parser_fastq_make_bams.add_argument("--out_dir", help="Output directory (Default: ./make_bams)", default=f'./make_bams')
+    parser_fastq_make_bams.add_argument("--env", help="Conda environment with samtools installed (Default: umi_tools)", default="umi_tools")
 
-    # BAM_UMI_tags():
-    parser_fastq_BAM_UMI_tags.add_argument("--bam_dir", help="Directory containing BAM files", required=True)
+    # bam_umi_tags():
+    parser_fastq_bam_umi_tags.add_argument("--bam_dir", help="Directory containing bam files", required=True)
 
-    parser_fastq_BAM_UMI_tags.add_argument("--out_dir", help="Output directory (Default: ./BAM_UMI_tags)", default=f'./BAM_UMI_tags')
-    parser_fastq_BAM_UMI_tags.add_argument("--env", help="Conda environment with fgbio installed (Default: umi_tools)", default="umi_tools")
+    parser_fastq_bam_umi_tags.add_argument("--out_dir", help="Output directory (Default: ./bam_umi_tags)", default=f'./bam_umi_tags')
+    parser_fastq_bam_umi_tags.add_argument("--env", help="Conda environment with fgbio installed (Default: umi_tools)", default="umi_tools")
 
-    # group_UMIs():
-    parser_fastq_group_UMIs.add_argument("--bam_dir", help="Directory containing BAM files", required=True)
+    # group_umis():
+    parser_fastq_group_umis.add_argument("--bam_dir", help="Directory containing BAM files", required=True)
 
-    parser_fastq_group_UMIs.add_argument("--out_dir", help="Output directory (Default: ./group_UMIs)", default=f'./group_UMIs')
-    parser_fastq_group_UMIs.add_argument("--strategy", choices=["Identical","Edit","Adjacency", "Paired"], help="UMI grouping strategy (Default: Adjacency)", default="Adjacency")
-    parser_fastq_group_UMIs.add_argument("--edits", type=int, help="Maximum edit distance to group UMIs (Default: 1)", default=1)
-    parser_fastq_group_UMIs.add_argument("--env", help="Conda environment with fgbio installed (Default: umi_tools)", default="umi_tools")
+    parser_fastq_group_umis.add_argument("--out_dir", help="Output directory (Default: ./group_umis)", default=f'./group_umis')
+    parser_fastq_group_umis.add_argument("--strategy", choices=["Identical","Edit","Adjacency", "Paired"], help="umi grouping strategy (Default: Adjacency)", default="Adjacency")
+    parser_fastq_group_umis.add_argument("--edits", type=int, help="Maximum edit distance to group UMIs (Default: 1)", default=1)
+    parser_fastq_group_umis.add_argument("--env", help="Conda environment with fgbio installed (Default: umi_tools)", default="umi_tools")
 
-    # consensus_UMIs():
-    parser_fastq_consensus_UMIs.add_argument("--bam_dir", help="Directory containing grouped BAM files", required=True)
+    # consensus_umis():
+    parser_fastq_consensus_umis.add_argument("--bam_dir", help="Directory containing grouped BAM files", required=True)
 
-    parser_fastq_consensus_UMIs.add_argument("--out_dir", help="Output directory (Default: ./consensus_UMIs)", default=f'./consensus_UMIs')
-    parser_fastq_consensus_UMIs.add_argument("--min_reads", type=int, help="Minimum reads per UMI to call consensus (Default: 1)", default=1)
-    parser_fastq_consensus_UMIs.add_argument("--env", help="Conda environment with fgbio installed (Default: umi_tools)", default="umi_tools")
+    parser_fastq_consensus_umis.add_argument("--out_dir", help="Output directory (Default: ./consensus_umis)", default=f'./consensus_umis')
+    parser_fastq_consensus_umis.add_argument("--min_reads", type=int, help="Minimum reads per UMI to call consensus (Default: 1)", default=1)
+    parser_fastq_consensus_umis.add_argument("--env", help="Conda environment with fgbio installed (Default: umi_tools)", default="umi_tools")
 
+    # bam_to_fastq():
+    parser_fastq_bam_to_fastq.add_argument("--bam_dir", help="Directory containing BAM files", required=True)
+    parser_fastq_bam_to_fastq.add_argument("--out_dir", help="Output directory (Default: ./bam_to_fastq)", default=f'./bam_to_fastq')
+    parser_fastq_bam_to_fastq.add_argument("--env", help="Conda environment with samtools installed (Default: umi_tools)", default="umi_tools")
+    
     # Set defaults
     parser_fastq_revcom.set_defaults(func=fq.revcom_fastqs)
     parser_fastq_unzip.set_defaults(func=fq.unzip_fastqs)
@@ -1453,13 +1460,14 @@ def main():
     parser_fastq_paired_regions.set_defaults(func=fq.paired_regions)
     parser_fastq_count_signatures.set_defaults(func=fq.count_signatures)
     parser_fastq_editing_per_library.set_defaults(func=fq.editing_per_library)
-    parser_fastq_extract_UMIs.set_defaults(func=fq.extract_UMIs)
+    parser_fastq_extract_umis.set_defaults(func=fq.extract_umis)
     parser_fastq_trim_motifs.set_defaults(func=fq.trim_motifs)
-    parser_fastq_make_SAMs.set_defaults(func=fq.make_SAMs)
-    parser_fastq_make_BAMs.set_defaults(func=fq.make_BAMs)
-    parser_fastq_BAM_UMI_tags.set_defaults(func=fq.BAM_UMI_tags)
-    parser_fastq_group_UMIs.set_defaults(func=fq.group_UMIs)
-    parser_fastq_consensus_UMIs.set_defaults(func=fq.consensus_UMIs)
+    parser_fastq_make_sams.set_defaults(func=fq.make_sams)
+    parser_fastq_make_bams.set_defaults(func=fq.make_bams)
+    parser_fastq_bam_umi_tags.set_defaults(func=fq.bam_umi_tags)
+    parser_fastq_group_umis.set_defaults(func=fq.group_umis)
+    parser_fastq_consensus_umis.set_defaults(func=fq.consensus_umis)
+    parser_fastq_bam_to_fastq.set_defaults(func=fq.bam_to_fastq)
 
     '''
     Add pe.py
@@ -1468,7 +1476,7 @@ def main():
     - epegRNA_linkers(): Generate epegRNA linkers between PBS and 3' hairpin motif & finish annotations
     - merge(): rejoins epeg/ngRNAs & creates ngRNA_groups
     - sensor_designer(): design pegRNA sensors
-    - RTT_designer(): design all possible RTT for given spacer & PBS (WT, single insertions, & single deletions)
+    - rtt_designer(): design all possible RTT for given spacer & PBS (WT, single insertions, & single deletions)
     - pegRNA_outcome(): confirm that pegRNAs should create the predicted edit
     - pegRNA_signature(): create signatures for pegRNA outcomes using alignments
     '''
@@ -1480,7 +1488,7 @@ def main():
     parser_pe_epegRNA_linkers = subparsers_pe.add_parser("epegRNA_linkers", help="Generate epegRNA linkers between PBS and 3' hairpin motif")
     parser_pe_merge = subparsers_pe.add_parser("merge", help="rejoins epeg/ngRNAs & creates ngRNA groups")
     parser_pe_sensor_designer = subparsers_pe.add_parser("sensor_designer", help='Design pegRNA sensors')
-    parser_pe_RTT_designer = subparsers_pe.add_parser("RTT_designer", help="Design all possible RTT for given spacer & PBS (WT, single insertions, & single deletions)")
+    parser_pe_rtt_designer = subparsers_pe.add_parser("rtt_designer", help="Design all possible RTT for given spacer & PBS (WT, single insertions, & single deletions)")
     parser_pe_pegRNA_outcome = subparsers_pe.add_parser("pegRNA_outcome", help="Confirm that pegRNAs should create the predicted edit")
     parser_pe_pegRNA_signature = subparsers_pe.add_parser("pegRNA_signature", help="Create signatures for pegRNA outcomes using alignments")
 
@@ -1549,18 +1557,18 @@ def main():
     parser_pe_sensor_designer.add_argument("--out_file", type=str, help="Name of the output file (Default: pegRNAs.csv)", default='pegRNAs.csv')
     parser_pe_sensor_designer.add_argument("--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
 
-    # RTT_designer():
-    parser_pe_RTT_designer.add_argument("--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
-    parser_pe_RTT_designer.add_argument("--in_file", type=str, help="Path to PrimeDesign input file (required columns: target_name, target_sequence, aa_index)", required=True)
+    # rtt_designer():
+    parser_pe_rtt_designer.add_argument("--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
+    parser_pe_rtt_designer.add_argument("--in_file", type=str, help="Path to PrimeDesign input file (required columns: target_name, target_sequence, aa_index)", required=True)
     
-    parser_pe_RTT_designer.add_argument("--RTT_length", type=int, default=39, help="Length of RTT (Default: 39)")
-    parser_pe_RTT_designer.add_argument("--include_WT", action='store_true', default=False, help="include wildtype RTT (Default: False)")
-    parser_pe_RTT_designer.add_argument("--out_dir", type=str, help="Output directory (Default: ../RTT_Designer)", default='../RTT_Designer')
-    parser_pe_RTT_designer.add_argument("--out_file", type=str, help="Name of the output file (Default: pegRNAs.csv)", default='pegRNAs.csv')
-    parser_pe_RTT_designer.add_argument("--comments", action='store_true', help="Print comments (Default: False)", default=False)
-    parser_pe_RTT_designer.add_argument("--enzymes", type=str, nargs="+", help="list of type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to check for in pegRNAs and ngRNAs (Default: ['Esp3I'])", default=['Esp3I'])
-    parser_pe_RTT_designer.add_argument("--dont_replace", action='store_false',dest='replace', help="Do not replace pegRNAs with RE enzyme sites", default=True)
-    parser_pe_RTT_designer.add_argument("--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
+    parser_pe_rtt_designer.add_argument("--RTT_length", type=int, default=39, help="Length of RTT (Default: 39)")
+    parser_pe_rtt_designer.add_argument("--include_WT", action='store_true', default=False, help="include wildtype RTT (Default: False)")
+    parser_pe_rtt_designer.add_argument("--out_dir", type=str, help="Output directory (Default: ../RTT_Designer)", default='../RTT_Designer')
+    parser_pe_rtt_designer.add_argument("--out_file", type=str, help="Name of the output file (Default: pegRNAs.csv)", default='pegRNAs.csv')
+    parser_pe_rtt_designer.add_argument("--comments", action='store_true', help="Print comments (Default: False)", default=False)
+    parser_pe_rtt_designer.add_argument("--enzymes", type=str, nargs="+", help="list of type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to check for in pegRNAs and ngRNAs (Default: ['Esp3I'])", default=['Esp3I'])
+    parser_pe_rtt_designer.add_argument("--dont_replace", action='store_false',dest='replace', help="Do not replace pegRNAs with RE enzyme sites", default=True)
+    parser_pe_rtt_designer.add_argument("--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
 
     # pegRNA_outcome():
     parser_pe_pegRNA_outcome.add_argument("--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
@@ -1594,7 +1602,7 @@ def main():
     parser_pe_epegRNA_linkers.set_defaults(func=pe.epegRNA_linkers)
     parser_pe_merge.set_defaults(func=pe.merge)
     parser_pe_sensor_designer.set_defaults(func=pe.sensor_designer)
-    parser_pe_RTT_designer.set_defaults(func=pe.RTT_designer)
+    parser_pe_rtt_designer.set_defaults(func=pe.rtt_designer)
     parser_pe_pegRNA_outcome.set_defaults(func=pe.pegRNA_outcome)
     parser_pe_pegRNA_signature.set_defaults(func=pe.pegRNA_signature)
 

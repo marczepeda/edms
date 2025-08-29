@@ -44,13 +44,14 @@ Usage:
 - editing_per_library(): Determine editing relative library abundance
 
 [UMI methods]
-- extract_UMIs(): extract UMIs using umi_tools
+- extract_umis(): extract UMIs using umi_tools
 - trim_motifs(): trimming motifs with cutadapt
-- make_SAMs(): generates alignments saved as a SAM files using bowtie2
-- make_BAMs(): converts SAM files to BAM files using samtools
-- BAM_UMI_tags(): copy UMI in read ID to RX tag in BAM files using fgbio
-- group_UMIs(): group BAM files by UMI using fgbio
-- consensus_UMIs(): generate consensus sequences from grouped UMIs using fgbio
+- make_sams(): generates alignments saved as a SAM files using bowtie2
+- make_bams(): converts SAM files to BAM files using samtools
+- bam_umi_tags(): copy UMI in read ID to RX tag in BAM files using fgbio
+- group_umis(): group BAM files by UMI using fgbio
+- consensus_umis(): generate consensus sequences from grouped UMIs using fgbio
+- bam_to_fastq(): convert BAM files to fastq files using samtools
 # Note: Consider adding fgbio FilterConsensusReads & fgbio ReviewConsensusVariants
 
 [Supporting methods for DMS plots]
@@ -1199,8 +1200,8 @@ def paired_regions(meta_dir: str, region1_dir: str, region2_dir: str, out_dir: s
 
 ### Signature 
 def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str, edit_col: str, fastq_dir: str, 
-                     df_motif5: pd.DataFrame | str, df_motif3: pd.DataFrame | str, out_dir: str, out_file: str, 
-                     target_sequence: str=None, in_file: pd.DataFrame | str=None, fastq_col: str=None,  meta: pd.DataFrame | str=None, 
+                     out_dir: str, out_file: str, target_sequence: str=None, in_file: pd.DataFrame | str=None, 
+                     df_motif5: pd.DataFrame | str=None, df_motif3: pd.DataFrame | str=None, fastq_col: str=None,  meta: pd.DataFrame | str=None, 
                      match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, extend_gap_score: float = -0.1, 
                      align_dims: tuple=(0,0), align_ckpt: int=10000, save_alignments: bool=False, return_df: bool=False, 
                      literal_eval: bool=True, plot_suf: bool=None, show: bool=False, **plot_kwargs) -> pd.DataFrame:
@@ -1213,14 +1214,14 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
     id_col (str): id column name in the annotated reference library
     edit_col (str): edit column name in the annotated reference library
     fastq_dir (str): directory with fastq files
-    df_motif5 (dataframe | str): 5' motif dataframe (or file path)
-    df_motif3 (dataframe | str): 3' motif dataframe (or file path)
     out_dir (str): directory for output files
     out_file (str): output filename
 
     target_sequence (str, option 1): Target sequence; retrieved from input file if not provided
     in_file (dataframe | str, option 2): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence,aa_index (column names required)
     
+    df_motif5 (dataframe | str, optional): 5' motif dataframe (or file path)
+    df_motif3 (dataframe | str, optional): 3' motif dataframe (or file path)
     fastq_col (str, optional): fastq column name in the annotated reference library (Default: None)
     meta (DataFrame | str, optional): meta dataframe (or file path) must have 'fastq_file' column (Default: None)
     match_score (float, optional): match score for pairwise alignment (Default: 2)
@@ -1251,21 +1252,10 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
     aligner.open_gap_score = open_gap_score  # Penalty for opening a gap; applied to both strands
     aligner.extend_gap_score = extend_gap_score  # Penalty for extending a gap; applied to both strands
 
-    # Get dataframes from file path if needed
+    # Get dataframe from file path if needed
     if type(df_ref)==str: 
         df_ref = io.get(df_ref,literal_eval=literal_eval)
-    if target_sequence is None: 
-        if type(in_file)==str:
-            in_file = io.get(in_file)
-        target_sequence = in_file.iloc[0]['target_sequence']
-        ref_seq = target_sequence.split('(')[1].split(')')[0] # Get wt reference sequence
-    else:
-        ref_seq = target_sequence
-    if type(df_motif5)==str: 
-        df_motif5 = io.get(df_motif5)
-    if type(df_motif3)==str: 
-        df_motif3 = io.get(df_motif3)
-
+    
     # Check dataframe for alignment, id, & fastq columns
     if signature_col not in df_ref.columns.tolist():
         raise Exception(f'Missing signature column: {signature_col}') 
@@ -1277,15 +1267,31 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
         if fastq_col not in df_ref.columns.tolist():
             raise Exception(f'Missing fastq column: {fastq_col}')
 
-    # Check for fastq_file, start_i and end_i columns
-    if 'fastq_file' not in df_motif5.columns.tolist():
-        raise Exception('Missing column in df_motif5: fastq_file') 
-    if 'end_i' not in df_motif5.columns.tolist():
-        raise Exception('Missing column in df_motif5: end_i') 
-    if 'fastq_file' not in df_motif3.columns.tolist():
-        raise Exception('Missing column in df_motif3: fastq_file') 
-    if 'start_i' not in df_motif3.columns.tolist():
-        raise Exception('Missing column in df_motif3: start_i') 
+    # Get ref_seq from target_sequence or in_file
+    if target_sequence is None: 
+        if type(in_file)==str:
+            in_file = io.get(in_file)
+        target_sequence = in_file.iloc[0]['target_sequence']
+        ref_seq = target_sequence.split('(')[1].split(')')[0] # Get wt reference sequence
+    else:
+        ref_seq = target_sequence
+    
+    # Get & check motif dataframes from file path if needed
+    if df_motif5 is not None:
+        if type(df_motif5)==str: 
+            df_motif5 = io.get(df_motif5)
+        if 'fastq_file' not in df_motif5.columns.tolist():
+            raise Exception('Missing column in df_motif5: fastq_file') 
+        if 'end_i' not in df_motif5.columns.tolist():
+            raise Exception('Missing column in df_motif5: end_i') 
+    
+    if df_motif3 is not None:
+        if type(df_motif3)==str: 
+            df_motif3 = io.get(df_motif3)
+        if 'fastq_file' not in df_motif3.columns.tolist():
+            raise Exception('Missing column in df_motif3: fastq_file') 
+        if 'start_i' not in df_motif3.columns.tolist():
+            raise Exception('Missing column in df_motif3: start_i') 
     
     # Check if align_dims is a tuple of length 2 with start_i greater than end_i
     if align_dims is None:
@@ -1319,12 +1325,20 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
         missing3 = 0
         overlap53 = 0
         seqs = [] # Store region sequences from reads with motifs
+        
         if fastq_file.endswith(".fastq.gz"): # Compressed fastq
             fastq_name = fastq_file[:-len(".fastq.gz")] # Get fastq name
-            fastq_motif5 = df_motif5[df_motif5['fastq_file']==fastq_file].reset_index(drop=True) # Isolate fastq motif5 info
-            fastq_motif3 = df_motif3[df_motif3['fastq_file']==fastq_file].reset_index(drop=True) # Isolate fastq motif3 info
-            if fastq_col is not None: fastq_df_ref = df_ref[df_ref[fastq_col]==fastq_file].reset_index(drop=True) # Isolate fastq reference library info (if needed)
-            else: fastq_df_ref = df_ref.copy()
+            
+            if df_motif5 is not None:
+                fastq_motif5 = df_motif5[df_motif5['fastq_file']==fastq_file].reset_index(drop=True) # Isolate fastq motif5 info
+            if df_motif3 is not None:
+                fastq_motif3 = df_motif3[df_motif3['fastq_file']==fastq_file].reset_index(drop=True) # Isolate fastq motif3 info
+            
+            if fastq_col is not None: 
+                fastq_df_ref = df_ref[df_ref[fastq_col]==fastq_file].reset_index(drop=True) # Isolate fastq reference library info (if needed)
+            else: 
+                fastq_df_ref = df_ref.copy()
+            
             with gzip.open(os.path.join(fastq_dir,fastq_file), "rt") as handle:
                 for i,record in enumerate(SeqIO.parse(handle, "fastq")): # Parse reads & isolate region between motifs
                     
@@ -1334,27 +1348,57 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                         continue
                     elif (align_dims[1]!=0)&(align_dims[1]<=i):
                         continue
+                    
+                    # Extract regions (between motifs) from reads
+                    if df_motif5 is None and df_motif3 is None: # No motifs provided
+                        # Use entire read as region
+                        regions += 1
+                        seqs.append(str(record.seq))
 
-                    # Obtain motif boundaries that define region
-                    start_i = fastq_motif5.iloc[i]["end_i"]
-                    end_i = fastq_motif3.iloc[i]["start_i"] 
-                    if (start_i!=-1) & (end_i!=-1): # Both motifs are present
-                        if start_i<end_i: # Motifs do not overlap
+                    elif df_motif5 is not None and df_motif3 is None: # df_motif5 is provided
+                        start_i = fastq_motif5.iloc[i]["end_i"] # Obtain motif5 boundary that define region
+
+                        if start_i==-1: # motif5 is present
                             regions += 1
-                            seqs.append(str(record.seq[start_i:end_i])) 
-                        else: # Motifs overlap
-                            overlap53 += 1
+                            seqs.append(str(record.seq[start_i:])) 
+                            
+                        else: # 5' motif is missing
+                            missing5 += 1 
                             seqs.append(None)
-                    elif (start_i==-1) & (end_i==-1): # Both motifs are missing
-                        missing5 += 1
-                        missing3 += 1
-                        seqs.append(None)
-                    elif start_i==0: # 5' motif is missing
-                        missing5 += 1 
-                        seqs.append(None)
-                    else: # 3' motif is missing
-                        missing3 += 1 
-                        seqs.append(None)
+
+                    elif df_motif5 is None and df_motif3 is not None: # df_motif3 is provided
+                        end_i = fastq_motif3.iloc[i]["start_i"] # Obtain motif3 boundary that define region
+
+                        if end_i==-1: # motif3 is present
+                            regions += 1
+                            seqs.append(str(record.seq[:end_i])) 
+                            
+                        else: # 5' motif is missing
+                            missing3 += 1 
+                            seqs.append(None)
+
+                    else: # Both motifs are provided
+                        # Obtain motif boundaries that define region
+                        start_i = fastq_motif5.iloc[i]["end_i"]
+                        end_i = fastq_motif3.iloc[i]["start_i"]
+
+                        if (start_i!=-1) & (end_i!=-1): # Both motifs are present
+                            if start_i<end_i: # Motifs do not overlap
+                                regions += 1
+                                seqs.append(str(record.seq[start_i:end_i])) 
+                            else: # Motifs overlap
+                                overlap53 += 1
+                                seqs.append(None)
+                        elif (start_i==-1) & (end_i==-1): # Both motifs are missing
+                            missing5 += 1
+                            missing3 += 1
+                            seqs.append(None)
+                        elif start_i==-1: # 5' motif is missing
+                            missing5 += 1 
+                            seqs.append(None)
+                        else: # 3' motif is missing
+                            missing3 += 1 
+                            seqs.append(None)
 
                     # Processing status
                     if len(seqs)%align_ckpt==0: 
@@ -1362,10 +1406,17 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
         
         elif fastq_file.endswith(".fastq"): # Uncompressed fastq
             fastq_name = fastq_file[:-len(".fastq")] # Get fastq name
-            fastq_motif5 = df_motif5[df_motif5['fastq_file']==fastq_file].reset_index(drop=True) # Isolate fastq motif5 info
-            fastq_motif3 = df_motif3[df_motif3['fastq_file']==fastq_file].reset_index(drop=True) # Isolate fastq motif3 info
-            if fastq_col is not None: fastq_df_ref = df_ref[df_ref[fastq_col]==fastq_file].reset_index(drop=True) # Isolate fastq reference library info (if needed)
-            else: fastq_df_ref = df_ref.copy()
+            
+            if df_motif5 is not None:
+                fastq_motif5 = df_motif5[df_motif5['fastq_file']==fastq_file].reset_index(drop=True) # Isolate fastq motif5 info
+            if df_motif3 is not None:
+                fastq_motif3 = df_motif3[df_motif3['fastq_file']==fastq_file].reset_index(drop=True) # Isolate fastq motif3 info
+            
+            if fastq_col is not None: 
+                fastq_df_ref = df_ref[df_ref[fastq_col]==fastq_file].reset_index(drop=True) # Isolate fastq reference library info (if needed)
+            else: 
+                fastq_df_ref = df_ref.copy()
+            
             with open(os.path.join(fastq_dir,fastq_file), "r") as handle:    
                 for i,record in enumerate(SeqIO.parse(handle, "fastq")): # Parse reads & isolate region between motifs
                     
@@ -1375,27 +1426,57 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                         continue
                     elif (align_dims[1]!=0)&(align_dims[1]<=i):
                         continue
+                    
+                    # Extract regions (between motifs) from reads
+                    if df_motif5 is None and df_motif3 is None: # No motifs provided
+                        # Use entire read as region
+                        regions += 1
+                        seqs.append(str(record.seq))
 
-                    # Obtain motif boundaries that define region
-                    start_i = fastq_motif5.iloc[i]["end_i"]
-                    end_i = fastq_motif3.iloc[i]["start_i"] 
-                    if (start_i!=-1) & (end_i!=-1): # Both motifs are present
-                        if start_i<end_i: # Motifs do not overlap
+                    elif df_motif5 is not None and df_motif3 is None: # df_motif5 is provided
+                        start_i = fastq_motif5.iloc[i]["end_i"] # Obtain motif5 boundary that define region
+
+                        if start_i==-1: # motif5 is present
                             regions += 1
-                            seqs.append(str(record.seq[start_i:end_i])) 
-                        else: # Motifs overlap
-                            overlap53 += 1
+                            seqs.append(str(record.seq[start_i:])) 
+                            
+                        else: # 5' motif is missing
+                            missing5 += 1 
                             seqs.append(None)
-                    elif (start_i==-1) & (end_i==-1): # Both motifs are missing
-                        missing5 += 1
-                        missing3 += 1
-                        seqs.append(None)
-                    elif start_i==0: # 5' motif is missing
-                        missing5 += 1 
-                        seqs.append(None)
-                    else: # 3' motif is missing
-                        missing3 += 1 
-                        seqs.append(None)
+
+                    elif df_motif5 is None and df_motif3 is not None: # df_motif3 is provided
+                        end_i = fastq_motif3.iloc[i]["start_i"] # Obtain motif3 boundary that define region
+
+                        if end_i==-1: # motif3 is present
+                            regions += 1
+                            seqs.append(str(record.seq[:end_i])) 
+                            
+                        else: # 5' motif is missing
+                            missing3 += 1 
+                            seqs.append(None)
+
+                    else: # Both motifs are provided
+                        # Obtain motif boundaries that define region
+                        start_i = fastq_motif5.iloc[i]["end_i"]
+                        end_i = fastq_motif3.iloc[i]["start_i"]
+
+                        if (start_i!=-1) & (end_i!=-1): # Both motifs are present
+                            if start_i<end_i: # Motifs do not overlap
+                                regions += 1
+                                seqs.append(str(record.seq[start_i:end_i])) 
+                            else: # Motifs overlap
+                                overlap53 += 1
+                                seqs.append(None)
+                        elif (start_i==-1) & (end_i==-1): # Both motifs are missing
+                            missing5 += 1
+                            missing3 += 1
+                            seqs.append(None)
+                        elif start_i==-1: # 5' motif is missing
+                            missing5 += 1 
+                            seqs.append(None)
+                        else: # 3' motif is missing
+                            missing3 += 1 
+                            seqs.append(None)
 
                     # Processing status
                     if len(seqs)%align_ckpt==0: 
@@ -2287,9 +2368,7 @@ def editing_per_library(edit_dc: dict | str, paired_regions_dc: dict | str, fast
     # Get editing per library abundance
     out_dc = dict()
     for edit_fq,edit_df in edit_dc.items(): # Iterate through edit outcomes dataframes
-        #print(edit_fq)
         paired_regions_fq = fastq_ids[fastq_ids['genotyping']==edit_fq]['paired_regions'].values[0]
-        #print(paired_regions_fq)
 
         # Check if paired regions file column has 'edit' column
         if 'edit' not in paired_regions_dc[paired_regions_fq].columns:
@@ -2339,14 +2418,14 @@ def editing_per_library(edit_dc: dict | str, paired_regions_dc: dict | str, fast
         return out_df
 
 # UMI methods
-def extract_UMIs(fastq_dir: str, out_dir: str='./extract_UMIs', 
+def extract_umis(fastq_dir: str, out_dir: str='./extract_umis', 
                  bc_pattern: str='NNNNNNNNNNNNNNNN', env: str='umi_tools'):
     ''' 
-    extract_UMIs(): extract UMIs using umi_tools
+    extract_umis(): extract UMIs using umi_tools
 
     Parameters:
     fastq_dir (str): directory with FASTQ files
-    out_dir (str): output directory (Default: ./extract_UMIs)
+    out_dir (str): output directory (Default: ./extract_umis)
     bc_pattern (str, optional): UMI barcode pattern (Default: NNNNNNNNNNNNNNNN)
     env (str, optional): conda environment with umi_tools installed (Default: umi_tools)
     '''
@@ -2354,14 +2433,14 @@ def extract_UMIs(fastq_dir: str, out_dir: str='./extract_UMIs',
     memory_timer(reset=True)
     memories = []
 
-    # Create output directory and .extract_UMI subdirectory for logs
-    io.mkdir(os.path.join(out_dir,'.extract_UMI'))
+    # Create output directory and .extract_umi subdirectory for logs
+    io.mkdir(os.path.join(out_dir,'.extract_umi'))
 
     # Iterate through fastq files in the directory
     for file in os.listdir(path=fastq_dir):
         if file.endswith('.fastq') or file.endswith('.fastq.gz'):
             # Extract UMIs using umi_tools
-            command = f'conda run -n {env} umi_tools extract --bc-pattern={bc_pattern} --stdin={os.path.join(fastq_dir,file)} --stdout={os.path.join(out_dir,file.replace(".gz",""))} --log={os.path.join(out_dir,".extract_UMI",file)}.log'
+            command = f'conda run -n {env} umi_tools extract --bc-pattern={bc_pattern} --stdin={os.path.join(fastq_dir,file)} --stdout={os.path.join(out_dir,file.replace(".gz",""))} --log={os.path.join(out_dir,".extract_umi",file)}.log'
             print(f"{command}")
             result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
             
@@ -2373,8 +2452,8 @@ def extract_UMIs(fastq_dir: str, out_dir: str='./extract_UMIs',
             memories.append(memory_timer(task=f'umi_tools extract: {file}'))
 
     # Memory reporting
-    memories.append(memory_timer(task='extract_UMIs()'))
-    io.save(dir=os.path.join(out_dir,'.extract_UMIs'),
+    memories.append(memory_timer(task='extract_umis()'))
+    io.save(dir=os.path.join(out_dir,'.extract_umis'),
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))     
     
@@ -2439,16 +2518,16 @@ def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs',
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))  
 
-def make_SAMs(fastq_dir: str, out_dir: str='./make_SAMs', 
+def make_sams(fastq_dir: str, out_dir: str='./make_sams', 
               in_file: pd.DataFrame | str = None, fasta: str=None,
               sensitivity: Literal['very-fast','fast','sensitive','very-sensitive','very-fast-local','fast-local','sensitive-local','very-sensitive-local']='very-sensitive', 
               env: str='umi_tools'):
     ''' 
-    make_SAMs(): generates alignments saved as a SAM files using bowtie2
+    make_sams(): generates alignments saved as a SAM files using bowtie2
 
     Parameters:
     fastq_dir (str): directory with FASTQ files (with UMIs extracted and motifs trimmed)
-    out_dir (str): output directory (Default: ./make_SAMs)
+    out_dir (str): output directory (Default: ./make_sams)
 
     in_file (dataframe | str, option 1): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)
     fasta (str, option 2): reference fasta file (Default: None)
@@ -2471,8 +2550,8 @@ def make_SAMs(fastq_dir: str, out_dir: str='./make_SAMs',
     memory_timer(reset=True)
     memories = []
 
-    # Create output directory and .make_SAMs subdirectory for logs
-    io.mkdir(os.path.join(out_dir,'.make_SAMs'))
+    # Create output directory and .make_sams subdirectory for logs
+    io.mkdir(os.path.join(out_dir,'.make_sams'))
 
     # Get fasta from in_file if needed
     if fasta is None:
@@ -2492,7 +2571,7 @@ def make_SAMs(fastq_dir: str, out_dir: str='./make_SAMs',
         seq = Seq(target_sequence.split('(')[1].split(')')[0])
         
         # Save fasta file
-        fasta = os.path.join(out_dir,'.make_SAMs',f'{target_name}.fasta')
+        fasta = os.path.join(out_dir,'.make_sams',f'{target_name}.fasta')
         SeqIO.write(SeqRecord(seq, id=target_name, description=''), fasta, 'fasta')
         
     # Create bowtie2 index
@@ -2511,7 +2590,7 @@ def make_SAMs(fastq_dir: str, out_dir: str='./make_SAMs',
     for file in os.listdir(path=fastq_dir):
         if file.endswith('.fastq') or file.endswith('.fastq.gz'):
             # Generate SAM files using bowtie2
-            command = f'conda run -n {env} bowtie2 -x {".".join(fasta.split(".")[:-1])} -U {os.path.join(fastq_dir,file)} -S {os.path.join(out_dir,file)}.sam --{sensitivity} > {os.path.join(out_dir,".make_SAMs",file)}.log'
+            command = f'conda run -n {env} bowtie2 -x {".".join(fasta.split(".")[:-1])} -U {os.path.join(fastq_dir,file)} -S {os.path.join(out_dir,file)}.sam --{sensitivity} > {os.path.join(out_dir,".make_sams",file)}.log'
             print(f"{command}")
             result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
             
@@ -2523,27 +2602,27 @@ def make_SAMs(fastq_dir: str, out_dir: str='./make_SAMs',
             memories.append(memory_timer(task=f'bowtie2: {file}'))
 
     # Memory reporting
-    memories.append(memory_timer(task='make_SAMs()'))
+    memories.append(memory_timer(task='make_sams()'))
 
-    io.save(dir=os.path.join(out_dir,'.make_SAMs'),
+    io.save(dir=os.path.join(out_dir,'.make_sams'),
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
 
-def make_BAMs(sam_dir: str, out_dir: str='./make_BAMs', env: str='umi_tools'):
+def make_bams(sam_dir: str, out_dir: str='./make_bams', env: str='umi_tools'):
     '''
-    make_BAMs(): converts SAM files to BAM files using samtools
+    make_bams(): converts SAM files to BAM files using samtools
     
     Parameters:
     sam_dir (str): directory with SAM files
-    out_dir (str): output directory (Default: ./make_BAMs)
+    out_dir (str): output directory (Default: ./make_bams)
     env (str, optional): Conda environment with samtools installed (Default: umi_tools)
     '''
     # Memory reporting
     memory_timer(reset=True)
     memories = []
 
-    # Create output directory and .make_BAMs subdirectory for logs
-    io.mkdir(os.path.join(out_dir,'.make_BAMs'))
+    # Create output directory and .make_bams subdirectory for logs
+    io.mkdir(os.path.join(out_dir,'.make_bams'))
 
     # Iterate through SAM files in the directory
     for file in os.listdir(path=sam_dir):
@@ -2552,7 +2631,7 @@ def make_BAMs(sam_dir: str, out_dir: str='./make_BAMs', env: str='umi_tools'):
             command = f"conda run -n {env} bash -lc \
                         'set -euo pipefail; \
                         samtools view -b {os.path.join(sam_dir,file)} | samtools sort -o {os.path.join(out_dir,file.replace('.sam','.sorted.bam'))}' \
-                        > {os.path.join(out_dir,'.make_BAMs',file)}.log 2>&1"
+                        > {os.path.join(out_dir,'.make_bams',file)}.log 2>&1"
             print(f"{command}")
             result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
             
@@ -2564,7 +2643,7 @@ def make_BAMs(sam_dir: str, out_dir: str='./make_BAMs', env: str='umi_tools'):
             memories.append(memory_timer(task=f'samtools view | samtools sort: {file}'))
 
             # Make BAM index using samtools
-            command = f'conda run -n {env} samtools index {os.path.join(out_dir,file.replace(".sam",".sorted.bam"))} > {os.path.join(out_dir,".make_BAMs",file)}.index.log'
+            command = f'conda run -n {env} samtools index {os.path.join(out_dir,file.replace(".sam",".sorted.bam"))} > {os.path.join(out_dir,".make_bams",file)}.index.log'
             print(f"{command}")
             result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
 
@@ -2576,27 +2655,27 @@ def make_BAMs(sam_dir: str, out_dir: str='./make_BAMs', env: str='umi_tools'):
             memories.append(memory_timer(task=f'samtools index: {file}'))
 
     # Memory reporting
-    memories.append(memory_timer(task='make_BAMs()'))
-    io.save(dir=os.path.join(out_dir,'.make_BAMs'),
+    memories.append(memory_timer(task='make_bams()'))
+    io.save(dir=os.path.join(out_dir,'.make_bams'),
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
 
-def BAM_UMI_tags(bam_dir: str, out_dir: str='./BAM_UMI_tags',
+def bam_umi_tags(bam_dir: str, out_dir: str='./bam_umi_tags',
                  env: str='umi_tools'):
     '''
-    BAM_UMI_tags(): copy UMI in read ID to RX tag in BAM files using fgbio
+    bam_umi_tags(): copy UMI in read ID to RX tag in BAM files using fgbio
     
     Parameters:
     bam_dir (str): directory with BAM files
-    out_dir (str): output directory (Default: ./BAM_UMI_tags)
+    out_dir (str): output directory (Default: ./bam_umi_tags)
     env (str, optional): Conda environment with umi_tools installed (Default: umi_tools)
     '''
     # Memory reporting
     memory_timer(reset=True)
     memories = []
 
-    # Create output directory and .BAM_UMI_tags subdirectory for logs
-    io.mkdir(os.path.join(out_dir,'.BAM_UMI_tags'))
+    # Create output directory and .bam_umi_tags subdirectory for logs
+    io.mkdir(os.path.join(out_dir,'.bam_umi_tags'))
 
     # Iterate through BAM files in the directory
     for file in os.listdir(path=bam_dir):
@@ -2614,21 +2693,21 @@ def BAM_UMI_tags(bam_dir: str, out_dir: str='./BAM_UMI_tags',
             memories.append(memory_timer(task=f'fgbio GroupReadsByUmi: {file}'))
     
     # Memory reporting
-    memories.append(memory_timer(task='BAM_UMI_tags()'))
-    io.save(dir=os.path.join(out_dir,'.BAM_UMI_tags'),
+    memories.append(memory_timer(task='bam_umi_tags()'))
+    io.save(dir=os.path.join(out_dir,'.bam_umi_tags'),
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
 
-def group_UMIs(bam_dir: str, out_dir: str='./group_UMIs', 
+def group_umis(bam_dir: str, out_dir: str='./group_umis', 
                strategy: Literal['Identical','Edit','Adjacency','Paired']='Adjacency',
                edits: int=1,
                env: str='umi_tools'):
     '''
-    group_UMIs(): group BAM files by UMI using fgbio
+    group_umis(): group BAM files by UMI using fgbio
     
     Parameters:
     bam_dir (str): directory with BAM files
-    out_dir (str): output directory (Default: ./group_UMIs)
+    out_dir (str): output directory (Default: ./group_umis)
     strategy (str, optional): UMI grouping strategy (Default: adjacency). Options: Identical, Edit, Adjacency, Paired
         1. Identity: only reads with identical UMI sequences are grouped together. This strategy may be useful for evaluating
            data, but should generally be avoided as it will generate multiple UMI groups per original molecule in the presence
@@ -2649,8 +2728,8 @@ def group_UMIs(bam_dir: str, out_dir: str='./group_UMIs',
     memory_timer(reset=True)
     memories = []
 
-    # Create output directory and .group_UMIs, family_hist, & grouping_metrics subdirectories for logs
-    io.mkdir(os.path.join(out_dir,'.group_UMIs'))
+    # Create output directory and .group_umis, family_hist, & grouping_metrics subdirectories for logs
+    io.mkdir(os.path.join(out_dir,'.group_umis'))
     io.mkdir(os.path.join(out_dir,'family_hist'))
     io.mkdir(os.path.join(out_dir,'grouping_metrics'))
 
@@ -2670,20 +2749,20 @@ def group_UMIs(bam_dir: str, out_dir: str='./group_UMIs',
             memories.append(memory_timer(task=f'fgbio GroupReadsByUmi: {file}'))
     
     # Memory reporting
-    memories.append(memory_timer(task='group_UMIs()'))
-    io.save(dir=os.path.join(out_dir,'.group_UMIs'),
+    memories.append(memory_timer(task='group_umis()'))
+    io.save(dir=os.path.join(out_dir,'.group_umis'),
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
 
-def consensus_UMIs(bam_dir: str, out_dir: str='./consensus_UMIs', 
+def consensus_umis(bam_dir: str, out_dir: str='./consensus_umis', 
                    min_reads: int=1,
                    env: str='umi_tools'):
     '''
-    consensus_UMIs(): generate consensus reads from grouped BAM files using fgbio
+    consensus_umis(): generate consensus reads from grouped BAM files using fgbio
     
     Parameters:
     bam_dir (str): directory with grouped BAM files
-    out_dir (str): output directory (Default: ./consensus_UMIs)
+    out_dir (str): output directory (Default: ./consensus_umis)
     min_reads (int, optional): minimum reads per UMI group to generate consensus (Default: 1)
     env (str, optional): Conda environment with fgbio installed (Default: umi_tools)
     '''
@@ -2691,8 +2770,8 @@ def consensus_UMIs(bam_dir: str, out_dir: str='./consensus_UMIs',
     memory_timer(reset=True)
     memories = []
 
-    # Create output directory and .consensus_UMIs subdirectory for logs
-    io.mkdir(os.path.join(out_dir,'.consensus_UMIs'))
+    # Create output directory and .consensus_umis subdirectory for logs
+    io.mkdir(os.path.join(out_dir,'.consensus_umis'))
 
     # Iterate through grouped BAM files in the directory
     for file in os.listdir(path=bam_dir):
@@ -2710,8 +2789,45 @@ def consensus_UMIs(bam_dir: str, out_dir: str='./consensus_UMIs',
             memories.append(memory_timer(task=f'fgbio CallMolecularConsensusReads: {file}'))
 
     # Memory reporting
-    memories.append(memory_timer(task='consensus_UMIs()'))
-    io.save(dir=os.path.join(out_dir,'.consensus_UMIs'),
+    memories.append(memory_timer(task='consensus_umis()'))
+    io.save(dir=os.path.join(out_dir,'.consensus_umis'),
+            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
+            obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+
+def bam_to_fastq(bam_dir: str, out_dir: str='./bam_to_fastq', env: str='umi_tools'):
+    '''
+    bam_to_fastq(): convert BAM files to FASTQ files using samtools
+
+    Parameters:
+    bam_dir (str): directory with BAM files
+    out_dir (str): output directory (Default: ./bam_to_fastq)
+    env (str, optional): Conda environment with samtools installed (Default: umi_tools)
+    '''
+    # Memory reporting
+    memory_timer(reset=True)
+    memories = []
+
+    # Create output directory and .bam_to_fastq subdirectory for logs
+    io.mkdir(os.path.join(out_dir,'.bam_to_fastq'))
+
+    # Iterate through BAM files in the directory
+    for file in os.listdir(path=bam_dir):
+        if file.endswith('.bam'):
+            # Convert BAM to FASTQ using samtools
+            command = f'conda run -n {env} samtools fastq -n {os.path.join(bam_dir,file)} > {os.path.join(out_dir,file.replace(".bam",".fastq"))}'
+            print(f"{command}")
+            result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
+            
+            # Print output/errors
+            if result.stdout: print(f"output:\n{result.stdout}")
+            if result.stderr: print(f"errors:\n{result.stderr}")
+
+            # Memory reporting
+            memories.append(memory_timer(task=f'samtools fastq: {file}'))
+    
+    # Memory reporting
+    memories.append(memory_timer(task='bam_to_fastq()'))
+    io.save(dir=os.path.join(out_dir,'.bam_to_fastq'),
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
 

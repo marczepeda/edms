@@ -28,7 +28,7 @@ Usage:
 - shared_sequences(): Reduce PE library into shared spacers and PBS sequences
 - pilot_screen(): Create pilot screen for EDMS
 - sensor_designer(): Design pegRNA sensors
-- RTT_designer(): design all possible RTT for given spacer & PBS (WT, single insertions, & single deletions)
+- rtt_designer(): design all possible RTT for given spacer & PBS (WT, single insertions, & single deletions)
 - pegRNA_outcome(): confirm that pegRNAs should create the predicted edit
 - pegRNA_signature(): create signatures for pegRNA outcomes using alignments
 
@@ -1118,11 +1118,11 @@ def sensor_designer(pegRNAs: pd.DataFrame | str, in_file: str, sensor_length: in
         io.save(dir=out_dir,file=out_file,obj=pegRNAs)
     if return_df==True: return pegRNAs
 
-def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, rtt_length: int=39, 
+def rtt_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, rtt_length: int=39, 
                  include_WT: bool=False, enzymes: list[str]=['Esp3I'], replace: bool=True,
                  out_dir: str=None, out_file: str=None, return_df: bool=True, literal_eval: bool=True, comments: bool=False) -> pd.DataFrame:
     ''' 
-    RTT_designer(): design all possible RTT for given spacer & PBS (WT, single insertions, & single deletions)
+    rtt_designer(): design all possible RTT for given spacer & PBS (WT, single insertions, & single deletions)
     
     Parameters:
     pegRNAs (dataframe | str): pegRNAs DataFrame (or file path)
@@ -1524,13 +1524,13 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, rtt_l
             
             # Store pegRNAs with recognition sites for enzymes
             pegRNAs_enzyme = pegRNAs[pegRNAs[enzyme]!=0]
-            io.save(dir=f'../RTT_designer/{enzyme}/codon_swap_before',
+            io.save(dir=f'../rtt_designer/{enzyme}/codon_swap_before',
                     file=f'{int(pegRNAs_enzyme.iloc[0]['PBS_length'])}.csv',
                     obj=pegRNAs_enzyme)
             
             # Codon swap pegRNAs with enzyme recognition site
             pegRNAs_enzyme = enzyme_codon_swap(pegRNAs=pegRNAs_enzyme,in_file=in_file,enzyme=enzyme)
-            io.save(dir=f'../RTT_designer/{enzyme}/codon_swap_after',
+            io.save(dir=f'../rtt_designer/{enzyme}/codon_swap_after',
                     file=f'{int(pegRNAs_enzyme.iloc[0]['PBS_length'])}.csv',
                     obj=pegRNAs_enzyme)
             pegRNAs = pd.concat([pegRNAs,pegRNAs_enzyme],ignore_index=True)
@@ -1547,7 +1547,7 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, rtt_l
             lost_pegRNAs_edits = [remove_edit for remove_edit in remove_pegRNAs_edits if remove_edit not in pegRNAs_edits]
             if len(lost_pegRNAs_edits) > 0:
                 print(f"pegRNAs edits lost due to {enzyme} recognition site: {lost_pegRNAs_edits}")
-                io.save(dir=f'../RTT_designer/{enzyme}/lost',
+                io.save(dir=f'../rtt_designer/{enzyme}/lost',
                             file=f'{int(pegRNAs_enzyme.iloc[0]['PBS_length'])}.csv',
                             obj=pegRNAs_enzyme[pegRNAs_enzyme['Edit'].isin(lost_pegRNAs_edits)])
 
@@ -1558,9 +1558,9 @@ def RTT_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, rtt_l
     pegRNAs = pegRNAs.drop(columns=['Oligonucleotide'])
 
     # Save & Return
-    memories.append(memory_timer(task=f"RTT_designer()"))
+    memories.append(memory_timer(task=f"rtt_designer()"))
     if out_dir is not None and out_file is not None:
-        io.save(dir=os.path.join(out_dir,f'.RTT_designer'),
+        io.save(dir=os.path.join(out_dir,f'.rtt_designer'),
                 file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
                 obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
         io.save(dir=out_dir,file=out_file,obj=pegRNAs)

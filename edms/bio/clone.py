@@ -22,7 +22,7 @@ Usage:
 - encode_sequences(): Convert sequences to integer arrays for fast comparison.
 - fast_filter_by_hamming(): fastFilter sequences such that all retained sequences have a Hamming distance 'min_distance' from each other, using NumPy for speed.
 - count_csv_rows(): counts number of rows in a csv file (subtracting 1 for header)
-- UMI(): generates unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance
+- umi(): generates unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance
 
 [Master Mix]
 - pcr_mm(): NEB Q5 PCR master mix calculations
@@ -531,10 +531,10 @@ def count_csv_rows(pt:str) -> int:
     with open(pt, 'r') as f:
         return sum(1 for line in f) - 1  # subtract 1 for header
 
-def UMI(length: int = 15, GC_fract: tuple = (0.4, 0.6), hamming: int = 4, 
+def umi(length: int = 15, GC_fract: tuple = (0.4, 0.6), hamming: int = 4, 
         nrows: int=1000, pt: str=None, dir: str = '../out'):
     '''
-    UMI(): generates unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance
+    umi(): generates unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance
     
     Parameters:
     length (int, optional): length of the unique molecular identifiers (Default: 15)
