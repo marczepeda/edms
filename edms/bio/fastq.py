@@ -2601,7 +2601,7 @@ def BAM_UMI_tags(bam_dir: str, out_dir: str='./BAM_UMI_tags',
     for file in os.listdir(path=bam_dir):
         if file.endswith('.bam'):
             # Group BAM files by UMI using fgbio
-            command = f'conda run -n {env} fgbio CopyUmiFromReadName -i {os.path.join(bam_dir,file)} -o {os.path.join(out_dir,file.replace(".bam",".withRX.bam"))} field-delimiter=_'
+            command = f'conda run -n {env} fgbio CopyUmiFromReadName -i {os.path.join(bam_dir,file)} -o {os.path.join(out_dir,file.replace(".bam",".withRX.bam"))} field-delimiter _'
             print(f"{command}")
             result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
             
