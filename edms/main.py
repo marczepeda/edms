@@ -1176,6 +1176,7 @@ def main():
     - trim_motifs(): trimming motifs with cutadapt
     - make_SAMs(): generates alignments saved as a SAM files using bowtie2
     - make_BAMs(): converts SAM files to BAM files using samtools
+    - BAM_UMI_tags(): copy UMI in read ID to RX tag in BAM files using fgbio
     - group_UMIs(): group BAM files by UMI using fgbio
     - consensus_UMIs(): generate consensus sequences from grouped UMIs using fgbio
     '''
@@ -1200,9 +1201,10 @@ def main():
     parser_fastq_trim_motifs = subparsers_fastq.add_parser("trim_motifs", help="Trim motifs with cutadapt")
     parser_fastq_make_SAMs = subparsers_fastq.add_parser("make_SAMs", help="Generate alignments saved as SAM files using bowtie2")
     parser_fastq_make_BAMs = subparsers_fastq.add_parser("make_BAMs", help="Convert SAM files to BAM files using samtools")
+    parser_fastq_BAM_UMI_tags = subparsers_fastq.add_parser("BAM_UMI_tags", help="Copy UMI in read ID to RX tag in BAM files using fgbio")
     parser_fastq_group_UMIs = subparsers_fastq.add_parser("group_UMIs", help="Group BAM files by UMI using fgbio")
     parser_fastq_consensus_UMIs = subparsers_fastq.add_parser("consensus_UMIs", help="Generate consensus sequences from grouped UMIs using fgbio")
-
+    
     # Add common arguments: revcom_fastqs(), unzip_fastqs(), comb_fastqs(), and genotyping()
     for parser_fastq_common in [parser_fastq_revcom,parser_fastq_unzip,parser_fastq_comb,parser_fastq_genotyping]:
         parser_fastq_common.add_argument("--in_dir", type=str, help="Input directory containing FASTQ files",default='.')
@@ -1415,6 +1417,12 @@ def main():
     parser_fastq_make_BAMs.add_argument("--out_dir", help="Output directory (Default: ./make_BAMs)", default=f'./make_BAMs')
     parser_fastq_make_BAMs.add_argument("--env", help="Conda environment with samtools installed (Default: umi_tools)", default="umi_tools")
 
+    # BAM_UMI_tags():
+    parser_fastq_BAM_UMI_tags.add_argument("--bam_dir", help="Directory containing BAM files", required=True)
+
+    parser_fastq_BAM_UMI_tags.add_argument("--out_dir", help="Output directory (Default: ./BAM_UMI_tags)", default=f'./BAM_UMI_tags')
+    parser_fastq_BAM_UMI_tags.add_argument("--env", help="Conda environment with fgbio installed (Default: umi_tools)", default="umi_tools")
+
     # group_UMIs():
     parser_fastq_group_UMIs.add_argument("--bam_dir", help="Directory containing BAM files", required=True)
 
@@ -1449,6 +1457,7 @@ def main():
     parser_fastq_trim_motifs.set_defaults(func=fq.trim_motifs)
     parser_fastq_make_SAMs.set_defaults(func=fq.make_SAMs)
     parser_fastq_make_BAMs.set_defaults(func=fq.make_BAMs)
+    parser_fastq_BAM_UMI_tags.set_defaults(func=fq.BAM_UMI_tags)
     parser_fastq_group_UMIs.set_defaults(func=fq.group_UMIs)
     parser_fastq_consensus_UMIs.set_defaults(func=fq.consensus_UMIs)
 

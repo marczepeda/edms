@@ -48,6 +48,7 @@ Usage:
 - trim_motifs(): trimming motifs with cutadapt
 - make_SAMs(): generates alignments saved as a SAM files using bowtie2
 - make_BAMs(): converts SAM files to BAM files using samtools
+- BAM_UMI_tags(): copy UMI in read ID to RX tag in BAM files using fgbio
 - group_UMIs(): group BAM files by UMI using fgbio
 - consensus_UMIs(): generate consensus sequences from grouped UMIs using fgbio
 
@@ -2422,7 +2423,7 @@ def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs',
             # Trim motifs using cutadapt (only keep reads with both motifs (up to 2 errors or 10% error rate))
             command = f'conda run -n {env} cutadapt -g {motif5} -a {motif3} -e {error_rate} --max-ee {max_distance} --trimmed-only -o {os.path.join(out_dir,file.replace(".gz",""))} {os.path.join(fastq_dir,file)} > {os.path.join(out_dir,".trim_motifs",file)}.log'
             print(f"{command}")
-            result = subprocess.run(f"{command}", shell=True, env=env, cwd='.', capture_output=True, text=True)
+            result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
             
             # Print output/errors
             if result.stdout: print(f"output:\n{result.stdout}")
@@ -2549,7 +2550,8 @@ def make_BAMs(sam_dir: str, out_dir: str='./make_BAMs', env: str='umi_tools'):
             # Convert SAM to sorted BAM using samtools
             command = f"conda run -n {env} bash -lc \
                         'set -euo pipefail; \
-                        samtools view -b {os.path.join(sam_dir,file)} | samtools sort -o {os.path.join(out_dir,file.replace('.sam','.sorted.bam'))}' 2>&1 {os.path.join(out_dir,'.make_BAMs',file)}.log"
+                        samtools view -b {os.path.join(sam_dir,file)} | samtools sort -o {os.path.join(out_dir,file.replace('.sam','.sorted.bam'))}' \
+                        > {os.path.join(out_dir,'.make_BAMs',file)}.log 2>&1"
             print(f"{command}")
             result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
             
@@ -2575,6 +2577,44 @@ def make_BAMs(sam_dir: str, out_dir: str='./make_BAMs', env: str='umi_tools'):
     # Memory reporting
     memories.append(memory_timer(task='make_BAMs()'))
     io.save(dir=os.path.join(out_dir,'.make_BAMs'),
+            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
+            obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+
+def BAM_UMI_tags(bam_dir: str, out_dir: str='./BAM_UMI_tags',
+                 env: str='umi_tools'):
+    '''
+    BAM_UMI_tags(): copy UMI in read ID to RX tag in BAM files using fgbio
+    
+    Parameters:
+    bam_dir (str): directory with BAM files
+    out_dir (str): output directory (Default: ./BAM_UMI_tags)
+    env (str, optional): Conda environment with umi_tools installed (Default: umi_tools)
+    '''
+    # Memory reporting
+    memory_timer(reset=True)
+    memories = []
+
+    # Create output directory and .BAM_UMI_tags subdirectory for logs
+    io.mkdir(os.path.join(out_dir,'.BAM_UMI_tags'))
+
+    # Iterate through BAM files in the directory
+    for file in os.listdir(path=bam_dir):
+        if file.endswith('.bam'):
+            # Group BAM files by UMI using fgbio
+            command = f'conda run -n {env} fgbio CopyUmiFromReadName -i {os.path.join(bam_dir,file)} -o {os.path.join(out_dir,file.replace(".bam",".withRX.bam"))} field-delimiter=_'
+            print(f"{command}")
+            result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
+            
+            # Print output/errors
+            if result.stdout: print(f"output:\n{result.stdout}")
+            if result.stderr: print(f"errors:\n{result.stderr}")
+
+            # Memory reporting
+            memories.append(memory_timer(task=f'fgbio GroupReadsByUmi: {file}'))
+    
+    # Memory reporting
+    memories.append(memory_timer(task='BAM_UMI_tags()'))
+    io.save(dir=os.path.join(out_dir,'.BAM_UMI_tags'),
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
 
