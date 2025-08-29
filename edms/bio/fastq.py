@@ -2615,7 +2615,7 @@ def group_UMIs(bam_dir: str, out_dir: str='./group_UMIs',
     for file in os.listdir(path=bam_dir):
         if file.endswith('.bam'):
             # Group BAM files by UMI using fgbio
-            command = f'conda run -n {env} fgbio GroupReadsByUmi -i {os.path.join(bam_dir,file)} -o {os.path.join(out_dir,file.replace(".bam",".grouped.bam"))} -s {strategy} -e {edits} 2>&1 {os.path.join(out_dir,".group_UMIs",file)}.log'
+            command = f'conda run -n {env} fgbio GroupReadsByUmi -i {os.path.join(bam_dir,file)} -o {os.path.join(out_dir,file.replace(".bam",".grouped.bam"))} -s {strategy} -e {edits} -f {os.path.join(out_dir,".group_UMIs",file.replace(".bam",".family_hist.txt"))} -g {os.path.join(out_dir,".group_UMIs",file.replace(".bam",".grouping_metrics.txt"))}'
             print(f"{command}")
             result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
             
@@ -2655,7 +2655,7 @@ def consensus_UMIs(bam_dir: str, out_dir: str='./consensus_UMIs',
     for file in os.listdir(path=bam_dir):
         if file.endswith('.grouped.bam'):
             # Generate consensus reads from grouped BAM files using fgbio
-            command = f'conda run -n {env} fgbio CallMolecularConsensusReads -i {os.path.join(bam_dir,file)} -o {os.path.join(out_dir,file.replace(".grouped.bam",".consensus.bam"))} -M {min_reads} 2>&1 {os.path.join(out_dir,".consensus_UMIs",file)}.log'
+            command = f'conda run -n {env} fgbio CallMolecularConsensusReads -i {os.path.join(bam_dir,file)} -o {os.path.join(out_dir,file.replace(".grouped.bam",".consensus.bam"))} -M {min_reads}'
             print(f"{command}")
             result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
             
