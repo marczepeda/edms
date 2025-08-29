@@ -1419,7 +1419,7 @@ def main():
     parser_fastq_group_UMIs.add_argument("--bam_dir", help="Directory containing BAM files", required=True)
 
     parser_fastq_group_UMIs.add_argument("--out_dir", help="Output directory (Default: ./group_UMIs)", default=f'./group_UMIs')
-    parser_fastq_group_UMIs.add_argument("--strategy", choices=["identical","edit","adjacency", "paired"], help="UMI grouping strategy (Default: adjacency)", default="adjacency")
+    parser_fastq_group_UMIs.add_argument("--strategy", choices=["Identical","Edit","Adjacency", "Paired"], help="UMI grouping strategy (Default: Adjacency)", default="Adjacency")
     parser_fastq_group_UMIs.add_argument("--edits", type=int, help="Maximum edit distance to group UMIs (Default: 1)", default=1)
     parser_fastq_group_UMIs.add_argument("--env", help="Conda environment with fgbio installed (Default: umi_tools)", default="umi_tools")
 

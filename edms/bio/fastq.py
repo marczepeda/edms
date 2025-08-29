@@ -2579,7 +2579,7 @@ def make_BAMs(sam_dir: str, out_dir: str='./make_BAMs', env: str='umi_tools'):
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
 
 def group_UMIs(bam_dir: str, out_dir: str='./group_UMIs', 
-               strategy: Literal['identical','edit','adjacency','paired']='adjacency',
+               strategy: Literal['Identical','Edit','Adjacency','Paired']='Adjacency',
                edits: int=1,
                env: str='umi_tools'):
     '''
@@ -2588,16 +2588,16 @@ def group_UMIs(bam_dir: str, out_dir: str='./group_UMIs',
     Parameters:
     bam_dir (str): directory with BAM files
     out_dir (str): output directory (Default: ./group_UMIs)
-    strategy (str, optional): UMI grouping strategy (Default: adjacency). Options: identical, edit, adjacency, paired
-        1. identity: only reads with identical UMI sequences are grouped together. This strategy may be useful for evaluating
+    strategy (str, optional): UMI grouping strategy (Default: adjacency). Options: Identical, Edit, Adjacency, Paired
+        1. Identity: only reads with identical UMI sequences are grouped together. This strategy may be useful for evaluating
            data, but should generally be avoided as it will generate multiple UMI groups per original molecule in the presence
            of errors.
-        2. edit: reads are clustered into groups such that each read within a group has at least one other read in the group
+        2. Edit: reads are clustered into groups such that each read within a group has at least one other read in the group
            with <= edits differences and there are inter-group pairings with <= edits differences. Effective when there are
            small numbers of reads per UMI, but breaks down at very high coverage of UMIs.
-        3. adjacency: a version of the directed adjacency method described in umi_tools (http://dx.doi.org/10.1101/051755)
+        3. Adjacency: a version of the directed adjacency method described in umi_tools (http://dx.doi.org/10.1101/051755)
            that allows for errors between UMIs but only when there is a count gradient.
-        4. paired: similar to adjacency but for methods that produce template such that a read with A-B is related to but not
+        4. Paired: similar to adjacency but for methods that produce template such that a read with A-B is related to but not
            identical to a read with B-A. Expects the UMI sequences to be stored in a single SAM tag separated by a hyphen (e.g.
            'ACGT-CCGG') and allows for one of the two UMIs to be absent (e.g. 'ACGT-' or '-ACGT'). The molecular IDs produced
            have more structure than for single UMI strategies and are of the form '{base}/{A|B}'. E.g. two UMI pairs would be
@@ -2615,7 +2615,7 @@ def group_UMIs(bam_dir: str, out_dir: str='./group_UMIs',
     for file in os.listdir(path=bam_dir):
         if file.endswith('.bam'):
             # Group BAM files by UMI using fgbio
-            command = f'conda run -n {env} fgbio GroupReadsByUmi -i {os.path.join(bam_dir,file)} -o {os.path.join(out_dir,file.replace(".bam",".grouped.bam"))} --strategy={strategy} --edits={edits} 2>&1 {os.path.join(out_dir,".group_UMIs",file)}.log'
+            command = f'conda run -n {env} fgbio GroupReadsByUmi -i {os.path.join(bam_dir,file)} -o {os.path.join(out_dir,file.replace(".bam",".grouped.bam"))} -s {strategy} -e {edits} 2>&1 {os.path.join(out_dir,".group_UMIs",file)}.log'
             print(f"{command}")
             result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
             
@@ -2655,7 +2655,7 @@ def consensus_UMIs(bam_dir: str, out_dir: str='./consensus_UMIs',
     for file in os.listdir(path=bam_dir):
         if file.endswith('.grouped.bam'):
             # Generate consensus reads from grouped BAM files using fgbio
-            command = f'conda run -n {env} fgbio CallMolecularConsensusReads -i {os.path.join(bam_dir,file)} -o {os.path.join(out_dir,file.replace(".grouped.bam",".consensus.bam"))} --min-reads={min_reads} 2>&1 {os.path.join(out_dir,".consensus_UMIs",file)}.log'
+            command = f'conda run -n {env} fgbio CallMolecularConsensusReads -i {os.path.join(bam_dir,file)} -o {os.path.join(out_dir,file.replace(".grouped.bam",".consensus.bam"))} -M {min_reads} 2>&1 {os.path.join(out_dir,".consensus_UMIs",file)}.log'
             print(f"{command}")
             result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
             
