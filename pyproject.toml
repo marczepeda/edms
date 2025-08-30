@@ -1,18 +1,17 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=61", "setuptools-scm>=8", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "edms"
-version = "0.0.1"
+dynamic = ["version"]
 description = "Endogenous Deep Mutational Scans"
 readme = "README.md"
 requires-python = ">=3.11"
-license = "MIT"
+license = { file = "LICENSE" }
 authors = [
   { name = "Marcanthony Zepeda", email = "mzepeda@g.harvard.edu" }
 ]
-urls = { Homepage = "https://github.com/marczepeda/edms" }
 
 dependencies = [
   "numpy",
@@ -42,8 +41,23 @@ classifiers = [
 [project.scripts]
 edms = "edms.main:main"
 
+[project.urls]
+Homepage = "https://github.com/marczepeda/edms"
+Repository = "https://github.com/marczepeda/edms"
+Issues = "https://github.com/marczepeda/edms/issues"
+Documentation = "https://github.com/marczepeda/edms#readme"
+
 [tool.setuptools]
-packages = ["edms"]
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.setuptools.package-data]
 "edms.resources" = ["*.csv"]
+
+[tool.setuptools_scm]
+version_scheme = "post-release"
+local_scheme = "no-local-version"
+write_to = "src/edms/_version.py"
