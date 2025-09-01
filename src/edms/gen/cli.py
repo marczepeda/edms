@@ -10,8 +10,9 @@ Usage:
 - smaller_fastq(): create new subdirectory containing fastqs with the # of reads limited
 
 [Environment variable management]
-- create_env_var(): create a persistent environment variable by adding it to the user's shell config.
-
+- detect_shell(): Attempt to detect the user's shell from the SHELL environment variable (i.e., 'bash' or 'zsh').
+- create_export_var(): create a persistent export variable by adding it to the user's shell config.
+- view_export_vars(): View the current export variables in the user's shell config.
 '''
 
 # Import packages

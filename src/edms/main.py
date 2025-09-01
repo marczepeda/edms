@@ -7,7 +7,12 @@ Created: 2025-04-12
 Description: Endogenous Deep Mutational Scans
 
 Usage:
-[Supporting methods]
+[Show post-install notice only once per version]
+- try: importlib.metadata to get current version
+- _user_config_dir(appname): Get cross-platform user config directory
+- _maybe_show_first_run_notice(appname): Show a post-install notice only once per version
+
+[Supporting argument methods]
 - parse_tuple_int(arg): Parse a string argument into a tuple of integers
 - parse_tuple_float(arg): Parse a string argument into a tuple of floats
 
@@ -23,10 +28,14 @@ Usage:
 - main(): Endogenous Deep Mutational Scans
 '''
 # Import packages
+from __future__ import annotations # NEEDS TO BE FIRST LINE
+import json, os, sys
+from pathlib import Path
 import argparse
 import argcomplete
 import ast
 import datetime
+import textwrap
 
 from . import config
 
@@ -34,6 +43,7 @@ from .gen import plot as p
 from .gen import stat as st
 from .gen import io
 from .gen import cli
+from .gen import tidy as t
 
 from .dat import cosmic as co 
 from .dat import cvar
@@ -46,7 +56,74 @@ from .bio import fastq as fq
 from .bio import pe
 from .bio import sanger
 
-# Supporting methods
+# Show post-install notice only once per version
+try:
+    # Py3.8+: importlib.metadata in stdlib
+    from importlib.metadata import version, PackageNotFoundError
+except Exception:  # pragma: no cover
+    version = lambda _: "0.0.0"  # fallback
+
+def _user_config_dir(appname: str) -> Path:
+    """
+    _user_config_dir(): Cross-platform config dir without extra deps.
+    
+    Parameters:
+    appname (str): Name of the application (used to create app-specific subdirectory)
+    """
+    if os.name == "nt":  # Windows
+        base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+    else:  # POSIX
+        base = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+    return base / appname
+
+def _maybe_show_first_run_notice(appname: str = "edms") -> None:
+    """
+    _maybe_show_first_run_notice(): Show a post-install notice only once per version.
+    
+    Parameters:
+    appname (str): Name of the application (used to create app-specific subdirectory)
+    """
+    # Allow users/CI to suppress the message
+    if os.environ.get("EDMS_NO_FIRST_RUN") == "1":
+        return
+
+    cfg_dir = _user_config_dir(appname)
+    state_file = cfg_dir / "state.json"
+    cfg_dir.mkdir(parents=True, exist_ok=True)
+
+    # Determine current installed version (best effort)
+    try:
+        cur_ver = version("edms")
+    except Exception:
+        cur_ver = None
+
+    state = {}
+    if state_file.exists():
+        try:
+            state = json.loads(state_file.read_text() or "{}")
+        except json.JSONDecodeError:
+            state = {}
+
+    last_shown_for = state.get("first_run_notice_shown_for")
+
+    # Show only if never shown for this version (or ever)
+    if cur_ver and last_shown_for == cur_ver:
+        return
+
+    # ---- Your message goes here ----
+    print(t.color("\nrecommended post-install:\n  1) bash autocomplete.sh\t\t\t\t\t\t\t# Optional: follow CLI instructions\n  2) conda create -n umi_tools umi_tools cutadapt samtools bowtie2 fgbio\t# Required for fastq.py UMI methods\n", "yellow"),
+        file=sys.stderr,
+    )
+    # --------------------------------
+
+    state["first_run_notice_shown_for"] = cur_ver or "unknown"
+    try:
+        state_file.write_text(json.dumps(state, indent=2))
+    except OSError:
+        # Non-fatal: if we can't write, just skip persisting
+        pass
+
+# Supporting argument methods
 def parse_tuple_int(arg):
     '''
     parse_tuple_int(arg): Parse a string argument into a tuple of integers
@@ -451,7 +528,8 @@ def main():
     '''
     main(): Endogenous Deep Mutational Scans
     '''
-    print("project: Endogenous Deep Mutational Scans (EDMS)")
+    print(t.color("project: Endogenous Deep Mutational Scans (EDMS)", "green"))
+    _maybe_show_first_run_notice()
 
     # Add parser and subparsers
     parser = argparse.ArgumentParser(prog="edms", description="Endogenous Deep Mutational Scans (EDMS)", formatter_class=argparse.ArgumentDefaultsHelpFormatter)

@@ -34,7 +34,24 @@ edms -h # or edms <TAB>
     import edms.dat.ncbi as ncbi
     ```
 
-## Instructions
+## PyPI Instructions
+### Install
+1. Install edms from PyPI
+    ```shell
+    pip install edms
+    ```
+2. Optional: fastq.py UMI methods need umi_tools, cutadapt, samtools, bowtie2, and fgbio in a seperate environment
+    ```shell
+    conda create -n umi_tools umi_tools cutadapt samtools bowtie2 fgbio
+    ```
+
+### Update
+1. Update edms from PyPI
+    ```shell
+    pip install --upgrade edms
+    ```
+
+## GitHub Instructions
 ### Install
 1. Download Anaconda:
     - Mac: https://docs.anaconda.com/anaconda/install/mac-os/

@@ -30,6 +30,7 @@ Usage:
 
 [String methods]
 - find_all(): Find all indexes of a substring in a string
+- color(): return colored text
 '''
 # Import packages
 import pandas as pd
@@ -378,3 +379,27 @@ def find_all(string: str, substring: str) -> list:
         start += 1  # Move past the current match to find the next one
         
     return indexes
+
+def color(text: str, color: str='green') -> None:
+    '''
+    color(): return colored text
+    
+    Parameters:
+    text (str): uncolored text
+    color (str, optional): text color [red, green, yellow, blue, magenta, cyan, white]
+    '''
+    colors = {
+        'red': '\033[91m',
+        'yellow': '\033[93m',
+        'green': '\033[92m',
+        'cyan': '\033[96m',
+        'blue': '\033[94m',
+        'magenta': '\033[95m',
+        'white': '\033[97m',
+        'reset': '\033[0m'
+    }
+    
+    color_code = colors.get(color.lower(), colors['reset']) # Get the color code or default to reset
+    reset_code = colors['reset'] # Reset code to clear formatting after the text
+    
+    return f"{color_code}{text}{reset_code}" # Return the colored text
