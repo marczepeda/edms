@@ -30,7 +30,9 @@ dependencies = [
   "dna-features-viewer",
   "openpyxl",
   "psutil",
-  "argcomplete"
+  "argcomplete",
+  "rich",
+  "rich-argparse"
 ]
 
 classifiers = [
