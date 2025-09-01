@@ -40,7 +40,16 @@ edms -h # or edms <TAB>
     ```shell
     pip install edms
     ```
-2. Optional: fastq.py UMI methods need umi_tools, cutadapt, samtools, bowtie2, and fgbio in a seperate environment
+2. Check edms install
+    ```shell
+    edms -h
+    ```
+3. Optional: Set up edms autocomplete
+    ```shell
+    edms autocomplete
+    # Follow CLI instructions
+    ```
+4. Optional: edms fastq {extract_umis,trim_motifs,make_sams,make_bams,bam_umi_tags,group_umis,consensus_umis,bam_to_fastq} need umi_tools, cutadapt, samtools, bowtie2, and fgbio in a seperate environment
     ```shell
     conda create -n umi_tools umi_tools cutadapt samtools bowtie2 fgbio
     ```
@@ -71,10 +80,10 @@ edms -h # or edms <TAB>
     conda env create -f edms.yml # When conda asks you to proceed, type "y"
     conda activate edms
     pip install -e . # Include the "."
-    bash autocomplete.sh # Optional: follow CLI instructions
+    edms autocomplete # Optional: set up edms autocomplete; follow CLI instructions
     conda deactivate
     ```
-5. Optional: fastq.py UMI methods need umi_tools, cutadapt, samtools, bowtie2, and fgbio in a seperate environment
+5. Optional: edms fastq {extract_umis,trim_motifs,make_sams,make_bams,bam_umi_tags,group_umis,consensus_umis,bam_to_fastq} need umi_tools, cutadapt, samtools, bowtie2, and fgbio in a seperate environment
     ```shell
     conda create -n umi_tools umi_tools cutadapt samtools bowtie2 fgbio
     ```
@@ -86,7 +95,6 @@ edms -h # or edms <TAB>
     conda activate edms
     pip uninstall -y edms
     rm -rf build/ dist/ *.egg-info
-
     ```
 2. Pull latest version from github and install edms:
     ```shell

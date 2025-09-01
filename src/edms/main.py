@@ -111,7 +111,7 @@ def _maybe_show_first_run_notice(appname: str = "edms") -> None:
         return
 
     # ---- Your message goes here ----
-    print(t.color("\nrecommended post-install:\n\n  1) edms autocomplete\n     Follow CLI instructions or open new terminal\n\n  2) conda create -n umi_tools umi_tools cutadapt samtools bowtie2 fgbio\n     Required for edms fastq {extract_umis,trim_motifs,make_sams,make_bams,bam_umi_tags,group_umis,consensus_umis,bam_to_fastq}\n", "yellow"),
+    print(t.color("\nrecommended post-install:\n\n  1) edms autocomplete\n     Follow CLI instructions\n\n  2) conda create -n umi_tools umi_tools cutadapt samtools bowtie2 fgbio\n     Required for edms fastq {extract_umis,trim_motifs,make_sams,make_bams,bam_umi_tags,group_umis,consensus_umis,bam_to_fastq}\n", "yellow"),
         file=sys.stderr,
     )
     # --------------------------------
