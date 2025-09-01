@@ -390,6 +390,7 @@ def color(text: str, color: str='green') -> None:
     '''
     colors = {
         'red': '\033[91m',
+        'orange': '\033[38;2;255;165;0m',
         'yellow': '\033[93m',
         'green': '\033[92m',
         'cyan': '\033[96m',
