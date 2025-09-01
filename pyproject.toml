@@ -50,13 +50,13 @@ Documentation = "https://github.com/marczepeda/edms#readme"
 [tool.setuptools]
 package-dir = {"" = "src"}
 include-package-data = true
-scripts = ["scripts/autocomplete"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
 "edms.resources" = ["*.csv"]
+"edms.scripts" = ["*.sh"]
 
 [tool.setuptools_scm]
 version_scheme = "post-release"

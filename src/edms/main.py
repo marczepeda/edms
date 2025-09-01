@@ -35,9 +35,9 @@ import argparse
 import argcomplete
 import ast
 import datetime
-import textwrap
 
 from . import config
+from . import utils
 
 from .gen import plot as p
 from .gen import stat as st
@@ -111,7 +111,7 @@ def _maybe_show_first_run_notice(appname: str = "edms") -> None:
         return
 
     # ---- Your message goes here ----
-    print(t.color("\nrecommended post-install:\n  1) bash autocomplete.sh\t\t\t\t\t\t\t# Optional: follow CLI instructions\n  2) conda create -n umi_tools umi_tools cutadapt samtools bowtie2 fgbio\t# Required for fastq.py UMI methods\n", "yellow"),
+    print(t.color("\nrecommended post-install:\n\n  1) edms autocomplete\n     Follow CLI instructions or open new terminal\n\n  2) conda create -n umi_tools umi_tools cutadapt samtools bowtie2 fgbio\n     Required for edms fastq {extract_umis,trim_motifs,make_sams,make_bams,bam_umi_tags,group_umis,consensus_umis,bam_to_fastq}\n", "yellow"),
         file=sys.stderr,
     )
     # --------------------------------
@@ -534,6 +534,12 @@ def main():
     # Add parser and subparsers
     parser = argparse.ArgumentParser(prog="edms", description="Endogenous Deep Mutational Scans (EDMS)", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     subparsers = parser.add_subparsers(dest="command") # dest="command" required for autocomplete
+
+    '''
+    edms.utils:
+    - run_bundled_script(): Run a bundled script from the package script resources.
+    '''
+    subparsers.add_parser("autocomplete", help="Enable edms autocomplete") # Run autocomplete script (args.command == "autocomplete")
 
     '''
     edms.config:
@@ -1689,6 +1695,8 @@ def main():
 
     # Parse all arguments
     args = parser.parse_args()
+    if args.command == 'autocomplete': # Run autocomplete script
+        sys.exit(utils.run_bundled_script())
     args_dict = vars(args)
     func = args_dict.pop("func")
     args_dict.pop("command", None)  # Remove 'command' if it exists (required for autocomplete)

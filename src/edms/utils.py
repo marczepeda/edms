@@ -20,6 +20,12 @@ import time
 import importlib.resources
 import pandas as pd
 
+import shutil
+import stat
+import subprocess 
+import sys
+import tempfile
+
 # Computation
 process = psutil.Process(os.getpid())
 
@@ -97,3 +103,28 @@ def load_resource_csv(filename: str):
     '''
     with importlib.resources.files("edms.resources").joinpath(filename).open("r", encoding="utf-8") as f:
         return pd.read_csv(f)
+    
+# Execute bash script
+def run_bundled_script(package: str="edms.scripts", relpath: str='autocomplete.sh', args: list[str]=sys.argv[1:]) -> int:
+    '''
+    run_bundled_script(): Run a bundled script from the package script resources.
+    
+    Parameters:
+    package (str): The package where the resource is located (Default: 'edms.scripts').
+    relpath (str): The relative path to the script within the package (Default: 'autocomplete.sh').
+    args (list[str]): List of arguments to pass to the script (Default: sys.argv[1:]).
+    '''
+    # Locate the resource inside the installed wheel
+    src = importlib.resources.files(package).joinpath(relpath)
+    if not src.is_file():
+        print(f"Error: resource {relpath} not found in {package}", file=sys.stderr)
+        return 1
+
+    # Copy to a temp file to ensure exec perms on all platforms
+    with tempfile.TemporaryDirectory() as td:
+        dst = os.path.join(td, os.path.basename(relpath))
+        shutil.copyfile(src, dst)
+        os.chmod(dst, os.stat(dst).st_mode | stat.S_IXUSR)
+        # Run with inherited stdio
+        proc = subprocess.run([dst, *args], check=False)
+        return proc.returncode
