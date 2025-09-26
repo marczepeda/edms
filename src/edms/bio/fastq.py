@@ -2481,6 +2481,7 @@ def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs',
 
     # Create output directory and .trim_motifs subdirectory for logs
     io.mkdir(os.path.join(out_dir,'.trim_motifs'))
+    io.mkdir(os.path.join(out_dir,'.trim5'))
     
     # Get motifs from in_file if needed
     if motif5 is None and motif3 is None:
@@ -2513,7 +2514,6 @@ def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs',
 
             # Memory reporting
             memories.append(memory_timer(task=f'cutadapt: {file}'))
-            
 
     # Memory reporting
     memories.append(memory_timer(task='trim_motifs()'))
