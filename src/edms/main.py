@@ -540,7 +540,7 @@ def main():
             "argparse.option": "", # ?
             "argparse.metavar": "dark_magenta", # meta variable (actual function argument name)
             "argparse.help": "blue", # help text
-            "argparse.text": "blue", # normal text in help message
+            "argparse.text": "green", # normal text in help message
             "argparse.groups": "red", # group titles
             "argparse.description": "",
             "argparse.epilog": "", # ... -h

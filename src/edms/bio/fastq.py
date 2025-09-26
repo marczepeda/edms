@@ -169,7 +169,7 @@ def revcom_fastqs(in_dir: str, out_dir: str):
                     reverse_complement_record = record[:] # Create a new record with the reverse complement sequence
                     reverse_complement_record.seq = reverse_complement_seq # Write the new record to the output file
                     SeqIO.write(reverse_complement_record, outfile, "fastq")
-            print(f"Saved reverse complement to {output_fastq_gz}")
+            print(f"Saved reverse complement to {output_fastq}")
 
 def unzip_fastqs(in_dir: str, out_dir: str):
     ''' 
@@ -228,7 +228,7 @@ def comb_fastqs(in_dir: str, out_dir: str, out_file: str):
                             out.write(line)
                 
                 elif in_file.endswith(".fastq"):
-                    with open(os.path.join(in_dir,in_file), 'r') as f:
+                    with open(os.path.join(in_dir,in_file), 'r') as handle:
                         for line in handle:
                             out.write(line)
 
@@ -1204,7 +1204,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                      df_motif5: pd.DataFrame | str=None, df_motif3: pd.DataFrame | str=None, fastq_col: str=None,  meta: pd.DataFrame | str=None, 
                      match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, extend_gap_score: float = -0.1, 
                      align_dims: tuple=(0,0), align_ckpt: int=10000, save_alignments: bool=False, return_df: bool=False, 
-                     literal_eval: bool=True, plot_suf: bool=None, show: bool=False, **plot_kwargs) -> pd.DataFrame:
+                     literal_eval: bool=True, plot_suf: str='.pdf', show: bool=False, **plot_kwargs) -> pd.DataFrame:
     ''' 
     count_signatures(): generate signatures from fastq read region alignments to WT sequence; count signatures, plot and return fastq signatures dataframe
 
@@ -1233,7 +1233,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
     save_alignments (bool, optional): save alignments (Default: False, save memory)
     return_df (bool, optional): return dataframe (Default: False)
     literal_eval (bool, optional): convert string representations (Default: True)
-    plot_suf (str, optional): plot type suffix with '.' (Default: None)
+    plot_suf (str, optional): plot type suffix with '.' (Default: '.pdf')
     show (bool, optional): show plots (Default: False)
     **plot_kwargs (optional): plot keyword arguments
     '''
@@ -1622,10 +1622,9 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
     io.save(dir=out_dir,file=out_file,obj=out_df)
 
-    if plot_suf is not None:
-        stack(df=out_df,x='fastq_file',y='fraction',cols=edit_col,vertical=False,
-              palette_or_cmap='tab20',repeats=math.ceil(len(out_df[edit_col].unique())/20),cutoff=0,legend_bbox_to_anchor=(0,-.1),legend_ncol=8,
-              figsize=(15,10), title='Edit Outcomes', dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}.{plot_suf}", show=show, **plot_kwargs)
+    stack(df=out_df,x='fastq_file',y='fraction',cols=edit_col,vertical=False,
+          palette_or_cmap='tab20',repeats=math.ceil(len(out_df[edit_col].unique())/20),cutoff=0,legend_bbox_to_anchor=(0,-.1),legend_ncol=8,
+          figsize=(15,10), title='Edit Outcomes', dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}{plot_suf}", show=show, **plot_kwargs)
 
     if return_df: return out_df
 
@@ -1849,7 +1848,7 @@ def region(fastqs: dict, flank5: str, flank3: str, save: bool=True, masks: bool=
     else: return fastqs_1
 
 ### Supporting methods for genotype()
-def find_AA_edits(wt: str, res: int, seq: str) -> str:
+def find_AA_edits(wt: str | Seq, res: int, seq: str) -> str:
     '''
     find_AA_edits(): find amino acid edits compared to wildtype sequence
     
@@ -2094,9 +2093,8 @@ def genotype(fastqs: dict, res: int, wt: str, save: bool=False, masks: bool=Fals
         # Save edits & corresponding categories
         edits=[]
         categories=[]
-        if masks==True: 
-            editsN=[]
-            categoriesN=[]
+        editsN=[]
+        categoriesN=[]
 
         for i in range(len(fastq['prot'])): # Iterate through translated sequences
             if len(fastq.iloc[i]['prot'])==0: # Empty sequence?
@@ -2501,7 +2499,7 @@ def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs',
     for file in os.listdir(path=fastq_dir):
         if file.endswith('.fastq') or file.endswith('.fastq.gz'):
             # Trim motifs using cutadapt (only keep reads with both motifs (up to 2 errors or 10% error rate))
-            command = f'conda run -n {env} cutadapt -g {motif5} -a {motif3} -e {error_rate} --max-ee {max_distance} --trimmed-only -o {os.path.join(out_dir,file.replace(".gz",""))} {os.path.join(fastq_dir,file)} > {os.path.join(out_dir,".trim_motifs",file)}.log'
+            command = f'conda run -n {env} cutadapt -a ^{motif5}...{motif3}$ -e {error_rate} --max-ee {max_distance} --trimmed-only -o {os.path.join(out_dir,file.replace(".gz",""))} {os.path.join(fastq_dir,file)} > {os.path.join(out_dir,".trim_motifs",file)}.log'
             print(f"{command}")
             result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
             
@@ -3032,11 +3030,11 @@ def subscript(df: pd.DataFrame, tick: str='before',tick_sub: str='number') -> pd
     return pd.DataFrame({'tick':ticks,'label':labels}).sort_values(by='tick').reset_index(drop=True)
 
 # Plot methods
-def scat(typ: str,df: pd.DataFrame,x: str,y: str, cols:bool=None, cols_ord:bool=None, stys:bool=None, cutoff: float=0.01, cols_exclude: list|str=None,
+def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols:bool=None, cols_ord:bool=None, stys:bool=None, cutoff: float=0.01, cols_exclude: list|str=None,
          file: bool=None, dir: bool=None, palette_or_cmap: str='colorblind', edgecol: str='black',
          figsize: tuple=(10,6), title: str='', title_size=18, title_weight: str='bold', title_font: str='Arial',
-         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_scale: str='linear', x_axis_dims: tuple=(0,100),x_ticks_rot: int=0, x_ticks_font: str='Arial',x_ticks: list=[],
-         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_scale: str='linear', y_axis_dims: tuple=(0,100),y_ticks_rot: int=0, y_ticks_font: str='Arial',y_ticks: list=[],
+         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_scale: str='linear', x_axis_dims: tuple=(0,100), x_ticks_rot: int=0, x_ticks_font: str='Arial',x_ticks: list=[],
+         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_scale: str='linear', y_axis_dims: tuple=(0,100), y_ticks_rot: int=0, y_ticks_font: str='Arial',y_ticks: list=[],
          legend_title: str='', legend_title_size: int=12, legend_size: int=9, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_items: tuple=(0,0), show: bool=True, space_capitalized: bool=True,
          **kwargs):
     '''
@@ -3044,7 +3042,7 @@ def scat(typ: str,df: pd.DataFrame,x: str,y: str, cols:bool=None, cols_ord:bool=
 
     Parameters:
     typ (str): plot type (scat, line, line_scat)
-    df (dataframe): pandas dataframe
+    df (dataframe | str): pandas dataframe or file path
     x (str): x-axis column name
     y (str): y-axis column name
     cols (str, optional): color column name
@@ -3089,6 +3087,10 @@ def scat(typ: str,df: pd.DataFrame,x: str,y: str, cols:bool=None, cols_ord:bool=
     
     Dependencies: os, matplotlib, seaborn, & plot
     '''
+    # Get dataframe from file path if needed
+    if type(df)==str:
+        df = io.get(pt=df)
+    
     # Omit data smaller than cutoff or excluded
     df_cut=df[df[y]>=cutoff]
     df_other=df[df[y]<cutoff]
@@ -3123,7 +3125,7 @@ def scat(typ: str,df: pd.DataFrame,x: str,y: str, cols:bool=None, cols_ord:bool=
            legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_items=legend_items,show=show,space_capitalize=space_capitalized,
            **kwargs)
 
-def cat(typ: str, df: pd.DataFrame, x: str, y: str, errorbar: str=None, cols: str=None, cols_ord: list=None, cutoff: float=0.01, cols_exclude: list|str=None,
+def cat(typ: str, df: pd.DataFrame | str, x: str, y: str, errorbar: str=None, cols: str=None, cols_ord: list=None, cutoff: float=0.01, cols_exclude: list|str=None,
         file: str=None, dir: str=None, palette_or_cmap: str='colorblind', edgecol: str='black', lw: int=1,
         figsize: tuple=(10,6), title: str='', title_size: int=18, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_scale: str='linear', x_axis_dims: tuple=(0,1), x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
@@ -3135,7 +3137,7 @@ def cat(typ: str, df: pd.DataFrame, x: str, y: str, errorbar: str=None, cols: st
     
     Parameters:
     typ (str): plot type (bar, box, violin, swarm, strip, point, count, bar_swarm, box_swarm, violin_swarm)
-    df (dataframe): pandas dataframe
+    df (dataframe | str): pandas dataframe or file path
     x (str, optional): x-axis column name
     y (str, optional): y-axis column name
     cols (str, optional): color column name
@@ -3183,6 +3185,10 @@ def cat(typ: str, df: pd.DataFrame, x: str, y: str, errorbar: str=None, cols: st
     
     Dependencies: os, matplotlib, seaborn, & plot
     '''
+    # Get dataframe from file path if needed
+    if type(df)==str:
+        df = io.get(pt=df)
+    
     # Omit data smaller than cutoff or excluded
     df_cut=df[df[y]>=cutoff]
     df_other=df[df[y]<cutoff]
@@ -3217,7 +3223,7 @@ def cat(typ: str, df: pd.DataFrame, x: str, y: str, errorbar: str=None, cols: st
           legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_items=legend_items,show=show,space_capitalize=space_capitalize,
           **kwargs)
 
-def stack(df: pd.DataFrame, x: str='sample', y: str='fraction', cols: str='edit', cutoff: float=0.01, cols_ord: list=[], x_ord: list=[],
+def stack(df: pd.DataFrame | str, x: str='sample', y: str='fraction', cols: str='edit', cutoff: float=0.01, cols_ord: list=[], x_ord: list=[],
           file: str=None, dir: str=None, palette_or_cmap: str='tab20', repeats: int=1, errcap: int=4, vertical: bool=True,
           figsize=(10,6), title: str='Editing Outcomes', title_size: int=18, title_weight: str='bold', title_font: str='Arial',
           x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_ticks_rot: int=0, x_ticks_font: str='Arial',
@@ -3228,7 +3234,7 @@ def stack(df: pd.DataFrame, x: str='sample', y: str='fraction', cols: str='edit'
     stack(): creates stacked bar plot
 
     Parameters:
-    df (dataframe): pandas dataframe
+    df (dataframe | str): pandas dataframe or file path
     x (str, optional): x-axis column name
     y (str, optional): y-axis column name
     cols (str, optional): color column name
@@ -3269,6 +3275,10 @@ def stack(df: pd.DataFrame, x: str='sample', y: str='fraction', cols: str='edit'
     
     Dependencies: re, os, pandas, numpy, matplotlib.pyplot & plot
     '''
+    # Get dataframe from file path if needed
+    if type(df)==str:
+        df = io.get(pt=df)
+
     # Omit smaller than cutoff and convert it to <cutoff
     df_cut=df[df[y]>=cutoff]
     df_other=df[df[y]<cutoff]
@@ -3300,7 +3310,7 @@ def stack(df: pd.DataFrame, x: str='sample', y: str='fraction', cols: str='edit'
             legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,
             legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_ncol=legend_ncol,show=show,space_capitalize=space_capitalize,**kwargs)
 
-def heat(df: pd.DataFrame, cond: str, x: str='number', y: str='after', vals: str='fraction_avg', vals_dims:tuple=None,
+def heat(df: pd.DataFrame | str, cond: str, x: str='number', y: str='after', vals: str='fraction_avg', vals_dims:tuple=None,
          file=None, dir=None, edgecol: str='black', lw: int=1, annot=False, cmap: str="bone_r", sq: bool=True, cbar: bool=True,
          title: str='', title_size: int=12, title_weight: str='bold', title_font: str='Arial', figsize: tuple=(20,7),
          x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_ticks_rot: int=45, x_ticks_font: str='Arial',
@@ -3310,7 +3320,8 @@ def heat(df: pd.DataFrame, cond: str, x: str='number', y: str='after', vals: str
     heat(): creates heatmap
     
     Parameters:
-    df (dataframe): tidy-formatted DMS dataframe (dms_cond() or dms_comp())
+    df (dataframe | str): tidy-formatted DMS dataframe (dms_cond() or dms_comp()) or file path
+    cond (str): Condition column name for grouping fastq outcomes dataframe
     x (str, optional): x-axis column name (AA residues number column)
     y (str, optional): y-axis column name (AA change column)
     vals (str, optional): values column name
@@ -3343,6 +3354,10 @@ def heat(df: pd.DataFrame, cond: str, x: str='number', y: str='after', vals: str
     
     Dependencies: matplotlib, seaborn, pandas, & aa_props
     '''
+    # Get dataframe from file path if needed
+    if type(df)==str:
+        df = io.get(pt=df)
+
     # Find min and max values in the dataset for normalization
     if vals_dims is None:
         vmin = df[vals].values.min()
@@ -3388,7 +3403,7 @@ def heat(df: pd.DataFrame, cond: str, x: str='number', y: str='after', vals: str
         plt.savefig(fname=os.path.join(dir, file), dpi=600, bbox_inches='tight', format=f'{file.split(".")[-1]}')
     if show: plt.show()
 
-def vol(df: pd.DataFrame, x: str, y: str, size: str=None, size_dims: tuple=None, include_wt: bool=False,
+def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple=None, include_wt: bool=False,
         FC_threshold: float=2, pval_threshold: float=0.05, file: str=None, dir: str=None, color: str='lightgray', alpha: float=0.5, edgecol: str='black', vertical: bool=True,
         figsize=(10,6), title: str='', title_size: int=18, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
@@ -3400,7 +3415,7 @@ def vol(df: pd.DataFrame, x: str, y: str, size: str=None, size_dims: tuple=None,
     vol(): creates volcano plot
     
     Parameters:
-    df (dataframe): pandas dataframe
+    df (dataframe | str): pandas dataframe or file path
     x (str): x-axis column name (FC)
     y (str): y-axis column name (pval)
     cols (str, optional): color column name
@@ -3450,6 +3465,10 @@ def vol(df: pd.DataFrame, x: str, y: str, size: str=None, size_dims: tuple=None,
     
     Dependencies: os, matplotlib, seaborn, pandas, & edit_1()
     '''
+    # Get dataframe from file path if needed
+    if type(df)==str:
+        df = io.get(pt=df)
+    
     # Strings with subscripts
     log2 = 'log\u2082'
     log10 = 'log\u2081\u2080'

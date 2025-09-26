@@ -1,5 +1,5 @@
 ''' From: https://www.nature.com/articles/s41587-021-01039-7 
-    Modified by Marc Zepeda (2025-8-13)
+    Modified by Marc Zepeda (2025-08-13)
 '''
 from math import prod
 import random

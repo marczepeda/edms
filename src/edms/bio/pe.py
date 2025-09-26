@@ -567,7 +567,7 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
     saturation_mutagenesis (str, optional): saturation mutagenesis design with prime editing (Options: 'aa', 'base').
     aa_index (int, optional): 1st amino acid in target sequence index (Default: 1)
     enzymes (list, optional): list of type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to check for in pegRNAs and ngRNAs (Default: ['Esp3I'])
-    replace (bool, optional): replace pegRNAs and remove ngRNAs with RE enzyme sites (Default: True)
+    replace (bool, optional): replace pegRNAs and remove ngRNAs with RE enzyme sites (Default: True if saturation_mutagenesis is not None)
     
     Dependencies: io, numpy, & pandas
     '''
@@ -593,11 +593,13 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
         pegRNAs['RTT_sequence']=[pegRNAs.iloc[i]['Extension_sequence'][0:int(pegRNAs.iloc[i]['RTT_length'])] for i in range(len(pegRNAs))]
         pegRNAs['PBS_sequence']=[pegRNAs.iloc[i]['Extension_sequence'][int(pegRNAs.iloc[i]['RTT_length']):]  for i in range(len(pegRNAs))]
         pegRNAs['AA Number'] = [int(re.findall(r'-?\d+',edit)[0]) if edit is not None else aa_index for edit in pegRNAs['Edit']]
-        pegRNAs = t.reorder_cols(df=pegRNAs,
-                                 cols=['pegRNA_number','gRNA_type','Strand','Edit','AA Number', # Important metadata
-                                    'Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence',  # Sequence information
-                                    'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide'], # Less important metadata
-                                 keep=False) 
+        cols=['pegRNA_number','gRNA_type','Strand','Edit','AA Number', # Important metadata
+              'Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence',  # Sequence information
+              'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide'], # Less important metadata
+        for pegRNA_col in pegRNAs.columns: # Keep any additional columns in pegRNAs DataFrame
+            if pegRNA_col not in cols and pegRNA_col not in ['Spacer_sequence_order_TOP','Spacer_sequence_order_BOTTOM','pegRNA_extension_sequence_order_TOP','pegRNA_extension_sequence_order_BOTTOM']:
+                cols.append(pegRNA_col)
+        pegRNAs = t.reorder_cols(df=pegRNAs, cols=cols, keep=False) 
         
         # Generate ngRNAs
         ngRNAs['Edit']=[str(target_name.split('_')[-1].split('to')[0]) + # AA Before
@@ -608,11 +610,13 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
         ngRNAs['Scaffold_sequence']=[scaffold_sequence]*len(ngRNAs)
         ngRNAs['ngRNA_number']=list(np.arange(1,len(ngRNAs)+1))
         ngRNAs['AA Number'] = [int(re.findall(r'-?\d+',edit)[0]) if edit is not None else aa_index for edit in ngRNAs['Edit']]
-        ngRNAs = t.reorder_cols(df=ngRNAs,
-                                cols=['pegRNA_number','ngRNA_number','gRNA_type','Strand','Edit','AA Number', # Important metadata
-                                    'Spacer_sequence','Scaffold_sequence',  # Sequence information
-                                    'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Annotation','Nick_index','ngRNA-to-pegRNA_distance'], # Less important metadata
-                                keep=False) 
+        cols = ['pegRNA_number','ngRNA_number','gRNA_type','Strand','Edit','AA Number', # Important metadata
+                'Spacer_sequence','Scaffold_sequence',  # Sequence information
+                'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Annotation','Nick_index','ngRNA-to-pegRNA_distance'], # Less important metadata
+        for ngRNA_col in ngRNAs.columns: # Keep any additional columns in ngRNAs DataFrame
+            if ngRNA_col not in cols and ngRNA_col not in ['Spacer_sequence_order_TOP','Spacer_sequence_order_BOTTOM','pegRNA_extension_sequence_order_TOP','pegRNA_extension_sequence_order_BOTTOM']:
+                cols.append(ngRNA_col)
+        ngRNAs = t.reorder_cols(df=ngRNAs, cols=cols, keep=False)
     
     else: # Not saturation mutagenesis mode
         
@@ -626,20 +630,28 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
         pegRNAs['RTT_sequence']=[pegRNAs.iloc[i]['Extension_sequence'][0:int(pegRNAs.iloc[i]['RTT_length'])] for i in range(len(pegRNAs))]
         pegRNAs['PBS_sequence']=[pegRNAs.iloc[i]['Extension_sequence'][int(pegRNAs.iloc[i]['RTT_length']):]  for i in range(len(pegRNAs))]
         pegRNAs['Target_name']=[target_name_in_file]*len(pegRNAs)
-        pegRNAs = t.reorder_cols(df=pegRNAs,
-                                cols=['Target_name','pegRNA_number','gRNA_type','Strand', # Important metadata
-                                    'Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence',  # Sequence information
-                                    'Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide'], # Less important metadata
-                                keep=False) 
+        cols = ['Target_name','pegRNA_number','gRNA_type','Strand', # Important metadata
+                'Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence',  # Sequence information
+                'Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide'] # Less important metadata
+        for pegRNA_col in pegRNAs.columns: # Keep any additional columns in pegRNAs DataFrame
+            if pegRNA_col not in cols and pegRNA_col not in ['Spacer_sequence_order_TOP','Spacer_sequence_order_BOTTOM','pegRNA_extension_sequence_order_TOP','pegRNA_extension_sequence_order_BOTTOM']:
+                cols.append(pegRNA_col)
+        pegRNAs = t.reorder_cols(df=pegRNAs, cols=cols, keep=False) 
         
         # Generate ngRNAs
         ngRNAs['Scaffold_sequence']=[scaffold_sequence]*len(ngRNAs)
         ngRNAs['Target_name']=[target_name_in_file]*len(ngRNAs)
-        ngRNAs = t.reorder_cols(df=ngRNAs,
-                                cols=['Target_name','pegRNA_number','gRNA_type','Strand', # Important metadata
-                                    'Spacer_sequence','Scaffold_sequence',  # Sequence information
-                                    'Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','Nick_index','ngRNA-to-pegRNA_distance'], # Less important metadata
-                                keep=False)
+        ngRNAs['ngRNA_number']=list(np.arange(1,len(ngRNAs)+1))
+        cols = ['Target_name','ngRNA_number','gRNA_type','Strand', # Important metadata
+                'Spacer_sequence','Scaffold_sequence',  # Sequence information
+                'Target_sequence','Spacer_GC_content','PAM_sequence','Annotation','Nick_index','ngRNA-to-pegRNA_distance'] # Less important metadata
+        for ngRNA_col in ngRNAs.columns: # Keep any additional columns in ngRNAs DataFrame
+            if ngRNA_col not in cols and ngRNA_col not in ['Spacer_sequence_order_TOP','Spacer_sequence_order_BOTTOM','pegRNA_extension_sequence_order_TOP','pegRNA_extension_sequence_order_BOTTOM']:
+                cols.append(ngRNA_col)
+        ngRNAs = t.reorder_cols(df=ngRNAs, cols=cols, keep=False)
+        
+        # Set replace to False if not saturation mutagenesis
+        replace = False
     
     # Temporarily make pegRNAs and ngRNAs oligonucleotides
     pegRNAs['Oligonucleotide'] = [str(spacer+scaffold+rtt+pbs).upper() for (spacer, scaffold, rtt, pbs) in t.zip_cols(df=pegRNAs,cols=['Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence'])]
@@ -649,10 +661,11 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
     for enzyme in enzymes:
         # pegRNAs: Find recognition sites for enzymes
         pegRNAs = find_enzyme_sites(df=pegRNAs, enzyme=enzyme)
-        pegRNAs_edits = list(pegRNAs['Edit'].unique()) # Get pegRNA edits
-    
+        
         if replace: # Replace pegRNAs with RE enzyme sites
             
+            pegRNAs_edits = list(pegRNAs['Edit'].unique()) # Get pegRNA edits
+    
             # Store pegRNAs with recognition sites for enzymes
             pegRNAs_enzyme = pegRNAs[pegRNAs[enzyme]!=0]
             io.save(dir=f'../pegRNAs/{enzyme}/codon_swap_before',
