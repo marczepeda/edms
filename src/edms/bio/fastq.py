@@ -1516,7 +1516,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                 fastq_df_ref = pd.merge(left=fastq_df_ref,right=meta,on='fastq_file',how='left')
         
         # Add WT & Not WT
-        Not_WT_WT_df = pd.concat(fastq_df_ref.iloc[0:1][[col for col in fastq_df_ref.columns if col not in previous_cols]]*2, ignore_index=True)
+        Not_WT_WT_df = pd.concat([fastq_df_ref.iloc[0:1][[col for col in fastq_df_ref.columns if col not in previous_cols]]]*2, ignore_index=True)
         Not_WT_WT_df[id_col] = ['Not WT', 'WT']
         Not_WT_WT_df[edit_col] = ['Not WT', 'WT']
         fastq_df_ref = pd.concat([fastq_df_ref, Not_WT_WT_df], ignore_index=True)
