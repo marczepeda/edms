@@ -504,16 +504,17 @@ def prime_design_input(target_name: str, flank5_sequence: str,
                               'target_sequence': [f"{flank5_sequence}({target_sequence}){flank3_sequence}"],
                               'aa_index': [aa_index]}))
 
-def prime_design(file: str, pbs_length_list: list = [],rtt_length_list: list = [], nicking_distance_minimum: int = 0,
-                nicking_distance_maximum: int = 100, filter_c1_extension: bool = False, silent_mutation: bool = False,
+def prime_design(file: str, pe_format: str = 'NNNNNNNNNNNNNNNNN/NNN[NGG]', pbs_length_list: list = [], rtt_length_list: list = [], 
+                nicking_distance_minimum: int = 0,nicking_distance_maximum: int = 100, filter_c1_extension: bool = False, silent_mutation: bool = False,
                 genome_wide_design: bool = False, saturation_mutagenesis: str = None, number_of_pegrnas: int = 3, number_of_ngrnas: int = 3,
                 nicking_distance_pooled: int = 75, homology_downstream: int = 10, pbs_length_pooled: int = 14, rtt_max_length_pooled: int = 50,
                 out_dir: str = './DATETIMESTAMP_PrimeDesign'):
     ''' 
-    prime_design(): run PrimeDesign
+    prime_design(): execute PrimeDesign (EDMS version)
     
     Parameters:
     file (str): input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)
+    pe_format (str, optional): Prime editing formatting including the spacer, cut index -> /, and protospacer adjacent motif (PAM) -> [PAM] (Default: NNNNNNNNNNNNNNNNN/NNN[NGG])
     pbs_length_list (list, optional): list of primer binding site (PBS) lengths for the pegRNA extension. Example: 12 13 14 15
     rtt_length_list (list, optional): list of reverse transcription (RT) template lengths for the pegRNA extension. Example: 10 15 20
     nicking_distance_minimum (int, optional): minimum nicking distance for designing ngRNAs. (Default: 0 bp)
@@ -535,6 +536,7 @@ def prime_design(file: str, pbs_length_list: list = [],rtt_length_list: list = [
     # Write PrimeDesign Command Line
     cmd = 'python -m edms.bio.primedesign'
     cmd += f' -f {file}' # Append required parameters
+    if pe_format!='NNNNNNNNNNNNNNNNN/NNN[NGG]': cmd += f' -pe_format {pe_format}'
     if pbs_length_list: cmd += f' -pbs {" ".join([str(val) for val in pbs_length_list])}' # Append optional parameters
     if rtt_length_list: cmd += f' -rtt {" ".join([str(val) for val in rtt_length_list])}'
     if nicking_distance_minimum!=0: cmd += f' -nick_dist_min {str(nicking_distance_minimum)}' 
@@ -592,13 +594,13 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
         pegRNAs['Target_name']=[target_name_in_file]*len(pegRNAs)
         pegRNAs['Scaffold_sequence']=[scaffold_sequence]*len(pegRNAs)
         pegRNAs['RTT_sequence']=[pegRNAs.iloc[i]['Extension_sequence'][0:int(pegRNAs.iloc[i]['RTT_length'])] for i in range(len(pegRNAs))]
-        pegRNAs['PBS_sequence']=[pegRNAs.iloc[i]['Extension_sequence'][int(pegRNAs.iloc[i]['RTT_length']):]  for i in range(len(pegRNAs))]
+        pegRNAs['PBS_sequence']=[pegRNAs.iloc[i]['Extension_sequence'][int(pegRNAs.iloc[i]['RTT_length']):].upper()  for i in range(len(pegRNAs))]
         pegRNAs['AA Number'] = [int(re.findall(r'-?\d+',edit)[0]) if edit is not None else aa_index for edit in pegRNAs['Edit']]
         cols=['pegRNA_number','gRNA_type','Strand','Edit','AA Number', # Important metadata
               'Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence',  # Sequence information
               'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide'] # Less important metadata
         for pegRNA_col in pegRNAs.columns: # Keep any additional columns in pegRNAs DataFrame
-            if pegRNA_col not in cols and pegRNA_col not in ['Spacer_sequence_order_TOP','Spacer_sequence_order_BOTTOM','pegRNA_extension_sequence_order_TOP','pegRNA_extension_sequence_order_BOTTOM']:
+            if pegRNA_col not in cols and pegRNA_col not in ['ngRNA-to-pegRNA_distance','Spacer_sequence_order_TOP','Spacer_sequence_order_BOTTOM','pegRNA_extension_sequence_order_TOP','pegRNA_extension_sequence_order_BOTTOM']:
                 cols.append(pegRNA_col)
         pegRNAs = t.reorder_cols(df=pegRNAs, cols=cols, keep=False) 
         
@@ -629,13 +631,13 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
         # Generate pegRNAs
         pegRNAs['Scaffold_sequence']=[scaffold_sequence]*len(pegRNAs)
         pegRNAs['RTT_sequence']=[pegRNAs.iloc[i]['Extension_sequence'][0:int(pegRNAs.iloc[i]['RTT_length'])] for i in range(len(pegRNAs))]
-        pegRNAs['PBS_sequence']=[pegRNAs.iloc[i]['Extension_sequence'][int(pegRNAs.iloc[i]['RTT_length']):]  for i in range(len(pegRNAs))]
+        pegRNAs['PBS_sequence']=[pegRNAs.iloc[i]['Extension_sequence'][int(pegRNAs.iloc[i]['RTT_length']):].upper()  for i in range(len(pegRNAs))]
         pegRNAs['Target_name']=[target_name_in_file]*len(pegRNAs)
         cols = ['Target_name','pegRNA_number','gRNA_type','Strand', # Important metadata
                 'Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence',  # Sequence information
                 'Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide'] # Less important metadata
         for pegRNA_col in pegRNAs.columns: # Keep any additional columns in pegRNAs DataFrame
-            if pegRNA_col not in cols and pegRNA_col not in ['Spacer_sequence_order_TOP','Spacer_sequence_order_BOTTOM','pegRNA_extension_sequence_order_TOP','pegRNA_extension_sequence_order_BOTTOM']:
+            if pegRNA_col not in cols and pegRNA_col not in ['ngRNA-to-pegRNA_distance','Spacer_sequence_order_TOP','Spacer_sequence_order_BOTTOM','pegRNA_extension_sequence_order_TOP','pegRNA_extension_sequence_order_BOTTOM']:
                 cols.append(pegRNA_col)
         pegRNAs = t.reorder_cols(df=pegRNAs, cols=cols, keep=False) 
         
@@ -736,12 +738,12 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
     return pegRNAs,ngRNAs
 
 def prime_designer(target_name: str, flank5_sequence: str, target_sequence: str, flank3_sequence: str,
-                  pbs_length_pooled_ls: list = [11,13,15], rtt_max_length_pooled: int = 50, silent_mutation: bool = True,
-                  number_of_pegrnas: int = 1, number_of_ngrnas: int = 3, homology_downstream: int = 10,
-                  scaffold_sequence: str='GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC', 
-                  aa_index: int=1, enzymes: list[str]=['Esp3I'], replace: bool=True):
+                pbs_length_pooled_ls: list = [11,13,15], rtt_max_length_pooled: int = 50, silent_mutation: bool = True,
+                number_of_pegrnas: int = 1, number_of_ngrnas: int = 3, homology_downstream: int = 10, pe_format: str = 'NNNNNNNNNNNNNNNNN/NNN[NGG]',
+                scaffold_sequence: str='GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC', 
+                aa_index: int=1, enzymes: list[str]=['Esp3I'], replace: bool=True):
     '''
-    prime_designer(): execute PrimeDesign saturation mutagenesis for EDMS
+    prime_designer(): execute PrimeDesign saturation mutagenesis (EDMS version)
     
     Parameters:
     target_name (str): name of target
@@ -750,10 +752,11 @@ def prime_designer(target_name: str, flank5_sequence: str, target_sequence: str,
     flank3_sequence (str): in-frame nucleotide sequence with 3' of saturation mutagensis region (length must be divisible by 3)
     pbs_length_pooled_ls (list, optional): list of primer binding site (PBS) lengths for the pegRNA extension (Default: [11,13,15])
     rtt_max_length_pooled (int, optional): maximum RTT length to design pegRNAs for pooled design applications. (Default: 50 nt)
-    silent_mutation (bool, optional): introduce silent mutation into PAM assuming sequence is in-frame (Default: True)
+    silent_mutation (bool, optional): introduce silent mutation into or around the PAM assuming the sequence is in-frame (Default: True). Currently only available with SpCas9 PE (i.e., pe_format = NNNNNNNNNNNNNNNNN/NNN[NGG]).
     number_of_pegrnas (int, optional): maximum number of pegRNAs to design for each input sequence. The pegRNAs are ranked by 1) PAM disrupted > PAM intact then 2) distance to edit. (Default: 1)
     number_of_ngrnas (int, optional): maximum number of ngRNAs to design for each input sequence. The ngRNAs are ranked by 1) PE3b-seed > PE3b-nonseed > PE3 then 2) deviation from nicking_distance_pooled. (Default: 3)
     homology_downstream (int, optional): for pooled designs (genome_wide or saturation_mutagenesis needs to be indicated), this parameter determines the RT extension length downstream of an edit for pegRNA designs (Default: 10)
+    pe_format (str, optional): Prime editing formatting including the spacer, cut index -> /, and protospacer adjacent motif (PAM) -> [PAM] (Default: NNNNNNNNNNNNNNNNN/NNN[NGG])
     scaffold_sequence (str, optional): sgRNA scaffold sequence (Default: SpCas9 flip + extend = GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC)
         Alternative option for VLPs: SpCas9 flip + extend + com-modified = GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC
     aa_index (int, optional): 1st amino acid in target sequence index (Default: 1)
@@ -764,7 +767,7 @@ def prime_designer(target_name: str, flank5_sequence: str, target_sequence: str,
     '''
     # Create PrimeDesign input file
     prime_design_input(target_name=target_name, flank5_sequence=flank5_sequence, target_sequence=target_sequence, 
-                     flank3_sequence=flank3_sequence, aa_index=aa_index, dir='.', file=f'{"_".join(target_name.split(" "))}.csv')
+                    flank3_sequence=flank3_sequence, aa_index=aa_index, dir='.', file=f'{"_".join(target_name.split(" "))}.csv')
 
     # Iterate through PBS lengths
     pegRNAs=dict()
@@ -773,8 +776,8 @@ def prime_designer(target_name: str, flank5_sequence: str, target_sequence: str,
 
         # Run PrimeDesign in saturation mutatgenesis mode
         prime_design(file=f'{"_".join(target_name.split(" "))}.csv', silent_mutation=silent_mutation, saturation_mutagenesis="aa",
-                     number_of_pegrnas=number_of_pegrnas, number_of_ngrnas=number_of_ngrnas, pbs_length_pooled=pbs_length_pooled, 
-                     rtt_max_length_pooled=rtt_max_length_pooled, homology_downstream=homology_downstream)
+                    number_of_pegrnas=number_of_pegrnas, number_of_ngrnas=number_of_ngrnas, pbs_length_pooled=pbs_length_pooled, 
+                    rtt_max_length_pooled=rtt_max_length_pooled, homology_downstream=homology_downstream, pe_format=pe_format)
         
         # Obtain pegRNAs and ngRNAs from PrimeDesign output
         pegRNAs[pbs_length_pooled],ngRNAs[pbs_length_pooled] = prime_design_output(
@@ -787,7 +790,7 @@ def prime_designer(target_name: str, flank5_sequence: str, target_sequence: str,
     io.save_dir(dir='../ngRNAs', suf='.csv', dc=ngRNAs)
 
 def merge(epegRNAs: str | dict | pd.DataFrame, ngRNAs: str | dict | pd.DataFrame, ngRNAs_groups_max: int=3,
-          epegRNA_suffix: str='_epegRNA', ngRNA_suffix: str='_ngRNA', dir: str=None, file: str=None, literal_eval: bool=True) -> pd.DataFrame:
+        epegRNA_suffix: str='_epegRNA', ngRNA_suffix: str='_ngRNA', dir: str=None, file: str=None, literal_eval: bool=True) -> pd.DataFrame:
     '''
     merge(): rejoins epeg/ngRNAs & creates ngRNA_groups
     
@@ -823,13 +826,13 @@ def merge(epegRNAs: str | dict | pd.DataFrame, ngRNAs: str | dict | pd.DataFrame
 
     # Limit to ngRNAs that correspond to epegRNAs
     ngRNAs = ngRNAs[[True if pegRNA_num in set(epegRNAs['pegRNA_number']) else False 
-                     for pegRNA_num in ngRNAs['pegRNA_number']]].reset_index(drop=True)
+                    for pegRNA_num in ngRNAs['pegRNA_number']]].reset_index(drop=True)
 
     # Merge epegRNAs & ngRNAs
     epeg_ngRNAs = pd.merge(left=epegRNAs,
-                           right=ngRNAs,
-                           on='pegRNA_number',
-                           suffixes=(epegRNA_suffix,ngRNA_suffix)).reset_index(drop=True)
+                        right=ngRNAs,
+                        on='pegRNA_number',
+                        suffixes=(epegRNA_suffix,ngRNA_suffix)).reset_index(drop=True)
     
     ngRNAs_dc = {(pegRNA_num):1 for (pegRNA_num) in list(epeg_ngRNAs['pegRNA_number'].value_counts().keys())}
     ngRNA_group_ls = []

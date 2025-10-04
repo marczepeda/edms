@@ -10,7 +10,7 @@ from argparse import RawTextHelpFormatter
 
 ##### Argument handeling
 parser = argparse.ArgumentParser(description = '''----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-Software for the design of pegRNAs for flexible prime editing! Please visit ----- https://github.com/jyhsu15/PrimeDesign ----- for more documentation on how to use the software.
+Software for the design of pegRNAs for flexible prime editing! Please visit ----- https://github.com/jyhsu15/PrimeDesign ----- for more documentation on how to use the software.\nModified by Marc Zepeda for integration into the EDMS pipeline. Please visit ----- https://github.com/marczepeda/edms ----- for more documentation on how to use the software.
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------''', formatter_class=RawTextHelpFormatter)
 
 # Inputs for de-novo design of pegRNAs and nicking gRNAs
@@ -51,14 +51,14 @@ parser.add_argument('-f', '--file', required = True, type = str, help = '''Input
 ''')
 
 # Inputs for the design parameters of pegRNAs and nicking gRNAs
-# parser.add_argument('-pe_format', '--pe_format', type = str, default = 'NNNNNNNNNNNNNNNNN/NNN[NGG]', help = "***** Prime editing formatting including the spacer, cut index -> /, and protospacer adjacent motif (PAM) -> [PAM] (Default: NNNNNNNNNNNNNNNNN/NNN[NGG]). Examples: NNNNNNNNNNNNNNNNN/NNN[NGG], NNNNNNNNNNNNNNNNN/NNN[NG] *****\n\n")
+parser.add_argument('-pe_format', '--pe_format', type = str, default = 'NNNNNNNNNNNNNNNNN/NNN[NGG]', help = "***** Prime editing formatting including the spacer, cut index -> /, and protospacer adjacent motif (PAM) -> [PAM] (Default: NNNNNNNNNNNNNNNNN/NNN[NGG]). Examples: NNNNNNNNNNNNNNNNN/NNN[NGG], NNNNNNNNNNNNNNNNN/NNN[NG] *****\n\n")
 parser.add_argument('-pbs', '--pbs_length_list', type = int, default = 0, nargs = '+', help = '***** List of primer binding site (PBS) lengths for the pegRNA extension (Default: 10 to 16 nt). Example: 12 13 14 15 *****\n\n')
 parser.add_argument('-rtt', '--rtt_length_list', type = int, default = 0, nargs = '+', help = '***** List of reverse transcription (RT) template lengths for the pegRNA extension (Default: 10 to 31 nt). Example: 10 15 20 *****\n')
 parser.add_argument('-nick_dist_min', '--nicking_distance_minimum', type = int, default = 0, nargs = '+', help = '***** Minimum nicking distance for designing ngRNAs upstream and downstream of a pegRNA (Default: 0). *****\n\n')
 parser.add_argument('-nick_dist_max', '--nicking_distance_maximum', type = int, default = 120, nargs = '+', help = '***** Maximum nicking distance for designing ngRNAs upstream and downstream of a pegRNA (Default: 100). *****\n\n')
 parser.add_argument('-filter_c1', '--filter_c1_extension', action='store_true', help = '***** Option to filter against pegRNA extensions that start with a C base. *****\n\n')
 parser.add_argument('-filter_homopolymer_ts', '--filter_homopolymer_ts', action='store_true', help = '***** Option to filter out spacer sequences with homopolymer Ts (>3). *****\n\n')
-parser.add_argument('-silent_mut', '--silent_mutation', action='store_true', help = '***** Introduce silent mutation into PAM assuming sequence is in-frame. Currently only available with SpCas9 PE (Default: N). *****\n\n')
+parser.add_argument('-silent_mut', '--silent_mutation', action='store_true', help = '***** Introduce silent mutation into or around the PAM assuming the sequence is in-frame. Currently only available with SpCas9 PE (i.e., pe_format = NNNNNNNNNNNNNNNNN/NNN[NGG]). *****\n\n')
 parser.add_argument('-genome_wide', '--genome_wide_design', action='store_true', help = '***** Whether or not this is a genome-wide pooled design. This option designs a set of pegRNAs per input without ranging PBS and RTT parameters. (Default: False) *****\n\n')
 parser.add_argument('-sat_mut', '--saturation_mutagenesis', default = False, choices = ['aa', 'base'], type = str, help = '***** Saturation mutagenesis design with prime editing. The aa option makes amino acid changes and the base option makes DNA base changes. (Default: False) *****\n\n')
 parser.add_argument('-n_pegrnas', '--number_of_pegrnas', default = 3, type = int, help = '***** The maximum number of pegRNAs to design for each input sequence. The pegRNAs are ranked by 1) PAM disrupted > PAM intact then 2) distance to edit. (Default: 3) *****\n\n')
@@ -77,7 +77,7 @@ args = parser.parse_args()
 ##### Initialize arguments
 file_in = args.file
 
-pe_format = 'NNNNNNNNNNNNNNNNN/NNN[NGG]'
+pe_format = args.pe_format
 pbs_length_list = args.pbs_length_list
 rtt_length_list = args.rtt_length_list
 nicking_distance_minimum = args.nicking_distance_minimum
@@ -218,38 +218,6 @@ for codon in codon_dict:
 for codon in aa2codon:
 	aa2codon[codon] = sorted(aa2codon[codon], key = lambda x: x[1], reverse = True)
 
-codon_swap_0 = {}
-codon_swap_1_1 = {}
-codon_swap_1_2 = {}
-codon_swap_2 = {}
-for codon in codon_dict:
-
-	codon_swap_0[codon] = []
-	codon_swap_1_1[codon] = []
-	codon_swap_1_2[codon] = []
-	codon_swap_2[codon] = []
-
-	for other_codon in aa2codon[codon_dict[codon][1]]:
-
-		# Check if PAM disrupted with silent mutations
-		if codon[1:] != other_codon[0][1:]:
-			codon_swap_0[codon].append(other_codon)
-
-		if codon[2:] != other_codon[0][2:]:
-			codon_swap_1_1[codon].append(other_codon)
-
-		if codon[:1] != other_codon[0][:1]:
-			codon_swap_1_2[codon].append(other_codon)
-
-		if codon[:2] != other_codon[0][:2]:
-			codon_swap_2[codon].append(other_codon)
-
-for codon in codon_dict:
-	codon_swap_0[codon] = sorted(codon_swap_0[codon], key = lambda x: x[1], reverse = True)
-	codon_swap_1_1[codon] = sorted(codon_swap_1_1[codon], key = lambda x: x[1], reverse = True)
-	codon_swap_1_2[codon] = sorted(codon_swap_1_2[codon], key = lambda x: x[1], reverse = True)
-	codon_swap_2[codon] = sorted(codon_swap_2[codon], key = lambda x: x[1], reverse = True)
-
 ##### Extract reference and edited sequence information
 def process_sequence(input_sequence):
 
@@ -293,7 +261,7 @@ def process_sequence(input_sequence):
 
 	# Create mapping between input format and reference and edit sequence
 	editformat2sequence = {}
-	edits = re.findall('\(.*?\)', input_sequence)
+	edits = re.findall(r'\(.*?\)', input_sequence)
 	for edit in edits:
 		if '/' in edit:
 			editformat2sequence[edit] = [edit.split('/')[0].replace('(',''), edit.split('/')[1].replace(')','')]
@@ -305,7 +273,7 @@ def process_sequence(input_sequence):
 	# Create mapping between edit number and reference and edit sequence
 	editformat2sequence = {}
 	editnumber2sequence = {}
-	edit_idxs = [[m.start(), m.end()] for m in re.finditer('\(.*?\)', input_sequence)]
+	edit_idxs = [[m.start(), m.end()] for m in re.finditer(r'\(.*?\)', input_sequence)]
 	edit_counter = 1
 	for edit_idx in edit_idxs:
 		edit = input_sequence[edit_idx[0]:edit_idx[1]]
@@ -325,8 +293,8 @@ def process_sequence(input_sequence):
 
 		edit_counter += 1
 
-	edit_start = min([i.start() for i in re.finditer('\(', input_sequence)])
-	edit_stop = max([i.start() for i in re.finditer('\)', input_sequence)])
+	edit_start = min([i.start() for i in re.finditer(r'\(', input_sequence)])
+	edit_stop = max([i.start() for i in re.finditer(r'\)', input_sequence)])
 
 	edit_span_sequence_w_ref = input_sequence[edit_start:edit_stop + 1]
 	edit_span_sequence_w_edit = input_sequence[edit_start:edit_stop + 1]
@@ -334,8 +302,8 @@ def process_sequence(input_sequence):
 		edit_span_sequence_w_ref = edit_span_sequence_w_ref.replace(edit, editformat2sequence[edit][0])
 		edit_span_sequence_w_edit = edit_span_sequence_w_edit.replace(edit, editformat2sequence[edit][1])
 
-	edit_start_in_ref = re.search('\(', input_sequence).start()
-	edit_stop_in_ref_rev = re.search('\)', input_sequence[::-1]).start()
+	edit_start_in_ref = re.search(r'\(', input_sequence).start()
+	edit_stop_in_ref_rev = re.search(r'\)', input_sequence[::-1]).start()
 
 	edit_span_length_w_ref = len(edit_span_sequence_w_ref)
 	edit_span_length_w_edit = len(edit_span_sequence_w_edit)
@@ -490,8 +458,8 @@ if (pe_format.count('[') + pe_format.count(']')) == 2:
 
 		# Find indices but shift when removing annotations
 		cut_idx = re.search('/', pe_format).start()
-		pam_start_idx = re.search('\[', pe_format).start()
-		pam_end_idx = re.search('\]', pe_format).start()
+		pam_start_idx = re.search(r'\[', pe_format).start()
+		pam_end_idx = re.search(r'\]', pe_format).start()
 
 		# Find pam and total PE format search length
 		pam_length = pam_end_idx - pam_start_idx - 1
@@ -743,7 +711,6 @@ for target_name in target_design:
 		for peg_plus in target_design[target_name]['pegRNA']['+']:
 
 			pe_nick_ref_idx, pe_nick_edit_idx, pe_full_search, pe_spacer_sequence, pe_pam_ref, pe_pam_edit, pe_annotate = peg_plus
-			# pegid = '_'.join(map(str, [pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '+']))
 
 			pe_annotate_constant = pe_annotate
 
@@ -761,52 +728,59 @@ for target_name in target_design:
 					pe_pam_ref_silent_mutation = ''
 
 					# Construct pegRNA extension to encode intended edit(s)
-
-					# Patch for NGG PAMs - may need to build something more generalizable in the future
+					# Silent mutations only work for NGG PAMs
 					pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + rtt_length])
 					pegRNA_ext_max = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + rtt_max_length_pooled])
-					if silent_mutation and (pe_format == 'NNNNNNNNNNNNNNNNN/NNN[NGG]'):
+					nick_aa_index = int(pe_nick_edit_idx)%3
+					if silent_mutation and (pe_format == 'NNNNNNNNNNNNNNNNN/NNN[NGG]'): # Generate silent mutations
 
-						if pe_annotate_constant == 'PAM_intact':
-
-							nick_aa_index = int(pe_nick_edit_idx)%3
+						if pe_annotate_constant == 'PAM_intact': # Generate silent mutation to distrupt PAM sequence
 							
 							if nick_aa_index == 0:
-								original_codon = edit_sequence[pe_nick_edit_idx + 3:pe_nick_edit_idx + 6].upper()
-
+								codon_start_idx = 3
+								codon_end_idx = 6
+								original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
 								aa_identity = codon_dict[original_codon][1]
 
 								for codon_substitute in aa2codon[aa_identity]:
 									if not re.search(pam_search, codon_substitute[0]):
 
 										new_codon = codon_substitute[0].lower()
-										pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + 3] + new_codon + edit_sequence[pe_nick_edit_idx + 6:pe_nick_edit_idx + rtt_length])
-										pegRNA_ext_max = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + 3] + new_codon + edit_sequence[pe_nick_edit_idx + 6:pe_nick_edit_idx + rtt_max_length_pooled])
+										pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + rtt_length])
+										pegRNA_ext_max = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + rtt_max_length_pooled])
 										pe_pam_ref_silent_mutation = pe_pam_ref + '-to-' + new_codon
-										pe_annotate = 'PAM_disrupted_silent_mutation'
-										silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + 3] + new_codon + edit_sequence[pe_nick_edit_idx + 6:]
+										pe_annotate = 'PAM_disrupted_with_silent_mutation'
+										silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
 
 										break
 
-								# if len(codon_swap_0[original_codon.upper()]) > 0:
-								#     new_codon = codon_swap_0[original_codon][0][0].lower()
-								#     pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + 3] + new_codon + edit_sequence[pe_nick_edit_idx + 6:pe_nick_edit_idx + rtt_length])
-								#     pe_pam_ref_silent_mutation = pe_pam_ref + '-to-' + new_codon
-								#     pe_annotate = 'PAM_disrupted_silent_mutation'
-								#     silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + 3] + new_codon + edit_sequence[pe_nick_edit_idx + 6:]
+								if pe_annotate != 'PAM_disrupted_with_silent_mutation': # Generate silent mutation that does not disrupt PAM sequence
+									
+									for codon_substitute in aa2codon[aa_identity]:
+										if codon_substitute[0] != original_codon:
 
-								# else:
-								#     pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + rtt_length])
+											new_codon = codon_substitute[0].lower()
+											pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + rtt_length])
+											pegRNA_ext_max = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + rtt_max_length_pooled])
+											pe_silent_mutation = original_codon + '-to-' + new_codon
+											pe_annotate = 'PAM_intact_with_silent_mutation'
+											silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
+
+											break
 
 							elif nick_aa_index == 1:
-
-								original_codon_1 = edit_sequence[pe_nick_edit_idx + 2:pe_nick_edit_idx + 5].upper()
-								original_codon_2 = edit_sequence[pe_nick_edit_idx + 5:pe_nick_edit_idx + 8].upper()
+								codon_start_idx_1 = 2
+								codon_end_idx_1 = 5
+								codon_start_idx_2 = 5
+								codon_end_idx_2 = 8
+								
+								original_codon_1 = edit_sequence[pe_nick_edit_idx + codon_start_idx_1:pe_nick_edit_idx + codon_end_idx_1].upper()
+								original_codon_2 = edit_sequence[pe_nick_edit_idx + codon_start_idx_2:pe_nick_edit_idx + codon_end_idx_2].upper()
 
 								aa_identity_1 = codon_dict[original_codon_1][1]
 								aa_identity_2 = codon_dict[original_codon_2][1]
-
-								for codon_substitute in aa2codon[aa_identity_1]:
+								
+								for codon_substitute in aa2codon[aa_identity_1]: # Try to introduce silent mutation in codon 1 first
 
 									new_codons = codon_substitute[0] + original_codon_2
 									pam_slice = new_codons[1:4]
@@ -814,16 +788,16 @@ for target_name in target_design:
 									if not re.search(pam_search, pam_slice):
 
 										new_codon = codon_substitute[0].lower()
-										pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + 2] + new_codon + edit_sequence[pe_nick_edit_idx + 5:pe_nick_edit_idx + rtt_length])
-										pegRNA_ext_max = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + 2] + new_codon + edit_sequence[pe_nick_edit_idx + 5:pe_nick_edit_idx + rtt_max_length_pooled])
+										pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx_1] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_1:pe_nick_edit_idx + rtt_length])
+										pegRNA_ext_max = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx_1] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_1:pe_nick_edit_idx + rtt_max_length_pooled])
 										pe_pam_ref_silent_mutation = pe_pam_ref + '-to-' + pam_slice.lower()
-										pe_annotate = 'PAM_disrupted_silent_mutation'
-										silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + 2] + new_codon + edit_sequence[pe_nick_edit_idx + 5:]
+										pe_annotate = 'PAM_disrupted_with_silent_mutation'
+										silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx_1] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_1:]
 
 										break
 
-								if pe_annotate != 'PAM_disrupted_silent_mutation':
-
+								if pe_annotate != 'PAM_disrupted_with_silent_mutation': # Try to introduce silent mutation in codon 2 if codon 1 did not work
+									
 									for codon_substitute in aa2codon[aa_identity_2]:
 
 										new_codons = original_codon_1 + codon_substitute[0]
@@ -832,36 +806,46 @@ for target_name in target_design:
 										if not re.search(pam_search, pam_slice):
 
 											new_codon = codon_substitute[0].lower()
-											pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + 5] + new_codon + edit_sequence[pe_nick_edit_idx + 8:pe_nick_edit_idx + rtt_length])
-											pegRNA_ext_max = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + 5] + new_codon + edit_sequence[pe_nick_edit_idx + 8:pe_nick_edit_idx + rtt_max_length_pooled])
-											pe_pam_ref_silent_mutation = pe_pam_ref + '-to-' + pam_slice.lower()
-											pe_annotate = 'PAM_disrupted_silent_mutation'
-											silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + 5] + new_codon + edit_sequence[pe_nick_edit_idx + 8:]
+											pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx_2] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_2:pe_nick_edit_idx + rtt_length])
+											pegRNA_ext_max = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx_2] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_2:pe_nick_edit_idx + rtt_max_length_pooled])
+											pe_silent_mutation = pe_pam_ref + '-to-' + pam_slice.lower()
+											pe_annotate = 'PAM_disrupted_with_silent_mutation'
+											silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx_2] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_2:]
+
+											break
+								
+								if 'silent_mutation' not in pe_annotate: # Generate silent mutation that does not disrupt PAM sequence
+									
+									for codon_substitute in aa2codon[aa_identity_1]: # Try to introduce silent mutation in codon 1 first
+										if codon_substitute[0] != original_codon_1:
+
+											new_codon = codon_substitute[0].lower()
+											pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx_1] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_1:pe_nick_edit_idx + rtt_length])
+											pegRNA_ext_max = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx_1] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_1:pe_nick_edit_idx + rtt_max_length_pooled])
+											pe_silent_mutation = original_codon_1 + '-to-' + new_codon
+											pe_annotate = 'PAM_intact_with_silent_mutation'
+											silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx_1] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_1:]
+
+											break
+								
+								if 'silent_mutation' not in pe_annotate: # Try to introduce silent mutation in codon 2 if codon 1 did not work
+
+									for codon_substitute in aa2codon[aa_identity_2]:
+										if codon_substitute[0] != original_codon_2:
+
+											new_codon = codon_substitute[0].lower()
+											pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx_2] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_2:pe_nick_edit_idx + rtt_length])
+											pegRNA_ext_max = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx_2] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_2:pe_nick_edit_idx + rtt_max_length_pooled])
+											pe_silent_mutation = original_codon_2 + '-to-' + new_codon
+											pe_annotate = 'PAM_intact_with_silent_mutation'
+											silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx_2] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_2:]
 
 											break
 
-								# if len(codon_swap_1_1[original_codon_1.upper()]) > 0:
-
-								#     new_codon = codon_swap_1_1[original_codon_1][0][0].lower()
-								#     pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + 2] + new_codon + edit_sequence[pe_nick_edit_idx + 5:pe_nick_edit_idx + rtt_length])
-								#     pe_pam_ref_silent_mutation = pe_pam_ref + '-to-' + new_codon[1:] + original_codon_2[:1].lower()
-								#     pe_annotate = 'PAM_disrupted_silent_mutation'
-								#     silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + 2] + new_codon + edit_sequence[pe_nick_edit_idx + 5:]
-
-								# elif len(codon_swap_1_2[original_codon_2.upper()]) > 0:
-
-								#     new_codon = codon_swap_1_2[original_codon_2][0][0].lower()
-								#     pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + 5] + new_codon + edit_sequence[pe_nick_edit_idx + 8:pe_nick_edit_idx + rtt_length])
-								#     pe_pam_ref_silent_mutation = pe_pam_ref + '-to-' + original_codon_1[1:].lower() + new_codon[:1]
-								#     pe_annotate = 'PAM_disrupted_silent_mutation'
-								#     silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + 5] + new_codon + edit_sequence[pe_nick_edit_idx + 8:]
-
-								# else:
-								#     pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + rtt_length])
-
 							elif nick_aa_index == 2:
-								original_codon = edit_sequence[pe_nick_edit_idx + 4:pe_nick_edit_idx + 7].upper()
-
+								codon_start_idx = 4
+								codon_end_idx = 7
+								original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
 								aa_identity = codon_dict[original_codon][1]
 
 								for codon_substitute in aa2codon[aa_identity]:
@@ -870,37 +854,157 @@ for target_name in target_design:
 									if not re.search(pam_search, pam_slice):
 
 										new_codon = codon_substitute[0].lower()
-										pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + 4] + new_codon + edit_sequence[pe_nick_edit_idx + 7:pe_nick_edit_idx + rtt_length])
-										pegRNA_ext_max = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + 4] + new_codon + edit_sequence[pe_nick_edit_idx + 7:pe_nick_edit_idx + rtt_max_length_pooled])
+										pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + rtt_length])
+										pegRNA_ext_max = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + rtt_max_length_pooled])
 										pe_pam_ref_silent_mutation = pe_pam_ref + '-to-' + pam_slice.lower()
-										pe_annotate = 'PAM_disrupted_silent_mutation'
-										silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + 4] + new_codon + edit_sequence[pe_nick_edit_idx + 7:]
+										pe_annotate = 'PAM_disrupted_with_silent_mutation'
+										silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
 
 										break
 
-								# if len(codon_swap_2[original_codon.upper()]) > 0:
-								#     new_codon = codon_swap_2[original_codon][0][0].lower()
-								#     pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + 4] + new_codon + edit_sequence[pe_nick_edit_idx + 7:pe_nick_edit_idx + rtt_length])
-								#     pe_pam_ref_silent_mutation = pe_pam_ref + '-to-' + edit_sequence[pe_nick_edit_idx + 3:pe_nick_edit_idx + 4].lower() + new_codon[:2]
-								#     pe_annotate = 'PAM_disrupted_silent_mutation'
-								#     silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + 4] + new_codon + edit_sequence[pe_nick_edit_idx + 7:]
+								if pe_annotate != 'PAM_disrupted_with_silent_mutation': # Generate silent mutation that does not disrupt PAM sequence
+									
+									for codon_substitute in aa2codon[aa_identity]:
+										if codon_substitute[0] != original_codon:
 
-								# else:
-								#     pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + rtt_length])
+											new_codon = codon_substitute[0].lower()
+											pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + rtt_length])
+											pegRNA_ext_max = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + rtt_max_length_pooled])
+											pe_silent_mutation = original_codon + '-to-' + new_codon
+											pe_annotate = 'PAM_intact_with_silent_mutation'
+											silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
 
-						# else:
-						#     pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + rtt_length])
+											break
+						
+						elif pe_annotate_constant == 'PAM_disrupted': # Generate silent mutation 5' or 3' of the PAM
 
-					# else:
-					#     pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + rtt_length])
+							if nick_aa_index == 0:
+								codon_start_idx = 0 # Try to introduce silent mutation 5' of the PAM first
+								codon_end_idx = 3
+								original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
+								aa_identity = codon_dict[original_codon][1]
 
-					# Check to see if pegRNA extension is within input sequence
-					if 'PAM_disrupted' in pe_annotate:
+								if (original_codon != 'ATG') & (original_codon != 'TGG'): # Can not introduce silent mutations for methionine and tryptophan codons
+									for codon_substitute in aa2codon[aa_identity]:
+										if codon_substitute != original_codon:
+
+											new_codon = codon_substitute[0].lower()
+											pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + rtt_length])
+											pegRNA_ext_max = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + rtt_max_length_pooled])
+											pe_silent_mutation = original_codon + '-to-' + new_codon
+											pe_annotate = 'silent_mutation_and_PAM_disrupted'
+											silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
+
+											break
+
+								else: # If methionine or tryptophan codons, try to introduce silent mutation 3' of the PAM
+									codon_start_idx = 6
+									codon_end_idx = 9
+									original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
+									aa_identity = codon_dict[original_codon][1]
+
+									if (original_codon != 'ATG') & (original_codon != 'TGG'): # Can not introduce silent mutations for methionine and tryptophan codons
+										for codon_substitute in aa2codon[aa_identity]:
+											if codon_substitute != original_codon:
+												
+												new_codon = codon_substitute[0].lower()
+												pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + rtt_length])
+												pegRNA_ext_max = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + rtt_max_length_pooled])
+												pe_silent_mutation = original_codon + '-to-' + new_codon
+												pe_annotate = 'PAM_disrupted_and_silent_mutation'
+												silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
+
+												break
+
+							elif nick_aa_index == 1:
+								codon_start_idx = -1 # Try to introduce silent mutation 5' of the PAM first
+								codon_end_idx = 2
+								original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
+								aa_identity = codon_dict[original_codon][1]
+
+								if (original_codon != 'ATG') & (original_codon != 'TGG'): # Can not introduce silent mutations for methionine and tryptophan codons
+									for codon_substitute in aa2codon[aa_identity]:
+										if (codon_substitute[0][0] == original_codon[0][0]) & (codon_substitute != original_codon): # Keep the first base the same to preserve PBS sequence
+
+											new_codon = codon_substitute[0].lower()
+											pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + rtt_length])
+											pegRNA_ext_max = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + rtt_max_length_pooled])
+											pe_silent_mutation = original_codon + '-to-' + new_codon
+											pe_annotate = 'silent_mutation_and_PAM_disrupted'
+											silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
+
+											break
+								
+								else: # If methionine or tryptophan codons, try to introduce silent mutation 3' of the PAM
+									codon_start_idx = 8
+									codon_end_idx = 11
+									original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
+									aa_identity = codon_dict[original_codon][1]
+
+									if (original_codon != 'ATG') & (original_codon != 'TGG'): # Can not introduce silent mutations for methionine and tryptophan codons
+										for codon_substitute in aa2codon[aa_identity]:
+											if codon_substitute != original_codon:
+												
+												new_codon = codon_substitute[0].lower()
+												pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + rtt_length])
+												pegRNA_ext_max = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + rtt_max_length_pooled])
+												pe_silent_mutation = original_codon + '-to-' + new_codon
+												pe_annotate = 'PAM_disrupted_and_silent_mutation'
+												silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
+
+												break
+
+							elif nick_aa_index == 2:
+								codon_start_idx = 1 # Try to introduce silent mutation 5' of the PAM first
+								codon_end_idx = 4
+								original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
+								aa_identity = codon_dict[original_codon][1]
+
+								if (original_codon != 'ATG') & (original_codon != 'TGG'): # Can not introduce silent mutations for methionine and tryptophan codons
+									for codon_substitute in aa2codon[aa_identity]:
+										if codon_substitute != original_codon:
+
+											new_codon = codon_substitute[0].lower()
+											pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + rtt_length])
+											pegRNA_ext_max = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + rtt_max_length_pooled])
+											pe_silent_mutation = original_codon + '-to-' + new_codon
+											pe_annotate = 'silent_mutation_and_PAM_disrupted'
+											silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
+
+											break
+								
+								else: # If methionine or tryptophan codons, try to introduce silent mutation 3' of the PAM
+									codon_start_idx = 7
+									codon_end_idx = 10
+									original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
+									aa_identity = codon_dict[original_codon][1]
+
+									if (original_codon != 'ATG') & (original_codon != 'TGG'): # Can not introduce silent mutations for methionine and tryptophan codons
+										for codon_substitute in aa2codon[aa_identity]:
+											if codon_substitute != original_codon:
+
+												new_codon = codon_substitute[0].lower()
+												pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + rtt_length])
+												pegRNA_ext_max = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + rtt_max_length_pooled])
+												pe_silent_mutation = original_codon + '-to-' + new_codon
+												pe_annotate = 'PAM_disrupted_and_silent_mutation'
+												silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
+
+												break
+					
+					# Create pegRNA ID based on annotation
+					if 'PAM_disrupted' in pe_annotate and 'silent_mutation' in pe_annotate:
 						pe_annotate_code = 0
-					else:
+					elif 'silent_mutation' in pe_annotate:
 						pe_annotate_code = 1
+					elif 'PAM_disrupted' in pe_annotate:
+						pe_annotate_code = 2
+					else:
+						pe_annotate_code = 3
 
 					pegid = '_'.join(map(str, [str(pe_annotate_code) + '0'*(3 - len(str(abs(nick2lastedit_length)))) + str(abs(nick2lastedit_length)), pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '+']))
+					
+					# Check to see if pegRNA extension is within input sequence
 					if len(pegRNA_ext) == (pbs_length + rtt_length):
 
 						# Initiate entry for new pegRNA spacers that are close enough to edit window based on RTT length parameter list
@@ -915,50 +1019,42 @@ for target_name in target_design:
 						else:
 							pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref_silent_mutation, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length])
 
-				# Create pegID
-				if 'PAM_disrupted' in pe_annotate:
-					pe_annotate_code = 0
-				else:
-					pe_annotate_code = 1
+					# Create ngRNAs targeting (-) strand for (+) pegRNAs
+					if pegid in pe_design[target_name]:
+						for ng_minus in target_design[target_name]['ngRNA']['-']:
+							ng_nick_ref_idx, ng_edit_start_idx, ng_edit_end_idx, ng_full_search_edit, ng_spacer_sequence_edit, ng_pam_edit, ng_annotate = ng_minus
+							nick_distance = ng_nick_ref_idx - pe_nick_ref_idx
 
-				pegid = '_'.join(map(str, [str(pe_annotate_code) + '0'*(3 - len(str(abs(nick2lastedit_length)))) + str(abs(nick2lastedit_length)), pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '+']))
-				# Create ngRNAs targeting (-) strand for (+) pegRNAs
-				if pegid in pe_design[target_name]:
-					for ng_minus in target_design[target_name]['ngRNA']['-']:
-						ng_nick_ref_idx, ng_edit_start_idx, ng_edit_end_idx, ng_full_search_edit, ng_spacer_sequence_edit, ng_pam_edit, ng_annotate = ng_minus
-						nick_distance = ng_nick_ref_idx - pe_nick_ref_idx
+							if silent_mutation and (pe_format == 'NNNNNNNNNNNNNNNNN/NNN[NGG]') and (len(silent_mutation_edit) > 0):
+								ng_spacer_sequence_edit = silent_mutation_edit[ng_edit_start_idx:ng_edit_end_idx]
 
-						if silent_mutation and (pe_format == 'NNNNNNNNNNNNNNNNN/NNN[NGG]') and (len(silent_mutation_edit) > 0):
-							ng_spacer_sequence_edit = silent_mutation_edit[ng_edit_start_idx:ng_edit_end_idx]
+								mutation_indices = [i for i, a in enumerate(ng_spacer_sequence_edit) if a.islower()]
+								if len(mutation_indices) > 0:
+									if len([1 for x in mutation_indices if x < 10]) > 0:
+										ng_annotate = 'PE3b-seed'
 
-							mutation_indices = [i for i, a in enumerate(ng_spacer_sequence_edit) if a.islower()]
-							if len(mutation_indices) > 0:
-								if len([1 for x in mutation_indices if x < 10]) > 0:
-									ng_annotate = 'PE3b-seed'
-
+									else:
+										ng_annotate = 'PE3b-nonseed'
 								else:
-									ng_annotate = 'PE3b-nonseed'
-							else:
-								ng_annotate = 'PE3'
+									ng_annotate = 'PE3'
 
-						if (abs(nick_distance) >= nicking_distance_minimum) and (abs(nick_distance) <= nicking_distance_maximum):
+							if (abs(nick_distance) >= nicking_distance_minimum) and (abs(nick_distance) <= nicking_distance_maximum):
 
-							if ng_annotate == 'PE3b-seed':
-								ng_code = 0
-							elif ng_annotate == 'PE3b-nonseed':
-								ng_code = 1
-							else:
-								ng_code = 2
+								if ng_annotate == 'PE3b-seed':
+									ng_code = 0
+								elif ng_annotate == 'PE3b-nonseed':
+									ng_code = 1
+								else:
+									ng_code = 2
 
-							pe_design[target_name][pegid][1].append([str(ng_code) + '0'*(3 - len(str(abs(abs(nick_distance) - nicking_distance_pooled)))) + str(abs(abs(nick_distance) - nicking_distance_pooled)), ng_nick_ref_idx, reverse_complement(ng_spacer_sequence_edit), reverse_complement(ng_pam_edit), ng_annotate, '-', nick_distance])
+								pe_design[target_name][pegid][1].append([str(ng_code) + '0'*(3 - len(str(abs(abs(nick_distance) - nicking_distance_pooled)))) + str(abs(abs(nick_distance) - nicking_distance_pooled)), ng_nick_ref_idx, reverse_complement(ng_spacer_sequence_edit), reverse_complement(ng_pam_edit), ng_annotate, '-', nick_distance])
 
-					pe_design[target_name][pegid][1] = sorted(pe_design[target_name][pegid][1])
+						pe_design[target_name][pegid][1] = sorted(pe_design[target_name][pegid][1])
 
 		# Design pegRNAs targeting the (-) strand
 		for peg_minus in target_design[target_name]['pegRNA']['-']:
 
 			pe_nick_ref_idx, pe_nick_edit_idx, pe_full_search, pe_spacer_sequence, pe_pam_ref, pe_pam_edit, pe_annotate = peg_minus
-			# pegid = '_'.join(map(str, [pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '-']))
 
 			pe_annotate_constant = pe_annotate
 
@@ -976,46 +1072,50 @@ for target_name in target_design:
 					pe_pam_ref_silent_mutation = ''
 
 					# Construct pegRNA extension to encode intended edit(s)
-
-					# Patch for NGG PAMs - may need to build something more generalizable in the future
+					# Silent mutations only work for NGG PAMs
 					pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + pbs_length]
 					pegRNA_ext_max = edit_sequence[pe_nick_edit_idx - rtt_max_length_pooled:pe_nick_edit_idx + pbs_length]
+					nick_aa_index = int(pe_nick_edit_idx)%3
 					if silent_mutation and (pe_format == 'NNNNNNNNNNNNNNNNN/NNN[NGG]'):
 						
 						if pe_annotate_constant == 'PAM_intact':
-
-							nick_aa_index = int(pe_nick_edit_idx)%3
 							
 							if nick_aa_index == 0:
-								original_codon = edit_sequence[pe_nick_edit_idx - 6:pe_nick_edit_idx - 3].upper()
-
+								codon_start_idx = -6
+								codon_end_idx = -3
+								original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
 								aa_identity = codon_dict[original_codon][1]
 
 								for codon_substitute in aa2codon[aa_identity]:
 									if not re.search(reverse_complement(pam_search), codon_substitute[0]):
 
 										new_codon = codon_substitute[0].lower()
-										pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx - 6] + new_codon + edit_sequence[pe_nick_edit_idx - 3:pe_nick_edit_idx + pbs_length]
-										pegRNA_ext_max = edit_sequence[pe_nick_edit_idx - rtt_max_length_pooled:pe_nick_edit_idx - 6] + new_codon + edit_sequence[pe_nick_edit_idx - 3:pe_nick_edit_idx + pbs_length]
+										pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + pbs_length]
+										pegRNA_ext_max = edit_sequence[pe_nick_edit_idx - rtt_max_length_pooled:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + pbs_length]
 										pe_pam_ref_silent_mutation = reverse_complement(pe_pam_ref) + '-to-' + reverse_complement(new_codon)
-										pe_annotate = 'PAM_disrupted_silent_mutation'
-										silent_mutation_edit = edit_sequence[:pe_nick_edit_idx - 6] + new_codon + edit_sequence[pe_nick_edit_idx - 3:]
+										pe_annotate = 'PAM_disrupted_with_silent_mutation'
+										silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
 
 										break
+								
+								if pe_annotate != 'PAM_disrupted_with_silent_mutation': # Generate silent mutation that does not disrupt PAM sequence
+									
+									for codon_substitute in aa2codon[aa_identity]:
+										if codon_substitute[0] != original_codon:
 
-								# if len(codon_swap_2[original_codon.upper()]) > 0:
-								#     new_codon = codon_swap_2[original_codon][0][0].lower()
-								#     pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx - 6] + new_codon + edit_sequence[pe_nick_edit_idx - 3:pe_nick_edit_idx + pbs_length]
-								#     pe_pam_ref_silent_mutation = reverse_complement(pe_pam_ref) + '-to-' + reverse_complement(new_codon)
-								#     pe_annotate = 'PAM_disrupted_silent_mutation'
-								#     silent_mutation_edit = edit_sequence[:pe_nick_edit_idx - 6] + new_codon + edit_sequence[pe_nick_edit_idx - 3:]
+											new_codon = codon_substitute[0].lower()
+											pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + pbs_length]
+											pegRNA_ext_max = edit_sequence[pe_nick_edit_idx - rtt_max_length_pooled:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + pbs_length]
+											pe_silent_mutation = original_codon + '-to-' + new_codon
+											pe_annotate = 'PAM_intact_with_silent_mutation'
+											silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
 
-								# else:
-								#     pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + pbs_length]
+											break
 
 							elif nick_aa_index == 1:
-								original_codon = edit_sequence[pe_nick_edit_idx - 7:pe_nick_edit_idx - 4].upper()
-
+								codon_start_idx = -7
+								codon_end_idx = -4
+								original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
 								aa_identity = codon_dict[original_codon][1]
 
 								for codon_substitute in aa2codon[aa_identity]:
@@ -1024,27 +1124,36 @@ for target_name in target_design:
 									if not re.search(reverse_complement(pam_search), pam_slice):
 
 										new_codon = codon_substitute[0].lower()
-										pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx - 7] + new_codon + edit_sequence[pe_nick_edit_idx - 4:pe_nick_edit_idx + pbs_length]
-										pegRNA_ext_max = edit_sequence[pe_nick_edit_idx - rtt_max_length_pooled:pe_nick_edit_idx - 7] + new_codon + edit_sequence[pe_nick_edit_idx - 4:pe_nick_edit_idx + pbs_length]
+										pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + pbs_length]
+										pegRNA_ext_max = edit_sequence[pe_nick_edit_idx - rtt_max_length_pooled:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + pbs_length]
 										pe_pam_ref_silent_mutation = reverse_complement(pe_pam_ref) + '-to-' + reverse_complement(pam_slice).lower()
-										pe_annotate = 'PAM_disrupted_silent_mutation'
-										silent_mutation_edit = edit_sequence[:pe_nick_edit_idx - 7] + new_codon + edit_sequence[pe_nick_edit_idx - 4:]
+										pe_annotate = 'PAM_disrupted_with_silent_mutation'
+										silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
 
 										break
+								
+								if pe_annotate != 'PAM_disrupted_with_silent_mutation': # Generate silent mutation that does not disrupt PAM sequence
+									
+									for codon_substitute in aa2codon[aa_identity]:
+										if codon_substitute[0] != original_codon:
 
-								# if len(codon_swap_0[original_codon.upper()]) > 0:
-								#     new_codon = codon_swap_0[original_codon][0][0].lower()
-								#     pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx - 7] + new_codon + edit_sequence[pe_nick_edit_idx - 4:pe_nick_edit_idx + pbs_length]
-								#     pe_pam_ref_silent_mutation = reverse_complement(pe_pam_ref) + '-to-' + reverse_complement(new_codon[1:] + edit_sequence[pe_nick_edit_idx - 4:pe_nick_edit_idx - 3].lower())
-								#     pe_annotate = 'PAM_disrupted_silent_mutation'
-								#     silent_mutation_edit = edit_sequence[:pe_nick_edit_idx - 7] + new_codon + edit_sequence[pe_nick_edit_idx - 4:]
+											new_codon = codon_substitute[0].lower()
+											pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + pbs_length]
+											pegRNA_ext_max = edit_sequence[pe_nick_edit_idx - rtt_max_length_pooled:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + pbs_length]
+											pe_silent_mutation = original_codon + '-to-' + new_codon
+											pe_annotate = 'PAM_intact_with_silent_mutation'
+											silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
 
-								# else:
-								#     pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + pbs_length]
+											break
 
 							elif nick_aa_index == 2:
-								original_codon_1 = edit_sequence[pe_nick_edit_idx - 8:pe_nick_edit_idx - 5].upper()
-								original_codon_2 = edit_sequence[pe_nick_edit_idx - 5:pe_nick_edit_idx - 2].upper()
+								codon_start_idx_1 = -8
+								codon_end_idx_1 = -5
+								codon_start_idx_2 = -5
+								codon_end_idx_2 = -2
+
+								original_codon_1 = edit_sequence[pe_nick_edit_idx + codon_start_idx_1:pe_nick_edit_idx + codon_end_idx_1].upper()
+								original_codon_2 = edit_sequence[pe_nick_edit_idx + codon_start_idx_2:pe_nick_edit_idx + codon_end_idx_2].upper()
 
 								aa_identity_1 = codon_dict[original_codon_1][1]
 								aa_identity_2 = codon_dict[original_codon_2][1]
@@ -1057,15 +1166,15 @@ for target_name in target_design:
 									if not re.search(reverse_complement(pam_search), pam_slice):
 
 										new_codon = codon_substitute[0].lower()
-										pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx - 8] + new_codon + edit_sequence[pe_nick_edit_idx - 5:pe_nick_edit_idx + pbs_length]
-										pegRNA_ext_max = edit_sequence[pe_nick_edit_idx - rtt_max_length_pooled:pe_nick_edit_idx - 8] + new_codon + edit_sequence[pe_nick_edit_idx - 5:pe_nick_edit_idx + pbs_length]
+										pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + codon_start_idx_1] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_1:pe_nick_edit_idx + pbs_length]
+										pegRNA_ext_max = edit_sequence[pe_nick_edit_idx - rtt_max_length_pooled:pe_nick_edit_idx + codon_start_idx_1] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_1:pe_nick_edit_idx + pbs_length]
 										pe_pam_ref_silent_mutation = reverse_complement(pe_pam_ref) + '-to-' + reverse_complement(pam_slice).lower()
-										pe_annotate = 'PAM_disrupted_silent_mutation'
-										silent_mutation_edit = edit_sequence[:pe_nick_edit_idx - 8] + new_codon + edit_sequence[pe_nick_edit_idx - 5:]
+										pe_annotate = 'PAM_disrupted_with_silent_mutation'
+										silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx_1] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_1:]
 
 										break
 
-								if pe_annotate != 'PAM_disrupted_silent_mutation':
+								if pe_annotate != 'PAM_disrupted_with_silent_mutation':
 
 									for codon_substitute in aa2codon[aa_identity_2]:
 
@@ -1075,44 +1184,170 @@ for target_name in target_design:
 										if not re.search(reverse_complement(pam_search), pam_slice):
 
 											new_codon = codon_substitute[0].lower()
-											pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx - 5] + new_codon + edit_sequence[pe_nick_edit_idx - 2:pe_nick_edit_idx + pbs_length]
-											pegRNA_ext_max = edit_sequence[pe_nick_edit_idx - rtt_max_length_pooled:pe_nick_edit_idx - 5] + new_codon + edit_sequence[pe_nick_edit_idx - 2:pe_nick_edit_idx + pbs_length]
+											pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + codon_start_idx_2] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_2:pe_nick_edit_idx + pbs_length]
+											pegRNA_ext_max = edit_sequence[pe_nick_edit_idx - rtt_max_length_pooled:pe_nick_edit_idx + codon_start_idx_2] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_2:pe_nick_edit_idx + pbs_length]
 											pe_pam_ref_silent_mutation = reverse_complement(pe_pam_ref) + '-to-' + reverse_complement(pam_slice).lower()
-											pe_annotate = 'PAM_disrupted_silent_mutation'
-											silent_mutation_edit = edit_sequence[:pe_nick_edit_idx - 5] + new_codon + edit_sequence[pe_nick_edit_idx - 2:]
+											pe_annotate = 'PAM_disrupted_with_silent_mutation'
+											silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx_2] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_2:]
+
+											break
+								
+								if 'silent_mutation' not in pe_annotate: # Generate silent mutation that does not disrupt PAM sequence
+									
+									for codon_substitute in aa2codon[aa_identity_1]: # Try to introduce silent mutation in codon 1 first
+										if codon_substitute[0] != original_codon_1:
+
+											new_codon = codon_substitute[0].lower()
+											pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + codon_start_idx_1] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_1:pe_nick_edit_idx + pbs_length]
+											pegRNA_ext_max = edit_sequence[pe_nick_edit_idx - rtt_max_length_pooled:pe_nick_edit_idx + codon_start_idx_1] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_1:pe_nick_edit_idx + pbs_length]
+											pe_silent_mutation = original_codon_1 + '-to-' + new_codon
+											pe_annotate = 'PAM_intact_with_silent_mutation'
+											silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx_1] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_1:]
+
+											break
+									
+								if 'silent_mutation' not in pe_annotate: # Try to introduce silent mutation in codon 2 if codon 1 did not work
+
+									for codon_substitute in aa2codon[aa_identity_2]:
+										if codon_substitute[0] != original_codon_2:
+
+											new_codon = codon_substitute[0].lower()
+											pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + codon_start_idx_2] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_2:pe_nick_edit_idx + pbs_length]
+											pegRNA_ext_max = edit_sequence[pe_nick_edit_idx - rtt_max_length_pooled:pe_nick_edit_idx + codon_start_idx_2] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_2:pe_nick_edit_idx + pbs_length]
+											pe_silent_mutation = original_codon_2 + '-to-' + new_codon
+											pe_annotate = 'PAM_intact_with_silent_mutation'
+											silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx_2] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_2:]
 
 											break
 
-								# if len(codon_swap_1_1[original_codon_1.upper()]) > 0:
-								#     new_codon = codon_swap_1_1[original_codon_1][0][0].lower()
-								#     pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx - 8] + new_codon + edit_sequence[pe_nick_edit_idx - 5:pe_nick_edit_idx + pbs_length]
-								#     pe_pam_ref_silent_mutation = reverse_complement(pe_pam_ref) + '-to-' + reverse_complement(new_codon[2:] + original_codon_2[:2].lower())
-								#     pe_annotate = 'PAM_disrupted_silent_mutation'
-								#     silent_mutation_edit = edit_sequence[:pe_nick_edit_idx - 8] + new_codon + edit_sequence[pe_nick_edit_idx - 5:]
+						elif pe_annotate_constant == 'PAM_disrupted': # Generate silent mutation 5' or 3' of the PAM
+							
+							if nick_aa_index == 0:
+								codon_start_idx = -3 # Try to introduce silent mutation 3' of the PAM first
+								codon_end_idx = 0
+								original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
+								aa_identity = codon_dict[original_codon][1]
 
-								# elif len(codon_swap_1_2[original_codon_2.upper()]) > 0:
-								#     new_codon = codon_swap_1_2[original_codon_2][0][0].lower()
-								#     pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx - 5] + new_codon + edit_sequence[pe_nick_edit_idx - 2:pe_nick_edit_idx + pbs_length]
-								#     pe_pam_ref_silent_mutation = reverse_complement(pe_pam_ref) + '-to-' + reverse_complement(original_codon_1[2:].lower() + new_codon[:2])
-								#     pe_annotate = 'PAM_disrupted_silent_mutation'
-								#     silent_mutation_edit = edit_sequence[:pe_nick_edit_idx - 5] + new_codon + edit_sequence[pe_nick_edit_idx - 2:]
+								if (original_codon != 'ATG') & (original_codon != 'TGG'): # Can not introduce silent mutations for methionine and tryptophan codons
+									for codon_substitute in aa2codon[aa_identity]:
+										if codon_substitute != original_codon:
 
-								# else:
-								#     pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + pbs_length]
+											new_codon = codon_substitute[0].lower()
+											pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + pbs_length]
+											pegRNA_ext_max = edit_sequence[pe_nick_edit_idx - rtt_max_length_pooled:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + pbs_length]
+											pe_silent_mutation = original_codon + '-to-' + new_codon
+											pe_annotate = 'PAM_disrupted_and_silent_mutation'
+											silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
 
-					#     else:
-					#         pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + pbs_length]
+											break
 
-					# else:
-					#     pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + pbs_length] ########
+								else: # If methionine or tryptophan codons, try to introduce silent mutation 5' of the PAM
+									codon_start_idx = -9
+									codon_end_idx = -6
+									original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
+									aa_identity = codon_dict[original_codon][1]
 
-					# Check to see if pegRNA extension is within input sequence
-					if 'PAM_disrupted' in pe_annotate:
+									if (original_codon != 'ATG') & (original_codon != 'TGG'): # Can not introduce silent mutations for methionine and tryptophan codons
+										for codon_substitute in aa2codon[aa_identity]:
+											if codon_substitute != original_codon:
+												
+												new_codon = codon_substitute[0].lower()
+												pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + pbs_length]
+												pegRNA_ext_max = edit_sequence[pe_nick_edit_idx - rtt_max_length_pooled:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + pbs_length]
+												pe_silent_mutation = original_codon + '-to-' + new_codon
+												pe_annotate = 'silent_mutation_and_PAM_disrupted'
+												silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
+
+												break
+							
+							elif nick_aa_index == 1:
+								codon_start_idx = -4 # Try to introduce silent mutation 3' of the PAM first
+								codon_end_idx = -1
+								original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
+								aa_identity = codon_dict[original_codon][1]
+
+								if (original_codon != 'ATG') & (original_codon != 'TGG'): # Can not introduce silent mutations for methionine and tryptophan codons
+									for codon_substitute in aa2codon[aa_identity]:
+										if codon_substitute != original_codon:
+
+											new_codon = codon_substitute[0].lower()
+											pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + pbs_length]
+											pegRNA_ext_max = edit_sequence[pe_nick_edit_idx - rtt_max_length_pooled:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + pbs_length]
+											pe_silent_mutation = original_codon + '-to-' + new_codon
+											pe_annotate = 'PAM_disrupted_and_silent_mutation'
+											silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
+
+											break
+
+								else: # If methionine or tryptophan codons, try to introduce silent mutation 5' of the PAM
+									codon_start_idx = -10
+									codon_end_idx = -7
+									original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
+									aa_identity = codon_dict[original_codon][1]
+
+									if (original_codon != 'ATG') & (original_codon != 'TGG'): # Can not introduce silent mutations for methionine and tryptophan codons
+										for codon_substitute in aa2codon[aa_identity]:
+											if codon_substitute != original_codon:
+												
+												new_codon = codon_substitute[0].lower()
+												pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + pbs_length]
+												pegRNA_ext_max = edit_sequence[pe_nick_edit_idx - rtt_max_length_pooled:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + pbs_length]
+												pe_silent_mutation = original_codon + '-to-' + new_codon
+												pe_annotate = 'silent_mutation_and_PAM_disrupted'
+												silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
+
+												break
+							
+							elif nick_aa_index == 2:
+								codon_start_idx = -2 # Try to introduce silent mutation 3' of the PAM first
+								codon_end_idx = 1
+								original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
+								aa_identity = codon_dict[original_codon][1]
+
+								if (original_codon != 'ATG') & (original_codon != 'TGG'): # Can not introduce silent mutations for methionine and tryptophan codons
+									for codon_substitute in aa2codon[aa_identity]:
+										if (codon_substitute[0][2] == original_codon[2]) & (codon_substitute != original_codon): # Keep the third base the same to preserve PBS sequence
+
+											new_codon = codon_substitute[0].lower()
+											pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + pbs_length]
+											pegRNA_ext_max = edit_sequence[pe_nick_edit_idx - rtt_max_length_pooled:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + pbs_length]
+											pe_silent_mutation = original_codon + '-to-' + new_codon
+											pe_annotate = 'silent_mutation_and_PAM_disrupted'
+											silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
+
+											break
+
+								else: # If methionine or tryptophan codons, try to introduce silent mutation 5' of the PAM
+									codon_start_idx = -11
+									codon_end_idx = -8
+									original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
+									aa_identity = codon_dict[original_codon][1]
+
+									if (original_codon != 'ATG') & (original_codon != 'TGG'): # Can not introduce silent mutations for methionine and tryptophan codons
+										for codon_substitute in aa2codon[aa_identity]:
+											if codon_substitute != original_codon:
+												
+												new_codon = codon_substitute[0].lower()
+												pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + pbs_length]
+												pegRNA_ext_max = edit_sequence[pe_nick_edit_idx - rtt_max_length_pooled:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + pbs_length]
+												pe_silent_mutation = original_codon + '-to-' + new_codon
+												pe_annotate = 'silent_mutation_and_PAM_disrupted'
+												silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
+
+												break
+
+					# Create pegRNA ID based on annotation
+					if 'PAM_disrupted' in pe_annotate and 'silent_mutation' in pe_annotate:
 						pe_annotate_code = 0
-					else:
+					elif 'silent_mutation' in pe_annotate:
 						pe_annotate_code = 1
+					elif 'PAM_disrupted' in pe_annotate:
+						pe_annotate_code = 2
+					else:
+						pe_annotate_code = 3
 
 					pegid = '_'.join(map(str, [str(pe_annotate_code) + '0'*(3 - len(str(abs(nick2lastedit_length)))) + str(abs(nick2lastedit_length)), pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '-']))
+					
 					# Check to see if pegRNA extension is within input sequence
 					if len(pegRNA_ext) == (pbs_length + rtt_length):
 
@@ -1128,45 +1363,37 @@ for target_name in target_design:
 						else:
 							pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), pe_pam_ref_silent_mutation, pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length])
 
-				# Create pegID
-				if 'PAM_disrupted' in pe_annotate:
-					pe_annotate_code = 0
-				else:
-					pe_annotate_code = 1
+					# Create ngRNAs targeting (+) strand for (-) pegRNAs
+					if pegid in pe_design[target_name]:
+						for ng_plus in target_design[target_name]['ngRNA']['+']:
+							ng_nick_ref_idx, ng_edit_start_idx, ng_edit_end_idx, ng_full_search_edit, ng_spacer_sequence_edit, ng_pam_edit, ng_annotate = ng_plus
+							nick_distance = ng_nick_ref_idx - pe_nick_ref_idx
 
-				pegid = '_'.join(map(str, [str(pe_annotate_code) + '0'*(3 - len(str(abs(nick2lastedit_length)))) + str(abs(nick2lastedit_length)), pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '-']))
+							if silent_mutation and (pe_format == 'NNNNNNNNNNNNNNNNN/NNN[NGG]') and (len(silent_mutation_edit) > 0):
+								ng_spacer_sequence_edit = silent_mutation_edit[ng_edit_start_idx:ng_edit_end_idx]
 
-				# Create ngRNAs targeting (+) strand for (-) pegRNAs
-				if pegid in pe_design[target_name]:
-					for ng_plus in target_design[target_name]['ngRNA']['+']:
-						ng_nick_ref_idx, ng_edit_start_idx, ng_edit_end_idx, ng_full_search_edit, ng_spacer_sequence_edit, ng_pam_edit, ng_annotate = ng_plus
-						nick_distance = ng_nick_ref_idx - pe_nick_ref_idx
+								mutation_indices = [i for i, a in enumerate(ng_spacer_sequence_edit) if a.islower()]
+								if len(mutation_indices) > 0:
+									if len([1 for x in mutation_indices if x >= 10]) > 0:
+										ng_annotate = 'PE3b-seed'
 
-						if silent_mutation and (pe_format == 'NNNNNNNNNNNNNNNNN/NNN[NGG]') and (len(silent_mutation_edit) > 0):
-							ng_spacer_sequence_edit = silent_mutation_edit[ng_edit_start_idx:ng_edit_end_idx]
-
-							mutation_indices = [i for i, a in enumerate(ng_spacer_sequence_edit) if a.islower()]
-							if len(mutation_indices) > 0:
-								if len([1 for x in mutation_indices if x >= 10]) > 0:
-									ng_annotate = 'PE3b-seed'
-
+									else:
+										ng_annotate = 'PE3b-nonseed'
 								else:
-									ng_annotate = 'PE3b-nonseed'
-							else:
-								ng_annotate = 'PE3'
+									ng_annotate = 'PE3'
 
-						if (abs(nick_distance) >= nicking_distance_minimum) and (abs(nick_distance) <= nicking_distance_maximum):
+							if (abs(nick_distance) >= nicking_distance_minimum) and (abs(nick_distance) <= nicking_distance_maximum):
 
-							if ng_annotate == 'PE3b-seed':
-								ng_code = 0
-							elif ng_annotate == 'PE3b-nonseed':
-								ng_code = 1
-							else:
-								ng_code = 2
+								if ng_annotate == 'PE3b-seed':
+									ng_code = 0
+								elif ng_annotate == 'PE3b-nonseed':
+									ng_code = 1
+								else:
+									ng_code = 2
 
-							pe_design[target_name][pegid][1].append([str(ng_code) + '0'*(3 - len(str(abs(abs(nick_distance) - nicking_distance_pooled)))) + str(abs(abs(nick_distance) - nicking_distance_pooled)), ng_nick_ref_idx, ng_spacer_sequence_edit, ng_pam_edit, ng_annotate, '+', nick_distance])
+								pe_design[target_name][pegid][1].append([str(ng_code) + '0'*(3 - len(str(abs(abs(nick_distance) - nicking_distance_pooled)))) + str(abs(abs(nick_distance) - nicking_distance_pooled)), ng_nick_ref_idx, ng_spacer_sequence_edit, ng_pam_edit, ng_annotate, '+', nick_distance])
 
-					pe_design[target_name][pegid][1] = sorted(pe_design[target_name][pegid][1])
+						pe_design[target_name][pegid][1] = sorted(pe_design[target_name][pegid][1])
 
 		# Sort pegRNAs and ngRNAs and filter for top designs
 		pe_design[target_name] = dict(sorted(pe_design[target_name].items(), key=lambda v: int(v[0].split('_')[0])))
@@ -1203,46 +1430,51 @@ for target_name in target_design:
 							pe_pam_ref_silent_mutation = ''
 
 							# Construct pegRNA extension to encode intended edit(s)
-
-							# Patch for NGG PAMs - may need to build something more generalizable in the future
+							# Silent mutations only work for NGG PAMs
 							pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + rtt_length])
+							nick_aa_index = int(pe_nick_edit_idx)%3
 							if silent_mutation and (pe_format == 'NNNNNNNNNNNNNNNNN/NNN[NGG]'):
 
 								if pe_annotate_constant == 'PAM_intact':
-
-									nick_aa_index = int(pe_nick_edit_idx)%3
 									
 									if nick_aa_index == 0:
-										original_codon = edit_sequence[pe_nick_edit_idx + 3:pe_nick_edit_idx + 6].upper()
-
+										codon_start_idx = 3
+										codon_end_idx = 6
+										original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
 										aa_identity = codon_dict[original_codon][1]
 
 										for codon_substitute in aa2codon[aa_identity]:
 											if not re.search(pam_search, codon_substitute[0]):
 
 												new_codon = codon_substitute[0].lower()
-												pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + 3] + new_codon + edit_sequence[pe_nick_edit_idx + 6:pe_nick_edit_idx + rtt_length])
-												# pegRNA_ext_max = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + 3] + new_codon + edit_sequence[pe_nick_edit_idx + 6:pe_nick_edit_idx + rtt_max_length_pooled])
+												pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + rtt_length])
 												pe_pam_ref_silent_mutation = pe_pam_ref + '-to-' + new_codon
-												pe_annotate = 'PAM_disrupted_silent_mutation'
-												silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + 3] + new_codon + edit_sequence[pe_nick_edit_idx + 6:]
+												pe_annotate = 'PAM_disrupted_with_silent_mutation'
+												silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
 
 												break
+										
+										if pe_annotate != 'PAM_disrupted_with_silent_mutation': # Generate silent mutation that does not disrupt PAM sequence
+									
+											for codon_substitute in aa2codon[aa_identity]:
+												if codon_substitute[0] != original_codon:
 
-										# if len(codon_swap_0[original_codon.upper()]) > 0:
-										#     new_codon = codon_swap_0[original_codon][0][0].lower()
-										#     pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + 3] + new_codon + edit_sequence[pe_nick_edit_idx + 6:pe_nick_edit_idx + rtt_length])
-										#     pe_pam_ref_silent_mutation = pe_pam_ref + '-to-' + new_codon
-										#     pe_annotate = 'PAM_disrupted_silent_mutation'
-										#     silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + 3] + new_codon + edit_sequence[pe_nick_edit_idx + 6:]
+													new_codon = codon_substitute[0].lower()
+													pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + rtt_length])
+													pe_silent_mutation = original_codon + '-to-' + new_codon
+													pe_annotate = 'PAM_intact_with_silent_mutation'
+													silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
 
-										# else:
-										#     pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + rtt_length])
+													break
 
 									elif nick_aa_index == 1:
+										codon_start_idx_1 = 2
+										codon_end_idx_1 = 5
+										codon_start_idx_2 = 5
+										codon_end_idx_2 = 8
 
-										original_codon_1 = edit_sequence[pe_nick_edit_idx + 2:pe_nick_edit_idx + 5].upper()
-										original_codon_2 = edit_sequence[pe_nick_edit_idx + 5:pe_nick_edit_idx + 8].upper()
+										original_codon_1 = edit_sequence[pe_nick_edit_idx + codon_start_idx_1:pe_nick_edit_idx + codon_end_idx_1].upper()
+										original_codon_2 = edit_sequence[pe_nick_edit_idx + codon_start_idx_2:pe_nick_edit_idx + codon_end_idx_2].upper()
 
 										aa_identity_1 = codon_dict[original_codon_1][1]
 										aa_identity_2 = codon_dict[original_codon_2][1]
@@ -1255,15 +1487,14 @@ for target_name in target_design:
 											if not re.search(pam_search, pam_slice):
 
 												new_codon = codon_substitute[0].lower()
-												pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + 2] + new_codon + edit_sequence[pe_nick_edit_idx + 5:pe_nick_edit_idx + rtt_length])
-												# pegRNA_ext_max = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + 2] + new_codon + edit_sequence[pe_nick_edit_idx + 5:pe_nick_edit_idx + rtt_max_length_pooled])
+												pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx_1] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_1:pe_nick_edit_idx + rtt_length])
 												pe_pam_ref_silent_mutation = pe_pam_ref + '-to-' + pam_slice.lower()
-												pe_annotate = 'PAM_disrupted_silent_mutation'
-												silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + 2] + new_codon + edit_sequence[pe_nick_edit_idx + 5:]
+												pe_annotate = 'PAM_disrupted_with_silent_mutation'
+												silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx_1] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_1:]
 
 												break
 
-										if pe_annotate != 'PAM_disrupted_silent_mutation':
+										if pe_annotate != 'PAM_disrupted_with_silent_mutation': # Try to introduce silent mutation in codon 2 if codon 1 did not work
 
 											for codon_substitute in aa2codon[aa_identity_2]:
 
@@ -1273,36 +1504,43 @@ for target_name in target_design:
 												if not re.search(pam_search, pam_slice):
 
 													new_codon = codon_substitute[0].lower()
-													pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + 5] + new_codon + edit_sequence[pe_nick_edit_idx + 8:pe_nick_edit_idx + rtt_length])
-													# pegRNA_ext_max = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + 5] + new_codon + edit_sequence[pe_nick_edit_idx + 8:pe_nick_edit_idx + rtt_max_length_pooled])
+													pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx_2] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_2:pe_nick_edit_idx + rtt_length])
 													pe_pam_ref_silent_mutation = pe_pam_ref + '-to-' + pam_slice.lower()
-													pe_annotate = 'PAM_disrupted_silent_mutation'
-													silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + 5] + new_codon + edit_sequence[pe_nick_edit_idx + 8:]
+													pe_annotate = 'PAM_disrupted_with_silent_mutation'
+													silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx_2] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_2:]
 
 													break
 
-										# if len(codon_swap_1_1[original_codon_1.upper()]) > 0:
+										if 'silent_mutation' not in pe_annotate: # Generate silent mutation that does not disrupt PAM sequence
+											
+											for codon_substitute in aa2codon[aa_identity_1]: # Try to introduce silent mutation in codon 1 first
+												if codon_substitute[0] != original_codon_1:
 
-										#     new_codon = codon_swap_1_1[original_codon_1][0][0].lower()
-										#     pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + 2] + new_codon + edit_sequence[pe_nick_edit_idx + 5:pe_nick_edit_idx + rtt_length])
-										#     pe_pam_ref_silent_mutation = pe_pam_ref + '-to-' + new_codon[1:] + original_codon_2[:1].lower()
-										#     pe_annotate = 'PAM_disrupted_silent_mutation'
-										#     silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + 2] + new_codon + edit_sequence[pe_nick_edit_idx + 5:]
+													new_codon = codon_substitute[0].lower()
+													pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx_1] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_1:pe_nick_edit_idx + rtt_length])
+													pe_silent_mutation = original_codon_1 + '-to-' + new_codon
+													pe_annotate = 'PAM_intact_with_silent_mutation'
+													silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx_1] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_1:]
 
-										# elif len(codon_swap_1_2[original_codon_2.upper()]) > 0:
+													break
+										
+										if 'silent_mutation' not in pe_annotate: # Try to introduce silent mutation in codon 2 if codon 1 did not work
 
-										#     new_codon = codon_swap_1_2[original_codon_2][0][0].lower()
-										#     pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + 5] + new_codon + edit_sequence[pe_nick_edit_idx + 8:pe_nick_edit_idx + rtt_length])
-										#     pe_pam_ref_silent_mutation = pe_pam_ref + '-to-' + original_codon_1[1:].lower() + new_codon[:1]
-										#     pe_annotate = 'PAM_disrupted_silent_mutation'
-										#     silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + 5] + new_codon + edit_sequence[pe_nick_edit_idx + 8:]
+											for codon_substitute in aa2codon[aa_identity_2]:
+												if codon_substitute[0] != original_codon_2:
 
-										# else:
-										#     pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + rtt_length])
+													new_codon = codon_substitute[0].lower()
+													pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx_2] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_2:pe_nick_edit_idx + rtt_length])
+													pe_silent_mutation = original_codon_2 + '-to-' + new_codon
+													pe_annotate = 'PAM_intact_with_silent_mutation'
+													silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx_2] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_2:]
+
+													break
 
 									elif nick_aa_index == 2:
-										original_codon = edit_sequence[pe_nick_edit_idx + 4:pe_nick_edit_idx + 7].upper()
-
+										codon_start_idx = 4
+										codon_end_idx = 7
+										original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
 										aa_identity = codon_dict[original_codon][1]
 
 										for codon_substitute in aa2codon[aa_identity]:
@@ -1311,30 +1549,139 @@ for target_name in target_design:
 											if not re.search(pam_search, pam_slice):
 
 												new_codon = codon_substitute[0].lower()
-												pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + 4] + new_codon + edit_sequence[pe_nick_edit_idx + 7:pe_nick_edit_idx + rtt_length])
-												# pegRNA_ext_max = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + 4] + new_codon + edit_sequence[pe_nick_edit_idx + 7:pe_nick_edit_idx + rtt_max_length_pooled])
+												pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + rtt_length])
 												pe_pam_ref_silent_mutation = pe_pam_ref + '-to-' + pam_slice.lower()
-												pe_annotate = 'PAM_disrupted_silent_mutation'
-												silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + 4] + new_codon + edit_sequence[pe_nick_edit_idx + 7:]
+												pe_annotate = 'PAM_disrupted_with_silent_mutation'
+												silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
 
 												break
+									
+										if pe_annotate != 'PAM_disrupted_with_silent_mutation': # Generate silent mutation that does not disrupt PAM sequence
+										
+											for codon_substitute in aa2codon[aa_identity]:
+												if codon_substitute[0] != original_codon:
 
-										# if len(codon_swap_2[original_codon.upper()]) > 0:
-										#     new_codon = codon_swap_2[original_codon][0][0].lower()
-										#     pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + 4] + new_codon + edit_sequence[pe_nick_edit_idx + 7:pe_nick_edit_idx + rtt_length])
-										#     pe_pam_ref_silent_mutation = pe_pam_ref + '-to-' + edit_sequence[pe_nick_edit_idx + 3:pe_nick_edit_idx + 4].lower() + new_codon[:2]
-										#     pe_annotate = 'PAM_disrupted_silent_mutation'
-										#     silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + 4] + new_codon + edit_sequence[pe_nick_edit_idx + 7:]
+													new_codon = codon_substitute[0].lower()
+													pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + rtt_length])
+													pe_silent_mutation = original_codon + '-to-' + new_codon
+													pe_annotate = 'PAM_intact_with_silent_mutation'
+													silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
 
-										# else:
-										#     pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + rtt_length])
+													break
 
-								# else:
-								#     pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + rtt_length])
+								elif pe_annotate_constant == 'PAM_disrupted': # Generate silent mutation 5' or 3' of the PAM
+									
+									if nick_aa_index == 0:
+										codon_start_idx = 0 # Try to introduce silent mutation 5' of the PAM first
+										codon_end_idx = 3
+										original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
+										aa_identity = codon_dict[original_codon][1]
 
-							# else:
-							#     pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + rtt_length])
+										if (original_codon != 'ATG') & (original_codon != 'TGG'): # Can not introduce silent mutations for methionine and tryptophan codons
 
+											for codon_substitute in aa2codon[aa_identity]:
+												if codon_substitute != original_codon:
+
+													new_codon = codon_substitute[0].lower()
+													pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + rtt_length])
+													pe_silent_mutation = original_codon + '-to-' + new_codon
+													pe_annotate = 'silent_mutation_and_PAM_disrupted'
+													silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
+
+													break
+
+										else: # If methionine or tryptophan codons, try to introduce silent mutation 3' of the PAM
+											codon_start_idx = 6
+											codon_end_idx = 9
+
+											original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
+											aa_identity = codon_dict[original_codon][1]
+
+											if (original_codon != 'ATG') & (original_codon != 'TGG'): # Can not introduce silent mutations for methionine and tryptophan codons
+												for codon_substitute in aa2codon[aa_identity]:
+													if codon_substitute != original_codon:
+														
+														new_codon = codon_substitute[0].lower()
+														pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + rtt_length])
+														pe_silent_mutation = original_codon + '-to-' + new_codon
+														pe_annotate = 'silent_mutation_and_PAM_disrupted'
+														silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
+
+														break
+														
+											elif nick_aa_index == 1:
+												codon_start_idx = -1 # Try to introduce silent mutation 5' of the PAM first
+												codon_end_idx = 2
+												original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
+												aa_identity = codon_dict[original_codon][1]
+
+												if (original_codon != 'ATG') & (original_codon != 'TGG'): # Can not introduce silent mutations for methionine and tryptophan codons
+													for codon_substitute in aa2codon[aa_identity]:
+														if codon_substitute != original_codon:
+
+															new_codon = codon_substitute[0].lower()
+															pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + rtt_length])
+															pe_silent_mutation = original_codon + '-to-' + new_codon
+															pe_annotate = 'silent_mutation_and_PAM_disrupted'
+															silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
+
+															break
+												
+												else: # If methionine or tryptophan codons, try to introduce silent mutation 3' of the PAM
+													codon_start_idx = 8
+													codon_end_idx = 11
+
+													original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
+													aa_identity = codon_dict[original_codon][1]
+
+													if (original_codon != 'ATG') & (original_codon != 'TGG'): # Can not introduce silent mutations for methionine and tryptophan codons
+														for codon_substitute in aa2codon[aa_identity]:
+															if codon_substitute != original_codon:
+																
+																new_codon = codon_substitute[0].lower()
+																pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + rtt_length])
+																pe_silent_mutation = original_codon + '-to-' + new_codon
+																pe_annotate = 'silent_mutation_and_PAM_disrupted'
+																silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
+
+																break
+											
+											elif nick_aa_index == 2:
+												codon_start_idx = 1 # Try to introduce silent mutation 5' of the PAM first
+												codon_end_idx = 4
+												original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
+												aa_identity = codon_dict[original_codon][1]
+
+												if (original_codon != 'ATG') & (original_codon != 'TGG'): # Can not introduce silent mutations for methionine and tryptophan codons
+													for codon_substitute in aa2codon[aa_identity]:
+														if codon_substitute != original_codon:
+
+															new_codon = codon_substitute[0].lower()
+															pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + rtt_length])
+															pe_silent_mutation = original_codon + '-to-' + new_codon
+															pe_annotate = 'silent_mutation_and_PAM_disrupted'
+															silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
+
+															break
+												
+												else: # If methionine or tryptophan codons, try to introduce silent mutation 3' of the PAM
+													codon_start_idx = 7
+													codon_end_idx = 10
+													original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
+													aa_identity = codon_dict[original_codon][1]
+
+													if (original_codon != 'ATG') & (original_codon != 'TGG'): # Can not introduce silent mutations for methionine and tryptophan codons
+														for codon_substitute in aa2codon[aa_identity]:
+															if codon_substitute != original_codon:
+
+																new_codon = codon_substitute[0].lower()
+																pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + rtt_length])
+																pe_silent_mutation = original_codon + '-to-' + new_codon
+																pe_annotate = 'PAM_disrupted_and_silent_mutation'
+																silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
+
+																break
+								
 							# Check to see if pegRNA extension is within input sequence
 							if len(pegRNA_ext) == (pbs_length + rtt_length):
 
@@ -1397,46 +1744,47 @@ for target_name in target_design:
 							pe_pam_ref_silent_mutation = ''
 
 							# Construct pegRNA extension to encode intended edit(s)
-
-							# Patch for NGG PAMs - may need to build something more generalizable in the future
+							# Silent mutations only work for NGG PAMs
 							pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + pbs_length]
-							# pegRNA_ext_max = edit_sequence[pe_nick_edit_idx - rtt_max_length_pooled:pe_nick_edit_idx + pbs_length]
+							nick_aa_index = int(pe_nick_edit_idx)%3
 							if silent_mutation and (pe_format == 'NNNNNNNNNNNNNNNNN/NNN[NGG]'):
 								
 								if pe_annotate_constant == 'PAM_intact':
-
-									nick_aa_index = int(pe_nick_edit_idx)%3
 									
 									if nick_aa_index == 0:
-										original_codon = edit_sequence[pe_nick_edit_idx - 6:pe_nick_edit_idx - 3].upper()
-
+										codon_start_idx = -6
+										codon_end_idx = -3
+										original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
 										aa_identity = codon_dict[original_codon][1]
 
 										for codon_substitute in aa2codon[aa_identity]:
 											if not re.search(reverse_complement(pam_search), codon_substitute[0]):
 
 												new_codon = codon_substitute[0].lower()
-												pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx - 6] + new_codon + edit_sequence[pe_nick_edit_idx - 3:pe_nick_edit_idx + pbs_length]
-												# pegRNA_ext_max = edit_sequence[pe_nick_edit_idx - rtt_max_length_pooled:pe_nick_edit_idx - 6] + new_codon + edit_sequence[pe_nick_edit_idx - 3:pe_nick_edit_idx + pbs_length]
+												pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + pbs_length]
 												pe_pam_ref_silent_mutation = reverse_complement(pe_pam_ref) + '-to-' + reverse_complement(new_codon)
-												pe_annotate = 'PAM_disrupted_silent_mutation'
-												silent_mutation_edit = edit_sequence[:pe_nick_edit_idx - 6] + new_codon + edit_sequence[pe_nick_edit_idx - 3:]
+												pe_annotate = 'PAM_disrupted_with_silent_mutation'
+												silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
 
 												break
+										
+										if pe_annotate != 'PAM_disrupted_with_silent_mutation': # Generate silent mutation that does not disrupt PAM sequence
+									
+											for codon_substitute in aa2codon[aa_identity]:
+												if codon_substitute[0] != original_codon:
 
-										# if len(codon_swap_2[original_codon.upper()]) > 0:
-										#     new_codon = codon_swap_2[original_codon][0][0].lower()
-										#     pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx - 6] + new_codon + edit_sequence[pe_nick_edit_idx - 3:pe_nick_edit_idx + pbs_length]
-										#     pe_pam_ref_silent_mutation = reverse_complement(pe_pam_ref) + '-to-' + reverse_complement(new_codon)
-										#     pe_annotate = 'PAM_disrupted_silent_mutation'
-										#     silent_mutation_edit = edit_sequence[:pe_nick_edit_idx - 6] + new_codon + edit_sequence[pe_nick_edit_idx - 3:]
+													new_codon = codon_substitute[0].lower()
+													pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + pbs_length]
+													pe_silent_mutation = original_codon + '-to-' + new_codon
+													pe_annotate = 'PAM_intact_with_silent_mutation'
+													silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
 
-										# else:
-										#     pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + pbs_length]
+													break
 
 									elif nick_aa_index == 1:
-										original_codon = edit_sequence[pe_nick_edit_idx - 7:pe_nick_edit_idx - 4].upper()
-
+										codon_start_idx = -7
+										codon_end_idx = -4
+										original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
 										aa_identity = codon_dict[original_codon][1]
 
 										for codon_substitute in aa2codon[aa_identity]:
@@ -1445,27 +1793,34 @@ for target_name in target_design:
 											if not re.search(reverse_complement(pam_search), pam_slice):
 
 												new_codon = codon_substitute[0].lower()
-												pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx - 7] + new_codon + edit_sequence[pe_nick_edit_idx - 4:pe_nick_edit_idx + pbs_length]
-												# pegRNA_ext_max = edit_sequence[pe_nick_edit_idx - rtt_max_length_pooled:pe_nick_edit_idx - 7] + new_codon + edit_sequence[pe_nick_edit_idx - 4:pe_nick_edit_idx + pbs_length]
+												pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + pbs_length]
 												pe_pam_ref_silent_mutation = reverse_complement(pe_pam_ref) + '-to-' + reverse_complement(pam_slice).lower()
-												pe_annotate = 'PAM_disrupted_silent_mutation'
-												silent_mutation_edit = edit_sequence[:pe_nick_edit_idx - 7] + new_codon + edit_sequence[pe_nick_edit_idx - 4:]
+												pe_annotate = 'PAM_disrupted_with_silent_mutation'
+												silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
 
 												break
 
-										# if len(codon_swap_0[original_codon.upper()]) > 0:
-										#     new_codon = codon_swap_0[original_codon][0][0].lower()
-										#     pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx - 7] + new_codon + edit_sequence[pe_nick_edit_idx - 4:pe_nick_edit_idx + pbs_length]
-										#     pe_pam_ref_silent_mutation = reverse_complement(pe_pam_ref) + '-to-' + reverse_complement(new_codon[1:] + edit_sequence[pe_nick_edit_idx - 4:pe_nick_edit_idx - 3].lower())
-										#     pe_annotate = 'PAM_disrupted_silent_mutation'
-										#     silent_mutation_edit = edit_sequence[:pe_nick_edit_idx - 7] + new_codon + edit_sequence[pe_nick_edit_idx - 4:]
+										if pe_annotate != 'PAM_disrupted_with_silent_mutation': # Generate silent mutation that does not disrupt PAM sequence
+									
+											for codon_substitute in aa2codon[aa_identity]:
+												if codon_substitute[0] != original_codon:
 
-										# else:
-										#     pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + pbs_length]
+													new_codon = codon_substitute[0].lower()
+													pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + pbs_length]
+													pe_silent_mutation = original_codon + '-to-' + new_codon
+													pe_annotate = 'PAM_intact_with_silent_mutation'
+													silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
+
+													break
 
 									elif nick_aa_index == 2:
-										original_codon_1 = edit_sequence[pe_nick_edit_idx - 8:pe_nick_edit_idx - 5].upper()
-										original_codon_2 = edit_sequence[pe_nick_edit_idx - 5:pe_nick_edit_idx - 2].upper()
+										codon_start_idx_1 = -8
+										codon_end_idx_1 = -5
+										codon_start_idx_2 = -5
+										codon_end_idx_2 = -2
+
+										original_codon_1 = edit_sequence[pe_nick_edit_idx + codon_start_idx_1:pe_nick_edit_idx + codon_end_idx_1].upper()
+										original_codon_2 = edit_sequence[pe_nick_edit_idx + codon_start_idx_2:pe_nick_edit_idx + codon_end_idx_2].upper()
 
 										aa_identity_1 = codon_dict[original_codon_1][1]
 										aa_identity_2 = codon_dict[original_codon_2][1]
@@ -1478,15 +1833,14 @@ for target_name in target_design:
 											if not re.search(reverse_complement(pam_search), pam_slice):
 
 												new_codon = codon_substitute[0].lower()
-												pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx - 8] + new_codon + edit_sequence[pe_nick_edit_idx - 5:pe_nick_edit_idx + pbs_length]
-												# pegRNA_ext_max = edit_sequence[pe_nick_edit_idx - rtt_max_length_pooled:pe_nick_edit_idx - 8] + new_codon + edit_sequence[pe_nick_edit_idx - 5:pe_nick_edit_idx + pbs_length]
+												pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + codon_start_idx_1] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_1:pe_nick_edit_idx + pbs_length]
 												pe_pam_ref_silent_mutation = reverse_complement(pe_pam_ref) + '-to-' + reverse_complement(pam_slice).lower()
-												pe_annotate = 'PAM_disrupted_silent_mutation'
-												silent_mutation_edit = edit_sequence[:pe_nick_edit_idx - 8] + new_codon + edit_sequence[pe_nick_edit_idx - 5:]
+												pe_annotate = 'PAM_disrupted_with_silent_mutation'
+												silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx_1] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_1:]
 
 												break
 
-										if pe_annotate != 'PAM_disrupted_silent_mutation':
+										if pe_annotate != 'PAM_disrupted_with_silent_mutation':
 
 											for codon_substitute in aa2codon[aa_identity_2]:
 
@@ -1496,36 +1850,148 @@ for target_name in target_design:
 												if not re.search(reverse_complement(pam_search), pam_slice):
 
 													new_codon = codon_substitute[0].lower()
-													pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx - 5] + new_codon + edit_sequence[pe_nick_edit_idx - 2:pe_nick_edit_idx + pbs_length]
-													# pegRNA_ext_max = edit_sequence[pe_nick_edit_idx - rtt_max_length_pooled:pe_nick_edit_idx - 5] + new_codon + edit_sequence[pe_nick_edit_idx - 2:pe_nick_edit_idx + pbs_length]
+													pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + codon_start_idx_2] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_2:pe_nick_edit_idx + pbs_length]
 													pe_pam_ref_silent_mutation = reverse_complement(pe_pam_ref) + '-to-' + reverse_complement(pam_slice).lower()
-													pe_annotate = 'PAM_disrupted_silent_mutation'
-													silent_mutation_edit = edit_sequence[:pe_nick_edit_idx - 5] + new_codon + edit_sequence[pe_nick_edit_idx - 2:]
+													pe_annotate = 'PAM_disrupted_with_silent_mutation'
+													silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx_2] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_2:]
+
+													break
+										
+										if 'silent_mutation' not in pe_annotate: # Generate silent mutation that does not disrupt PAM sequence
+											
+											for codon_substitute in aa2codon[aa_identity_1]: # Try to introduce silent mutation in codon 1 first
+												if codon_substitute[0] != original_codon_1:
+
+													new_codon = codon_substitute[0].lower()
+													pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + codon_start_idx_1] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_1:pe_nick_edit_idx + pbs_length]
+													pe_silent_mutation = original_codon_1 + '-to-' + new_codon
+													pe_annotate = 'PAM_intact_with_silent_mutation'
+													silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx_1] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_1:]
+
+													break
+											
+										if 'silent_mutation' not in pe_annotate: # Try to introduce silent mutation in codon 2 if codon 1 did not work
+
+											for codon_substitute in aa2codon[aa_identity_2]:
+												if codon_substitute[0] != original_codon_2:
+
+													new_codon = codon_substitute[0].lower()
+													pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + codon_start_idx_2] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_2:pe_nick_edit_idx + pbs_length]
+													pe_silent_mutation = original_codon_2 + '-to-' + new_codon
+													pe_annotate = 'PAM_intact_with_silent_mutation'
+													silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx_2] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx_2:]
 
 													break
 
-										# if len(codon_swap_1_1[original_codon_1.upper()]) > 0:
-										#     new_codon = codon_swap_1_1[original_codon_1][0][0].lower()
-										#     pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx - 8] + new_codon + edit_sequence[pe_nick_edit_idx - 5:pe_nick_edit_idx + pbs_length]
-										#     pe_pam_ref_silent_mutation = reverse_complement(pe_pam_ref) + '-to-' + reverse_complement(new_codon[2:] + original_codon_2[:2].lower())
-										#     pe_annotate = 'PAM_disrupted_silent_mutation'
-										#     silent_mutation_edit = edit_sequence[:pe_nick_edit_idx - 8] + new_codon + edit_sequence[pe_nick_edit_idx - 5:]
+								elif pe_annotate_constant == 'PAM_disrupted': # Generate silent mutation 5' or 3' of the PAM
+							
+									if nick_aa_index == 0:
+										codon_start_idx = -3 # Try to introduce silent mutation 3' of the PAM first
+										codon_end_idx = 0
+										original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
+										aa_identity = codon_dict[original_codon][1]
 
-										# elif len(codon_swap_1_2[original_codon_2.upper()]) > 0:
-										#     new_codon = codon_swap_1_2[original_codon_2][0][0].lower()
-										#     pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx - 5] + new_codon + edit_sequence[pe_nick_edit_idx - 2:pe_nick_edit_idx + pbs_length]
-										#     pe_pam_ref_silent_mutation = reverse_complement(pe_pam_ref) + '-to-' + reverse_complement(original_codon_1[2:].lower() + new_codon[:2])
-										#     pe_annotate = 'PAM_disrupted_silent_mutation'
-										#     silent_mutation_edit = edit_sequence[:pe_nick_edit_idx - 5] + new_codon + edit_sequence[pe_nick_edit_idx - 2:]
+										if (original_codon != 'ATG') & (original_codon != 'TGG'): # Can not introduce silent mutations for methionine and tryptophan codons
+											for codon_substitute in aa2codon[aa_identity]:
+												if codon_substitute != original_codon:
 
-										# else:
-										#     pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + pbs_length]
+													new_codon = codon_substitute[0].lower()
+													pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + pbs_length]
+													pe_silent_mutation = original_codon + '-to-' + new_codon
+													pe_annotate = 'PAM_disrupted_and_silent_mutation'
+													silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
 
-							#     else:
-							#         pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + pbs_length]
+													break
 
-							# else:
-							#     pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + pbs_length] ########
+										else: # If methionine or tryptophan codons, try to introduce silent mutation 5' of the PAM
+											codon_start_idx = -9
+											codon_end_idx = -6
+											original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
+											aa_identity = codon_dict[original_codon][1]
+
+											if (original_codon != 'ATG') & (original_codon != 'TGG'): # Can not introduce silent mutations for methionine and tryptophan codons
+												for codon_substitute in aa2codon[aa_identity]:
+													if codon_substitute != original_codon:
+														
+														new_codon = codon_substitute[0].lower()
+														pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + pbs_length]
+														pe_silent_mutation = original_codon + '-to-' + new_codon
+														pe_annotate = 'silent_mutation_and_PAM_disrupted'
+														silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
+
+														break
+									
+									elif nick_aa_index == 1:
+										codon_start_idx = -4 # Try to introduce silent mutation 3' of the PAM first
+										codon_end_idx = -1
+										original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
+										aa_identity = codon_dict[original_codon][1]
+
+										if (original_codon != 'ATG') & (original_codon != 'TGG'): # Can not introduce silent mutations for methionine and tryptophan codons
+											for codon_substitute in aa2codon[aa_identity]:
+												if codon_substitute != original_codon:
+
+													new_codon = codon_substitute[0].lower()
+													pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + pbs_length]
+													pe_silent_mutation = original_codon + '-to-' + new_codon
+													pe_annotate = 'PAM_disrupted_and_silent_mutation'
+													silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
+
+													break
+
+										else: # If methionine or tryptophan codons, try to introduce silent mutation 5' of the PAM
+											codon_start_idx = -10
+											codon_end_idx = -7
+											original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
+											aa_identity = codon_dict[original_codon][1]
+
+											if (original_codon != 'ATG') & (original_codon != 'TGG'): # Can not introduce silent mutations for methionine and tryptophan codons
+												for codon_substitute in aa2codon[aa_identity]:
+													if codon_substitute != original_codon:
+														
+														new_codon = codon_substitute[0].lower()
+														pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + pbs_length]
+														pe_silent_mutation = original_codon + '-to-' + new_codon
+														pe_annotate = 'silent_mutation_and_PAM_disrupted'
+														silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
+
+														break
+									
+									elif nick_aa_index == 2:
+										codon_start_idx = -2 # Try to introduce silent mutation 3' of the PAM first
+										codon_end_idx = 1
+										original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
+										aa_identity = codon_dict[original_codon][1]
+
+										if (original_codon != 'ATG') & (original_codon != 'TGG'): # Can not introduce silent mutations for methionine and tryptophan codons
+											for codon_substitute in aa2codon[aa_identity]:
+												if (codon_substitute[0][2] == original_codon[2]) & (codon_substitute != original_codon): # Keep the third base the same to preserve PBS sequence
+
+													new_codon = codon_substitute[0].lower()
+													pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + pbs_length]
+													pe_silent_mutation = original_codon + '-to-' + new_codon
+													pe_annotate = 'silent_mutation_and_PAM_disrupted'
+													silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
+
+													break
+
+										else: # If methionine or tryptophan codons, try to introduce silent mutation 5' of the PAM
+											codon_start_idx = -11
+											codon_end_idx = -8
+											original_codon = edit_sequence[pe_nick_edit_idx + codon_start_idx:pe_nick_edit_idx + codon_end_idx].upper()
+											aa_identity = codon_dict[original_codon][1]
+
+											if (original_codon != 'ATG') & (original_codon != 'TGG'): # Can not introduce silent mutations for methionine and tryptophan codons
+												for codon_substitute in aa2codon[aa_identity]:
+													if codon_substitute != original_codon:
+														
+														new_codon = codon_substitute[0].lower()
+														pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:pe_nick_edit_idx + pbs_length]
+														pe_silent_mutation = original_codon + '-to-' + new_codon
+														pe_annotate = 'silent_mutation_and_PAM_disrupted'
+														silent_mutation_edit = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
+
+														break
 
 							# Check to see if pegRNA extension is within input sequence
 							if len(pegRNA_ext) == (pbs_length + rtt_length):
@@ -1590,30 +2056,57 @@ with open(out_dir + '/%s' % pegRNAs_summary_f, 'w') as f:
 					ng_continue = True
 
 					# Write pegRNAs
-					pegRNA_entry = pe_design[target_name][pegid][0][0]
-					pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, pe_strand, pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length = pegRNA_entry
+					for pegRNA_entry in pe_design[target_name][pegid][0]:
+						pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, pe_strand, pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length = pegRNA_entry
 
-					pegRNA_ext_first_base = pegRNA_ext[0]
-					spacer_gc_content = gc_content(pe_spacer_sequence)
-					pbs_gc_content = gc_content(pegRNA_ext[rtt_length:])
-					rtt_gc_content = gc_content(pegRNA_ext[:rtt_length])
+						pegRNA_ext_first_base = pegRNA_ext[0]
+						spacer_gc_content = gc_content(pe_spacer_sequence)
+						pbs_gc_content = gc_content(pegRNA_ext[rtt_length:])
+						rtt_gc_content = gc_content(pegRNA_ext[:rtt_length])
 
-					if pegRNA_ext_first_base.upper() == 'C':
+						if pegRNA_ext_first_base.upper() == 'C':
 
-						# Find minimum non-C index extending the RTT template
-						shift_rtt_index_list = [pegRNA_ext_max[:-len(pegRNA_ext)][::-1].upper().find('A'), pegRNA_ext_max[:-len(pegRNA_ext)][::-1].upper().find('G'), pegRNA_ext_max[:-len(pegRNA_ext)][::-1].upper().find('T')]
-						shift_rtt_index_list = [x for x in shift_rtt_index_list if x != -1]
+							# Find minimum non-C index extending the RTT template
+							shift_rtt_index_list = [pegRNA_ext_max[:-len(pegRNA_ext)][::-1].upper().find('A'), pegRNA_ext_max[:-len(pegRNA_ext)][::-1].upper().find('G'), pegRNA_ext_max[:-len(pegRNA_ext)][::-1].upper().find('T')]
+							shift_rtt_index_list = [x for x in shift_rtt_index_list if x != -1]
 
-						# Make sure there are non-C indices
-						if len(shift_rtt_index_list) > 0:
-							shift_rtt_index = min(shift_rtt_index_list) + 1
-							rtt_length += shift_rtt_index
+							# Make sure there are non-C indices
+							if len(shift_rtt_index_list) > 0:
+								shift_rtt_index = min(shift_rtt_index_list) + 1
+								rtt_length += shift_rtt_index
 
-							pegRNA_ext = pegRNA_ext_max[-len(pegRNA_ext) - shift_rtt_index:]
-							pegRNA_ext_first_base = pegRNA_ext[0]
-							spacer_gc_content = gc_content(pe_spacer_sequence)
-							pbs_gc_content = gc_content(pegRNA_ext[rtt_length:])
-							rtt_gc_content = gc_content(pegRNA_ext[:rtt_length])
+								pegRNA_ext = pegRNA_ext_max[-len(pegRNA_ext) - shift_rtt_index:]
+								pegRNA_ext_first_base = pegRNA_ext[0]
+								spacer_gc_content = gc_content(pe_spacer_sequence)
+								pbs_gc_content = gc_content(pegRNA_ext[rtt_length:])
+								rtt_gc_content = gc_content(pegRNA_ext[:rtt_length])
+
+								if pe_spacer_sequence[0].upper() == 'G':
+									spacer_oligo_top = 'cacc' + pe_spacer_sequence + 'gtttt'
+									spacer_oligo_bottom = 'ctctaaaac' + reverse_complement(pe_spacer_sequence)
+
+								else:
+									spacer_oligo_top = 'caccG' + pe_spacer_sequence + 'gtttt'
+									spacer_oligo_bottom = 'ctctaaaac' + reverse_complement('G' + pe_spacer_sequence)
+
+								pegext_oligo_top = 'gtgc' + pegRNA_ext
+								pegext_oligo_bottom = 'aaaa' + reverse_complement(pegRNA_ext)
+
+								if filter_homopolymer_ts:
+
+									if 'TTTT' not in pe_spacer_sequence:
+										f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom])) + '\n')
+										peg_count += 1
+
+									else:
+										ng_continue = False
+
+								else:
+
+									f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom])) + '\n')
+									peg_count += 1
+
+						else:
 
 							if pe_spacer_sequence[0].upper() == 'G':
 								spacer_oligo_top = 'cacc' + pe_spacer_sequence + 'gtttt'
@@ -1631,7 +2124,7 @@ with open(out_dir + '/%s' % pegRNAs_summary_f, 'w') as f:
 								if 'TTTT' not in pe_spacer_sequence:
 									f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom])) + '\n')
 									peg_count += 1
-
+									
 								else:
 									ng_continue = False
 
@@ -1640,7 +2133,46 @@ with open(out_dir + '/%s' % pegRNAs_summary_f, 'w') as f:
 								f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom])) + '\n')
 								peg_count += 1
 
-					else:
+						# Write ngRNAs
+						if ng_continue:
+							for ngRNA_entry in pe_design[target_name][pegid][1][:number_of_ngrnas]:
+								ng_code, ng_nick_ref_idx, ng_spacer_sequence_edit, ng_pam_edit, ng_annotate, ng_strand, nick_distance = ngRNA_entry
+
+								spacer_gc_content = gc_content(ng_spacer_sequence_edit)
+
+								if ng_spacer_sequence_edit[0].upper() == 'G':
+									spacer_oligo_top = 'cacc' + ng_spacer_sequence_edit
+									spacer_oligo_bottom = 'aaac' + reverse_complement(ng_spacer_sequence_edit)
+
+								else:
+									spacer_oligo_top = 'caccG' + ng_spacer_sequence_edit
+									spacer_oligo_bottom = 'aaac' + reverse_complement('G' + ng_spacer_sequence_edit)
+
+								if filter_homopolymer_ts:
+
+									if 'TTTT' not in ng_spacer_sequence_edit:
+										f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', ''])) + '\n')
+
+								else:
+									f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', ''])) + '\n')
+
+						counter += 1
+
+						if peg_count == number_of_pegrnas:
+							break
+
+			else:
+
+				for pegid in list(pe_design[target_name].keys())[:number_of_pegrnas]:
+
+					# Write pegRNAs
+					for pegRNA_entry in pe_design[target_name][pegid][0]:
+						pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, pe_strand, pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length = pegRNA_entry
+
+						pegRNA_ext_first_base = pegRNA_ext[0]
+						spacer_gc_content = gc_content(pe_spacer_sequence)
+						pbs_gc_content = gc_content(pegRNA_ext[rtt_length:])
+						rtt_gc_content = gc_content(pegRNA_ext[:rtt_length])
 
 						if pe_spacer_sequence[0].upper() == 'G':
 							spacer_oligo_top = 'cacc' + pe_spacer_sequence + 'gtttt'
@@ -1657,18 +2189,14 @@ with open(out_dir + '/%s' % pegRNAs_summary_f, 'w') as f:
 
 							if 'TTTT' not in pe_spacer_sequence:
 								f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom])) + '\n')
-								peg_count += 1
-								
-							else:
-								ng_continue = False
 
 						else:
 
 							f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom])) + '\n')
-							peg_count += 1
 
-					# Write ngRNAs
-					if ng_continue:
+						# Sort ngRNAs
+
+						# Write ngRNAs
 						for ngRNA_entry in pe_design[target_name][pegid][1][:number_of_ngrnas]:
 							ng_code, ng_nick_ref_idx, ng_spacer_sequence_edit, ng_pam_edit, ng_annotate, ng_strand, nick_distance = ngRNA_entry
 
@@ -1690,69 +2218,7 @@ with open(out_dir + '/%s' % pegRNAs_summary_f, 'w') as f:
 							else:
 								f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', ''])) + '\n')
 
-					counter += 1
-
-					if peg_count == number_of_pegrnas:
-						break
-
-			else:
-
-				for pegid in list(pe_design[target_name].keys())[:number_of_pegrnas]:
-
-					# Write pegRNAs
-					pegRNA_entry = pe_design[target_name][pegid][0][0]
-					pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, pe_strand, pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length = pegRNA_entry
-
-					pegRNA_ext_first_base = pegRNA_ext[0]
-					spacer_gc_content = gc_content(pe_spacer_sequence)
-					pbs_gc_content = gc_content(pegRNA_ext[rtt_length:])
-					rtt_gc_content = gc_content(pegRNA_ext[:rtt_length])
-
-					if pe_spacer_sequence[0].upper() == 'G':
-						spacer_oligo_top = 'cacc' + pe_spacer_sequence + 'gtttt'
-						spacer_oligo_bottom = 'ctctaaaac' + reverse_complement(pe_spacer_sequence)
-
-					else:
-						spacer_oligo_top = 'caccG' + pe_spacer_sequence + 'gtttt'
-						spacer_oligo_bottom = 'ctctaaaac' + reverse_complement('G' + pe_spacer_sequence)
-
-					pegext_oligo_top = 'gtgc' + pegRNA_ext
-					pegext_oligo_bottom = 'aaaa' + reverse_complement(pegRNA_ext)
-
-					if filter_homopolymer_ts:
-
-						if 'TTTT' not in pe_spacer_sequence:
-							f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom])) + '\n')
-
-					else:
-
-						f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom])) + '\n')
-
-					# Sort ngRNAs
-
-					# Write ngRNAs
-					for ngRNA_entry in pe_design[target_name][pegid][1][:number_of_ngrnas]:
-						ng_code, ng_nick_ref_idx, ng_spacer_sequence_edit, ng_pam_edit, ng_annotate, ng_strand, nick_distance = ngRNA_entry
-
-						spacer_gc_content = gc_content(ng_spacer_sequence_edit)
-
-						if ng_spacer_sequence_edit[0].upper() == 'G':
-							spacer_oligo_top = 'cacc' + ng_spacer_sequence_edit
-							spacer_oligo_bottom = 'aaac' + reverse_complement(ng_spacer_sequence_edit)
-
-						else:
-							spacer_oligo_top = 'caccG' + ng_spacer_sequence_edit
-							spacer_oligo_bottom = 'aaac' + reverse_complement('G' + ng_spacer_sequence_edit)
-
-						if filter_homopolymer_ts:
-
-							if 'TTTT' not in ng_spacer_sequence_edit:
-								f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', ''])) + '\n')
-
-						else:
-							f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', ''])) + '\n')
-
-					counter += 1
+						counter += 1
 
 		else:
 		

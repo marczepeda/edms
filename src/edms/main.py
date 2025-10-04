@@ -1571,7 +1571,7 @@ def main():
 
     '''
     Add pe.py
-    - prime_designer(): Execute PrimeDesign saturation mutagenesis for EDMS using Docker (NEED TO BE RUNNING DESKTOP APP)
+    - prime_designer(): Execute PrimeDesign saturation mutagenesis (EDMS version)
     - pilot_screen(): Create pilot screen for EDMS
     - epegRNA_linkers(): Generate epegRNA linkers between PBS and 3' hairpin motif & finish annotations
     - merge(): rejoins epeg/ngRNAs & creates ngRNA_groups
@@ -1583,7 +1583,7 @@ def main():
     parser_pe = subparsers.add_parser("pe", help="Prime Editing", formatter_class=MyFormatter)
     subparsers_pe = parser_pe.add_subparsers()
 
-    parser_pe_prime_designer = subparsers_pe.add_parser("prime_designer", help="Execute PrimeDesign saturation mutagenesis for EDMS", formatter_class=MyFormatter)
+    parser_pe_prime_designer = subparsers_pe.add_parser("prime_designer", help="Execute PrimeDesign saturation mutagenesis (EDMS version)", formatter_class=MyFormatter)
     parser_pe_pilot_screen = subparsers_pe.add_parser("pilot_screen", help="Determine pilot screen for EDMS", formatter_class=MyFormatter)
     parser_pe_epegRNA_linkers = subparsers_pe.add_parser("epegRNA_linkers", help="Generate epegRNA linkers between PBS and 3' hairpin motif", formatter_class=MyFormatter)
     parser_pe_merge = subparsers_pe.add_parser("merge", help="rejoins epeg/ngRNAs & creates ngRNA groups", formatter_class=MyFormatter)
@@ -1608,6 +1608,8 @@ def main():
                         help="Max number of pegRNAs to design (Default: 1)")
     parser_pe_prime_designer.add_argument("--number_of_ngrnas", type=int, default=3,
                         help="Max number of ngRNAs to design (Default: 3)")
+    parser_pe_prime_designer.add_argument("--pe_format", type=str, default="NNNNNNNNNNNNNNNNN/NNN[NGG]",
+                        help="Prime editing formatting including the spacer, cut index -> /, and protospacer adjacent motif (PAM) -> [PAM] (Default: NNNNNNNNNNNNNNNNN/NNN[NGG]). Warning: Changing pe_format prevents silent mutations from being applied.")
     parser_pe_prime_designer.add_argument("--scaffold_sequence", type=str, default="GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC",
                         help="sgRNA scaffold sequence (Default: SpCas9 flip + extend")
     parser_pe_prime_designer.add_argument("--aa_index", type=int, default=1,
