@@ -1682,6 +1682,7 @@ def main():
     parser_pe_pegRNA_outcome.add_argument("--mismatch_score", type=float, help="Mismatch score for pairwise alignment", default=argparse.SUPPRESS)
     parser_pe_pegRNA_outcome.add_argument("--open_gap_score", type=float, help="Open gap score for pairwise alignment", default=argparse.SUPPRESS)
     parser_pe_pegRNA_outcome.add_argument("--extend_gap_score", type=float, help="Extend gap score for pairwise alignment", default=argparse.SUPPRESS)
+    parser_pe_pegRNA_outcome.add_argument("--comments", action='store_true', help="Print comments (Default: False)", default=False)
 
     # pegRNA_signature():
     parser_pe_pegRNA_signature.add_argument("--pegRNAs", type=str, help="Path to pegRNAs file", required=True)

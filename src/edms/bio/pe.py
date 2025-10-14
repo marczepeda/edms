@@ -30,6 +30,7 @@ Usage:
 - sensor_designer(): Design pegRNA sensors
 - rtt_designer(): design all possible RTT for given spacer & PBS (WT, single insertions, & single deletions)
 - pegRNA_outcome(): confirm that pegRNAs should create the predicted edit
+- pegRNA_outcome_fs(): confirm that pegRNAs should create the predicted edit [frameshift WIP]
 - pegRNA_signature(): create signatures for pegRNA outcomes using alignments
 
 [Comparing pegRNA libraries]
@@ -273,8 +274,8 @@ def enzyme_codon_swap(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, 
     # Get new RTT sequences
     new_rtt_ls = []
     for (strand,spacer,scaffold,rtt,pbs,rtt_length,enzyme_fwd_i_ls,enzyme_rc_i_ls) in t.zip_cols(df=pegRNAs,
-                                                                                      cols=['Strand','Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence',
-                                                                                            'RTT_length',f'{enzyme}_fwd_i',f'{enzyme}_rc_i']):
+                                                                                                cols=['Strand','Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence',
+                                                                                                'RTT_length',f'{enzyme}_fwd_i',f'{enzyme}_rc_i']):
         if strand=='+': # Spacer: + strand; PBS & RTT: - strand
             
             # Find spacer in sequence
@@ -576,7 +577,7 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
         in_file = io.get(pt=in_file)
     target_name_in_file = in_file.iloc[0]['target_name']
 
-    if saturation_mutagenesis: # Saturation mutagenesis mode
+    if saturation_mutagenesis is not None: # Saturation mutagenesis mode
 
         # Get PrimeDesign output & seperate pegRNAs and ngRNAs
         primeDesign_output = io.get(pt)
@@ -595,7 +596,7 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
         pegRNAs['AA Number'] = [int(re.findall(r'-?\d+',edit)[0]) if edit is not None else aa_index for edit in pegRNAs['Edit']]
         cols=['pegRNA_number','gRNA_type','Strand','Edit','AA Number', # Important metadata
               'Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence',  # Sequence information
-              'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide'], # Less important metadata
+              'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide'] # Less important metadata
         for pegRNA_col in pegRNAs.columns: # Keep any additional columns in pegRNAs DataFrame
             if pegRNA_col not in cols and pegRNA_col not in ['Spacer_sequence_order_TOP','Spacer_sequence_order_BOTTOM','pegRNA_extension_sequence_order_TOP','pegRNA_extension_sequence_order_BOTTOM']:
                 cols.append(pegRNA_col)
@@ -612,7 +613,7 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
         ngRNAs['AA Number'] = [int(re.findall(r'-?\d+',edit)[0]) if edit is not None else aa_index for edit in ngRNAs['Edit']]
         cols = ['pegRNA_number','ngRNA_number','gRNA_type','Strand','Edit','AA Number', # Important metadata
                 'Spacer_sequence','Scaffold_sequence',  # Sequence information
-                'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Annotation','Nick_index','ngRNA-to-pegRNA_distance'], # Less important metadata
+                'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Annotation','Nick_index','ngRNA-to-pegRNA_distance'] # Less important metadata
         for ngRNA_col in ngRNAs.columns: # Keep any additional columns in ngRNAs DataFrame
             if ngRNA_col not in cols and ngRNA_col not in ['Spacer_sequence_order_TOP','Spacer_sequence_order_BOTTOM','pegRNA_extension_sequence_order_TOP','pegRNA_extension_sequence_order_BOTTOM']:
                 cols.append(ngRNA_col)
@@ -736,7 +737,7 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
 
 def prime_designer(target_name: str, flank5_sequence: str, target_sequence: str, flank3_sequence: str,
                   pbs_length_pooled_ls: list = [11,13,15], rtt_max_length_pooled: int = 50, silent_mutation: bool = True,
-                  number_of_pegrnas: int = 1, number_of_ngrnas: int = 3,
+                  number_of_pegrnas: int = 1, number_of_ngrnas: int = 3, homology_downstream: int = 10,
                   scaffold_sequence: str='GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC', 
                   aa_index: int=1, enzymes: list[str]=['Esp3I'], replace: bool=True):
     '''
@@ -752,6 +753,7 @@ def prime_designer(target_name: str, flank5_sequence: str, target_sequence: str,
     silent_mutation (bool, optional): introduce silent mutation into PAM assuming sequence is in-frame (Default: True)
     number_of_pegrnas (int, optional): maximum number of pegRNAs to design for each input sequence. The pegRNAs are ranked by 1) PAM disrupted > PAM intact then 2) distance to edit. (Default: 1)
     number_of_ngrnas (int, optional): maximum number of ngRNAs to design for each input sequence. The ngRNAs are ranked by 1) PE3b-seed > PE3b-nonseed > PE3 then 2) deviation from nicking_distance_pooled. (Default: 3)
+    homology_downstream (int, optional): for pooled designs (genome_wide or saturation_mutagenesis needs to be indicated), this parameter determines the RT extension length downstream of an edit for pegRNA designs (Default: 10)
     scaffold_sequence (str, optional): sgRNA scaffold sequence (Default: SpCas9 flip + extend = GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC)
         Alternative option for VLPs: SpCas9 flip + extend + com-modified = GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC
     aa_index (int, optional): 1st amino acid in target sequence index (Default: 1)
@@ -771,7 +773,8 @@ def prime_designer(target_name: str, flank5_sequence: str, target_sequence: str,
 
         # Run PrimeDesign in saturation mutatgenesis mode
         prime_design(file=f'{"_".join(target_name.split(" "))}.csv', silent_mutation=silent_mutation, saturation_mutagenesis="aa",
-                     number_of_pegrnas=number_of_pegrnas, number_of_ngrnas=number_of_ngrnas, pbs_length_pooled=pbs_length_pooled, rtt_max_length_pooled=rtt_max_length_pooled)
+                     number_of_pegrnas=number_of_pegrnas, number_of_ngrnas=number_of_ngrnas, pbs_length_pooled=pbs_length_pooled, 
+                     rtt_max_length_pooled=rtt_max_length_pooled, homology_downstream=homology_downstream)
         
         # Obtain pegRNAs and ngRNAs from PrimeDesign output
         pegRNAs[pbs_length_pooled],ngRNAs[pbs_length_pooled] = prime_design_output(
@@ -1581,7 +1584,7 @@ def rtt_designer(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, rtt_l
 
 def pegRNA_outcome(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str,
                    match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, extend_gap_score: float = -0.1,
-                   out_dir: str=None, out_file: str=None, return_df: bool=True, literal_eval: bool=True) -> pd.DataFrame:
+                   out_dir: str=None, out_file: str=None, return_df: bool=True, literal_eval: bool=True, comments: bool=False) -> pd.DataFrame:
     ''' 
     pegRNA_outcome(): confirm that pegRNAs should create the predicted edit
     
@@ -1596,6 +1599,7 @@ def pegRNA_outcome(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str,
     out_file (str, optional): output filename
     return_df (bool, optional): return dataframe (Default: True)
     literal_eval (bool, optional): convert string representations (Default: True)
+    comments (bool, optional): Print comments (Default: False)
     
     Dependencies: Bio, numpy, pandas, fastq, datetime, re, os, memory_timer(), io
     '''
@@ -1779,7 +1783,251 @@ def pegRNA_outcome(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str,
         io.save(dir=out_dir,file=out_file,obj=pegRNAs)
     if return_df==True: return pegRNAs
 
-def pegRNA_signature(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, 
+def pegRNA_outcome_fs(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str,
+                      match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, extend_gap_score: float = -0.1,
+                      out_dir: str=None, out_file: str=None, return_df: bool=True, literal_eval: bool=True, comments: bool=False) -> pd.DataFrame:
+    ''' 
+    pegRNA_outcome_fs(): confirm that pegRNAs should create the predicted edit [frameshift WIP]
+    
+    Parameters:
+    pegRNAs (dataframe | str): pegRNAs DataFrame (or file path)
+    in_file (dataframe | str): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)
+    match_score (float, optional): match score for pairwise alignment (Default: 2)
+    mismatch_score (float, optional): mismatch score for pairwise alignment (Default: -1)
+    open_gap_score (float, optional): open gap score for pairwise alignment (Default: -10)
+    extend_gap_score (float, optional): extend gap score for pairwise alignment (Default: -0.1)
+    out_dir (str, optional): output directory
+    out_file (str, optional): output filename
+    return_df (bool, optional): return dataframe (Default: True)
+    literal_eval (bool, optional): convert string representations (Default: True)
+    comments (bool, optional): Print comments (Default: False)
+    
+    Dependencies: Bio, numpy, pandas, fastq, datetime, re, os, memory_timer(), io
+    '''
+    # Initialize timer; memory reporting
+    memory_timer(reset=True)
+    memories = []
+
+    # Get pegRNAs & PrimeDesign input DataFrame from file path if needed
+    if type(pegRNAs)==str:
+        pegRNAs = io.get(pt=pegRNAs,literal_eval=literal_eval)
+    if type(in_file)==str:
+        in_file = io.get(pt=in_file,literal_eval=literal_eval)
+
+    # Catch all stop codons that are written as "X" instead of "*"
+    pegRNAs['Edit'] = pegRNAs['Edit'].replace('X', '*', regex=True)
+
+   # Get reference sequence & codons (+ reverse complement)
+    target_sequence = in_file.iloc[0]['target_sequence'] 
+    seq = Seq(target_sequence.split('(')[1].split(')')[0]) # Break apart target sequences
+    if len(seq)%3 != 0: raise(ValueError(f"Length of target sequence ({len(seq)}) must divisible by 3. Check input file."))
+    flank5 = Seq(target_sequence.split('(')[0])
+    if len(flank5)%3 != 0: raise(ValueError(f"Length of flank5 ({len(flank5)}) must divisible by 3. Check input file."))
+    flank3 = Seq(target_sequence.split(')')[1])
+    if len(flank3)%3 != 0: raise(ValueError(f"Length of flank3 ({len(flank3)}) must divisible by 3. Check input file."))
+
+    aa_index = in_file.iloc[0]['aa_index']
+
+    f5_seq_f3_nuc = flank5 + seq + flank3  # Join full nucleotide reference sequence
+    rc_f5_seq_f3_nuc = Seq.reverse_complement(f5_seq_f3_nuc) # Full nucleotide reference reverse complement sequence
+    seq_prot = Seq.translate(seq) # In-frame amino acid sequence
+    f5_seq_f3_prot = Seq.translate(f5_seq_f3_nuc) # Full in-frame protein sequence (including flanks)
+    
+    aa_indexes = list(np.arange(aa_index,aa_index+len(seq_prot))) # In-frame amino acid indexes
+    seq_prot_deletions = Seq.translate(seq)+Seq.translate(flank3[:3]) # In-frame amino acid sequence + next AA for deletion names
+    
+    print(f'FWD Ref: {f5_seq_f3_nuc}')
+    print(f'REV Ref: {rc_f5_seq_f3_nuc}')
+    print(f'Nucleotides: {seq}')
+    print(f'Amino Acids: {seq_prot}\n')
+
+    # Get expected edits in the pegRNA library 
+    edits_substitutions=[]
+    edits_insertions=[]
+    edits_deletions=[]
+    for i,aa in enumerate(seq_prot):
+        edits_substitutions.extend([f'{aa}{str(aa_indexes[i])}{aa2}' for aa2 in aa_dna_codon_table if (aa2!='*')&(aa2!=aa)])
+        edits_insertions.extend([f'{aa}{str(aa_indexes[i])}{aa}{aa2}' for aa2 in aa_dna_codon_table if aa2!='*'])
+        edits_deletions.append(f'{aa}{seq_prot_deletions[i+1]}{str(aa_indexes[i])}{seq_prot_deletions[i+1]}')
+    edits_substitutions_set = set(edits_substitutions)
+    edits_insertions_set = set(edits_insertions)
+    edits_deletions_set = set(edits_deletions)
+    
+    print(f'Expected Edits in pegRNA library...\nSubstitutions: {edits_substitutions}\nInsertions: {edits_insertions}\nDeletions: {edits_deletions}')
+    print(f'All substitutions present: {edits_substitutions_set.issubset(set(pegRNAs["Edit"]))}; missing: {edits_substitutions_set-set(pegRNAs["Edit"])}')
+    print(f'All insertions present: {edits_insertions_set.issubset(set(pegRNAs["Edit"]))}; missing: {edits_insertions_set-set(pegRNAs["Edit"])}')
+    print(f'All deletions present: {edits_deletions_set.issubset(set(pegRNAs["Edit"]))}; missing: {edits_deletions_set-set(pegRNAs["Edit"])}\n')
+    
+    # Determine post_RTT_sequences
+    post_RTT_sequences = [] # Store post RTT sequences
+    for (strand,pbs,rtt) in t.zip_cols(df=pegRNAs,cols=['Strand','PBS_sequence','RTT_sequence']): # Iterate through primer binding sites
+
+        if strand=='+': # Spacer: + strand; PBS & RTT: - strand
+
+            # Find reverse complement PBS in sequence
+            rc_pbs = Seq.reverse_complement(Seq(pbs)) # reverse complement of pbs (+ strand)
+            
+            rc_pbs_j = f5_seq_f3_nuc.find(str(rc_pbs))
+            if rc_pbs_j == -1:
+                raise ValueError(f"PBS sequence '{pbs}' not found in target sequence. Please check the input file.")
+            elif rc_pbs_j != f5_seq_f3_nuc.rfind(str(rc_pbs)):
+                print(rc_pbs,rc_pbs_j,rc_f5_seq_f3_nuc.rfind(str(rc_pbs)))
+                raise ValueError(f"Multiple matches found for PBS sequence '{str(rc_pbs)}'. Please check the input file.")
+            
+            # Find the longest 5' & 3' homology of rc_rtt in f5_seq_f3_nuc after rc_pbs
+            rc_rtt = Seq.reverse_complement(Seq(rtt)) # reverse complement of rtt (+ strand)
+            
+            if comments==True: print('i\trc_rtt[:i]\tf5_seq_f3_nuc[rc_pbs_j+len(rc_pbs):].find(rc_rtt[:i])')
+            for i in range(len(rc_rtt)): # Shorten RTT from 5' end until found in f5_seq_f3_nuc
+                if f5_seq_f3_nuc[rc_pbs_j+len(rc_pbs):].find(rc_rtt[:i]) != -1:
+                    if comments==True: print(f"{i}\t{rc_rtt[:i]}\t\t{f5_seq_f3_nuc[rc_pbs_j+len(rc_pbs):].find(rc_rtt[:i])}")
+                    rc_rtt_5_i = i # Save 5' shortened RTT index
+                else:
+                    break
+
+            rc_rtt_3_remaining = rc_rtt[rc_rtt_5_i:]
+            if comments==True: print(f"\nrc_rtt_3_remaining: {rc_rtt_3_remaining}\n")
+
+            rc_rtt_3_i = len(rc_rtt)-1
+            rc_rtt_3_i_on_f5_seq_f3_nuc = -1
+            if comments==True: print('i\trc_rtt_3_remaining[i:]\trc_rtt_3_i_on_f5_seq_f3_nuc_temp\trc_rtt_3_i_on_f5_seq_f3_nuc\tf5_seq_f3_nuc[rc_pbs_j+len(rc_pbs)+rc_rtt_5_i:]')
+            for i in reversed(range(len(rc_rtt_3_remaining))): # Shorten RTT from 3' end until found in f5_seq_f3_nuc
+                rc_rtt_3_i_on_f5_seq_f3_nuc_temp = f5_seq_f3_nuc[rc_pbs_j+len(rc_pbs)+rc_rtt_5_i:].find(rc_rtt_3_remaining[i:])
+                if (rc_rtt_3_i_on_f5_seq_f3_nuc_temp != -1):
+                    if comments==True: print(f"{i}\t{rc_rtt_3_remaining[i:]}\t\t\t{rc_rtt_3_i_on_f5_seq_f3_nuc_temp}\t\t\t\t\t{rc_rtt_3_i_on_f5_seq_f3_nuc}\t\t\t\t{f5_seq_f3_nuc[rc_pbs_j+len(rc_pbs)+rc_rtt_5_i:]}")
+                    rc_rtt_3_i = i # Save 3' shortened RTT index
+                    rc_rtt_3_i_on_f5_seq_f3_nuc = rc_rtt_3_i_on_f5_seq_f3_nuc_temp # Save 3' shortened RTT index on f5_seq_f3_nuc
+                else:
+                    break
+            
+            if comments==True: 
+                print(f"\n5': {f5_seq_f3_nuc[:rc_pbs_j+len(rc_pbs)+rc_rtt_5_i]}")
+                print(f"new: {rc_rtt[rc_rtt_5_i:rc_rtt_5_i+rc_rtt_3_i].upper()}")
+                print(f"3': {f5_seq_f3_nuc[rc_pbs_j+len(rc_pbs)+rc_rtt_5_i+rc_rtt_3_i_on_f5_seq_f3_nuc:][:]}")
+            
+            post_RTT_sequences.append(str(f5_seq_f3_nuc[:rc_pbs_j+len(rc_pbs)+rc_rtt_5_i]+ # WT sequence before RTT 5' homology ends
+                                            rc_rtt[rc_rtt_5_i:rc_rtt_5_i+rc_rtt_3_i].upper()+ # RTT edit part (between 5' & 3' homology)
+                                            f5_seq_f3_nuc[rc_pbs_j+len(rc_pbs)+rc_rtt_5_i+rc_rtt_3_i_on_f5_seq_f3_nuc:][:] # WT sequence after RTT 5' homology ends
+                                            )) # Save post RTT sequence
+
+        elif strand=='-': # Spacer: - strand; PBS & RTT: + strand
+
+            # Find PBS in sequence
+            pbs = Seq(pbs) # pbs (+ strand)
+            
+            pbs_j = f5_seq_f3_nuc.find(str(pbs))
+            if pbs_j == -1:
+                raise ValueError(f"PBS sequence '{pbs}' not found in target sequence. Please check the input file.")
+            elif pbs_j != f5_seq_f3_nuc.rfind(str(pbs)):
+                print(pbs,pbs_j,f5_seq_f3_nuc.rfind(str(pbs)))
+                raise ValueError(f"Multiple matches found for PBS sequence '{pbs}'. Please check the input file.")
+            
+            # Find the longest 5' & 3' homology of rtt in f5_seq_f3_nuc after pbs
+            rtt = Seq(rtt) # rtt (+ strand)
+            
+            rtt_3_i = len(rtt)-1
+            if comments==True: print('i\trtt[i:]\t\tf5_seq_f3_nuc[:pbs_j].rfind(rtt[i:])')
+            for i in reversed(range(len(rtt))): # Extend RTT from 3' end until no longer found in f5_seq_f3_nuc
+                if f5_seq_f3_nuc[:pbs_j].rfind(rtt[i:]) != -1:
+                    if comments==True: print(f"{i}\t{rtt[i:]}\t\t{f5_seq_f3_nuc[:pbs_j].rfind(rtt[i:])}")
+                    rtt_3_i = i # Save 3' shortened RTT index
+                else:
+                    break
+
+            rtt_5_remaining = rtt[:rtt_3_i]
+            if comments==True: print(f"\nrtt_5_remaining: {rtt_5_remaining}\n")
+
+            rtt_5_i = 0
+            rtt_5_i_on_f5_seq_f3_nuc = -1
+            if comments==True: print('i\trtt_5_remaining[:i]\tf5_seq_f3_nuc[:pbs_j+rtt].rfind(rtt_5_remaining[:i+1])')
+            for i in range(len(rtt_5_remaining)): # Shorten RTT from 5' end until found in f5_seq_f3_nuc
+                rtt_5_i_on_f5_seq_f3_nuc_temp = f5_seq_f3_nuc[:pbs_j].rfind(rtt_5_remaining[:i+1])
+                if rtt_5_i_on_f5_seq_f3_nuc_temp != -1:
+                    if comments==True: print(f"{i}\t{rtt_5_remaining[:i+1]}\t\t\t{rtt_5_i_on_f5_seq_f3_nuc_temp}")
+                    rtt_5_i = i+1 # Save 5' shortened RTT index
+                    rtt_5_i_on_f5_seq_f3_nuc = rtt_5_i_on_f5_seq_f3_nuc_temp # Save 5' shortened RTT index on f5_seq_f3_nuc
+                else:
+                    break
+
+            if comments==True: 
+                print(f"\n5': {f5_seq_f3_nuc[:rtt_5_i_on_f5_seq_f3_nuc+rtt_5_i]}")
+                print(f"new: {rtt[rtt_5_i:rtt_3_i].upper()}")
+                print(f"3': {rtt[rtt_3_i:]}{f5_seq_f3_nuc[pbs_j:]}")
+
+            post_RTT_sequences.append(str(f5_seq_f3_nuc[:rtt_5_i_on_f5_seq_f3_nuc+rtt_5_i]+ # WT sequence before RTT 5' homology ends
+                                          rtt[rtt_5_i:rtt_3_i].upper()+ # RTT edit part (between 5' & 3' homology)
+                                          rtt[rtt_3_i:]+f5_seq_f3_nuc[pbs_j:] # WT sequence after RTT 5' homology ends
+                                          )) # Save post RTT sequence
+
+        else: 
+            raise(ValueError('Error: Strand column can only have "+" and "-".'))
+        
+    # Determine edit from post RTT sequences
+    pegRNAs['post_RTT_sequence']=post_RTT_sequences
+    
+    # Check edits & assign multiple edit annotations if needed
+    edit_check = []
+    for post_RTT_sequence in pegRNAs['post_RTT_sequence']:
+        if len(f5_seq_f3_nuc)!=len(post_RTT_sequence): # Indel
+            edit = fq.find_indel(wt=f5_seq_f3_nuc, mut=post_RTT_sequence, res=int(aa_index-len(flank5)/3), show=False, 
+                                 match_score=match_score, mismatch_score=mismatch_score,
+                                 open_gap_score=open_gap_score, extend_gap_score=extend_gap_score)[0]
+            
+            # Check for additional edits
+            aa_number = int(re.findall(r'-?\d+',edit)[0])
+            i = int(aa_number-aa_index+len(flank5)/3)
+            if edit.find(str(aa_number))>len(edit)-edit.find(str(aa_number))-len(str(aa_number)): # Deletion
+                
+                # Look for next AA(s) that match the deleted AA in the edit
+                i_ls = [i]
+                for j,aa_j in enumerate(f5_seq_f3_prot[i+1:]):
+                    if aa_j==edit[0]:
+                        i_ls.append(i+j+1)
+                    else:
+                        break
+                
+                if len(i_ls)>1: # Multiple edit annotations
+                    edits = [f'{f5_seq_f3_prot[i]}{f5_seq_f3_prot[i+1]}{int(i+aa_index-len(flank5)/3)}{f5_seq_f3_prot[i+1]}' for i in i_ls]
+                    edit_check.append(edits)
+                else: # Single edit annotation
+                    edit_check.append(edit)
+
+            else: # Insertion
+                
+                # Look for next AA(s) that match the inserted AA in the edit
+                i_ls = [i]
+                for j,aa_j in enumerate(f5_seq_f3_prot[i+1:]):
+                    if aa_j==edit[-1]:
+                        i_ls.append(i+j+1)
+                    else:
+                        break
+                
+                if len(i_ls)>1: # Multiple edit annotations
+                    edits = [f'{f5_seq_f3_prot[i]}{int(i+aa_index-len(flank5)/3)}{f5_seq_f3_prot[i]}{edit[-1]}' for i in i_ls]
+                    edit_check.append(edits)
+                else: 
+                    edit_check.append(edit)
+            
+        else: # Substitution
+            edit_check.append(fq.find_AA_edits(wt=str(Seq.translate(f5_seq_f3_nuc)), 
+                                               res=int(aa_index-len(flank5)/3), 
+                                               seq=str(Seq.translate(Seq(post_RTT_sequence)))))
+    pegRNAs['Edit_check'] = edit_check
+    
+    # Compare Edit_check with Edit
+    pegRNAs['Edit_check_match'] = [edit_check==edit if isinstance(edit_check,str) else edit in edit_check for (edit_check,edit) in t.zip_cols(df=pegRNAs,cols=['Edit_check','Edit'])]
+    print(f"All pegRNAs passed edit check: {all(pegRNAs['Edit_check_match'])}")
+
+    # Save & Return
+    memories.append(memory_timer(task=f"pegRNA_outcome(): {len(pegRNAs)} out of {len(pegRNAs)}"))
+    if out_dir is not None and out_file is not None:
+        io.save(dir=os.path.join(out_dir,f'.pegRNA_outcome'),
+                file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
+                obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+        io.save(dir=out_dir,file=out_file,obj=pegRNAs)
+    if return_df==True: return pegRNAs
+
+def pegRNA_signature(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, flank_length: int = 21,
                      match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, extend_gap_score: float = -0.1,
                      out_dir: str=None, out_file: str=None, save_alignments: bool=False, return_df: bool=True, literal_eval: bool=True) -> pd.DataFrame:
     ''' 
@@ -1787,6 +2035,7 @@ def pegRNA_signature(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str,
     
     pegRNAs (dataframe | str): pegRNAs DataFrame (or file path)
     in_file (dataframe | str): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence,aa_index (column names required)
+    flank_length (int, optional): length of flanking sequences to include in signature (Default: 21)
     match_score (float, optional): match score for pairwise alignment (Default: 2)
     mismatch_score (float, optional): mismatch score for pairwise alignment (Default: -1)
     open_gap_score (float, optional): open gap score for pairwise alignment (Default: -10)
@@ -1827,13 +2076,27 @@ def pegRNA_signature(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str,
     # Create alignments and Signatures
     start_i = len(flank5)
     end_i = start_i + len(seq)
-    pegRNAs['Alignment'] = [aligner.align(Seq(seq),
-                                          Seq((post_RTT_sequence[start_i:end_i])))[0] for post_RTT_sequence in pegRNAs['post_RTT_sequence']]
-    pegRNAs['Signature'] = [signature_from_alignment(ref_seq=seq,
-                                                     query_seq=post_RTT_sequence[start_i:end_i],
-                                                     alignment=alignment) for alignment,post_RTT_sequence in t.zip_cols(df=pegRNAs, cols=['Alignment', 'post_RTT_sequence'])]
+    pegRNAs['Alignment'] = [aligner.align(Seq(flank5[-flank_length:])+Seq(seq)+Seq(flank3[:flank_length]),
+                                        Seq((post_RTT_sequence[start_i-flank_length:end_i+flank_length])))[0] for post_RTT_sequence in pegRNAs['post_RTT_sequence']]
+    pegRNAs['Signature'] = [signature_from_alignment(ref_seq=flank5[-flank_length:]+seq+flank3[:flank_length],
+                                                    query_seq=post_RTT_sequence[start_i-flank_length:end_i+flank_length],
+                                                    alignment=alignment) for alignment,post_RTT_sequence in t.zip_cols(df=pegRNAs, cols=['Alignment', 'post_RTT_sequence'])]
     if save_alignments==False:
         pegRNAs.drop(columns=['Alignment'],inplace=True)
+
+    # Count # of SNVs, insertions, deletions in Signature
+    snvs_ls = []
+    ins_ls = []
+    dels_ls = []
+    for i,sign in enumerate(pegRNAs['Signature']):
+        
+        snvs_ls.append(len([snv for snv in sign.snvs]))
+        ins_ls.append(sum([len(ind.ins) for ind in sign.indels]))
+        dels_ls.append(sum([ind.dellen for ind in sign.indels]))
+    pegRNAs['SNV_count'] = snvs_ls
+    pegRNAs['ins_count'] = ins_ls
+    pegRNAs['del_count'] = dels_ls
+    pegRNAs['difference_count'] = pegRNAs['SNV_count'] + pegRNAs['ins_count'] + pegRNAs['del_count']
 
     # Save & Return
     memories.append(memory_timer(task=f"pegRNA_signature(): {len(pegRNAs)} out of {len(pegRNAs)}"))

@@ -231,23 +231,36 @@ def signature_from_alignment(alignment, ref_seq: str, query_seq: str) -> Signatu
 
     # compress adjacent identical indel steps into single events
     compressed: Dict[Tuple[int, str, int], Indel] = {}
-    for ind in indels:
-        key = (ind.pos, ind.ins, int(ind.dellen > 0))
-        if key in compressed:
-            prev = compressed[key]
-            if ind.dellen > 0:
-                # extend deletion length if same start
-                if ind.pos == prev.pos:
-                    compressed[key] = Indel(pos=prev.pos, ins="", dellen=prev.dellen + 1)
-                else:
-                    compressed[(ind.pos, ind.ins, 1)] = ind
-            else:
-                # insertion pieces at same position -> concatenate
-                compressed[key] = Indel(pos=prev.pos, ins=prev.ins + ind.ins, dellen=0)
-        else:
-            compressed[key] = ind
-    indels_list = list(compressed.values())
+    for ind in indels: # Iterate through indels to compress contiguous ones
+        key = (ind.pos, ind.ins, int(ind.dellen > 0)) # Tuple key: (start position, inserted sequence, deletion size)
 
+        cond_ins = False # Flag to indicate if found previous insertion with same start position
+        for comp in compressed: # Check if any existing compressed insertion has same start position
+            if key[0] == comp[0]:
+                prev = compressed[comp]
+                cond_ins = True
+                break
+        
+        cond_del = False # Flag to indicate if found previous deletion has adjacent start position
+        for comp in compressed: # Check if any existing compressed deletion has adjacent start position
+            if (key[0]-1 == comp[0]) & (comp[2] > 0) & (key[2] > 0): # If both are deletions and adjacent
+                prev = compressed[comp]
+                cond_del = True
+                break
+
+        if cond_ins: # Found previous insertion with same start position
+            del compressed[comp] # Remove previous indel before replace it
+            compressed[key] = Indel(pos=prev.pos, ins=prev.ins + ind.ins, dellen=0)
+
+        elif cond_del: # Found previous indel with adjacent start position
+            del compressed[comp] # Remove previous indel before replace it
+            compressed[key] = Indel(pos=prev.pos, ins="", dellen=prev.dellen + 1)
+        
+        else: # No previous insertion with same start position nor adjacent deletion found
+            compressed[key] = ind
+    
+    indels_list = list(compressed.values())
+    
     # left-align in repeat contexts for stability
     indels_list = left_align_indels(indels_list, ref_seq)
 
