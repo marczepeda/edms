@@ -429,7 +429,7 @@ def saturating_mutagenesis_input_sequences(target_name, target_sequence, sm_type
 			base_edit_list = [x for x in base_list if x != base_ref.upper()]
 			for base_edit in base_edit_list:
 
-				sm_target_name_list.append('%s_%s_%sto%s' % (target_name, str(base_index), base_ref, base_edit))
+				sm_target_name_list.append('%s_%s_%sto%s' % (target_name, str(base_index+1), base_ref, base_edit))
 				sm_target_sequence_list.append(sequence_left + inner_sequence_left + '(%s/%s)' % (base_ref, base_edit) + inner_sequence_right + sequence_right)
 
 	return(sm_target_name_list, sm_target_sequence_list)
