@@ -60,7 +60,7 @@ parser.add_argument('-filter_c1', '--filter_c1_extension', action='store_true', 
 parser.add_argument('-filter_homopolymer_ts', '--filter_homopolymer_ts', action='store_true', help = '***** Option to filter out spacer sequences with homopolymer Ts (>3). *****\n\n')
 parser.add_argument('-silent_mut', '--silent_mutation', action='store_true', help = '***** Introduce silent mutation into or around the PAM assuming the sequence is in-frame. Currently only available with SpCas9 PE (i.e., pe_format = NNNNNNNNNNNNNNNNN/NNN[NGG]). *****\n\n')
 parser.add_argument('-genome_wide', '--genome_wide_design', action='store_true', help = '***** Whether or not this is a genome-wide pooled design. This option designs a set of pegRNAs per input without ranging PBS and RTT parameters. (Default: False) *****\n\n')
-parser.add_argument('-sat_mut', '--saturation_mutagenesis', default = False, choices = ['aa', 'base'], type = str, help = '***** Saturation mutagenesis design with prime editing. The aa option makes amino acid changes and the base option makes DNA base changes. (Default: False) *****\n\n')
+parser.add_argument('-sat_mut', '--saturation_mutagenesis', default = False, choices = ['aa', 'aa_subs', 'aa_ins', 'aa_dels', 'base'], type = str, help = '***** Saturation mutagenesis design with prime editing. The \'aa\' option makes all amino acid substitutions (\'aa_subs\'),  +1 amino acid insertions (\'aa_ins\'), and -1 amino acid deletions (\'aa_dels\'). The \'base\' option makes DNA base changes. (Default: False) *****\n\n')
 parser.add_argument('-n_pegrnas', '--number_of_pegrnas', default = 3, type = int, help = '***** The maximum number of pegRNAs to design for each input sequence. The pegRNAs are ranked by 1) PAM disrupted > PAM intact then 2) distance to edit. (Default: 3) *****\n\n')
 parser.add_argument('-n_ngrnas', '--number_of_ngrnas', default = 3, type = int, help = '***** The maximum number of ngRNAs to design for each input sequence. The ngRNAs are ranked by 1) PE3b-seed > PE3b-nonseed > PE3 then 2) deviation from nicking_distance_pooled. (Default: 3) *****\n\n')
 parser.add_argument('-nick_dist_pooled', '--nicking_distance_pooled', default = 75, type = int, help = '***** The nicking distance between pegRNAs and ngRNAs for pooled designs. PE3b annotation is priority, followed by nicking distance closest to this parameter. (Default: 75 bp) *****\n\n')
@@ -361,7 +361,7 @@ def saturating_mutagenesis_input_sequences(target_name, target_sequence, sm_type
 	sm_target_sequence_list = []
 	sm_target_name_list = []
 
-	if sm_type == 'aa':
+	if (sm_type == 'aa') | (sm_type == 'aa_subs'): # All Substitutions
 
 		for base_index in range(0, len(sequence_to_edit), 3):
 
@@ -379,8 +379,45 @@ def saturating_mutagenesis_input_sequences(target_name, target_sequence, sm_type
 					codon_edit = aa2codon[aa_edit][0][0]
 					sm_target_name_list.append('%s_%s_%sto%s' % (target_name, str(int(base_index/3 + 1)), aa_ref, aa_edit))
 					sm_target_sequence_list.append(sequence_left + inner_sequence_left + '(%s/%s)' % (codon_ref, codon_edit) + inner_sequence_right + sequence_right)
+	
+	if (sm_type == 'aa') | (sm_type == 'aa_ins'): # All +1 Insertions
+		
+		for base_index in range(0, len(sequence_to_edit), 3):
 
-	elif sm_type == 'base':
+			codon_ref = sequence_to_edit[base_index:base_index + 3]
+
+			if len(codon_ref) == 3:
+
+				aa_ref = codon_dict[codon_ref][1]
+				inner_sequence_left = sequence_to_edit[:base_index]
+				inner_sequence_right = sequence_to_edit[base_index+3:]
+
+				aa_edit_list = [x for x in aa2codon if x != '*']
+				for aa_edit in aa_edit_list:
+
+					codon_edit = aa2codon[aa_edit][0][0]
+					sm_target_name_list.append('%s_%s_%sto%s%s' % (target_name, str(int(base_index/3 + 1)), aa_ref, aa_ref, aa_edit))
+					sm_target_sequence_list.append(sequence_left + inner_sequence_left + codon_ref + '(+%s)' % (codon_edit) + inner_sequence_right + sequence_right)
+	
+	if (sm_type == 'aa') | (sm_type == 'aa_dels'): # All -1 Deletions
+		
+		for base_index in range(0, len(sequence_to_edit), 3):
+
+			codon_ref = sequence_to_edit[base_index:base_index + 3]
+			sequence_to_edit_and_right = sequence_to_edit + sequence_right
+			codon2_ref = sequence_to_edit_and_right[base_index + 3:base_index + 6]
+
+			if len(codon_ref) == 3:
+
+				aa_ref = codon_dict[codon_ref][1]
+				aa2_ref = codon_dict[codon2_ref][1]
+				inner_sequence_left = sequence_to_edit[:base_index]
+				inner_sequence_right = sequence_to_edit[base_index + 3:]
+
+				sm_target_name_list.append('%s_%s_%s%sto%s' % (target_name, str(int(base_index/3 + 1)), aa_ref, aa2_ref, aa2_ref))
+				sm_target_sequence_list.append(sequence_left + inner_sequence_left + '(-%s)' % (codon_ref) + inner_sequence_right + sequence_right)
+
+	if sm_type == 'base': # All Base Substitutions
 
 		base_list = ['A','T','C','G']
 		for base_index in range(len(sequence_to_edit)):
@@ -518,6 +555,16 @@ total_regions = len(target_design.keys())
 
 for target_name in target_design:
 
+	# Store edit type
+	edit_type = ''
+	if "/" in target_design[target_name]['target_sequence']:
+		edit_type += '& substitution'
+	if "+" in target_design[target_name]['target_sequence']:
+		edit_type += '& insertion'
+	if "-" in target_design[target_name]['target_sequence']:
+		edit_type += '& deletion'
+	edit_type = edit_type[2:]
+
 	# pegRNA spacer search for (+) and (-) strands with reference sequence
 	reference_sequence = target_design[target_name]['reference_sequence']
 	find_guides_ref_plus = [[m.start()] for m in re.finditer('(?=%s)' % pe_format_search_plus, reference_sequence, re.IGNORECASE)]
@@ -566,7 +613,7 @@ for target_name in target_design:
 				# Store pegRNA spacer
 				nick_ref_idx = match[0] + cut_idx
 				nick_edit_idx = extension_core_start_idx + cut_idx
-				target_design[target_name]['pegRNA']['+'].append([nick_ref_idx, nick_edit_idx, full_search, spacer_sequence, pam_ref, pam_edit, pe_annotate])
+				target_design[target_name]['pegRNA']['+'].append([nick_ref_idx, nick_edit_idx, full_search, spacer_sequence, pam_ref, pam_edit, pe_annotate, edit_type])
 
 			except:
 				continue
@@ -606,7 +653,7 @@ for target_name in target_design:
 				# Store pegRNA spacer
 				nick_ref_idx = match[0] + (pe_format_length - cut_idx)
 				nick_edit_idx = extension_core_start_idx - downstream_sequence_length + (pe_format_length - cut_idx)
-				target_design[target_name]['pegRNA']['-'].append([nick_ref_idx, nick_edit_idx, full_search, spacer_sequence, pam_ref, pam_edit, pe_annotate])
+				target_design[target_name]['pegRNA']['-'].append([nick_ref_idx, nick_edit_idx, full_search, spacer_sequence, pam_ref, pam_edit, pe_annotate, edit_type])
 
 			except:
 				continue
@@ -710,7 +757,7 @@ for target_name in target_design:
 		# Design pegRNAs targeting the (+) strand
 		for peg_plus in target_design[target_name]['pegRNA']['+']:
 
-			pe_nick_ref_idx, pe_nick_edit_idx, pe_full_search, pe_spacer_sequence, pe_pam_ref, pe_pam_edit, pe_annotate = peg_plus
+			pe_nick_ref_idx, pe_nick_edit_idx, pe_full_search, pe_spacer_sequence, pe_pam_ref, pe_pam_edit, pe_annotate, edit_type = peg_plus
 
 			pe_annotate_constant = pe_annotate
 
@@ -1002,7 +1049,7 @@ for target_name in target_design:
 					else:
 						pe_annotate_code = 3
 
-					pegid = '_'.join(map(str, [str(pe_annotate_code) + '0'*(3 - len(str(abs(nick2lastedit_length)))) + str(abs(nick2lastedit_length)), pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '+']))
+					pegid = '_'.join(map(str, [str(pe_annotate_code) + '0'*(3 - len(str(abs(nick2lastedit_length)))) + str(abs(nick2lastedit_length)), pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '+', edit_type]))
 					
 					# Check to see if pegRNA extension is within input sequence
 					if len(pegRNA_ext) == (pbs_length + rtt_length):
@@ -1014,10 +1061,10 @@ for target_name in target_design:
 							pe_design[target_name][pegid] = [[],[]]
 
 						if pe_pam_ref_silent_mutation == '':
-							pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length])
+							pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length, edit_type])
 
 						else:
-							pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref_silent_mutation, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length])
+							pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref_silent_mutation, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length, edit_type])
 
 					# Create ngRNAs targeting (-) strand for (+) pegRNAs
 					if pegid in pe_design[target_name]:
@@ -1054,7 +1101,7 @@ for target_name in target_design:
 		# Design pegRNAs targeting the (-) strand
 		for peg_minus in target_design[target_name]['pegRNA']['-']:
 
-			pe_nick_ref_idx, pe_nick_edit_idx, pe_full_search, pe_spacer_sequence, pe_pam_ref, pe_pam_edit, pe_annotate = peg_minus
+			pe_nick_ref_idx, pe_nick_edit_idx, pe_full_search, pe_spacer_sequence, pe_pam_ref, pe_pam_edit, pe_annotate, edit_type = peg_minus
 
 			pe_annotate_constant = pe_annotate
 
@@ -1346,7 +1393,7 @@ for target_name in target_design:
 					else:
 						pe_annotate_code = 3
 
-					pegid = '_'.join(map(str, [str(pe_annotate_code) + '0'*(3 - len(str(abs(nick2lastedit_length)))) + str(abs(nick2lastedit_length)), pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '-']))
+					pegid = '_'.join(map(str, [str(pe_annotate_code) + '0'*(3 - len(str(abs(nick2lastedit_length)))) + str(abs(nick2lastedit_length)), pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '-', edit_type]))
 					
 					# Check to see if pegRNA extension is within input sequence
 					if len(pegRNA_ext) == (pbs_length + rtt_length):
@@ -1358,10 +1405,10 @@ for target_name in target_design:
 							pe_design[target_name][pegid] = [[],[]]
 
 						if pe_pam_ref_silent_mutation == '':
-							pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), reverse_complement(pe_pam_ref), pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length])
+							pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), reverse_complement(pe_pam_ref), pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length, edit_type])
 						
 						else:
-							pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), pe_pam_ref_silent_mutation, pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length])
+							pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), pe_pam_ref_silent_mutation, pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length, edit_type])
 
 					# Create ngRNAs targeting (+) strand for (-) pegRNAs
 					if pegid in pe_design[target_name]:
@@ -1408,8 +1455,8 @@ for target_name in target_design:
 		# Design pegRNAs targeting the (+) strand
 		for peg_plus in target_design[target_name]['pegRNA']['+']:
 
-			pe_nick_ref_idx, pe_nick_edit_idx, pe_full_search, pe_spacer_sequence, pe_pam_ref, pe_pam_edit, pe_annotate = peg_plus
-			pegid = '_'.join(map(str, [pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '+']))
+			pe_nick_ref_idx, pe_nick_edit_idx, pe_full_search, pe_spacer_sequence, pe_pam_ref, pe_pam_edit, pe_annotate, edit_type = peg_plus
+			pegid = '_'.join(map(str, [pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '+', edit_type]))
 
 			pe_annotate_constant = pe_annotate
 
@@ -1692,10 +1739,10 @@ for target_name in target_design:
 									pe_design[target_name][pegid] = [[],[]]
 
 								if pe_pam_ref_silent_mutation == '':
-									pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length])
+									pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type])
 
 								else:
-									pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref_silent_mutation, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length])
+									pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref_silent_mutation, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type])
 
 				# Create ngRNAs targeting (-) strand for (+) pegRNAs
 				if pegid in pe_design[target_name]:
@@ -1722,8 +1769,8 @@ for target_name in target_design:
 		# Design pegRNAs targeting the (-) strand
 		for peg_minus in target_design[target_name]['pegRNA']['-']:
 
-			pe_nick_ref_idx, pe_nick_edit_idx, pe_full_search, pe_spacer_sequence, pe_pam_ref, pe_pam_edit, pe_annotate = peg_minus
-			pegid = '_'.join(map(str, [pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '-']))
+			pe_nick_ref_idx, pe_nick_edit_idx, pe_full_search, pe_spacer_sequence, pe_pam_ref, pe_pam_edit, pe_annotate, edit_type = peg_minus
+			pegid = '_'.join(map(str, [pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '-', edit_type]))
 
 			pe_annotate_constant = pe_annotate
 
@@ -2003,10 +2050,10 @@ for target_name in target_design:
 									pe_design[target_name][pegid] = [[],[]]
 
 								if pe_pam_ref_silent_mutation == '':
-									pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), reverse_complement(pe_pam_ref), pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length])
+									pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), reverse_complement(pe_pam_ref), pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type])
 								
 								else:
-									pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), pe_pam_ref_silent_mutation, pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length])
+									pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), pe_pam_ref_silent_mutation, pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type])
 
 				# Create ngRNAs targeting (+) strand for (-) pegRNAs
 				if pegid in pe_design[target_name]:
@@ -2042,8 +2089,8 @@ logger.info('Writing pegRNA and ngRNA designs into output file %s ...' % pegRNAs
 
 counter = 1
 with open(out_dir + '/%s' % pegRNAs_summary_f, 'w') as f:
-	
-	f.write(','.join(map(str, ['Target_name', 'Target_sequence', 'pegRNA_number', 'gRNA_type', 'Spacer_sequence', 'Spacer_GC_content', 'PAM_sequence', 'Extension_sequence', 'Strand', 'Annotation', 'pegRNA-to-edit_distance', 'Nick_index', 'ngRNA-to-pegRNA_distance', 'PBS_length', 'PBS_GC_content', 'RTT_length', 'RTT_GC_content', 'First_extension_nucleotide', 'Spacer_sequence_order_TOP', 'Spacer_sequence_order_BOTTOM', 'pegRNA_extension_sequence_order_TOP', 'pegRNA_extension_sequence_order_BOTTOM'])) + '\n')
+
+	f.write(','.join(map(str, ['Target_name', 'Target_sequence', 'pegRNA_number', 'gRNA_type', 'Spacer_sequence', 'Spacer_GC_content', 'PAM_sequence', 'Extension_sequence', 'Strand', 'Annotation', 'pegRNA-to-edit_distance', 'Nick_index', 'ngRNA-to-pegRNA_distance', 'PBS_length', 'PBS_GC_content', 'RTT_length', 'RTT_GC_content', 'First_extension_nucleotide', 'Spacer_sequence_order_TOP', 'Spacer_sequence_order_BOTTOM', 'pegRNA_extension_sequence_order_TOP', 'pegRNA_extension_sequence_order_BOTTOM', 'Edit Type'])) + '\n')
 	for target_name in pe_design:
 
 		if genome_wide_design or saturation_mutagenesis:
@@ -2057,7 +2104,7 @@ with open(out_dir + '/%s' % pegRNAs_summary_f, 'w') as f:
 
 					# Write pegRNAs
 					for pegRNA_entry in pe_design[target_name][pegid][0]:
-						pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, pe_strand, pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length = pegRNA_entry
+						pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, pe_strand, pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length, edit_type = pegRNA_entry
 
 						pegRNA_ext_first_base = pegRNA_ext[0]
 						spacer_gc_content = gc_content(pe_spacer_sequence)
@@ -2095,7 +2142,7 @@ with open(out_dir + '/%s' % pegRNAs_summary_f, 'w') as f:
 								if filter_homopolymer_ts:
 
 									if 'TTTT' not in pe_spacer_sequence:
-										f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom])) + '\n')
+										f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom, edit_type])) + '\n')
 										peg_count += 1
 
 									else:
@@ -2103,7 +2150,7 @@ with open(out_dir + '/%s' % pegRNAs_summary_f, 'w') as f:
 
 								else:
 
-									f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom])) + '\n')
+									f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom, edit_type])) + '\n')
 									peg_count += 1
 
 						else:
@@ -2122,7 +2169,7 @@ with open(out_dir + '/%s' % pegRNAs_summary_f, 'w') as f:
 							if filter_homopolymer_ts:
 
 								if 'TTTT' not in pe_spacer_sequence:
-									f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom])) + '\n')
+									f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom, edit_type])) + '\n')
 									peg_count += 1
 									
 								else:
@@ -2130,7 +2177,7 @@ with open(out_dir + '/%s' % pegRNAs_summary_f, 'w') as f:
 
 							else:
 
-								f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom])) + '\n')
+								f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom, edit_type])) + '\n')
 								peg_count += 1
 
 						# Write ngRNAs
@@ -2151,10 +2198,10 @@ with open(out_dir + '/%s' % pegRNAs_summary_f, 'w') as f:
 								if filter_homopolymer_ts:
 
 									if 'TTTT' not in ng_spacer_sequence_edit:
-										f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', ''])) + '\n')
+										f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', '', ''])) + '\n')
 
 								else:
-									f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', ''])) + '\n')
+									f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', '', ''])) + '\n')
 
 						counter += 1
 
@@ -2167,7 +2214,7 @@ with open(out_dir + '/%s' % pegRNAs_summary_f, 'w') as f:
 
 					# Write pegRNAs
 					for pegRNA_entry in pe_design[target_name][pegid][0]:
-						pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, pe_strand, pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length = pegRNA_entry
+						pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, pe_strand, pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length, edit_type = pegRNA_entry
 
 						pegRNA_ext_first_base = pegRNA_ext[0]
 						spacer_gc_content = gc_content(pe_spacer_sequence)
@@ -2188,11 +2235,11 @@ with open(out_dir + '/%s' % pegRNAs_summary_f, 'w') as f:
 						if filter_homopolymer_ts:
 
 							if 'TTTT' not in pe_spacer_sequence:
-								f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom])) + '\n')
+								f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom, edit_type])) + '\n')
 
 						else:
 
-							f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom])) + '\n')
+							f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom, edit_type])) + '\n')
 
 						# Sort ngRNAs
 
@@ -2213,10 +2260,10 @@ with open(out_dir + '/%s' % pegRNAs_summary_f, 'w') as f:
 							if filter_homopolymer_ts:
 
 								if 'TTTT' not in ng_spacer_sequence_edit:
-									f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', ''])) + '\n')
+									f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', '', ''])) + '\n')
 
 							else:
-								f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', ''])) + '\n')
+								f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', '', ''])) + '\n')
 
 						counter += 1
 
@@ -2228,7 +2275,7 @@ with open(out_dir + '/%s' % pegRNAs_summary_f, 'w') as f:
 
 				# Write pegRNAs
 				for pegRNA_entry in pe_design[target_name][pegid][0]:
-					pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, pe_strand, pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length = pegRNA_entry
+					pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, pe_strand, pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type = pegRNA_entry
 
 					pegRNA_ext_first_base = pegRNA_ext[0]
 					spacer_gc_content = gc_content(pe_spacer_sequence)
@@ -2249,14 +2296,14 @@ with open(out_dir + '/%s' % pegRNAs_summary_f, 'w') as f:
 					if filter_homopolymer_ts:
 
 						if 'TTTT' not in pe_spacer_sequence:
-							f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom])) + '\n')
+							f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom, edit_type])) + '\n')
 
 						else:
 							ng_continue = False
 
 					else:
 
-						f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom])) + '\n')
+						f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom, edit_type])) + '\n')
 
 				# Write ngRNAs
 				if ng_continue:
@@ -2276,10 +2323,10 @@ with open(out_dir + '/%s' % pegRNAs_summary_f, 'w') as f:
 						if filter_homopolymer_ts:
 
 							if 'TTTT' not in ng_spacer_sequence_edit:
-								f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', ''])) + '\n')
+								f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', '', ''])) + '\n')
 
 						else:
 
-							f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', ''])) + '\n')
+							f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', '', ''])) + '\n')
 
 				counter += 1
