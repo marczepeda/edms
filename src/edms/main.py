@@ -1447,7 +1447,7 @@ def main():
     
     parser_fastq_count_signatures_group = parser_fastq_count_signatures.add_mutually_exclusive_group(required=True)
     parser_fastq_count_signatures_group.add_argument("--target_sequence", help="[Required (Option 1)] Target sequence; retrieved from input file if not provided")
-    parser_fastq_count_signatures_group.add_argument("--in_file", help="[Required (Option 2)] Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence,aa_index (column names required)")
+    parser_fastq_count_signatures_group.add_argument("--in_file", help="[Required (Option 2)] Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence,index (column names required)")
     
     parser_fastq_count_signatures.add_argument("--df_motif5", help="5' motif file path", default=argparse.SUPPRESS)
     parser_fastq_count_signatures.add_argument("--df_motif3", help="3' motif file path", default=argparse.SUPPRESS)
@@ -1595,7 +1595,9 @@ def main():
     parser_pe_prime_designer.add_argument("--flank5", type=str, dest='flank5_sequence', help="5' flank sequence (in-frame, length divisible by 3)", required=True)
     parser_pe_prime_designer.add_argument("--target", type=str, dest='target_sequence', help="Target sequence (in-frame, length divisible by 3)", required=True)
     parser_pe_prime_designer.add_argument("--flank3", type=str, dest='flank3_sequence', help="3' flank sequence (in-frame, length divisible by 3)", required=True)
-
+    
+    parser_pe_prime_designer.add_argument("--index", type=int, default=1,
+                        help="Index of 1st amino acid or base in target sequence (Default: 1)")
     parser_pe_prime_designer.add_argument("--saturation_mutagenesis", type=str, choices=['aa', 'aa_subs', 'aa_ins', 'aa_dels', 'base'], help="Saturation mutagenesis design with prime editing. The 'aa' option makes all amino acid substitutions ('aa_subs'),  +1 amino acid insertions ('aa_ins'), and -1 amino acid deletions ('aa_dels'). The 'base' option makes DNA base changes.", default='aa')
     parser_pe_prime_designer.add_argument("--pbs_lengths", type=int, dest='pbs_length_pooled_ls', nargs="+", default=[11,13,15],
                         help="List of PBS lengths (Default: 11,13,15)")
@@ -1611,8 +1613,6 @@ def main():
                         help="Prime editing formatting including the spacer, cut index -> /, and protospacer adjacent motif (PAM) -> [PAM] (Default: NNNNNNNNNNNNNNNNN/NNN[NGG]). Warning: Changing pe_format prevents silent mutations from being applied.")
     parser_pe_prime_designer.add_argument("--scaffold_sequence", type=str, default="GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC",
                         help="sgRNA scaffold sequence (Default: SpCas9 flip + extend")
-    parser_pe_prime_designer.add_argument("--aa_index", type=int, default=1,
-                        help="Index of 1st amino acid in target sequence (Default: 1)")
     parser_pe_prime_designer.add_argument("--enzymes", type=str, nargs="+", help="list of type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to check for in pegRNAs and ngRNAs (Default: ['Esp3I'])", default=['Esp3I'])
     parser_pe_prime_designer.add_argument("--dont_replace", action='store_false',dest='replace', help="Do not replace pegRNAs and remove ngRNAs with RE enzyme sites", default=True)
 
@@ -1649,7 +1649,7 @@ def main():
 
     # sensor_designer():
     parser_pe_sensor_designer.add_argument("--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
-    parser_pe_sensor_designer.add_argument("--in_file", type=str, help="Path to PrimeDesign input file (required columns: target_name, target_sequence, aa_index)", required=True)
+    parser_pe_sensor_designer.add_argument("--in_file", type=str, help="Path to PrimeDesign input file (required columns: target_name, target_sequence, index)", required=True)
 
     parser_pe_sensor_designer.add_argument("--sensor_length", type=int, default=60, help="Total length of the sensor in bp (Default: 60)")
     parser_pe_sensor_designer.add_argument("--before_spacer", type=int, default=5, help="Amount of nucleotide context to put before the protospacer in the sensor (Default = 5)")
@@ -1660,7 +1660,7 @@ def main():
 
     # pegRNA_outcome():
     parser_pe_pegRNA_outcome.add_argument("--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
-    parser_pe_pegRNA_outcome.add_argument("--in_file", type=str, help="Path to PrimeDesign input file (required columns: target_name, target_sequence, aa_index)", required=True)
+    parser_pe_pegRNA_outcome.add_argument("--in_file", type=str, help="Path to PrimeDesign input file (required columns: target_name, target_sequence, index)", required=True)
 
     parser_pe_pegRNA_outcome.add_argument("--out_dir", type=str, help="Output directory (Default: ../pegRNA_outcome)", default='../pegRNA_outcome')
     parser_pe_pegRNA_outcome.add_argument("--out_file", type=str, help="Name of the output file (Default: pegRNAs.csv)", default='pegRNAs.csv')
@@ -1674,8 +1674,9 @@ def main():
 
     # pegRNA_signature():
     parser_pe_pegRNA_signature.add_argument("--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
-    parser_pe_pegRNA_signature.add_argument("--in_file", type=str, help="Path to PrimeDesign input file (required columns: target_name, target_sequence, aa_index)", required=True)
-
+    parser_pe_pegRNA_signature.add_argument("--in_file", type=str, help="Path to PrimeDesign input file (required columns: target_name, target_sequence, index)", required=True)
+    
+    parser_pe_pegRNA_signature.add_argument("--post_RTT_sequence", type=str, help="Column name for post RTT sequences (Default: 'post_RTT_sequence'). Change to 'Edit_sequence' if pegRNA_outcome was skipped.", default='Post_RTT_sequence')
     parser_pe_pegRNA_signature.add_argument("--out_dir", type=str, help="Output directory (Default: ../pegRNA_signature)", default='../pegRNA_signature')
     parser_pe_pegRNA_signature.add_argument("--out_file", type=str, help="Name of the output file (Default: pegRNAs.csv)", default='pegRNAs.csv')
     parser_pe_pegRNA_signature.add_argument("--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)

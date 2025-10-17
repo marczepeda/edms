@@ -473,7 +473,7 @@ def enzyme_codon_swap(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, 
 # PrimeDesign
 def prime_design_input(target_name: str, flank5_sequence: str, 
                      target_sequence: str, flank3_sequence: str,
-                     aa_index: int=1,
+                     index: int=1,
                      dir: str='.', file: str='prime_design_input.csv'):
     ''' 
     prime_design_input(): creates and checks PrimeDesign saturation mutagenesis input file
@@ -483,7 +483,7 @@ def prime_design_input(target_name: str, flank5_sequence: str,
     flank5_sequence: in-frame nucleotide sequence with 5' of saturation mutagensis region (length must be divisible by 3)
     target_sequence (str): in-frame nucleotide sequence for the saturation mutagensis region (length must be divisible by 3)
     flank3_sequence: in-frame nucleotide sequence with 3' of saturation mutagensis region (length must be divisible by 3)
-    aa_index (int, optional): 1st amino acid in target sequence index (Default: 1)
+    index (int, optional): 1st amino acid or base in target sequence index (Default: 1)
     dir (str, optional): name of the output directory 
     file (str, optional): name of the output file
     
@@ -501,7 +501,7 @@ def prime_design_input(target_name: str, flank5_sequence: str,
             file=file,
             obj=pd.DataFrame({'target_name': [target_name],
                               'target_sequence': [f"{flank5_sequence}({target_sequence}){flank3_sequence}"],
-                              'aa_index': [aa_index]}))
+                              'index': [index]}))
 
 def prime_design(file: str, pe_format: str = 'NNNNNNNNNNNNNNNNN/NNN[NGG]', pbs_length_list: list = [], rtt_length_list: list = [], 
                 nicking_distance_minimum: int = 0,nicking_distance_maximum: int = 100, filter_c1_extension: bool = False, silent_mutation: bool = False,
@@ -556,7 +556,7 @@ def prime_design(file: str, pe_format: str = 'NNNNNNNNNNNNNNNNN/NNN[NGG]', pbs_l
     os.system(cmd) # Execute PrimeDesign Command Line
 
 def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame | str, saturation_mutagenesis:str=None, 
-                        aa_index: int=1, enzymes: list[str]=['Esp3I'], replace: bool=True) -> dict[pd.DataFrame]:
+                        index: int=1, enzymes: list[str]=['Esp3I'], replace: bool=True) -> dict[pd.DataFrame]:
     ''' 
     prime_design_output(): splits peg/ngRNAs from PrimeDesign output & finishes annotations
     
@@ -567,7 +567,7 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
         SpCas9 flip + extend + com-modified (required for VLPs): GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC
     in_file (Dataframe | str): input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)
     saturation_mutagenesis (str, optional): saturation mutagenesis design with prime editing (Options: 'aa', 'aa_subs', 'aa_ins', 'aa_dels', 'base'). The 'aa' option makes all amino acid substitutions ('aa_subs'),  +1 amino acid insertions ('aa_ins'), and -1 amino acid deletions ('aa_dels'). The 'base' option makes DNA base changes. (Default: 'aa')
-    aa_index (int, optional): 1st amino acid in target sequence index (Default: 1)
+    index (int, optional): 1st amino acid or base in target sequence index (Default: 1)
     enzymes (list, optional): list of type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to check for in pegRNAs and ngRNAs (Default: ['Esp3I'])
     replace (bool, optional): replace pegRNAs and remove ngRNAs with RE enzyme sites (Default: True if saturation_mutagenesis is not None)
     
@@ -587,7 +587,7 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
 
         # Generate pegRNAs
         pegRNAs['Edit']=[str(target_name.split('_')[-1].split('to')[0]) + # AA Before
-                        str(int(target_name.split('_')[-2]) + aa_index-1) + # AA Index
+                        str(int(target_name.split('_')[-2]) + index-1) + # AA Index
                         str(target_name.split('_')[-1].split('to')[1]) # AA After
                         for target_name in pegRNAs['Target_name']]
         pegRNAs['Target_name']=[target_name_in_file]*len(pegRNAs)
@@ -595,15 +595,15 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
         pegRNAs['RTT_sequence']=[pegRNAs.iloc[i]['Extension_sequence'][0:int(pegRNAs.iloc[i]['RTT_length'])] for i in range(len(pegRNAs))]
         pegRNAs['PBS_sequence']=[pegRNAs.iloc[i]['Extension_sequence'][int(pegRNAs.iloc[i]['RTT_length']):].upper()  for i in range(len(pegRNAs))]
         if 'aa' in saturation_mutagenesis: 
-            pegRNAs['AA Number'] = [int(re.findall(r'-?\d+',edit)[0]) if edit is not None else aa_index for edit in pegRNAs['Edit']]
-            cols=['pegRNA_number','gRNA_type','Strand','Edit','AA Number','Edit Type', # Important metadata
+            pegRNAs['AA_number'] = [int(re.findall(r'-?\d+',edit)[0]) if edit is not None else index for edit in pegRNAs['Edit']]
+            cols=['pegRNA_number','gRNA_type','Strand','Edit','AA_number','Edit_type', # Important metadata
                 'Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence',  # Sequence information
-                'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide'] # Less important metadata
+                'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide','Reference_sequence', 'Edit_sequence'] # Less important metadata
         else: 
-            pegRNAs['Base Number'] = [int(re.findall(r'-?\d+',edit)[0]) if edit is not None else aa_index for edit in pegRNAs['Edit']]
-            cols=['pegRNA_number','gRNA_type','Strand','Edit','Base Number','Edit Type', # Important metadata
+            pegRNAs['Base_number'] = [int(re.findall(r'-?\d+',edit)[0]) if edit is not None else index for edit in pegRNAs['Edit']]
+            cols=['pegRNA_number','gRNA_type','Strand','Edit','Base_number','Edit_type', # Important metadata
                 'Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence',  # Sequence information
-                'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide'] # Less important metadata
+                'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide','Reference_sequence', 'Edit_sequence'] # Less important metadata
         for pegRNA_col in pegRNAs.columns: # Keep any additional columns in pegRNAs DataFrame
             if pegRNA_col not in cols and pegRNA_col not in ['ngRNA-to-pegRNA_distance','Spacer_sequence_order_TOP','Spacer_sequence_order_BOTTOM','pegRNA_extension_sequence_order_TOP','pegRNA_extension_sequence_order_BOTTOM']:
                 cols.append(pegRNA_col)
@@ -611,22 +611,22 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
         
         # Generate ngRNAs
         ngRNAs['Edit']=[str(target_name.split('_')[-1].split('to')[0]) + # AA Before
-                        str(int(target_name.split('_')[-2]) + aa_index-1) + # AA Index
+                        str(int(target_name.split('_')[-2]) + index-1) + # AA Index
                         str(target_name.split('_')[-1].split('to')[1]) # AA After
                         for target_name in ngRNAs['Target_name']]
         ngRNAs['Target_name']=[target_name_in_file]*len(ngRNAs)
         ngRNAs['Scaffold_sequence']=[scaffold_sequence]*len(ngRNAs)
         ngRNAs['ngRNA_number']=list(np.arange(1,len(ngRNAs)+1))
         if 'aa' in saturation_mutagenesis: 
-            ngRNAs['AA Number'] = [int(re.findall(r'-?\d+',edit)[0]) if edit is not None else aa_index for edit in ngRNAs['Edit']]
-            cols = ['pegRNA_number','ngRNA_number','gRNA_type','Strand','Edit','AA Number', # Important metadata
+            ngRNAs['AA_number'] = [int(re.findall(r'-?\d+',edit)[0]) if edit is not None else index for edit in ngRNAs['Edit']]
+            cols = ['pegRNA_number','ngRNA_number','gRNA_type','Strand','Edit','AA_number', # Important metadata
                 'Spacer_sequence','Scaffold_sequence',  # Sequence information
-                'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Annotation','Nick_index','ngRNA-to-pegRNA_distance'] # Less important metadata
+                'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Annotation','Nick_index','ngRNA-to-pegRNA_distance','Reference_sequence', 'Edit_sequence'] # Less important metadata
         else: 
-            ngRNAs['Base Number'] = [int(re.findall(r'-?\d+',edit)[0]) if edit is not None else aa_index for edit in ngRNAs['Edit']]
-            cols = ['pegRNA_number','ngRNA_number','gRNA_type','Strand','Edit','Base Number', # Important metadata
+            ngRNAs['Base_number'] = [int(re.findall(r'-?\d+',edit)[0]) if edit is not None else index for edit in ngRNAs['Edit']]
+            cols = ['pegRNA_number','ngRNA_number','gRNA_type','Strand','Edit','Base_number', # Important metadata
                 'Spacer_sequence','Scaffold_sequence',  # Sequence information
-                'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Annotation','Nick_index','ngRNA-to-pegRNA_distance'] # Less important metadata
+                'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Annotation','Nick_index','ngRNA-to-pegRNA_distance','Reference_sequence', 'Edit_sequence'] # Less important metadata
         
         for ngRNA_col in ngRNAs.columns: # Keep any additional columns in ngRNAs DataFrame
             if ngRNA_col not in cols and ngRNA_col not in ['Spacer_sequence_order_TOP','Spacer_sequence_order_BOTTOM','pegRNA_extension_sequence_order_TOP','pegRNA_extension_sequence_order_BOTTOM']:
@@ -645,9 +645,9 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
         pegRNAs['RTT_sequence']=[pegRNAs.iloc[i]['Extension_sequence'][0:int(pegRNAs.iloc[i]['RTT_length'])] for i in range(len(pegRNAs))]
         pegRNAs['PBS_sequence']=[pegRNAs.iloc[i]['Extension_sequence'][int(pegRNAs.iloc[i]['RTT_length']):].upper()  for i in range(len(pegRNAs))]
         pegRNAs['Target_name']=[target_name_in_file]*len(pegRNAs)
-        cols = ['Target_name','pegRNA_number','gRNA_type','Strand','Edit Type', # Important metadata
+        cols = ['Target_name','pegRNA_number','gRNA_type','Strand','Edit_type', # Important metadata
                 'Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence',  # Sequence information
-                'Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide'] # Less important metadata
+                'Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide','Reference_sequence', 'Edit_sequence'] # Less important metadata
         for pegRNA_col in pegRNAs.columns: # Keep any additional columns in pegRNAs DataFrame
             if pegRNA_col not in cols and pegRNA_col not in ['ngRNA-to-pegRNA_distance','Spacer_sequence_order_TOP','Spacer_sequence_order_BOTTOM','pegRNA_extension_sequence_order_TOP','pegRNA_extension_sequence_order_BOTTOM']:
                 cols.append(pegRNA_col)
@@ -659,7 +659,7 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
         ngRNAs['ngRNA_number']=list(np.arange(1,len(ngRNAs)+1))
         cols = ['Target_name','ngRNA_number','gRNA_type','Strand', # Important metadata
                 'Spacer_sequence','Scaffold_sequence',  # Sequence information
-                'Target_sequence','Spacer_GC_content','PAM_sequence','Annotation','Nick_index','ngRNA-to-pegRNA_distance'] # Less important metadata
+                'Target_sequence','Spacer_GC_content','PAM_sequence','Annotation','Nick_index','ngRNA-to-pegRNA_distance','Reference_sequence', 'Edit_sequence'] # Less important metadata
         for ngRNA_col in ngRNAs.columns: # Keep any additional columns in ngRNAs DataFrame
             if ngRNA_col not in cols and ngRNA_col not in ['Spacer_sequence_order_TOP','Spacer_sequence_order_BOTTOM','pegRNA_extension_sequence_order_TOP','pegRNA_extension_sequence_order_BOTTOM']:
                 cols.append(ngRNA_col)
@@ -749,11 +749,11 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
 
     return pegRNAs,ngRNAs
 
-def prime_designer(target_name: str, flank5_sequence: str, target_sequence: str, flank3_sequence: str, saturation_mutagenesis: str = 'aa',
+def prime_designer(target_name: str, flank5_sequence: str, target_sequence: str, flank3_sequence: str, index: int=1, saturation_mutagenesis: str = 'aa',
                 pbs_length_pooled_ls: list = [11,13,15], rtt_max_length_pooled: int = 50, silent_mutation: bool = True,
                 number_of_pegrnas: int = 1, number_of_ngrnas: int = 3, homology_downstream: int = 10, pe_format: str = 'NNNNNNNNNNNNNNNNN/NNN[NGG]',
                 scaffold_sequence: str='GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC', 
-                aa_index: int=1, enzymes: list[str]=['Esp3I'], replace: bool=True):
+                enzymes: list[str]=['Esp3I'], replace: bool=True):
     '''
     prime_designer(): execute PrimeDesign saturation mutagenesis (EDMS version)
     
@@ -762,6 +762,7 @@ def prime_designer(target_name: str, flank5_sequence: str, target_sequence: str,
     flank5_sequence (str): in-frame nucleotide sequence with 5' of saturation mutagensis region (length must be divisible by 3)
     target_sequence (str): in-frame nucleotide sequence for the saturation mutagensis region (length must be divisible by 3)
     flank3_sequence (str): in-frame nucleotide sequence with 3' of saturation mutagensis region (length must be divisible by 3)
+    index (int, optional): 1st amino acid or base in target sequence index (Default: 1)
     saturation_mutagenesis (str, optional): saturation mutagenesis design with prime editing (Options: 'aa', 'aa_subs', 'aa_ins', 'aa_dels', 'base'). The 'aa' option makes all amino acid substitutions ('aa_subs'),  +1 amino acid insertions ('aa_ins'), and -1 amino acid deletions ('aa_dels'). The 'base' option makes DNA base changes. (Default: 'aa')
     pbs_length_pooled_ls (list, optional): list of primer binding site (PBS) lengths for the pegRNA extension (Default: [11,13,15])
     rtt_max_length_pooled (int, optional): maximum RTT length to design pegRNAs for pooled design applications. (Default: 50 nt)
@@ -772,7 +773,6 @@ def prime_designer(target_name: str, flank5_sequence: str, target_sequence: str,
     pe_format (str, optional): Prime editing formatting including the spacer, cut index -> /, and protospacer adjacent motif (PAM) -> [PAM] (Default: NNNNNNNNNNNNNNNNN/NNN[NGG])
     scaffold_sequence (str, optional): sgRNA scaffold sequence (Default: SpCas9 flip + extend = GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC)
         Alternative option for VLPs: SpCas9 flip + extend + com-modified = GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC
-    aa_index (int, optional): 1st amino acid in target sequence index (Default: 1)
     enzymes (list, optional): list of type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to check for in pegRNAs and ngRNAs (Default: ['Esp3I'])
     replace (bool, optional): replace pegRNAs and remove ngRNAs with RE sites (Default: True)
 
@@ -780,7 +780,7 @@ def prime_designer(target_name: str, flank5_sequence: str, target_sequence: str,
     '''
     # Create PrimeDesign input file
     prime_design_input(target_name=target_name, flank5_sequence=flank5_sequence, target_sequence=target_sequence, 
-                    flank3_sequence=flank3_sequence, aa_index=aa_index, dir='.', file=f'{"_".join(target_name.split(" "))}.csv')
+                    flank3_sequence=flank3_sequence, index=index, dir='.', file=f'{"_".join(target_name.split(" "))}.csv')
 
     # Iterate through PBS lengths
     pegRNAs=dict()
@@ -796,7 +796,7 @@ def prime_designer(target_name: str, flank5_sequence: str, target_sequence: str,
         pegRNAs[pbs_length_pooled],ngRNAs[pbs_length_pooled] = prime_design_output(
             pt=sorted([file for file in io.relative_paths('.') if "PrimeDesign.csv" in file], reverse= True)[0], 
             scaffold_sequence=scaffold_sequence, in_file=f'./{"_".join(target_name.split(" "))}.csv', 
-            saturation_mutagenesis=saturation_mutagenesis, aa_index=aa_index, enzymes=enzymes, replace=replace)
+            saturation_mutagenesis=saturation_mutagenesis, index=index, enzymes=enzymes, replace=replace)
     
     # Save pegRNAs and ngRNAs
     io.save_dir(dir='../pegRNAs', suf='.csv', dc=pegRNAs)
@@ -1158,7 +1158,7 @@ def pegRNA_outcome(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str,
     
     Parameters:
     pegRNAs (dataframe | str): pegRNAs DataFrame (or file path)
-    in_file (dataframe | str): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)
+    in_file (dataframe | str): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence,index (column names required)
     match_score (float, optional): match score for pairwise alignment (Default: 2)
     mismatch_score (float, optional): mismatch score for pairwise alignment (Default: -1)
     open_gap_score (float, optional): open gap score for pairwise alignment (Default: -10)
@@ -1193,14 +1193,14 @@ def pegRNA_outcome(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str,
     flank3 = Seq(target_sequence.split(')')[1])
     if len(flank3)%3 != 0: raise(ValueError(f"Length of flank3 ({len(flank3)}) must divisible by 3. Check input file."))
 
-    aa_index = in_file.iloc[0]['aa_index']
+    index = in_file.iloc[0]['index']
 
     f5_seq_f3_nuc = flank5 + seq + flank3  # Join full nucleotide reference sequence
     rc_f5_seq_f3_nuc = Seq.reverse_complement(f5_seq_f3_nuc) # Full nucleotide reference reverse complement sequence
     seq_prot = Seq.translate(seq) # In-frame amino acid sequence
     f5_seq_f3_prot = Seq.translate(f5_seq_f3_nuc) # Full in-frame protein sequence (including flanks)
     
-    aa_indexes = list(np.arange(aa_index,aa_index+len(seq_prot))) # In-frame amino acid indexes
+    indexes = list(np.arange(index,index+len(seq_prot))) # In-frame amino acid indexes
     seq_prot_deletions = Seq.translate(seq)+Seq.translate(flank3[:3]) # In-frame amino acid sequence + next AA for deletion names
     
     print(f'FWD Ref: {f5_seq_f3_nuc}')
@@ -1213,9 +1213,9 @@ def pegRNA_outcome(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str,
     edits_insertions=[]
     edits_deletions=[]
     for i,aa in enumerate(seq_prot):
-        edits_substitutions.extend([f'{aa}{str(aa_indexes[i])}{aa2}' for aa2 in aa_dna_codon_table if (aa2!='*')&(aa2!=aa)])
-        edits_insertions.extend([f'{aa}{str(aa_indexes[i])}{aa}{aa2}' for aa2 in aa_dna_codon_table if aa2!='*'])
-        edits_deletions.append(f'{aa}{seq_prot_deletions[i+1]}{str(aa_indexes[i])}{seq_prot_deletions[i+1]}')
+        edits_substitutions.extend([f'{aa}{str(indexes[i])}{aa2}' for aa2 in aa_dna_codon_table if (aa2!='*')&(aa2!=aa)])
+        edits_insertions.extend([f'{aa}{str(indexes[i])}{aa}{aa2}' for aa2 in aa_dna_codon_table if aa2!='*'])
+        edits_deletions.append(f'{aa}{seq_prot_deletions[i+1]}{str(indexes[i])}{seq_prot_deletions[i+1]}')
     edits_substitutions_set = set(edits_substitutions)
     edits_insertions_set = set(edits_insertions)
     edits_deletions_set = set(edits_deletions)
@@ -1227,7 +1227,7 @@ def pegRNA_outcome(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str,
 
     # Determine post_RTT_sequences
     post_RTT_sequences = [] # Store post RTT sequences
-    for (strand,pbs,rtt,edit,aa_number) in t.zip_cols(df=pegRNAs,cols=['Strand','PBS_sequence','RTT_sequence','Edit','AA Number']): # Iterate through primer binding sites
+    for (strand,pbs,rtt,edit,aa_number) in t.zip_cols(df=pegRNAs,cols=['Strand','PBS_sequence','RTT_sequence','Edit','AA_number']): # Iterate through primer binding sites
 
         if strand=='+': # Spacer: + strand; PBS & RTT: - strand
 
@@ -1287,19 +1287,19 @@ def pegRNA_outcome(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str,
             raise(ValueError('Error: Strand column can only have "+" and "-".'))
         
     # Determine edit from post RTT sequences
-    pegRNAs['post_RTT_sequence']=post_RTT_sequences
+    pegRNAs['Post_RTT_sequence']=post_RTT_sequences
     
     # Check edits & assign multiple edit annotations if needed
     edit_check = []
-    for post_RTT_sequence in pegRNAs['post_RTT_sequence']:
+    for post_RTT_sequence in pegRNAs['Post_RTT_sequence']:
         if len(f5_seq_f3_nuc)!=len(post_RTT_sequence): # Indel
-            edit = fq.find_indel(wt=f5_seq_f3_nuc, mut=post_RTT_sequence, res=int(aa_index-len(flank5)/3), show=False, 
+            edit = fq.find_indel(wt=f5_seq_f3_nuc, mut=post_RTT_sequence, res=int(index-len(flank5)/3), show=False, 
                                  match_score=match_score, mismatch_score=mismatch_score,
                                  open_gap_score=open_gap_score, extend_gap_score=extend_gap_score)[0]
             
             # Check for additional edits
             aa_number = int(re.findall(r'-?\d+',edit)[0])
-            i = int(aa_number-aa_index+len(flank5)/3)
+            i = int(aa_number-index+len(flank5)/3)
             if edit.find(str(aa_number))>len(edit)-edit.find(str(aa_number))-len(str(aa_number)): # Deletion
                 
                 # Look for next AA(s) that match the deleted AA in the edit
@@ -1311,7 +1311,7 @@ def pegRNA_outcome(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str,
                         break
                 
                 if len(i_ls)>1: # Multiple edit annotations
-                    edits = [f'{f5_seq_f3_prot[i]}{f5_seq_f3_prot[i+1]}{int(i+aa_index-len(flank5)/3)}{f5_seq_f3_prot[i+1]}' for i in i_ls]
+                    edits = [f'{f5_seq_f3_prot[i]}{f5_seq_f3_prot[i+1]}{int(i+index-len(flank5)/3)}{f5_seq_f3_prot[i+1]}' for i in i_ls]
                     edit_check.append(edits)
                 else: # Single edit annotation
                     edit_check.append(edit)
@@ -1327,14 +1327,14 @@ def pegRNA_outcome(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str,
                         break
                 
                 if len(i_ls)>1: # Multiple edit annotations
-                    edits = [f'{f5_seq_f3_prot[i]}{int(i+aa_index-len(flank5)/3)}{f5_seq_f3_prot[i]}{edit[-1]}' for i in i_ls]
+                    edits = [f'{f5_seq_f3_prot[i]}{int(i+index-len(flank5)/3)}{f5_seq_f3_prot[i]}{edit[-1]}' for i in i_ls]
                     edit_check.append(edits)
                 else: 
                     edit_check.append(edit)
             
         else: # Substitution
             edit_check.append(fq.find_AA_edits(wt=str(Seq.translate(f5_seq_f3_nuc)), 
-                                               res=int(aa_index-len(flank5)/3), 
+                                               res=int(index-len(flank5)/3), 
                                                seq=str(Seq.translate(Seq(post_RTT_sequence)))))
     pegRNAs['Edit_check'] = edit_check
     
@@ -1394,14 +1394,14 @@ def pegRNA_outcome_fs(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str,
     flank3 = Seq(target_sequence.split(')')[1])
     if len(flank3)%3 != 0: raise(ValueError(f"Length of flank3 ({len(flank3)}) must divisible by 3. Check input file."))
 
-    aa_index = in_file.iloc[0]['aa_index']
+    index = in_file.iloc[0]['index']
 
     f5_seq_f3_nuc = flank5 + seq + flank3  # Join full nucleotide reference sequence
     rc_f5_seq_f3_nuc = Seq.reverse_complement(f5_seq_f3_nuc) # Full nucleotide reference reverse complement sequence
     seq_prot = Seq.translate(seq) # In-frame amino acid sequence
     f5_seq_f3_prot = Seq.translate(f5_seq_f3_nuc) # Full in-frame protein sequence (including flanks)
     
-    aa_indexes = list(np.arange(aa_index,aa_index+len(seq_prot))) # In-frame amino acid indexes
+    indexes = list(np.arange(index,index+len(seq_prot))) # In-frame amino acid indexes
     seq_prot_deletions = Seq.translate(seq)+Seq.translate(flank3[:3]) # In-frame amino acid sequence + next AA for deletion names
     
     print(f'FWD Ref: {f5_seq_f3_nuc}')
@@ -1414,9 +1414,9 @@ def pegRNA_outcome_fs(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str,
     edits_insertions=[]
     edits_deletions=[]
     for i,aa in enumerate(seq_prot):
-        edits_substitutions.extend([f'{aa}{str(aa_indexes[i])}{aa2}' for aa2 in aa_dna_codon_table if (aa2!='*')&(aa2!=aa)])
-        edits_insertions.extend([f'{aa}{str(aa_indexes[i])}{aa}{aa2}' for aa2 in aa_dna_codon_table if aa2!='*'])
-        edits_deletions.append(f'{aa}{seq_prot_deletions[i+1]}{str(aa_indexes[i])}{seq_prot_deletions[i+1]}')
+        edits_substitutions.extend([f'{aa}{str(indexes[i])}{aa2}' for aa2 in aa_dna_codon_table if (aa2!='*')&(aa2!=aa)])
+        edits_insertions.extend([f'{aa}{str(indexes[i])}{aa}{aa2}' for aa2 in aa_dna_codon_table if aa2!='*'])
+        edits_deletions.append(f'{aa}{seq_prot_deletions[i+1]}{str(indexes[i])}{seq_prot_deletions[i+1]}')
     edits_substitutions_set = set(edits_substitutions)
     edits_insertions_set = set(edits_insertions)
     edits_deletions_set = set(edits_deletions)
@@ -1531,19 +1531,19 @@ def pegRNA_outcome_fs(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str,
             raise(ValueError('Error: Strand column can only have "+" and "-".'))
         
     # Determine edit from post RTT sequences
-    pegRNAs['post_RTT_sequence']=post_RTT_sequences
+    pegRNAs['Post_RTT_sequence']=post_RTT_sequences
     
     # Check edits & assign multiple edit annotations if needed
     edit_check = []
-    for post_RTT_sequence in pegRNAs['post_RTT_sequence']:
+    for post_RTT_sequence in pegRNAs['Post_RTT_sequence']:
         if len(f5_seq_f3_nuc)!=len(post_RTT_sequence): # Indel
-            edit = fq.find_indel(wt=f5_seq_f3_nuc, mut=post_RTT_sequence, res=int(aa_index-len(flank5)/3), show=False, 
+            edit = fq.find_indel(wt=f5_seq_f3_nuc, mut=post_RTT_sequence, res=int(index-len(flank5)/3), show=False, 
                                  match_score=match_score, mismatch_score=mismatch_score,
                                  open_gap_score=open_gap_score, extend_gap_score=extend_gap_score)[0]
             
             # Check for additional edits
             aa_number = int(re.findall(r'-?\d+',edit)[0])
-            i = int(aa_number-aa_index+len(flank5)/3)
+            i = int(aa_number-index+len(flank5)/3)
             if edit.find(str(aa_number))>len(edit)-edit.find(str(aa_number))-len(str(aa_number)): # Deletion
                 
                 # Look for next AA(s) that match the deleted AA in the edit
@@ -1555,7 +1555,7 @@ def pegRNA_outcome_fs(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str,
                         break
                 
                 if len(i_ls)>1: # Multiple edit annotations
-                    edits = [f'{f5_seq_f3_prot[i]}{f5_seq_f3_prot[i+1]}{int(i+aa_index-len(flank5)/3)}{f5_seq_f3_prot[i+1]}' for i in i_ls]
+                    edits = [f'{f5_seq_f3_prot[i]}{f5_seq_f3_prot[i+1]}{int(i+index-len(flank5)/3)}{f5_seq_f3_prot[i+1]}' for i in i_ls]
                     edit_check.append(edits)
                 else: # Single edit annotation
                     edit_check.append(edit)
@@ -1571,14 +1571,14 @@ def pegRNA_outcome_fs(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str,
                         break
                 
                 if len(i_ls)>1: # Multiple edit annotations
-                    edits = [f'{f5_seq_f3_prot[i]}{int(i+aa_index-len(flank5)/3)}{f5_seq_f3_prot[i]}{edit[-1]}' for i in i_ls]
+                    edits = [f'{f5_seq_f3_prot[i]}{int(i+index-len(flank5)/3)}{f5_seq_f3_prot[i]}{edit[-1]}' for i in i_ls]
                     edit_check.append(edits)
                 else: 
                     edit_check.append(edit)
             
         else: # Substitution
             edit_check.append(fq.find_AA_edits(wt=str(Seq.translate(f5_seq_f3_nuc)), 
-                                               res=int(aa_index-len(flank5)/3), 
+                                               res=int(index-len(flank5)/3), 
                                                seq=str(Seq.translate(Seq(post_RTT_sequence)))))
     pegRNAs['Edit_check'] = edit_check
     
@@ -1595,15 +1595,16 @@ def pegRNA_outcome_fs(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str,
         io.save(dir=out_dir,file=out_file,obj=pegRNAs)
     if return_df==True: return pegRNAs
 
-def pegRNA_signature(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, flank_length: int = 21,
+def pegRNA_signature(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, flank_length: int = 21, post_RTT_sequence: str='Post_RTT_sequence',
                      match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, extend_gap_score: float = -0.1,
                      out_dir: str=None, out_file: str=None, save_alignments: bool=False, return_df: bool=True, literal_eval: bool=True) -> pd.DataFrame:
     ''' 
     pegRNA_signature(): create signatures for pegRNA outcomes using alignments
     
     pegRNAs (dataframe | str): pegRNAs DataFrame (or file path)
-    in_file (dataframe | str): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence,aa_index (column names required)
+    in_file (dataframe | str): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence,index (column names required)
     flank_length (int, optional): length of flanking sequences to include in signature (Default: 21)
+    post_RTT_sequence (str, optional): column name for post RTT sequences (Default: 'Post_RTT_sequence'). Change to 'Edit_sequence' if pegRNA_outcome was skipped.
     match_score (float, optional): match score for pairwise alignment (Default: 2)
     mismatch_score (float, optional): mismatch score for pairwise alignment (Default: -1)
     open_gap_score (float, optional): open gap score for pairwise alignment (Default: -10)
@@ -1645,10 +1646,10 @@ def pegRNA_signature(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, f
     start_i = len(flank5)
     end_i = start_i + len(seq)
     pegRNAs['Alignment'] = [aligner.align(Seq(flank5[-flank_length:])+Seq(seq)+Seq(flank3[:flank_length]),
-                                        Seq((post_RTT_sequence[start_i-flank_length:end_i+flank_length])))[0] for post_RTT_sequence in pegRNAs['post_RTT_sequence']]
+                                        Seq((post_RTT_seq[start_i-flank_length:end_i+flank_length])))[0] for post_RTT_seq in pegRNAs[post_RTT_sequence]]
     pegRNAs['Signature'] = [signature_from_alignment(ref_seq=flank5[-flank_length:]+seq+flank3[:flank_length],
-                                                    query_seq=post_RTT_sequence[start_i-flank_length:end_i+flank_length],
-                                                    alignment=alignment) for alignment,post_RTT_sequence in t.zip_cols(df=pegRNAs, cols=['Alignment', 'post_RTT_sequence'])]
+                                                    query_seq=post_RTT_seq[start_i-flank_length:end_i+flank_length],
+                                                    alignment=alignment) for alignment,post_RTT_seq in t.zip_cols(df=pegRNAs, cols=['Alignment', post_RTT_sequence])]
     if save_alignments==False:
         pegRNAs.drop(columns=['Alignment'],inplace=True)
 
