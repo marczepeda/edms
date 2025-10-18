@@ -64,7 +64,7 @@ parser.add_argument('-sat_mut', '--saturation_mutagenesis', default = False, cho
 parser.add_argument('-n_pegrnas', '--number_of_pegrnas', default = 3, type = int, help = '***** The maximum number of pegRNAs to design for each input sequence. The pegRNAs are ranked by 1) PAM disrupted > PAM intact then 2) distance to edit. (Default: 3) *****\n\n')
 parser.add_argument('-n_ngrnas', '--number_of_ngrnas', default = 3, type = int, help = '***** The maximum number of ngRNAs to design for each input sequence. The ngRNAs are ranked by 1) PE3b-seed > PE3b-nonseed > PE3 then 2) deviation from nicking_distance_pooled. (Default: 3) *****\n\n')
 parser.add_argument('-nick_dist_pooled', '--nicking_distance_pooled', default = 75, type = int, help = '***** The nicking distance between pegRNAs and ngRNAs for pooled designs. PE3b annotation is priority, followed by nicking distance closest to this parameter. (Default: 75 bp) *****\n\n')
-parser.add_argument('-homology_downstream', '--homology_downstream', default = 10, type = int, help = '***** For pooled designs (genome_wide or saturation_mutagenesis needs to be indicated), this parameter determines the RT extension length downstream of an edit for pegRNA designs. (Default: 10) *****\n\n')
+parser.add_argument('-homology_downstream', '--homology_downstream', default = 10, type = int, help = '***** This parameter determines the minimum RT extension length downstream of an edit for pegRNA designs. (Default: 10) *****\n\n')
 parser.add_argument('-pbs_pooled', '--pbs_length_pooled', type = int, default = 14, help = '***** The PBS length to design pegRNAs for pooled design applications. (Default: 14 nt) *****\n\n')
 parser.add_argument('-rtt_pooled', '--rtt_max_length_pooled', type = int, default = 50, help = '***** The maximum RTT length to design pegRNAs for pooled design applications. (Default: 50 nt) *****\n\n')
 
@@ -1470,7 +1470,7 @@ for target_name in target_design:
 
 					# See if RT length can reach entire edit
 					nick2lastedit_length = nick2edit_length + edit_span_length_w_edit
-					if nick2lastedit_length < rtt_length:
+					if nick2lastedit_length + homology_downstream < rtt_length:
 
 						# Loop through PBS lengths
 						for pbs_length in pbs_length_list:
@@ -1784,7 +1784,7 @@ for target_name in target_design:
 
 					# See if RT length can reach entire edit
 					nick2lastedit_length = nick2edit_length + edit_span_length_w_edit
-					if nick2lastedit_length < rtt_length:
+					if nick2lastedit_length + homology_downstream < rtt_length:
 
 						# Loop through PBS lengths
 						for pbs_length in pbs_length_list:

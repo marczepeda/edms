@@ -29,6 +29,7 @@ Usage:
 '''
 # Import packages
 from __future__ import annotations # NEEDS TO BE FIRST LINE
+from cgitb import text
 import json, os, sys
 from pathlib import Path
 import argparse
@@ -535,17 +536,25 @@ def main():
     # Custom formatter for rich help messages
     class MyFormatter(RichHelpFormatter):
         styles = {
-            "argparse.prog": "green", # program name
-            "argparse.args": "cyan", # positional arguments
-            "argparse.option": "", # ?
+            "argparse.prog": "green",           # program name
+            "argparse.args": "cyan",            # positional arguments
+            "argparse.option": "",              # options like --flag
             "argparse.metavar": "dark_magenta", # meta variable (actual function argument name)
-            "argparse.help": "blue", # help text
-            "argparse.text": "green", # normal text in help message
-            "argparse.groups": "red", # group titles
-            "argparse.description": "",
-            "argparse.epilog": "", # ... -h
-            "argparse.syntax": "white", # []
+            "argparse.help": "blue",            # help text
+            "argparse.text": "green",           # normal text in help message
+            "argparse.groups": "red",           # group titles
+            "argparse.description": "",         # description at the top
+            "argparse.epilog": "",              # ... -h; epilog at the bottom
+            "argparse.syntax": "white",         # []
         }
+        
+        def _split_lines(self, text, width):
+            """Render help text as block (preserve line breaks and indentation)."""
+            return text.splitlines()
+        
+        def _fill_text(self, text, width, indent):
+            """Preserve newlines/indentation for description/epilog"""
+            return "\n".join(line if line.strip() else "" for line in text.splitlines())
 
     # Add parser and subparsers
     parser = argparse.ArgumentParser(prog="edms", description="Endogenous Deep Mutational Scans (EDMS)", formatter_class=MyFormatter)
@@ -555,14 +564,14 @@ def main():
     edms.utils:
     - run_bundled_script(): Run a bundled script from the package script resources.
     '''
-    subparsers.add_parser("autocomplete", help="Enable edms autocomplete") # Run autocomplete script (args.command == "autocomplete")
+    subparsers.add_parser("autocomplete", help="Enable edms autocomplete", description="Enable edms autocomplete") # Run autocomplete script (args.command == "autocomplete")
 
     '''
     edms.config:
     - get_info: Retrieve information based on id
     - set_info: Set information based on id
     '''
-    parser_config = subparsers.add_parser("config", help="Configuration", formatter_class=MyFormatter)
+    parser_config = subparsers.add_parser("config", help="Configuration", description="Configuration", formatter_class=MyFormatter)
     subparsers_config = parser_config.add_subparsers()
 
     # get_info(): Retrieve information based on id
@@ -590,56 +599,56 @@ def main():
     - stack(): creates stacked bar plot
     - vol(): creates volcano plot
     '''
-    parser_plot = subparsers.add_parser("plot", help="Generate scatter, category, distribution, heatmap, stacked bar, and volcano plots", formatter_class=MyFormatter)
+    parser_plot = subparsers.add_parser("plot", help="Generate scatter, category, distribution, heatmap, stacked bar, and volcano plots", description="Generate scatter, category, distribution, heatmap, stacked bar, and volcano plots", formatter_class=MyFormatter)
     subparsers_plot = parser_plot.add_subparsers(dest="typ")
 
     # scat(): Creates scatter plot related graphs (scat, line, line_scat)
-    parser_plot_type_scat = subparsers_plot.add_parser("scat", help="Create scatter plot", formatter_class=MyFormatter)
-    parser_plot_type_line = subparsers_plot.add_parser("line", help="Create line plot", formatter_class=MyFormatter)
-    parser_plot_type_line_scat = subparsers_plot.add_parser("line_scat", help="Create scatter + line plot", formatter_class=MyFormatter)
+    parser_plot_type_scat = subparsers_plot.add_parser("scat", help="Create scatter plot", description="Create scatter plot", formatter_class=MyFormatter)
+    parser_plot_type_line = subparsers_plot.add_parser("line", help="Create line plot", description="Create line plot", formatter_class=MyFormatter)
+    parser_plot_type_line_scat = subparsers_plot.add_parser("line_scat", help="Create scatter + line plot", description="Create scatter + line plot", formatter_class=MyFormatter)
 
     for parser_plot_scat in [parser_plot_type_scat, parser_plot_type_line, parser_plot_type_line_scat]:
         add_common_plot_scat_args(parser_plot_scat)
         parser_plot_scat.set_defaults(func=p.scat)
 
     # cat(): Creates category dependent graphs (bar, box, violin, swarm, strip, point, count, bar_swarm, box_swarm, violin_swarm)
-    parser_plot_type_bar = subparsers_plot.add_parser("bar", help="Create bar plot", formatter_class=MyFormatter)
-    parser_plot_type_box = subparsers_plot.add_parser("box", help="Create box plot", formatter_class=MyFormatter)
-    parser_plot_type_violin = subparsers_plot.add_parser("violin", help="Create violin plot", formatter_class=MyFormatter)
-    parser_plot_type_swarm = subparsers_plot.add_parser("swarm", help="Create swarm plot", formatter_class=MyFormatter)
-    parser_plot_type_strip = subparsers_plot.add_parser("strip", help="Create strip plot", formatter_class=MyFormatter)
-    parser_plot_type_point = subparsers_plot.add_parser("point", help="Create point plot", formatter_class=MyFormatter)
-    parser_plot_type_count = subparsers_plot.add_parser("count", help="Create count plot", formatter_class=MyFormatter)
-    parser_plot_type_bar_swarm = subparsers_plot.add_parser("bar_swarm", help="Create bar + swarm plot", formatter_class=MyFormatter)
-    parser_plot_type_box_swarm = subparsers_plot.add_parser("box_swarm", help="Create box + swarm plot", formatter_class=MyFormatter)
-    parser_plot_type_violin_swarm = subparsers_plot.add_parser("violin_swarm", help="Create violin + swarm plot", formatter_class=MyFormatter)
+    parser_plot_type_bar = subparsers_plot.add_parser("bar", help="Create bar plot", description="Create bar plot", formatter_class=MyFormatter)
+    parser_plot_type_box = subparsers_plot.add_parser("box", help="Create box plot", description="Create box plot", formatter_class=MyFormatter)
+    parser_plot_type_violin = subparsers_plot.add_parser("violin", help="Create violin plot", description="Create violin plot", formatter_class=MyFormatter)
+    parser_plot_type_swarm = subparsers_plot.add_parser("swarm", help="Create swarm plot", description="Create swarm plot", formatter_class=MyFormatter)
+    parser_plot_type_strip = subparsers_plot.add_parser("strip", help="Create strip plot", description="Create strip plot", formatter_class=MyFormatter)
+    parser_plot_type_point = subparsers_plot.add_parser("point", help="Create point plot", description="Create point plot", formatter_class=MyFormatter)
+    parser_plot_type_count = subparsers_plot.add_parser("count", help="Create count plot", description="Create count plot", formatter_class=MyFormatter)
+    parser_plot_type_bar_swarm = subparsers_plot.add_parser("bar_swarm", help="Create bar + swarm plot", description="Create bar + swarm plot", formatter_class=MyFormatter)
+    parser_plot_type_box_swarm = subparsers_plot.add_parser("box_swarm", help="Create box + swarm plot", description="Create box + swarm plot", formatter_class=MyFormatter)
+    parser_plot_type_violin_swarm = subparsers_plot.add_parser("violin_swarm", help="Create violin + swarm plot", description="Create violin + swarm plot", formatter_class=MyFormatter)
 
     for parser_plot_cat in [parser_plot_type_bar, parser_plot_type_box, parser_plot_type_violin, parser_plot_type_swarm, parser_plot_type_strip, parser_plot_type_point, parser_plot_type_count, parser_plot_type_bar_swarm, parser_plot_type_box_swarm, parser_plot_type_violin_swarm]:
         add_common_plot_cat_args(parser_plot_cat)
         parser_plot_cat.set_defaults(func=p.cat)
 
     # dist(): Creates distribution graphs (hist, kde, hist_kde, rid)
-    parser_plot_type_hist = subparsers_plot.add_parser("hist", help="Create histogram plot", formatter_class=MyFormatter)
-    parser_plot_type_kde = subparsers_plot.add_parser("kde", help="Create density plot", formatter_class=MyFormatter)
-    parser_plot_type_hist_kde = subparsers_plot.add_parser("hist_kde", help="Create histogram + density plot", formatter_class=MyFormatter)
-    parser_plot_type_rid = subparsers_plot.add_parser("rid", help="Create ridge plot", formatter_class=MyFormatter)
+    parser_plot_type_hist = subparsers_plot.add_parser("hist", help="Create histogram plot", description="Create histogram plot", formatter_class=MyFormatter)
+    parser_plot_type_kde = subparsers_plot.add_parser("kde", help="Create density plot", description="Create density plot", formatter_class=MyFormatter)
+    parser_plot_type_hist_kde = subparsers_plot.add_parser("hist_kde", help="Create histogram + density plot", description="Create histogram + density plot", formatter_class=MyFormatter)
+    parser_plot_type_rid = subparsers_plot.add_parser("rid", help="Create ridge plot", description="Create ridge plot", formatter_class=MyFormatter)
 
     for parser_plot_dist in [parser_plot_type_hist, parser_plot_type_kde, parser_plot_type_hist_kde, parser_plot_type_rid]:
         add_common_plot_dist_args(parser_plot_dist)
         parser_plot_cat.set_defaults(func=p.dist)
 
     # heat(): Creates heatmap graphs
-    parser_plot_type_heat = subparsers_plot.add_parser("heat", help="Create heatmap plot", formatter_class=MyFormatter)
+    parser_plot_type_heat = subparsers_plot.add_parser("heat", help="Create heatmap plot", description="Create heatmap plot", formatter_class=MyFormatter)
     add_common_plot_heat_args(parser_plot_type_heat)
     parser_plot_type_heat.set_defaults(func=p.heat)
     
     # stack(): Creates stacked bar plot
-    parser_plot_type_stack = subparsers_plot.add_parser("stack", help="Create stacked bar plot", formatter_class=MyFormatter)
+    parser_plot_type_stack = subparsers_plot.add_parser("stack", help="Create stacked bar plot", description="Create stacked bar plot", formatter_class=MyFormatter)
     add_common_plot_stack_args(parser_plot_type_stack)
     parser_plot_type_stack.set_defaults(func=p.stack)
 
     # vol(): Creates volcano plot
-    parser_plot_type_vol = subparsers_plot.add_parser("vol", help="Create volcano plot", formatter_class=MyFormatter)
+    parser_plot_type_vol = subparsers_plot.add_parser("vol", help="Create volcano plot", description="Create volcano plot", formatter_class=MyFormatter)
     add_common_plot_vol_args(parser_plot_type_vol)
     parser_plot_type_vol.set_defaults(func=p.vol)
 
@@ -650,11 +659,11 @@ def main():
     - correlation(): returns a correlation matrix
     - compare(): computes FC, pval, and log transformations relative to a specified condition
     '''
-    parser_stat = subparsers.add_parser("stat", help="Statistics", formatter_class=MyFormatter)
+    parser_stat = subparsers.add_parser("stat", help="Statistics", description="Statistics", formatter_class=MyFormatter)
     subparsers_stat = parser_stat.add_subparsers()
     
     # describe(): returns descriptive statistics for numerical columns in a DataFrame
-    parser_stat_describe = subparsers_stat.add_parser("describe", help="Compute descriptive statistics", formatter_class=MyFormatter)
+    parser_stat_describe = subparsers_stat.add_parser("describe", help="Compute descriptive statistics", description="Compute descriptive statistics", formatter_class=MyFormatter)
 
     parser_stat_describe.add_argument("--df", type=str, help="Input file path", required=True)
 
@@ -667,7 +676,7 @@ def main():
     parser_stat_describe.set_defaults(func=st.describe)
 
     # difference(): computes the appropriate statistical test(s) and returns the p-value(s)
-    parser_stat_difference = subparsers_stat.add_parser("difference", help="Compute statistical difference between groups", formatter_class=MyFormatter)
+    parser_stat_difference = subparsers_stat.add_parser("difference", help="Compute statistical difference between groups", description="Compute statistical difference between groups", formatter_class=MyFormatter)
 
     parser_stat_difference.add_argument("--df", type=str, help="Input file path",required=True)
     parser_stat_difference.add_argument("--data_col", type=str, help="Name of column containing numerical data",required=True)
@@ -686,7 +695,7 @@ def main():
     parser_stat_difference.set_defaults(func=st.difference)
 
     # correlation(): returns a correlation matrix
-    parser_stat_correlation = subparsers_stat.add_parser("correlation", help="Compute correlation matrix", formatter_class=MyFormatter)
+    parser_stat_correlation = subparsers_stat.add_parser("correlation", help="Compute correlation matrix", description="Compute correlation matrix", formatter_class=MyFormatter)
 
     parser_stat_correlation.add_argument("--df", type=str, help="Input file path",required=True)
 
@@ -702,7 +711,7 @@ def main():
     parser_stat_correlation.set_defaults(func=st.correlation)
 
     # compare(): computes FC, pval, and log transformations relative to a specified condition
-    parser_stat_compare = subparsers_stat.add_parser("compare", help="Compare conditions using FC, p-values, and log transforms", formatter_class=MyFormatter)
+    parser_stat_compare = subparsers_stat.add_parser("compare", help="Compare conditions using FC, p-values, and log transforms", description="Compare conditions using FC, p-values, and log transforms", formatter_class=MyFormatter)
 
     parser_stat_compare.add_argument("--df", type=str, help="Input file path",required=True)
     parser_stat_compare.add_argument("--sample", type=str, help="Sample column name",required=True)
@@ -729,12 +738,12 @@ def main():
     subparsers_io = parser_io.add_subparsers()
     
     # Create subparsers for commands
-    parser_io_in_subs = subparsers_io.add_parser("in_subs", help="*No FASRC* Moves all files with a given suffix into subfolders named after the files (excluding the suffix)", formatter_class=MyFormatter)
-    parser_io_out_subs = subparsers_io.add_parser("out_subs", help="*No FASRC* Delete subdirectories and move their files to the parent directory", formatter_class=MyFormatter)
-    parser_io_create_sh = subparsers_io.add_parser("create_sh", help='Generate SLURM shell script for Harvard FASRC cluster.', formatter_class=MyFormatter)
-    parser_io_split_R1_R2 = subparsers_io.add_parser("split_R1_R2", help='*No FASRC* Split paired reads into new R1 and R2 subdirectories at the parent directory.', formatter_class=MyFormatter)
-    parser_io_excel_csvs = subparsers_io.add_parser("excel_csvs", help='Exports excel file to .csv files in specified directory.', formatter_class=MyFormatter)
-    
+    parser_io_in_subs = subparsers_io.add_parser("in_subs", help="*No FASRC* Moves all files with a given suffix into subfolders named after the files (excluding the suffix)", description="*No FASRC* Moves all files with a given suffix into subfolders named after the files (excluding the suffix)", formatter_class=MyFormatter)
+    parser_io_out_subs = subparsers_io.add_parser("out_subs", help="*No FASRC* Delete subdirectories and move their files to the parent directory", description="*No FASRC* Delete subdirectories and move their files to the parent directory", formatter_class=MyFormatter)
+    parser_io_create_sh = subparsers_io.add_parser("create_sh", help='Generate SLURM shell script for Harvard FASRC cluster.', description='Generate SLURM shell script for Harvard FASRC cluster.', formatter_class=MyFormatter)
+    parser_io_split_R1_R2 = subparsers_io.add_parser("split_R1_R2", help='*No FASRC* Split paired reads into new R1 and R2 subdirectories at the parent directory.', description='*No FASRC* Split paired reads into new R1 and R2 subdirectories at the parent directory.', formatter_class=MyFormatter)
+    parser_io_excel_csvs = subparsers_io.add_parser("excel_csvs", help='Exports excel file to .csv files in specified directory.', description='Exports excel file to .csv files in specified directory.', formatter_class=MyFormatter)
+
     # Add common arguments
     for parser_io_common in [parser_io_in_subs,parser_io_out_subs,parser_io_split_R1_R2]:
         parser_io_common.add_argument("--dir", help="Path to parent directory", type=str, default='.')
@@ -770,15 +779,15 @@ def main():
     - smaller_fastq(): create new subdirectory containing fastqs with the # of reads limited
     - create_export_var(): create a persistent environment variable by adding it to the user's shell config.
     '''
-    parser_cli = subparsers.add_parser("cli", help="Command Line Interaction", formatter_class=MyFormatter)
+    parser_cli = subparsers.add_parser("cli", help="Command Line Interaction", description="Command Line Interaction", formatter_class=MyFormatter)
     subparsers_cli = parser_cli.add_subparsers()
     
     # Create subparsers for commands
-    parser_cli_access = subparsers_cli.add_parser("access", help="Make all files and subdirectories accessible on Harvard FASRC", formatter_class=MyFormatter)
-    parser_cli_smaller_fastq = subparsers_cli.add_parser("smaller_fastq", help="Create new subdirectory containing fastqs with the # of reads limited", formatter_class=MyFormatter)
-    parser_cli_create_export_var = subparsers_cli.add_parser("create_export_var", help="Create a persistent export variable by adding it to the user's shell config.", formatter_class=MyFormatter)
-    parser_cli_view_export_vars = subparsers_cli.add_parser("view_export_vars", help="View the current export variables in the user's shell config.", formatter_class=MyFormatter)
-    
+    parser_cli_access = subparsers_cli.add_parser("access", help="Make all files and subdirectories accessible on Harvard FASRC", description="Make all files and subdirectories accessible on Harvard FASRC", formatter_class=MyFormatter)
+    parser_cli_smaller_fastq = subparsers_cli.add_parser("smaller_fastq", help="Create new subdirectory containing fastqs with the # of reads limited", description="Create new subdirectory containing fastqs with the # of reads limited", formatter_class=MyFormatter)
+    parser_cli_create_export_var = subparsers_cli.add_parser("create_export_var", help="Create a persistent export variable by adding it to the user's shell config.", description="Create a persistent export variable by adding it to the user's shell config.", formatter_class=MyFormatter)
+    parser_cli_view_export_vars = subparsers_cli.add_parser("view_export_vars", help="View the current export variables in the user's shell config.", description="View the current export variables in the user's shell config.", formatter_class=MyFormatter)
+
     # Add common arguments
     for parser_cli_common in [parser_cli_access, parser_cli_smaller_fastq]:
         parser_cli_common.add_argument("--pt", help="Path to parent directory", type=str, default='.')
@@ -809,11 +818,11 @@ def main():
     - priority_edits(): returns a dataframe with the most clinically-relevant prime edits to prioritize from the shared sequences library
     - editor_mutations(): returns and plots editor accessible COSMIC mutations
     '''
-    parser_cosmic = subparsers.add_parser("cosmic", help="COSMIC Database", formatter_class=MyFormatter)
+    parser_cosmic = subparsers.add_parser("cosmic", help="COSMIC Database", description="COSMIC Database", formatter_class=MyFormatter)
     subparsers_cosmic = parser_cosmic.add_subparsers()
 
     # mutations(): returns COSMIC mutations dataframe for a given gene
-    parser_cosmic_mutations = subparsers_cosmic.add_parser("mutations", help="Extract COSMIC mutations", formatter_class=MyFormatter)
+    parser_cosmic_mutations = subparsers_cosmic.add_parser("mutations", help="Extract COSMIC mutations", description="Extract COSMIC mutations", formatter_class=MyFormatter)
 
     parser_cosmic_mutations.add_argument("--df", type=str, help="Input file path", required=True)
 
@@ -823,7 +832,7 @@ def main():
     parser_cosmic_mutations.set_defaults(func=co.mutations)
     
     # cds_group(): plot COSMIC mutations histogram with CDS regions highlighted in different colors
-    parser_cds_group = subparsers_cosmic.add_parser("cds_group", help="Plot COSMIC mutation histogram with CDS regions highlighted", formatter_class=MyFormatter)
+    parser_cds_group = subparsers_cosmic.add_parser("cds_group", help="Plot COSMIC mutation histogram with CDS regions highlighted", description="Plot COSMIC mutation histogram with CDS regions highlighted", formatter_class=MyFormatter)
 
     parser_cds_group.add_argument("--df_cosmic", type=str, help="COSMIC mutations() file path", required=True)
     parser_cds_group.add_argument("--df_cds", type=str, help="CDS region file path (with columns: gene, CDS, start, end)", required=True)
@@ -833,7 +842,7 @@ def main():
     parser_cds_group.set_defaults(func=co.cds_group)
 
     # priority_muts: returns the shared sequences library dataframe with priority mutations
-    parser_cosmic_priority_muts = subparsers_cosmic.add_parser("priority_muts", help="Identify priority mutations in shared pegRNA library", formatter_class=MyFormatter)
+    parser_cosmic_priority_muts = subparsers_cosmic.add_parser("priority_muts", help="Identify priority mutations in shared pegRNA library", description="Identify priority mutations in shared pegRNA library", formatter_class=MyFormatter)
 
     parser_cosmic_priority_muts.add_argument("--pegRNAs_shared", type=str, help="Shared pegRNAs library dataframe file path", required=True)
     parser_cosmic_priority_muts.add_argument("--df_cosmic", type=str, help="COSMIC mutations() dataframe file path",required=True)
@@ -844,7 +853,7 @@ def main():
     parser_cosmic_priority_muts.set_defaults(func=co.priority_muts)
 
     # priority_edits(): returns a dataframe with the most clinically-relevant prime edits to prioritize from the shared sequences library
-    parser_cosmic_priority_edits = subparsers_cosmic.add_parser("priority_edits", help="Identify clinically-relevant prime edits from shared pegRNA sequences", formatter_class=MyFormatter)
+    parser_cosmic_priority_edits = subparsers_cosmic.add_parser("priority_edits", help="Identify clinically-relevant prime edits from shared pegRNA sequences", description="Identify clinically-relevant prime edits from shared pegRNA sequences", formatter_class=MyFormatter)
 
     parser_cosmic_priority_edits.add_argument("--pegRNAs", type=str, help="pegRNAs library dataframe file path",required=True)
     parser_cosmic_priority_edits.add_argument("--pegRNAs_shared", type=str, help="Shared pegRNAs library dataframe file path",required=True)
@@ -856,7 +865,7 @@ def main():
     parser_cosmic_priority_edits.set_defaults(func=co.priority_edits)
 
     # editor_mutations(): returns and plots editor accessible COSMIC mutations
-    parser_editor_muts = subparsers_cosmic.add_parser("editor_mutations", help="Plot editor-accessible COSMIC mutations using BESCAN library", formatter_class=MyFormatter)
+    parser_editor_muts = subparsers_cosmic.add_parser("editor_mutations", help="Plot editor-accessible COSMIC mutations using BESCAN library", description="Plot editor-accessible COSMIC mutations using BESCAN library", formatter_class=MyFormatter)
 
     parser_editor_muts.add_argument("--df_cosmic", type=str, help="COSMIC mutations() dataframe file path",required=True)
     parser_editor_muts.add_argument("--df_bescan", type=str, help="BESCAN sgRNA library dataframe file path",required=True)
@@ -871,11 +880,11 @@ def main():
     - priority_muts: returns the shared sequences library dataframe with priority mutations
     - priority_edits(): returns a dataframe with the most clinically-relevant prime edits to prioritize from the shared sequences library
     '''
-    parser_cvar = subparsers.add_parser("cvar", help="ClinVar Database", formatter_class=MyFormatter)
+    parser_cvar = subparsers.add_parser("cvar", help="ClinVar Database", description="ClinVar Database", formatter_class=MyFormatter)
     subparsers_cvar = parser_cvar.add_subparsers()
 
     # mutations(): returns ClinVar mutations dataframe for a given gene
-    parser_cvar_mutations = subparsers_cvar.add_parser("mutations", help="Extract ClinVar mutations", formatter_class=MyFormatter)
+    parser_cvar_mutations = subparsers_cvar.add_parser("mutations", help="Extract ClinVar mutations", description="Extract ClinVar mutations", formatter_class=MyFormatter)
 
     parser_cvar_mutations.add_argument("--df", type=str, help="Input file path", required=True)
     parser_cvar_mutations.add_argument("--gene_name", type=str, help="Gene name", required=True)
@@ -897,7 +906,7 @@ def main():
     parser_cvar_priority_muts.set_defaults(func=cvar.priority_muts)
 
     # priority_edits(): returns a dataframe with the most clinically-relevant prime edits to prioritize from the shared sequences library
-    parser_cvar_priority_edits = subparsers_cvar.add_parser("priority_edits", help="Identify clinically-relevant prime edits from shared pegRNA sequences", formatter_class=MyFormatter)
+    parser_cvar_priority_edits = subparsers_cvar.add_parser("priority_edits", help="Identify clinically-relevant prime edits from shared pegRNA sequences", description="Identify clinically-relevant prime edits from shared pegRNA sequences", formatter_class=MyFormatter)
 
     parser_cvar_priority_edits.add_argument("--pegRNAs", type=str, help="pegRNAs library dataframe file path",required=True)
     parser_cvar_priority_edits.add_argument("--pegRNAs_shared", type=str, help="Shared pegRNAs library dataframe file path",required=True)
@@ -914,12 +923,12 @@ def main():
     - umis(): determine the ug of gDNA and reads required for genotyping with UMIs.
     - compute_distance_matrix(): compute pairwise Hamming distance matrix for a list of sequences stored in a dataframe
     '''
-    parser_ngs = subparsers.add_parser("ngs", help="Next generation sequencing", formatter_class=MyFormatter)
+    parser_ngs = subparsers.add_parser("ngs", help="Next generation sequencing", description="Next generation sequencing", formatter_class=MyFormatter)
     subparsers_ngs = parser_ngs.add_subparsers()
 
     # pcrs(): generates NGS PCR plan automatically
-    parser_ngs_pcrs = subparsers_ngs.add_parser("pcrs", help="Plan NGS PCRs", formatter_class=MyFormatter)
-    
+    parser_ngs_pcrs = subparsers_ngs.add_parser("pcrs", help="Plan NGS PCRs", description="Plan NGS PCRs", formatter_class=MyFormatter)
+
     # pcrs(): Core parameters
     parser_ngs_pcrs.add_argument("--df", help="Input file", type=str, required=True)
     
@@ -961,7 +970,7 @@ def main():
     parser_ngs_pcrs.set_defaults(func=ngs.pcrs)
     
     # umis(): determine the ug of gDNA and reads required for genotyping with UMIs.
-    parser_ngs_umis = subparsers_ngs.add_parser("umis", help="Determine ug of gDNA and reads required for genotyping with UMIs", formatter_class=MyFormatter)
+    parser_ngs_umis = subparsers_ngs.add_parser("umis", help="Determine ug of gDNA and reads required for genotyping with UMIs", description="Determine ug of gDNA and reads required for genotyping with UMIs", formatter_class=MyFormatter)
 
     parser_ngs_umis.add_argument("--genotypes", help="# of intended genotypes per sample", type=int, required=True)
 
@@ -974,7 +983,7 @@ def main():
     parser_ngs_umis.set_defaults(func=ngs.umis)
     
     # hamming_distance_matrix(): compute pairwise Hamming distance matrix for a list of sequences stored in a dataframe
-    parser_ngs_hamming = subparsers_ngs.add_parser("hamming", help="Compute pairwise Hamming distance matrix", formatter_class=MyFormatter)
+    parser_ngs_hamming = subparsers_ngs.add_parser("hamming", help="Compute pairwise Hamming distance matrix", description="Compute pairwise Hamming distance matrix", formatter_class=MyFormatter)
     
     parser_ngs_hamming.add_argument("--df", help="Input file", type=str, required=True)
     parser_ngs_hamming.add_argument("--id", help="ID column name", type=str, required=True)
@@ -989,12 +998,12 @@ def main():
     edms.bio.sanger:
     - pcrs(): generates Sanger PCR plan automatically
     '''
-    parser_sanger = subparsers.add_parser("sanger", help="Sanger sequencing", formatter_class=MyFormatter)
+    parser_sanger = subparsers.add_parser("sanger", help="Sanger sequencing", description="Sanger sequencing", formatter_class=MyFormatter)
     subparsers_sanger = parser_sanger.add_subparsers()
 
     # pcrs(): generates Sanger PCR plan automatically
-    parser_sanger_pcrs = subparsers_sanger.add_parser("pcrs", help="Plan Sanger PCRs")
-    
+    parser_sanger_pcrs = subparsers_sanger.add_parser("pcrs", help="Plan Sanger PCRs", description="Plan Sanger PCRs", formatter_class=MyFormatter)
+
     # pcrs(): Core parameters
     parser_sanger_pcrs.add_argument("--df", help="Input file", type=str, required=True)
     parser_sanger_pcrs.add_argument("--dir", help="Output directory path", type=str, default='../out')
@@ -1035,12 +1044,12 @@ def main():
     - pcr_sim(): returns dataframe with simulated pcr product
     - off_targets(): Find off-target sequences for a list of sequences using pairwise alignment.
     '''
-    parser_clone = subparsers.add_parser("clone", help="Molecular cloning", formatter_class=MyFormatter)
+    parser_clone = subparsers.add_parser("clone", help="Molecular cloning", description="Molecular cloning", formatter_class=MyFormatter)
     subparsers_clone = parser_clone.add_subparsers()
 
     # sgRNAs(): design GG cloning oligonucleotides for cutting and base editing sgRNAs
-    parser_clone_sgRNAs = subparsers_clone.add_parser("sgRNAs", help="Design GG oligos for sgRNAs (cutting or BE)", formatter_class=MyFormatter)
-    
+    parser_clone_sgRNAs = subparsers_clone.add_parser("sgRNAs", help="Design GG oligos for sgRNAs (cutting or BE)", description="Design GG oligos for sgRNAs (cutting or BE)", formatter_class=MyFormatter)
+
     parser_clone_sgRNAs.add_argument("--df", type=str, help="Input file path",required=True)
     parser_clone_sgRNAs.add_argument("--id", type=str, help="Column name for unique sgRNA identifier",required=True)
 
@@ -1058,7 +1067,7 @@ def main():
     parser_clone_sgRNAs.set_defaults(func=cl.sgRNAs)
 
     # epegRNAs(): design GG cloning oligonucleotides for prime editing epegRNAs
-    parser_clone_epegRNAs = subparsers_clone.add_parser("epegRNAs", help="Design GG oligos for epegRNAs", formatter_class=MyFormatter)
+    parser_clone_epegRNAs = subparsers_clone.add_parser("epegRNAs", help="Design GG oligos for epegRNAs", description="Design GG oligos for epegRNAs", formatter_class=MyFormatter)
 
     parser_clone_epegRNAs.add_argument("--df", type=str, help="Input file path", required=True)
     parser_clone_epegRNAs.add_argument("--id", type=str, help="Column name for unique sequence identifier",required=True)
@@ -1087,7 +1096,7 @@ def main():
     parser_clone_epegRNAs.set_defaults(func=cl.epegRNAs)
     
     # ngRNAs(): design GG cloning oligonucleotides for prime editing ngRNAs
-    parser_clone_ngRNAs = subparsers_clone.add_parser("ngRNAs", help="Design GG oligos for ngRNAs", formatter_class=MyFormatter)
+    parser_clone_ngRNAs = subparsers_clone.add_parser("ngRNAs", help="Design GG oligos for ngRNAs", description="Design GG oligos for ngRNAs", formatter_class=MyFormatter)
 
     parser_clone_ngRNAs.add_argument("--df", type=str, help="Input file path", required=True)
     parser_clone_ngRNAs.add_argument("--id", type=str, help="Column name for unique sequence identifier",required=True)
@@ -1107,7 +1116,7 @@ def main():
     parser_clone_ngRNAs.set_defaults(func=cl.ngRNAs)
 
     # epegRNA_pool(): makes twist oligonucleotides for prime editing
-    parser_clone_epegRNA_pool = subparsers_clone.add_parser("epegRNA_pool", help="Design GG oligos for pooled epegRNAs", formatter_class=MyFormatter)
+    parser_clone_epegRNA_pool = subparsers_clone.add_parser("epegRNA_pool", help="Design GG oligos for pooled epegRNAs", description="Design GG oligos for pooled epegRNAs", formatter_class=MyFormatter)
     
     parser_clone_epegRNA_pool.add_argument("--df", type=str, help="Input file path", required=True)
 
@@ -1137,7 +1146,7 @@ def main():
     parser_clone_epegRNA_pool.set_defaults(func=cl.epegRNA_pool) 
     
     # umi(): generates unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance
-    parser_clone_umi = subparsers_clone.add_parser("umi", help="Generate unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance", formatter_class=MyFormatter)
+    parser_clone_umi = subparsers_clone.add_parser("umi", help="Generate unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance", description="Generate unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance", formatter_class=MyFormatter)
 
     parser_clone_umi.add_argument("--length", type=int, help="Length of UMI (Default: 15)", default=15)
     parser_clone_umi.add_argument("--GC_fract", type=parse_tuple_float, default=(0.4,0.6), help="Pair of GC content boundaries written as fractions (Default: 0.4,0.6)")
@@ -1149,7 +1158,7 @@ def main():
     parser_clone_umi.set_defaults(func=cl.umi)
 
     # pcr_sim(): returns dataframe with simulated pcr product 
-    parser_clone_pcrsim = subparsers_clone.add_parser("pcr_sim", help="Simulate PCR product from template and primer sequences", formatter_class=MyFormatter)
+    parser_clone_pcrsim = subparsers_clone.add_parser("pcr_sim", help="Simulate PCR product from template and primer sequences", description="Simulate PCR product from template and primer sequences", formatter_class=MyFormatter)
 
     parser_clone_pcrsim.add_argument("--df", type=str, help="Input dataframe or file path containing template and primers", required=True)
     parser_clone_pcrsim.add_argument("--template_col", type=str, help="Column name for template sequence", required=True)
@@ -1166,7 +1175,7 @@ def main():
     parser_clone_pcrsim.set_defaults(func=cl.pcr_sim)
 
     # off_targets(): Find off-target sequences for a list of sequences using pairwise alignment.
-    parser_clone_off_targets = subparsers_clone.add_parser("off_targets", help="Find off-target sequences for a list of sequences of the same length using pairwise alignment", formatter_class=MyFormatter)
+    parser_clone_off_targets = subparsers_clone.add_parser("off_targets", help="Find off-target sequences for a list of sequences of the same length using pairwise alignment", description="Find off-target sequences for a list of sequences of the same length using pairwise alignment", formatter_class=MyFormatter)
 
     parser_clone_off_targets.add_argument("--df", type=str, help="Input file path containing sequences", required=True)
     parser_clone_off_targets.add_argument("--col", type=str, help="Column name containing sequences to align", required=True)
@@ -1185,11 +1194,11 @@ def main():
     - PE3(): generates PE3 transfection plan for HEK293T cells (Default: 96-well plate in triplicate using L2000)
     - virus(): generates transfection plan for virus production from HEK293T cells (Default: 6-well plate using L3000)
     '''
-    parser_transfect = subparsers.add_parser("transfect", help="Transfection", formatter_class=MyFormatter)
+    parser_transfect = subparsers.add_parser("transfect", help="Transfection", description="Transfection", formatter_class=MyFormatter)
     subparsers_transfect = parser_transfect.add_subparsers()
 
     # PE3(): generates PE3 transfection plan for HEK293T cells (Default: 96-well plate in triplicate using L2000)
-    parser_transfect_PE3 = subparsers_transfect.add_parser("PE3", help="Plan PE3 transfection")
+    parser_transfect_PE3 = subparsers_transfect.add_parser("PE3", help="Plan PE3 transfection", description="Plan PE3 transfection", formatter_class=MyFormatter)
     
     parser_transfect_PE3.add_argument("--plasmids", type=str, help="Path to plasmids file", required=True)
     parser_transfect_PE3.add_argument("--epegRNAs", type=str, help="Path to epegRNAs file", required=True)
@@ -1216,7 +1225,7 @@ def main():
     parser_transfect_PE3.set_defaults(func=tf.PE3)
 
     # virus(): generates transfection plan for virus production from HEK293T cells (Default: 6-well plate using L3000)
-    parser_transfect_virus = subparsers_transfect.add_parser("virus", help="Plan virus transfection", formatter_class=MyFormatter)
+    parser_transfect_virus = subparsers_transfect.add_parser("virus", help="Plan virus transfection", description="Plan virus transfection", formatter_class=MyFormatter)
 
     parser_transfect_virus.add_argument("--plasmids", type=str, help="Path to plasmids file", required=True)
 
@@ -1243,7 +1252,7 @@ def main():
     - ddCq(): computes ΔΔCq mean and error for all samples holding target pairs constant
     '''
     # ddCq(): computes ΔΔCq mean and error for all samples holding target pairs constant
-    parser_ddcq = subparsers.add_parser("ddCq", help="Compute ΔΔCq values for RT-qPCR data", formatter_class=MyFormatter)
+    parser_ddcq = subparsers.add_parser("ddCq", help="Compute ΔΔCq values for RT-qPCR data", description="Compute ΔΔCq values for RT-qPCR data", formatter_class=MyFormatter)
     
     parser_ddcq.add_argument("--data", type=str, help="Input Cq file from CFX instrument",required=True)
 
@@ -1281,31 +1290,31 @@ def main():
     - consensus_umis(): generate consensus sequences from grouped UMIs using fgbio
     - bam_to_fastq(): convert BAM files to FASTQ files using samtools
     '''
-    parser_fastq = subparsers.add_parser("fastq", help="FASTQ files", formatter_class=MyFormatter)
+    parser_fastq = subparsers.add_parser("fastq", help="FASTQ files", description="FASTQ files", formatter_class=MyFormatter)
     subparsers_fastq = parser_fastq.add_subparsers()
 
-    parser_fastq_revcom = subparsers_fastq.add_parser("revcom", help="Reverse complement all FASTQ files in a directory", formatter_class=MyFormatter)
-    parser_fastq_unzip = subparsers_fastq.add_parser("unzip", help="Unzip gzipped FASTQ files to a new directory", formatter_class=MyFormatter)
-    parser_fastq_comb = subparsers_fastq.add_parser("comb", help="Combine multiple FASTQ files into a single FASTQ (.fastq or .fastq.gz)", formatter_class=MyFormatter)
-    parser_fastq_genotyping = subparsers_fastq.add_parser("genotyping", help="Quantify edit outcomes workflow", formatter_class=MyFormatter)
-    parser_fastq_abundances = subparsers_fastq.add_parser("abundances", help="Quantify edit outcomes count & fraction per sample", formatter_class=MyFormatter)
-    parser_fastq_count_motif = subparsers_fastq.add_parser("count_motif", help="Count motif occurrences in FASTQ files", formatter_class=MyFormatter)
-    parser_fastq_plot_motif = subparsers_fastq.add_parser("plot_motif", help="Plot motif occurrences from FASTQ files", formatter_class=MyFormatter)
-    parser_fastq_plot_alignments = subparsers_fastq.add_parser("plot_alignments", help="Plot alignments from FASTQ files", formatter_class=MyFormatter)
-    parser_fastq_count_region = subparsers_fastq.add_parser("count_region", help="Count region occurrences in FASTQ files", formatter_class=MyFormatter)
-    parser_fastq_count_alignments = subparsers_fastq.add_parser("count_alignments", help="Count alignments in FASTQ files", formatter_class=MyFormatter)
-    parser_fastq_plot_paired = subparsers_fastq.add_parser("plot_paired", help="Plot paired regions from FASTQ files", formatter_class=MyFormatter)
-    parser_fastq_paired_regions = subparsers_fastq.add_parser("paired_regions", help="Extract paired regions from FASTQ files", formatter_class=MyFormatter)
-    parser_fastq_count_signatures = subparsers_fastq.add_parser("count_signatures", help="Generate signatures from fastq read region alignments to WT sequence", formatter_class=MyFormatter)
-    parser_fastq_editing_per_library = subparsers_fastq.add_parser("editing_per_library", help="Determine editing relative library abundance", formatter_class=MyFormatter)
-    parser_fastq_extract_umis = subparsers_fastq.add_parser("extract_umis", help="Extract UMIs using umi_tools", formatter_class=MyFormatter)
-    parser_fastq_trim_motifs = subparsers_fastq.add_parser("trim_motifs", help="Trim motifs with cutadapt", formatter_class=MyFormatter)
-    parser_fastq_make_sams = subparsers_fastq.add_parser("make_sams", help="Generate alignments saved as SAM files using bowtie2", formatter_class=MyFormatter)
-    parser_fastq_make_bams = subparsers_fastq.add_parser("make_bams", help="Convert SAM files to BAM files using samtools", formatter_class=MyFormatter)
-    parser_fastq_bam_umi_tags = subparsers_fastq.add_parser("bam_umi_tags", help="Copy UMI in read ID to RX tag in BAM files using fgbio", formatter_class=MyFormatter)
-    parser_fastq_group_umis = subparsers_fastq.add_parser("group_umis", help="Group BAM files by UMI using fgbio", formatter_class=MyFormatter)
-    parser_fastq_consensus_umis = subparsers_fastq.add_parser("consensus_umis", help="Generate consensus sequences from grouped UMIs using fgbio", formatter_class=MyFormatter)
-    parser_fastq_bam_to_fastq = subparsers_fastq.add_parser("bam_to_fastq", help="Convert BAM files to FASTQ files using samtools", formatter_class=MyFormatter)
+    parser_fastq_revcom = subparsers_fastq.add_parser("revcom", help="Reverse complement all FASTQ files in a directory", description="Reverse complement all FASTQ files in a directory", formatter_class=MyFormatter)
+    parser_fastq_unzip = subparsers_fastq.add_parser("unzip", help="Unzip gzipped FASTQ files to a new directory", description="Unzip gzipped FASTQ files to a new directory", formatter_class=MyFormatter)
+    parser_fastq_comb = subparsers_fastq.add_parser("comb", help="Combine multiple FASTQ files into a single FASTQ (.fastq or .fastq.gz)", description="Combine multiple FASTQ files into a single FASTQ (.fastq or .fastq.gz)", formatter_class=MyFormatter)
+    parser_fastq_genotyping = subparsers_fastq.add_parser("genotyping", help="Quantify edit outcomes workflow", description="Quantify edit outcomes workflow", formatter_class=MyFormatter)
+    parser_fastq_abundances = subparsers_fastq.add_parser("abundances", help="Quantify edit outcomes count & fraction per sample", description="Quantify edit outcomes count & fraction per sample", formatter_class=MyFormatter)
+    parser_fastq_count_motif = subparsers_fastq.add_parser("count_motif", help="Count motif occurrences in FASTQ files", description="Count motif occurrences in FASTQ files", formatter_class=MyFormatter)
+    parser_fastq_plot_motif = subparsers_fastq.add_parser("plot_motif", help="Plot motif occurrences from FASTQ files", description="Plot motif occurrences from FASTQ files", formatter_class=MyFormatter)
+    parser_fastq_plot_alignments = subparsers_fastq.add_parser("plot_alignments", help="Plot alignments from FASTQ files", description="Plot alignments from FASTQ files", formatter_class=MyFormatter)
+    parser_fastq_count_region = subparsers_fastq.add_parser("count_region", help="Count region occurrences in FASTQ files", description="Count region occurrences in FASTQ files", formatter_class=MyFormatter)
+    parser_fastq_count_alignments = subparsers_fastq.add_parser("count_alignments", help="Count alignments in FASTQ files", description="Count alignments in FASTQ files", formatter_class=MyFormatter)
+    parser_fastq_plot_paired = subparsers_fastq.add_parser("plot_paired", help="Plot paired regions from FASTQ files", description="Plot paired regions from FASTQ files", formatter_class=MyFormatter)
+    parser_fastq_paired_regions = subparsers_fastq.add_parser("paired_regions", help="Extract paired regions from FASTQ files", description="Extract paired regions from FASTQ files", formatter_class=MyFormatter)
+    parser_fastq_count_signatures = subparsers_fastq.add_parser("count_signatures", help="Generate signatures from fastq read region alignments to WT sequence", description="Generate signatures from fastq read region alignments to WT sequence", formatter_class=MyFormatter)
+    parser_fastq_editing_per_library = subparsers_fastq.add_parser("editing_per_library", help="Determine editing relative library abundance", description="Determine editing relative library abundance", formatter_class=MyFormatter)
+    parser_fastq_extract_umis = subparsers_fastq.add_parser("extract_umis", help="Extract UMIs using umi_tools", description="Extract UMIs using umi_tools", formatter_class=MyFormatter)
+    parser_fastq_trim_motifs = subparsers_fastq.add_parser("trim_motifs", help="Trim motifs with cutadapt", description="Trim motifs with cutadapt", formatter_class=MyFormatter)
+    parser_fastq_make_sams = subparsers_fastq.add_parser("make_sams", help="Generate alignments saved as SAM files using bowtie2", description="Generate alignments saved as SAM files using bowtie2", formatter_class=MyFormatter)
+    parser_fastq_make_bams = subparsers_fastq.add_parser("make_bams", help="Convert SAM files to BAM files using samtools", description="Convert SAM files to BAM files using samtools", formatter_class=MyFormatter)
+    parser_fastq_bam_umi_tags = subparsers_fastq.add_parser("bam_umi_tags", help="Copy UMI in read ID to RX tag in BAM files using fgbio", description="Copy UMI in read ID to RX tag in BAM files using fgbio", formatter_class=MyFormatter)
+    parser_fastq_group_umis = subparsers_fastq.add_parser("group_umis", help="Group BAM files by UMI using fgbio", description="Group BAM files by UMI using fgbio", formatter_class=MyFormatter)
+    parser_fastq_consensus_umis = subparsers_fastq.add_parser("consensus_umis", help="Generate consensus sequences from grouped UMIs using fgbio", description="Generate consensus sequences from grouped UMIs using fgbio", formatter_class=MyFormatter)
+    parser_fastq_bam_to_fastq = subparsers_fastq.add_parser("bam_to_fastq", help="Convert BAM files to FASTQ files using samtools", description="Convert BAM files to FASTQ files using samtools", formatter_class=MyFormatter)
 
     # Add common arguments: revcom_fastqs(), unzip_fastqs(), comb_fastqs(), and genotyping()
     for parser_fastq_common in [parser_fastq_revcom,parser_fastq_unzip,parser_fastq_comb,parser_fastq_genotyping]:
@@ -1505,7 +1514,7 @@ def main():
     parser_fastq_make_sams.add_argument("--out_dir", help="Output directory (Default: ./make_sams)", default=f'./make_sams')
 
     parser_fastq_make_sams_group = parser_fastq_make_sams.add_mutually_exclusive_group(required=True)
-    parser_fastq_make_sams_group.add_argument("--in_file", help="Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)", default=argparse.SUPPRESS)
+    parser_fastq_make_sams_group.add_argument("--in_file", help="Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence,index (column names required)", default=argparse.SUPPRESS)
     parser_fastq_make_sams_group.add_argument("--fasta", help="Reference FASTA file for alignment", default=argparse.SUPPRESS)
 
     parser_fastq_make_sams.add_argument("--sensitivity", choices=["very-sensitive", "sensitive", "fast", "very-fast", "very-sensitive-local", "sensitive-local", "fast-local", "very-fast-local"], 
@@ -1582,35 +1591,98 @@ def main():
     parser_pe = subparsers.add_parser("pe", help="Prime Editing", formatter_class=MyFormatter)
     subparsers_pe = parser_pe.add_subparsers()
 
-    parser_pe_prime_designer = subparsers_pe.add_parser("prime_designer", help="Execute PrimeDesign saturation mutagenesis (EDMS version)", formatter_class=MyFormatter)
-    parser_pe_pilot_screen = subparsers_pe.add_parser("pilot_screen", help="Determine pilot screen for EDMS", formatter_class=MyFormatter)
-    parser_pe_epegRNA_linkers = subparsers_pe.add_parser("epegRNA_linkers", help="Generate epegRNA linkers between PBS and 3' hairpin motif", formatter_class=MyFormatter)
-    parser_pe_merge = subparsers_pe.add_parser("merge", help="rejoins epeg/ngRNAs & creates ngRNA groups", formatter_class=MyFormatter)
-    parser_pe_sensor_designer = subparsers_pe.add_parser("sensor_designer", help='Design pegRNA sensors', formatter_class=MyFormatter)
-    parser_pe_pegRNA_outcome = subparsers_pe.add_parser("pegRNA_outcome", help="Confirm that pegRNAs should create the predicted edit", formatter_class=MyFormatter)
-    parser_pe_pegRNA_signature = subparsers_pe.add_parser("pegRNA_signature", help="Create signatures for pegRNA outcomes using alignments", formatter_class=MyFormatter)
+    parser_pe_prime_designer = subparsers_pe.add_parser("prime_designer", help="Execute PrimeDesign saturation mutagenesis (EDMS version)", description="Execute PrimeDesign saturation mutagenesis (EDMS version)", formatter_class=MyFormatter)
+    parser_pe_pilot_screen = subparsers_pe.add_parser("pilot_screen", help="Determine pilot screen for EDMS", description="Determine pilot screen for EDMS", formatter_class=MyFormatter)
+    parser_pe_epegRNA_linkers = subparsers_pe.add_parser("epegRNA_linkers", help="Generate epegRNA linkers between PBS and 3' hairpin motif", description="Generate epegRNA linkers between PBS and 3' hairpin motif", formatter_class=MyFormatter)
+    parser_pe_merge = subparsers_pe.add_parser("merge", help="rejoins epeg/ngRNAs & creates ngRNA groups", description="rejoins epeg/ngRNAs & creates ngRNA groups", formatter_class=MyFormatter)
+    parser_pe_sensor_designer = subparsers_pe.add_parser("sensor_designer", help='Design pegRNA sensors', description='Design pegRNA sensors', formatter_class=MyFormatter)
+    parser_pe_pegRNA_outcome = subparsers_pe.add_parser("pegRNA_outcome", help="Confirm that pegRNAs should create the predicted edit", description="Confirm that pegRNAs should create the predicted edit", formatter_class=MyFormatter)
+    parser_pe_pegRNA_signature = subparsers_pe.add_parser("pegRNA_signature", help="Create signatures for pegRNA outcomes using alignments", description="Create signatures for pegRNA outcomes using alignments", formatter_class=MyFormatter)
 
     # prime_designer():
-    parser_pe_prime_designer.add_argument("--name", type=str, dest='target_name',help="Name of the target", required=True)
-    parser_pe_prime_designer.add_argument("--flank5", type=str, dest='flank5_sequence', help="5' flank sequence (in-frame, length divisible by 3)", required=True)
-    parser_pe_prime_designer.add_argument("--target", type=str, dest='target_sequence', help="Target sequence (in-frame, length divisible by 3)", required=True)
-    parser_pe_prime_designer.add_argument("--flank3", type=str, dest='flank3_sequence', help="3' flank sequence (in-frame, length divisible by 3)", required=True)
-    
+    parser_pe_prime_designer.add_argument("--file", type=str, dest='in_file', help='''[Required (Option 1)] Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence,index (Required)
+
+*** Example saturation_mutagenesis.TXT file *** ---------------------------------------
+|											|
+|	target	ATGTGC(TGTGATGGTATGCCGGCGTAGTAA)TCGTAG   1                              |
+|											|
+---------------------------------------------------------------------------------------
+
+*** Example saturation_mutagenesis.CSV file *** ---------------------------------------
+|											|
+|	target,ATGTGC(TGTGATGGTATGCCGGCGTAGTAA)TCGTAG,1		                        |
+|											|
+---------------------------------------------------------------------------------------
+
+*** Example not_saturation_mutagenesis.TXT file *** -----------------------------------
+|											|
+|	target_01_substitution	ATGTGCTGTGATGGTAT(G/A)CCGGCGTAGTAATCGTAGC   1           |
+|	target_01_insertion	ATGTGCTGTGATGGTATG(+ATCTCGATGA)CCGGCGTAGTAATCGTAGC  1   |
+|	target_01_deletion	ATGTGCTGTGATGG(-TATGCCG)GCGTAGTAATCGTAGC    1           |
+|											|
+---------------------------------------------------------------------------------------
+
+*** Example not_saturation_mutagenesis.CSV file *** -----------------------------------
+|											|
+|	target_01_substitution,ATGTGCTGTGATGGTAT(G/A)CCGGCGTAGTAATCGTAGC,1		|
+|	target_01_insertion,ATGTGCTGTGATGGTATG(+ATCTCGATGA)CCGGCGTAGTAATCGTAGC,1	|
+|	target_01_deletion,ATGTGCTGTGATGG(-TATGCCG)GCGTAGTAATCGTAGC,1			|
+|											|
+---------------------------------------------------------------------------------------
+
+*** Formatting different DNA edits *** ------------------------------------------------
+|											|
+|	Substitution edit:	Format: (reference/edit)	Example:(G/A)		|
+|	Insertion edit:		Format: (+insertion)		Example:(+ATCG)		|
+|	Deletion edit:		Format: (-deletion)		Example:(-ATCG)		|
+|											|
+---------------------------------------------------------------------------------------
+
+*** Combination edit example *** ------------------------------------------------------
+|											|
+|	Reference:			ATGCTGTGAT G TCGTGATG    A			|
+|	Edit:				A--CTGTGAT C TCGTGATGatcgA			|
+|	Sequence format:	A(-TG)CTGTGAT(G/C)TCGTGATG(+atcg)A			|
+|											|
+---------------------------------------------------------------------------------------
+
+''')
+    parser_pe_prime_designer.add_argument("--name", type=str, dest='target_name',help="[Required (Option 2)] Name of the target")
+    parser_pe_prime_designer.add_argument("--flank5", type=str, dest='flank5_sequence', help="[Required (Option 2)] 5' flank sequence (in-frame, length divisible by 3)")
+    parser_pe_prime_designer.add_argument("--target", type=str, dest='target_sequence', help="[Required (Option 2)] Target sequence (in-frame, length divisible by 3)")
+    parser_pe_prime_designer.add_argument("--flank3", type=str, dest='flank3_sequence', help="[Required (Option 2)] 3' flank sequence (in-frame, length divisible by 3)")
     parser_pe_prime_designer.add_argument("--index", type=int, default=1,
-                        help="Index of 1st amino acid or base in target sequence (Default: 1)")
-    parser_pe_prime_designer.add_argument("--saturation_mutagenesis", type=str, choices=['aa', 'aa_subs', 'aa_ins', 'aa_dels', 'base'], help="Saturation mutagenesis design with prime editing. The 'aa' option makes all amino acid substitutions ('aa_subs'),  +1 amino acid insertions ('aa_ins'), and -1 amino acid deletions ('aa_dels'). The 'base' option makes DNA base changes.", default='aa')
-    parser_pe_prime_designer.add_argument("--pbs_lengths", type=int, dest='pbs_length_pooled_ls', nargs="+", default=[11,13,15],
-                        help="List of PBS lengths (Default: 11,13,15)")
-    parser_pe_prime_designer.add_argument("--rtt_max_length", type=int, dest='rtt_max_length_pooled', default=50,
-                        help="Maximum RTT length to design pegRNAs (Default: 50 nt)")
-    parser_pe_prime_designer.add_argument("--no_silent_mutation", dest="silent_mutation", action="store_false",
-                        help="Disable silent mutation")
-    parser_pe_prime_designer.add_argument("--number_of_pegrnas", type=int, default=1,
-                        help="Max number of pegRNAs to design (Default: 1)")
-    parser_pe_prime_designer.add_argument("--number_of_ngrnas", type=int, default=3,
-                        help="Max number of ngRNAs to design (Default: 3)")
+                        help="[Required (Option 2)] Index of 1st amino acid or base in target sequence (Default: 1)")
+    
     parser_pe_prime_designer.add_argument("--pe_format", type=str, default="NNNNNNNNNNNNNNNNN/NNN[NGG]",
                         help="Prime editing formatting including the spacer, cut index -> /, and protospacer adjacent motif (PAM) -> [PAM] (Default: NNNNNNNNNNNNNNNNN/NNN[NGG]). Warning: Changing pe_format prevents silent mutations from being applied.")
+    parser_pe_prime_designer.add_argument("--pbs_length_list", type=int, default=argparse.SUPPRESS, nargs="+",
+                        help="List of primer binding site (PBS) lengths for the pegRNA extension")
+    parser_pe_prime_designer.add_argument("--rtt_length_list", type=int, default=argparse.SUPPRESS, nargs="+",
+                        help="List of reverse transcription template (RTT) lengths for the pegRNA extension")
+    parser_pe_prime_designer.add_argument("--nicking_distance_minimum", type=int, default=0,
+                        help="Minimum nicking distance for pegRNA designs (Default: 0 nt)")
+    parser_pe_prime_designer.add_argument("--nicking_distance_maximum", type=int, default=100,
+                        help="Maximum nicking distance for pegRNA designs (Default: 100 nt)")
+    parser_pe_prime_designer.add_argument("--filter_c1_extension", action="store_true",
+                        help="Filter against pegRNA extensions that start with a C base (Default: False)", default=False)
+    parser_pe_prime_designer.add_argument("--no_silent_mutation", dest="silent_mutation", action="store_false",
+                        help="Disable silent mutation", default=True)
+    parser_pe_prime_designer.add_argument("--genome_wide_design", action="store_true",
+                        help="Whether this is a genome-wide pooled design. This option designs a set of pegRNAs per input without ranging PBS and RTT parameters", default=False)
+    parser_pe_prime_designer.add_argument("--saturation_mutagenesis", type=str, choices=['aa', 'aa_subs', 'aa_ins', 'aa_dels', 'base'], help="Saturation mutagenesis design with prime editing. The 'aa' option makes all amino acid substitutions ('aa_subs'),  +1 amino acid insertions ('aa_ins'), and -1 amino acid deletions ('aa_dels'). The 'base' option makes DNA base changes.", default=None)
+    parser_pe_prime_designer.add_argument("--number_of_pegrnas", type=int, default=3,
+                        help="Max number of pegRNAs to design (Default: 3)")
+    parser_pe_prime_designer.add_argument("--number_of_ngrnas", type=int, default=3,
+                        help="Max number of ngRNAs to design (Default: 3)")
+    parser_pe_prime_designer.add_argument("--nicking_distance_pooled", type=int, default=75,
+                        help="The nicking distance between pegRNAs and ngRNAs for pooled designs. PE3b annotation is priority (PE3b seed -> PE3b non-seed), followed by nicking distance closest to this parameter. (Default: 75 bp)")
+    parser_pe_prime_designer.add_argument("--homology_downstream", type=int, default=10,
+                        help="Minimum RT extension length downstream of an edit for pegRNA designs (Default: 10 nt)")
+    parser_pe_prime_designer.add_argument("--pbs_length_pooled_list", type=int, dest='pbs_length_pooled_list', nargs="+", default=[11,13,15],
+                        help="List of PBS lengths to design pegRNAs for pooled design applications (Default: 11,13,15)")
+    parser_pe_prime_designer.add_argument("--rtt_max_length_pooled", type=int, default=50,
+                        help="Maximum RTT length to design pegRNAs for pooled design applications (Default: 50 nt)")
     parser_pe_prime_designer.add_argument("--scaffold_sequence", type=str, default="GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC",
                         help="sgRNA scaffold sequence (Default: SpCas9 flip + extend")
     parser_pe_prime_designer.add_argument("--enzymes", type=str, nargs="+", help="list of type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to check for in pegRNAs and ngRNAs (Default: ['Esp3I'])", default=['Esp3I'])

@@ -208,7 +208,7 @@ def enzyme_codon_swap(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, 
 
     Parameters:
     pegRNAs (pd.DataFrame | str): pegRNAs DataFrame or file path to pegRNAs DataFrame
-    in_file (dataframe | str): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)
+    in_file (dataframe | str): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence,index (column names required)
     enzyme (str): Enzyme name (e.g. Esp3I, BsaI, BspMI, etc.)
     RE_type_IIS_df (dataframe | str, optional): Dataframe with Type IIS RE information (or file path)
     out_dir (str, optional): output directory
@@ -472,9 +472,9 @@ def enzyme_codon_swap(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, 
 
 # PrimeDesign
 def prime_design_input(target_name: str, flank5_sequence: str, 
-                     target_sequence: str, flank3_sequence: str,
-                     index: int=1,
-                     dir: str='.', file: str='prime_design_input.csv'):
+                    target_sequence: str, flank3_sequence: str,
+                    index: int=1, silent_mutation: bool=True,
+                    dir: str='.', file: str='prime_design_input.csv'):
     ''' 
     prime_design_input(): creates and checks PrimeDesign saturation mutagenesis input file
     
@@ -484,6 +484,7 @@ def prime_design_input(target_name: str, flank5_sequence: str,
     target_sequence (str): in-frame nucleotide sequence for the saturation mutagensis region (length must be divisible by 3)
     flank3_sequence: in-frame nucleotide sequence with 3' of saturation mutagensis region (length must be divisible by 3)
     index (int, optional): 1st amino acid or base in target sequence index (Default: 1)
+    silent_mutation (bool, optional): check that sequences are in-frame for silent mutation option (Default: True)
     dir (str, optional): name of the output directory 
     file (str, optional): name of the output file
     
@@ -491,10 +492,11 @@ def prime_design_input(target_name: str, flank5_sequence: str,
     
     Reference: https://github.com/pinellolab/PrimeDesign/tree/master/PrimeDesign
     '''
-    # Check PrimeDesign saturation mutagenesis input file
-    if len(flank5_sequence)%3 != 0: raise(ValueError(f"Length of flank5_sequence ({len(flank5_sequence)}) must divisible by 3."))
-    if len(target_sequence)%3 != 0: raise(ValueError(f"Length of target_sequence ({len(target_sequence)}) must divisible by 3."))
-    if len(flank5_sequence)%3 != 0: raise(ValueError(f"Length of flank3_sequence ({len(flank3_sequence)}) must divisible by 3."))
+    # Check PrimeDesign saturation mutagenesis input file 
+    if silent_mutation == True:
+        if len(flank5_sequence)%3 != 0: raise(ValueError(f"Length of flank5_sequence ({len(flank5_sequence)}) must divisible by 3."))
+        if len(target_sequence)%3 != 0: raise(ValueError(f"Length of target_sequence ({len(target_sequence)}) must divisible by 3."))
+        if len(flank3_sequence)%3 != 0: raise(ValueError(f"Length of flank3_sequence ({len(flank3_sequence)}) must divisible by 3."))
 
     # Create PrimeDesign saturation mutagenesis input file
     io.save(dir=dir,
@@ -512,7 +514,7 @@ def prime_design(file: str, pe_format: str = 'NNNNNNNNNNNNNNNNN/NNN[NGG]', pbs_l
     prime_design(): execute PrimeDesign (EDMS version)
     
     Parameters:
-    file (str): input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)
+    file (str): input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence,index (column names required)
     pe_format (str, optional): Prime editing formatting including the spacer, cut index -> /, and protospacer adjacent motif (PAM) -> [PAM] (Default: NNNNNNNNNNNNNNNNN/NNN[NGG])
     pbs_length_list (list, optional): list of primer binding site (PBS) lengths for the pegRNA extension. Example: 12 13 14 15
     rtt_length_list (list, optional): list of reverse transcription (RT) template lengths for the pegRNA extension. Example: 10 15 20
@@ -525,11 +527,55 @@ def prime_design(file: str, pe_format: str = 'NNNNNNNNNNNNNNNNN/NNN[NGG]', pbs_l
     number_of_pegrnas (int, optional): maximum number of pegRNAs to design for each input sequence. The pegRNAs are ranked by 1) PAM disrupted > PAM intact then 2) distance to edit. (Default: 3)
     number_of_ngrnas (int, optional): maximum number of ngRNAs to design for each input sequence. The ngRNAs are ranked by 1) PE3b-seed > PE3b-nonseed > PE3 then 2) deviation from nicking_distance_pooled. (Default: 3)
     nicking_distance_pooled (int, optional): the nicking distance between pegRNAs and ngRNAs for pooled designs. PE3b annotation is priority (PE3b seed -> PE3b non-seed), followed by nicking distance closest to this parameter. (Default: 75 bp)
-    homology_downstream (int, optional): for pooled designs (genome_wide or saturation_mutagenesis needs to be indicated), this parameter determines the RT extension length downstream of an edit for pegRNA designs. (Default: 10)
+    homology_downstream (int, optional): this parameter determines the minimum RT extension length downstream of an edit for pegRNA designs. (Default: 10)
     pbs_length_pooled (int, optional): the PBS length to design pegRNAs for pooled design applications. (Default: 14 nt)
     rtt_max_length_pooled (int, optional): maximum RTT length to design pegRNAs for pooled design applications. (Default: 50 nt)
     out_dir (str, optional): name of output directory (Default: ./DATETIMESTAMP_PrimeDesign)
     
+    *** Example saturation_mutagenesis.TXT file *** ---------------------------------------
+    |											|
+    |	target	ATGTGC(TGTGATGGTATGCCGGCGTAGTAA)TCGTAG   1                              |
+    |											|
+    ---------------------------------------------------------------------------------------
+
+    *** Example saturation_mutagenesis.CSV file *** ---------------------------------------
+    |											|
+    |	target,ATGTGC(TGTGATGGTATGCCGGCGTAGTAA)TCGTAG,1		                        |
+    |											|
+    ---------------------------------------------------------------------------------------
+
+    *** Example not_saturation_mutagenesis.TXT file *** -----------------------------------
+    |											|
+    |	target_01_substitution	ATGTGCTGTGATGGTAT(G/A)CCGGCGTAGTAATCGTAGC   1           |
+    |	target_01_insertion	ATGTGCTGTGATGGTATG(+ATCTCGATGA)CCGGCGTAGTAATCGTAGC  1   |
+    |	target_01_deletion	ATGTGCTGTGATGG(-TATGCCG)GCGTAGTAATCGTAGC    1           |
+    |											|
+    ---------------------------------------------------------------------------------------
+
+    *** Example not_saturation_mutagenesis.CSV file *** -----------------------------------
+    |											|
+    |	target_01_substitution,ATGTGCTGTGATGGTAT(G/A)CCGGCGTAGTAATCGTAGC,1		|
+    |	target_01_insertion,ATGTGCTGTGATGGTATG(+ATCTCGATGA)CCGGCGTAGTAATCGTAGC,1	|
+    |	target_01_deletion,ATGTGCTGTGATGG(-TATGCCG)GCGTAGTAATCGTAGC,1			|
+    |											|
+    ---------------------------------------------------------------------------------------
+
+    *** Formatting different DNA edits *** ------------------------------------------------
+    |											|
+    |	Substitution edit:	Format: (reference/edit)	Example:(G/A)		|
+    |	Insertion edit:		Format: (+insertion)		Example:(+ATCG)		|
+    |	Deletion edit:		Format: (-deletion)		Example:(-ATCG)		|
+    |											|
+    ---------------------------------------------------------------------------------------
+
+    *** Combination edit example *** ------------------------------------------------------
+    |											|
+    |	Reference:			ATGCTGTGAT G TCGTGATG    A			|
+    |	Edit:				A--CTGTGAT C TCGTGATGatcgA			|
+    |	Sequence format:	A(-TG)CTGTGAT(G/C)TCGTGATG(+atcg)A			|
+    |											|
+    ---------------------------------------------------------------------------------------
+
     Dependencies: os, numpy, & https://github.com/pinellolab/PrimeDesign
     '''
     # Write PrimeDesign Command Line
@@ -749,54 +795,150 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
 
     return pegRNAs,ngRNAs
 
-def prime_designer(target_name: str, flank5_sequence: str, target_sequence: str, flank3_sequence: str, index: int=1, saturation_mutagenesis: str = 'aa',
-                pbs_length_pooled_ls: list = [11,13,15], rtt_max_length_pooled: int = 50, silent_mutation: bool = True,
-                number_of_pegrnas: int = 1, number_of_ngrnas: int = 3, homology_downstream: int = 10, pe_format: str = 'NNNNNNNNNNNNNNNNN/NNN[NGG]',
+def prime_designer(in_file: str = None, target_name: str = None, flank5_sequence: str = None, target_sequence: str = None, 
+                flank3_sequence: str = None, index: int=1, pe_format: str = 'NNNNNNNNNNNNNNNNN/NNN[NGG]', pbs_length_list: list = [],
+                rtt_length_list: list = [], nicking_distance_minimum: int = 0,nicking_distance_maximum: int = 100, filter_c1_extension: bool = False,
+                silent_mutation: bool = True, genome_wide_design: bool = False, saturation_mutagenesis: str = None,
+                number_of_pegrnas: int = 3, number_of_ngrnas: int = 3, nicking_distance_pooled: int = 75, homology_downstream: int = 10,
+                pbs_length_pooled_list: list = [11,13,15], rtt_max_length_pooled: int = 50,
                 scaffold_sequence: str='GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC', 
                 enzymes: list[str]=['Esp3I'], replace: bool=True):
     '''
     prime_designer(): execute PrimeDesign saturation mutagenesis (EDMS version)
     
     Parameters:
-    target_name (str): name of target
-    flank5_sequence (str): in-frame nucleotide sequence with 5' of saturation mutagensis region (length must be divisible by 3)
-    target_sequence (str): in-frame nucleotide sequence for the saturation mutagensis region (length must be divisible by 3)
-    flank3_sequence (str): in-frame nucleotide sequence with 3' of saturation mutagensis region (length must be divisible by 3)
-    index (int, optional): 1st amino acid or base in target sequence index (Default: 1)
-    saturation_mutagenesis (str, optional): saturation mutagenesis design with prime editing (Options: 'aa', 'aa_subs', 'aa_ins', 'aa_dels', 'base'). The 'aa' option makes all amino acid substitutions ('aa_subs'),  +1 amino acid insertions ('aa_ins'), and -1 amino acid deletions ('aa_dels'). The 'base' option makes DNA base changes. (Default: 'aa')
-    pbs_length_pooled_ls (list, optional): list of primer binding site (PBS) lengths for the pegRNA extension (Default: [11,13,15])
-    rtt_max_length_pooled (int, optional): maximum RTT length to design pegRNAs for pooled design applications. (Default: 50 nt)
-    silent_mutation (bool, optional): introduce silent mutation into or around the PAM assuming the sequence is in-frame (Default: True). Currently only available with SpCas9 PE (i.e., pe_format = NNNNNNNNNNNNNNNNN/NNN[NGG]).
-    number_of_pegrnas (int, optional): maximum number of pegRNAs to design for each input sequence. The pegRNAs are ranked by 1) PAM disrupted > PAM intact then 2) distance to edit. (Default: 1)
-    number_of_ngrnas (int, optional): maximum number of ngRNAs to design for each input sequence. The ngRNAs are ranked by 1) PE3b-seed > PE3b-nonseed > PE3 then 2) deviation from nicking_distance_pooled. (Default: 3)
-    homology_downstream (int, optional): for pooled designs (genome_wide or saturation_mutagenesis needs to be indicated), this parameter determines the RT extension length downstream of an edit for pegRNA designs (Default: 10)
+    in_file (str, required option 1): path to input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence,index (column names required). See examples below. (Default: None)
+    target_name (str, required option 2): name of target
+    flank5_sequence (str, required option 2): in-frame nucleotide sequence with 5' of saturation mutagensis region (length must be divisible by 3)
+    target_sequence (str, required option 2): in-frame nucleotide sequence for the saturation mutagensis region (length must be divisible by 3)
+    flank3_sequence (str, required option 2): in-frame nucleotide sequence with 3' of saturation mutagensis region (length must be divisible by 3)
+    index (int, required option 2): 1st amino acid or base in target sequence index (Default: 1)
+    
     pe_format (str, optional): Prime editing formatting including the spacer, cut index -> /, and protospacer adjacent motif (PAM) -> [PAM] (Default: NNNNNNNNNNNNNNNNN/NNN[NGG])
+    pbs_length_list (list, optional): list of primer binding site (PBS) lengths for the pegRNA extension. Example: 12 13 14 15
+    rtt_length_list (list, optional): list of reverse transcription (RT) template lengths for the pegRNA extension. Example: 10 15 20
+    nicking_distance_minimum (int, optional): minimum nicking distance for designing ngRNAs. (Default: 0 bp)
+    nicking_distance_maximum (int, optional): maximum nicking distance for designing ngRNAs. (Default: 100 bp)
+    filter_c1_extension (bool, optional): filter against pegRNA extensions that start with a C base. (Default: False)
+    silent_mutation (bool, optional): introduce silent mutation into PAM assuming sequence is in-frame. Currently only available with SpCas9. (Default: False)
+    genome_wide_design (bool, optional): whether this is a genome-wide pooled design. This option designs a set of pegRNAs per input without ranging PBS and RTT parameters (Default: False).
+    saturation_mutagenesis (str, optional): saturation mutagenesis design with prime editing (Options: 'aa', 'aa_subs', 'aa_ins', 'aa_dels', 'base'). The 'aa' option makes all amino acid substitutions ('aa_subs'),  +1 amino acid insertions ('aa_ins'), and -1 amino acid deletions ('aa_dels'). The 'base' option makes DNA base changes. (Default: None)
+    number_of_pegrnas (int, optional): maximum number of pegRNAs to design for each input sequence. The pegRNAs are ranked by 1) PAM disrupted > PAM intact then 2) distance to edit. (Default: 3)
+    number_of_ngrnas (int, optional): maximum number of ngRNAs to design for each input sequence. The ngRNAs are ranked by 1) PE3b-seed > PE3b-nonseed > PE3 then 2) deviation from nicking_distance_pooled. (Default: 3)
+    nicking_distance_pooled (int, optional): the nicking distance between pegRNAs and ngRNAs for pooled designs. PE3b annotation is priority (PE3b seed -> PE3b non-seed), followed by nicking distance closest to this parameter. (Default: 75 bp)
+    homology_downstream (int, optional): this parameter determines the minimum RT extension length downstream of an edit for pegRNA designs. (Default: 10)
+    pbs_length_pooled_list (list, optional): List of PBS lengths to design pegRNAs for pooled design applications. (Default: [11, 13, 15])
+    rtt_max_length_pooled (int, optional): maximum RTT length to design pegRNAs for pooled design applications. (Default: 50 nt)
     scaffold_sequence (str, optional): sgRNA scaffold sequence (Default: SpCas9 flip + extend = GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC)
         Alternative option for VLPs: SpCas9 flip + extend + com-modified = GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC
     enzymes (list, optional): list of type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to check for in pegRNAs and ngRNAs (Default: ['Esp3I'])
     replace (bool, optional): replace pegRNAs and remove ngRNAs with RE sites (Default: True)
 
+    *** Example saturation_mutagenesis.TXT file *** ---------------------------------------
+    |											|
+    |	target	ATGTGC(TGTGATGGTATGCCGGCGTAGTAA)TCGTAG   1                              |
+    |											|
+    ---------------------------------------------------------------------------------------
+
+    *** Example saturation_mutagenesis.CSV file *** ---------------------------------------
+    |											|
+    |	target,ATGTGC(TGTGATGGTATGCCGGCGTAGTAA)TCGTAG,1		                        |
+    |											|
+    ---------------------------------------------------------------------------------------
+
+    *** Example not_saturation_mutagenesis.TXT file *** -----------------------------------
+    |											|
+    |	target_01_substitution	ATGTGCTGTGATGGTAT(G/A)CCGGCGTAGTAATCGTAGC   1           |
+    |	target_01_insertion	ATGTGCTGTGATGGTATG(+ATCTCGATGA)CCGGCGTAGTAATCGTAGC  1   |
+    |	target_01_deletion	ATGTGCTGTGATGG(-TATGCCG)GCGTAGTAATCGTAGC    1           |
+    |											|
+    ---------------------------------------------------------------------------------------
+
+    *** Example not_saturation_mutagenesis.CSV file *** -----------------------------------
+    |											|
+    |	target_01_substitution,ATGTGCTGTGATGGTAT(G/A)CCGGCGTAGTAATCGTAGC,1		|
+    |	target_01_insertion,ATGTGCTGTGATGGTATG(+ATCTCGATGA)CCGGCGTAGTAATCGTAGC,1	|
+    |	target_01_deletion,ATGTGCTGTGATGG(-TATGCCG)GCGTAGTAATCGTAGC,1			|
+    |											|
+    ---------------------------------------------------------------------------------------
+
+    *** Formatting different DNA edits *** ------------------------------------------------
+    |											|
+    |	Substitution edit:	Format: (reference/edit)	Example:(G/A)		|
+    |	Insertion edit:		Format: (+insertion)		Example:(+ATCG)		|
+    |	Deletion edit:		Format: (-deletion)		Example:(-ATCG)		|
+    |											|
+    ---------------------------------------------------------------------------------------
+
+    *** Combination edit example *** ------------------------------------------------------
+    |											|
+    |	Reference:			ATGCTGTGAT G TCGTGATG    A			|
+    |	Edit:				A--CTGTGAT C TCGTGATGatcgA			|
+    |	Sequence format:	A(-TG)CTGTGAT(G/C)TCGTGATG(+atcg)A			|
+    |											|
+    ---------------------------------------------------------------------------------------
+    
     Dependencies: prime_design_input(), prime_design(), & prime_design_output()
     '''
-    # Create PrimeDesign input file
-    prime_design_input(target_name=target_name, flank5_sequence=flank5_sequence, target_sequence=target_sequence, 
-                    flank3_sequence=flank3_sequence, index=index, dir='.', file=f'{"_".join(target_name.split(" "))}.csv')
+    if in_file is None: # Create PrimeDesign input file if needed
+        prime_design_input(target_name=target_name, flank5_sequence=flank5_sequence, target_sequence=target_sequence, 
+                        flank3_sequence=flank3_sequence, index=index, silent_mutation=silent_mutation, dir='.', file=f'{"_".join(target_name.split(" "))}.csv')
+
+    elif (in_file is not None) & (silent_mutation == True): # Check that in_file target sequences are in-frame if silent_mutation is True
+        in_file_df = io.get(pt=in_file)
+
+        if saturation_mutagenesis is not None: # Saturation mutagenesis mode
+            in_file_df_target_sequence = in_file_df.iloc[0]['target_sequence']
+            flank5_sequence = in_file_df_target_sequence.split('(')[0]
+            target_sequence = in_file_df_target_sequence.split('(')[1].split(')')[0]
+            flank3_sequence = in_file_df_target_sequence.split(')')[1]
+
+            if len(flank5_sequence)%3 != 0: raise(ValueError(f"Length of flank5_sequence ({len(flank5_sequence)}) must divisible by 3."))
+            if len(target_sequence)%3 != 0: raise(ValueError(f"Length of target_sequence ({len(target_sequence)}) must divisible by 3."))
+            if len(flank3_sequence)%3 != 0: raise(ValueError(f"Length of flank3_sequence ({len(flank3_sequence)}) must divisible by 3."))
+
+        else: # Not saturation mutagenesis mode
+            print("Warning: Manually verify that target sequences in 'in_file' are in-frame when 'silent_mutation' is set to True.")
 
     # Iterate through PBS lengths
     pegRNAs=dict()
     ngRNAs=dict()
-    for pbs_length_pooled in pbs_length_pooled_ls:
+    for pbs_length_pooled in pbs_length_pooled_list:
 
-        # Run PrimeDesign in saturation mutatgenesis mode
-        prime_design(file=f'{"_".join(target_name.split(" "))}.csv', silent_mutation=silent_mutation, saturation_mutagenesis=saturation_mutagenesis,
-                    number_of_pegrnas=number_of_pegrnas, number_of_ngrnas=number_of_ngrnas, pbs_length_pooled=pbs_length_pooled, 
-                    rtt_max_length_pooled=rtt_max_length_pooled, homology_downstream=homology_downstream, pe_format=pe_format)
+        if in_file is None:
+            # Run PrimeDesign
+            prime_design(file=f'{"_".join(target_name.split(" "))}.csv', silent_mutation=silent_mutation, saturation_mutagenesis=saturation_mutagenesis,
+                        number_of_pegrnas=number_of_pegrnas, number_of_ngrnas=number_of_ngrnas, pbs_length_pooled=pbs_length_pooled, 
+                        rtt_max_length_pooled=rtt_max_length_pooled, homology_downstream=homology_downstream, pe_format=pe_format,
+                        pbs_length_list=pbs_length_list, rtt_length_list=rtt_length_list, nicking_distance_minimum=nicking_distance_minimum,
+                        nicking_distance_maximum=nicking_distance_maximum, filter_c1_extension=filter_c1_extension, genome_wide_design=genome_wide_design,
+                        nicking_distance_pooled=nicking_distance_pooled)
+
+            # Obtain pegRNAs and ngRNAs from PrimeDesign output
+            pegRNAs[pbs_length_pooled],ngRNAs[pbs_length_pooled] = prime_design_output(
+                pt=sorted([file for file in io.relative_paths('.') if "PrimeDesign.csv" in file], reverse= True)[0], 
+                scaffold_sequence=scaffold_sequence, in_file=f'./{"_".join(target_name.split(" "))}.csv', 
+                saturation_mutagenesis=saturation_mutagenesis, index=index, enzymes=enzymes, replace=replace)
         
-        # Obtain pegRNAs and ngRNAs from PrimeDesign output
-        pegRNAs[pbs_length_pooled],ngRNAs[pbs_length_pooled] = prime_design_output(
-            pt=sorted([file for file in io.relative_paths('.') if "PrimeDesign.csv" in file], reverse= True)[0], 
-            scaffold_sequence=scaffold_sequence, in_file=f'./{"_".join(target_name.split(" "))}.csv', 
-            saturation_mutagenesis=saturation_mutagenesis, index=index, enzymes=enzymes, replace=replace)
+        else:
+            # Run PrimeDesign
+            prime_design(file=in_file, silent_mutation=silent_mutation, saturation_mutagenesis=saturation_mutagenesis,
+                        number_of_pegrnas=number_of_pegrnas, number_of_ngrnas=number_of_ngrnas, pbs_length_pooled=pbs_length_pooled, 
+                        rtt_max_length_pooled=rtt_max_length_pooled, homology_downstream=homology_downstream, pe_format=pe_format,
+                        pbs_length_list=pbs_length_list, rtt_length_list=rtt_length_list, nicking_distance_minimum=nicking_distance_minimum,
+                        nicking_distance_maximum=nicking_distance_maximum, filter_c1_extension=filter_c1_extension, genome_wide_design=genome_wide_design,
+                        nicking_distance_pooled=nicking_distance_pooled)
+            
+            # Obtain pegRNAs and ngRNAs from PrimeDesign output
+            pegRNAs[pbs_length_pooled],ngRNAs[pbs_length_pooled] = prime_design_output(
+                pt=sorted([file for file in io.relative_paths('.') if "PrimeDesign.csv" in file], reverse= True)[0], 
+                scaffold_sequence=scaffold_sequence, in_file=in_file, 
+                saturation_mutagenesis=saturation_mutagenesis, index=index, enzymes=enzymes, replace=replace)
+        
+        if (saturation_mutagenesis is None) & (genome_wide_design==False): # Only run once if not saturation mutagenesis
+            pegRNAs['pegRNAs'] = pegRNAs.pop(pbs_length_pooled) # Rename dictionary keys
+            ngRNAs['ngRNAs'] = ngRNAs.pop(pbs_length_pooled)
+            break 
     
     # Save pegRNAs and ngRNAs
     io.save_dir(dir='../pegRNAs', suf='.csv', dc=pegRNAs)
