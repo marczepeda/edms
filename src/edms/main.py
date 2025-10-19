@@ -38,6 +38,7 @@ import ast
 import datetime
 from rich_argparse import RichHelpFormatter
 from rich import print as rprint
+import sys
 
 from . import config
 from . import utils
@@ -1600,53 +1601,7 @@ def main():
     parser_pe_pegRNA_signature = subparsers_pe.add_parser("pegRNA_signature", help="Create signatures for pegRNA outcomes using alignments", description="Create signatures for pegRNA outcomes using alignments", formatter_class=MyFormatter)
 
     # prime_designer():
-    parser_pe_prime_designer.add_argument("--file", type=str, dest='in_file', help='''[Required (Option 1)] Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence,index (Required)
-
-*** Example saturation_mutagenesis.TXT file *** ---------------------------------------
-|											|
-|	target	ATGTGC(TGTGATGGTATGCCGGCGTAGTAA)TCGTAG   1                              |
-|											|
----------------------------------------------------------------------------------------
-
-*** Example saturation_mutagenesis.CSV file *** ---------------------------------------
-|											|
-|	target,ATGTGC(TGTGATGGTATGCCGGCGTAGTAA)TCGTAG,1		                        |
-|											|
----------------------------------------------------------------------------------------
-
-*** Example not_saturation_mutagenesis.TXT file *** -----------------------------------
-|											|
-|	target_01_substitution	ATGTGCTGTGATGGTAT(G/A)CCGGCGTAGTAATCGTAGC   1           |
-|	target_01_insertion	ATGTGCTGTGATGGTATG(+ATCTCGATGA)CCGGCGTAGTAATCGTAGC  1   |
-|	target_01_deletion	ATGTGCTGTGATGG(-TATGCCG)GCGTAGTAATCGTAGC    1           |
-|											|
----------------------------------------------------------------------------------------
-
-*** Example not_saturation_mutagenesis.CSV file *** -----------------------------------
-|											|
-|	target_01_substitution,ATGTGCTGTGATGGTAT(G/A)CCGGCGTAGTAATCGTAGC,1		|
-|	target_01_insertion,ATGTGCTGTGATGGTATG(+ATCTCGATGA)CCGGCGTAGTAATCGTAGC,1	|
-|	target_01_deletion,ATGTGCTGTGATGG(-TATGCCG)GCGTAGTAATCGTAGC,1			|
-|											|
----------------------------------------------------------------------------------------
-
-*** Formatting different DNA edits *** ------------------------------------------------
-|											|
-|	Substitution edit:	Format: (reference/edit)	Example:(G/A)		|
-|	Insertion edit:		Format: (+insertion)		Example:(+ATCG)		|
-|	Deletion edit:		Format: (-deletion)		Example:(-ATCG)		|
-|											|
----------------------------------------------------------------------------------------
-
-*** Combination edit example *** ------------------------------------------------------
-|											|
-|	Reference:			ATGCTGTGAT G TCGTGATG    A			|
-|	Edit:				A--CTGTGAT C TCGTGATGatcgA			|
-|	Sequence format:	A(-TG)CTGTGAT(G/C)TCGTGATG(+atcg)A			|
-|											|
----------------------------------------------------------------------------------------
-
-''')
+    parser_pe_prime_designer.add_argument("--file", type=str, dest='in_file', help="[Required (Option 1)] Input file (.csv or .txt) with sequences for PrimeDesign. Format: target_name,target_sequence,index (Required). See examples below...")
     parser_pe_prime_designer.add_argument("--name", type=str, dest='target_name',help="[Required (Option 2)] Name of the target")
     parser_pe_prime_designer.add_argument("--flank5", type=str, dest='flank5_sequence', help="[Required (Option 2)] 5' flank sequence (in-frame, length divisible by 3)")
     parser_pe_prime_designer.add_argument("--target", type=str, dest='target_sequence', help="[Required (Option 2)] Target sequence (in-frame, length divisible by 3)")
@@ -1687,6 +1642,60 @@ def main():
                         help="sgRNA scaffold sequence (Default: SpCas9 flip + extend")
     parser_pe_prime_designer.add_argument("--enzymes", type=str, nargs="+", help="list of type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to check for in pegRNAs and ngRNAs (Default: ['Esp3I'])", default=['Esp3I'])
     parser_pe_prime_designer.add_argument("--dont_replace", action='store_false',dest='replace', help="Do not replace pegRNAs and remove ngRNAs with RE enzyme sites", default=True)
+
+    # Help message for edms pe prime_designer because input file format can't be captured as block text by Myformatter(RichHelpFormatter):
+    if any(["edms" in argv for argv in sys.argv]) and "pe" in sys.argv and "prime_designer" in sys.argv and ("--help" in sys.argv or "-h" in sys.argv):
+        parser_pe_prime_designer.print_help()
+        rprint("""[red]
+Examples:[/red]
+    [cyan]--file[/cyan] [dark_magenta]IN_FILE[/dark_magenta]
+    [blue]Input file (.csv or .txt) with sequences for PrimeDesign.
+    Format: target_name,target_sequence,index
+
+    *** Example saturation_mutagenesis.CSV file *** ---------------------------------------
+    |											|
+    |	target,ATGTGC(TGTGATGGTATGCCGGCGTAGTAA)TCGTAG,1		                        |
+    |											|
+    ---------------------------------------------------------------------------------------
+
+    *** Example saturation_mutagenesis.TXT file *** ---------------------------------------
+    |											|
+    |	target	ATGTGC(TGTGATGGTATGCCGGCGTAGTAA)TCGTAG   1                              |
+    |											|
+    ---------------------------------------------------------------------------------------
+
+    *** Example not_saturation_mutagenesis.CSV file *** -----------------------------------
+    |											|
+    |	target_01_substitution,ATGTGCTGTGATGGTAT(G/A)CCGGCGTAGTAATCGTAGC,1		|
+    |	target_01_insertion,ATGTGCTGTGATGGTATG(+ATCTCGATGA)CCGGCGTAGTAATCGTAGC,1	|
+    |	target_01_deletion,ATGTGCTGTGATGG(-TATGCCG)GCGTAGTAATCGTAGC,1			|
+    |											|
+    ---------------------------------------------------------------------------------------
+
+    *** Example not_saturation_mutagenesis.TXT file *** -----------------------------------
+    |											|
+    |	target_01_substitution	ATGTGCTGTGATGGTAT(G/A)CCGGCGTAGTAATCGTAGC   1           |
+    |	target_01_insertion	ATGTGCTGTGATGGTATG(+ATCTCGATGA)CCGGCGTAGTAATCGTAGC  1   |
+    |	target_01_deletion	ATGTGCTGTGATGG(-TATGCCG)GCGTAGTAATCGTAGC    1           |
+    |											|
+    ---------------------------------------------------------------------------------------
+
+    *** Formatting different DNA edits *** ------------------------------------------------
+    |											|
+    |	Substitution edit:	Format: (reference/edit)	Example:(G/A)		|
+    |	Insertion edit:		Format: (+insertion)		Example:(+ATCG)		|
+    |	Deletion edit:		Format: (-deletion)		Example:(-ATCG)		|
+    |											|
+    ---------------------------------------------------------------------------------------
+
+    *** Combination edit example *** ------------------------------------------------------
+    |											|
+    |	Reference:			ATGCTGTGAT G TCGTGATG    A			|
+    |	Edit:				A--CTGTGAT C TCGTGATGatcgA			|
+    |	Sequence format:	A(-TG)CTGTGAT(G/C)TCGTGATG(+atcg)A			|
+    |											|
+    ---------------------------------------------------------------------------------------[/blue]""")
+        sys.exit()
 
     # Pilot_Screen():
     parser_pe_pilot_screen.add_argument("--pegRNAs", type=str, dest='pegRNAs_dir',help="Directory with pegRNAs from prime_designer() output", required=True)
