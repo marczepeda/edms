@@ -506,7 +506,7 @@ def prime_design_input(target_name: str, flank5_sequence: str,
                               'index': [index]}))
 
 def prime_design(file: str, pe_format: str = 'NNNNNNNNNNNNNNNNN/NNN[NGG]', pbs_length_list: list = [], rtt_length_list: list = [], 
-                nicking_distance_minimum: int = 0,nicking_distance_maximum: int = 100, filter_c1_extension: bool = False, silent_mutation: bool = False,
+                nicking_distance_minimum: int = 0, nicking_distance_maximum: int = 100, filter_c1_extension: bool = False, silent_mutation: bool = False,
                 genome_wide_design: bool = False, saturation_mutagenesis: str = None, number_of_pegrnas: int = 3, number_of_ngrnas: int = 3,
                 nicking_distance_pooled: int = 75, homology_downstream: int = 10, pbs_length_pooled: int = 14, rtt_max_length_pooled: int = 50,
                 out_dir: str = './DATETIMESTAMP_PrimeDesign'):
@@ -527,7 +527,7 @@ def prime_design(file: str, pe_format: str = 'NNNNNNNNNNNNNNNNN/NNN[NGG]', pbs_l
     number_of_pegrnas (int, optional): maximum number of pegRNAs to design for each input sequence. The pegRNAs are ranked by 1) PAM disrupted > PAM intact then 2) distance to edit. (Default: 3)
     number_of_ngrnas (int, optional): maximum number of ngRNAs to design for each input sequence. The ngRNAs are ranked by 1) PE3b-seed > PE3b-nonseed > PE3 then 2) deviation from nicking_distance_pooled. (Default: 3)
     nicking_distance_pooled (int, optional): the nicking distance between pegRNAs and ngRNAs for pooled designs. PE3b annotation is priority (PE3b seed -> PE3b non-seed), followed by nicking distance closest to this parameter. (Default: 75 bp)
-    homology_downstream (int, optional): this parameter determines the minimum RT extension length downstream of an edit for pegRNA designs. (Default: 10)
+    homology_downstream (int, optional): this parameter determines the minimum RT extension length downstream of an edit for pegRNA designs. (Default: 15)
     pbs_length_pooled (int, optional): the PBS length to design pegRNAs for pooled design applications. (Default: 14 nt)
     rtt_max_length_pooled (int, optional): maximum RTT length to design pegRNAs for pooled design applications. (Default: 50 nt)
     out_dir (str, optional): name of output directory (Default: ./DATETIMESTAMP_PrimeDesign)
@@ -593,7 +593,7 @@ def prime_design(file: str, pe_format: str = 'NNNNNNNNNNNNNNNNN/NNN[NGG]', pbs_l
     if number_of_pegrnas!=3: cmd += f' -n_pegrnas {number_of_pegrnas}'
     if number_of_ngrnas!=3: cmd += f' -n_ngrnas {number_of_ngrnas}'
     if nicking_distance_pooled!=75: cmd += f' -nick_dist_pooled {nicking_distance_pooled}'
-    if homology_downstream!=10: cmd += f' -homology_downstream {homology_downstream}'
+    if homology_downstream!=15: cmd += f' -homology_downstream {homology_downstream}'
     if pbs_length_pooled!=14: cmd += f' -pbs_pooled {pbs_length_pooled}'
     if rtt_max_length_pooled!=50: cmd += f' -rtt_pooled {rtt_max_length_pooled}'
     if out_dir!='./DATETIMESTAMP_PrimeDesign': cmd+= f' -out {out_dir}'
@@ -799,7 +799,7 @@ def prime_designer(in_file: str = None, target_name: str = None, flank5_sequence
                 flank3_sequence: str = None, index: int=1, pe_format: str = 'NNNNNNNNNNNNNNNNN/NNN[NGG]', pbs_length_list: list = [],
                 rtt_length_list: list = [], nicking_distance_minimum: int = 0,nicking_distance_maximum: int = 100, filter_c1_extension: bool = False,
                 silent_mutation: bool = True, genome_wide_design: bool = False, saturation_mutagenesis: str = None,
-                number_of_pegrnas: int = 3, number_of_ngrnas: int = 3, nicking_distance_pooled: int = 75, homology_downstream: int = 10,
+                number_of_pegrnas: int = 3, number_of_ngrnas: int = 3, nicking_distance_pooled: int = 75, homology_downstream: int = 15,
                 pbs_length_pooled_list: list = [11,13,15], rtt_max_length_pooled: int = 50,
                 scaffold_sequence: str='GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC', 
                 enzymes: list[str]=['Esp3I'], replace: bool=True):
@@ -826,7 +826,7 @@ def prime_designer(in_file: str = None, target_name: str = None, flank5_sequence
     number_of_pegrnas (int, optional): maximum number of pegRNAs to design for each input sequence. The pegRNAs are ranked by 1) PAM disrupted > PAM intact then 2) distance to edit. (Default: 3)
     number_of_ngrnas (int, optional): maximum number of ngRNAs to design for each input sequence. The ngRNAs are ranked by 1) PE3b-seed > PE3b-nonseed > PE3 then 2) deviation from nicking_distance_pooled. (Default: 3)
     nicking_distance_pooled (int, optional): the nicking distance between pegRNAs and ngRNAs for pooled designs. PE3b annotation is priority (PE3b seed -> PE3b non-seed), followed by nicking distance closest to this parameter. (Default: 75 bp)
-    homology_downstream (int, optional): this parameter determines the minimum RT extension length downstream of an edit for pegRNA designs. (Default: 10)
+    homology_downstream (int, optional): this parameter determines the minimum RT extension length downstream of an edit for pegRNA designs. (Default: 15)
     pbs_length_pooled_list (list, optional): List of PBS lengths to design pegRNAs for pooled design applications. (Default: [11, 13, 15])
     rtt_max_length_pooled (int, optional): maximum RTT length to design pegRNAs for pooled design applications. (Default: 50 nt)
     scaffold_sequence (str, optional): sgRNA scaffold sequence (Default: SpCas9 flip + extend = GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC)
