@@ -200,7 +200,7 @@ def find_enzyme_sites(df: pd.DataFrame | str, enzyme: str, RE_type_IIS_df: pd.Da
     df[f'{enzyme}_rc_i'] = df_enzyme_sites_rc
     return df
 
-def enzyme_codon_swap(pegRNAs: pd.DataFrame | str, enzyme: str, 
+def enzyme_codon_swap(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, enzyme: str, 
                       RE_type_IIS_df: pd.DataFrame | str = None, out_dir: str = None, 
                       out_file: str = None, return_df: bool = True, literal_eval: bool=True, comments: bool=False) -> pd.DataFrame:
     '''
@@ -208,6 +208,7 @@ def enzyme_codon_swap(pegRNAs: pd.DataFrame | str, enzyme: str,
 
     Parameters:
     pegRNAs (pd.DataFrame | str): pegRNAs DataFrame or file path to pegRNAs DataFrame
+    in_file (dataframe | str): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence,index (column names required)
     enzyme (str): Enzyme name (e.g. Esp3I, BsaI, BspMI, etc.)
     RE_type_IIS_df (dataframe | str, optional): Dataframe with Type IIS RE information (or file path)
     out_dir (str, optional): output directory
@@ -220,9 +221,11 @@ def enzyme_codon_swap(pegRNAs: pd.DataFrame | str, enzyme: str,
     memory_timer(reset=True)
     memories = []
 
-    # Get pegRNAs & RE_type_IIS DataFrames from file path if needed
+    # Get pegRNAs & PrimeDesign input DataFrame from file path if needed
     if type(pegRNAs)==str:
         pegRNAs = io.get(pt=pegRNAs, literal_eval=literal_eval)
+    if type(in_file)==str:
+        in_file = io.get(pt=in_file, literal_eval=literal_eval)
     if type(RE_type_IIS_df)==str:
         RE_type_IIS_df = io.get(pt=RE_type_IIS_df, literal_eval=literal_eval)
     elif RE_type_IIS_df is None: # Get from resources if not provided
@@ -250,47 +253,59 @@ def enzyme_codon_swap(pegRNAs: pd.DataFrame | str, enzyme: str,
 
     pegRNAs = pegRNAs[enzyme_rtt]
 
+    # Get reference sequence & codons (+ reverse complement)
+    target_sequence = in_file.iloc[0]['target_sequence'] 
+    seq = Seq(target_sequence.split('(')[1].split(')')[0]) # Break apart target sequences
+    if len(seq)%3 != 0: raise(ValueError(f"Length of target sequence ({len(seq)}) must divisible by 3. Check input file."))
+    flank5 = Seq(target_sequence.split('(')[0])
+    if len(flank5)%3 != 0: raise(ValueError(f"Length of 5' flank ({len(flank5)}) must divisible by 3. Check input file."))
+    flank3 = Seq(target_sequence.split(')')[1])
+    if len(flank3)%3 != 0: raise(ValueError(f"Length of 3' flank ({len(flank3)}) must divisible by 3. Check input file."))
+
+    f5_seq_f3_nuc = flank5 + seq + flank3  # Join full nucleotide reference sequence
+    rc_f5_seq_f3_nuc = Seq.reverse_complement(f5_seq_f3_nuc) # Full nucleotide reference reverse complement sequence
+    
+    codons = get_codons(seq) # Codons
+    codons_flank5 = get_codons(flank5) # Codons in-frame flank 5
+    codons_flank3 = get_codons(flank3) # Codons in-frame flank 3
+    extended_codons = codons_flank5 + codons + codons_flank3 # Codons including flank 5 and flank 3
+
     # Get new RTT sequences
     new_rtt_ls = []
-    for (strand,spacer,scaffold,rtt,pbs,rtt_length,enzyme_fwd_i_ls,enzyme_rc_i_ls,reference_sequence) in t.zip_cols(df=pegRNAs,
-        cols=['Strand','Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence', 'RTT_length',f'{enzyme}_fwd_i',f'{enzyme}_rc_i','Reference_sequence']):
-        
-        # Get reverse complement and codons of reference sequence
-        reference_sequence = Seq(reference_sequence)
-        rc_reference_sequence = Seq.reverse_complement(reference_sequence)
-        reference_sequence_codons = get_codons(reference_sequence)
+    for (strand,spacer,scaffold,rtt,pbs,rtt_length,enzyme_fwd_i_ls,enzyme_rc_i_ls) in t.zip_cols(df=pegRNAs,
+        cols=['Strand','Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence', 'RTT_length',f'{enzyme}_fwd_i',f'{enzyme}_rc_i']):
 
         if strand=='+': # Spacer: + strand; PBS & RTT: - strand
             
             # Find spacer in sequence
-            spacer_j = reference_sequence.find(spacer)
+            spacer_j = f5_seq_f3_nuc.find(spacer)
             if spacer_j == -1:
-                raise ValueError(f"Spacer sequence '{spacer}' not found in reference sequence.")
-            elif spacer_j != reference_sequence.rfind(spacer):
-                raise ValueError(f"Multiple matches found for spacer sequence '{spacer}'.")
+                raise ValueError(f"Spacer sequence '{spacer}' not found in target sequence. Please check the input file.")
+            elif spacer_j != f5_seq_f3_nuc.rfind(spacer):
+                raise ValueError(f"Multiple matches found for spacer sequence '{spacer}'. Please check the input file.")
 
             # Find PBS in reverse complement sequence
-            pbs_j = rc_reference_sequence.find(pbs)
+            pbs_j = rc_f5_seq_f3_nuc.find(pbs)
             if pbs_j == -1:
-                raise ValueError(f"PBS sequence '{pbs}' not found in reference sequence.")
-            elif pbs_j != rc_reference_sequence.rfind(pbs):
-                print(pbs,pbs_j,rc_reference_sequence.rfind(pbs))
-                raise ValueError(f"Multiple matches found for PBS sequence '{pbs}'.")
+                raise ValueError(f"PBS sequence '{pbs}' not found in target sequence. Please check the input file.")
+            elif pbs_j != rc_f5_seq_f3_nuc.rfind(pbs):
+                print(pbs,pbs_j,rc_f5_seq_f3_nuc.rfind(pbs))
+                raise ValueError(f"Multiple matches found for PBS sequence '{pbs}'. Please check the input file.")
 
             # Obtain reverse complement WT RTT & edit RTT in-frame from + strand
             rc_rtt = Seq.reverse_complement(Seq(rtt)) # reverse complement of rtt (+ strand)
             rc_rtt_codon_frames = get_codon_frames(rc_rtt) # codons
 
-            rtt_wt = rc_reference_sequence[pbs_j-int(rtt_length):pbs_j]
+            rtt_wt = rc_f5_seq_f3_nuc[pbs_j-int(rtt_length):pbs_j]
             rc_rtt_wt = Seq.reverse_complement(rtt_wt) # reverse complement of rtt wt (+ strand)
             rc_rtt_wt_codon_frames = get_codon_frames(rc_rtt_wt) # codons
             if comments==True:
-                print(f"Reference Sequence Codons (Here): {reference_sequence_codons[math.floor((len(rc_reference_sequence)-pbs_j)/3)-1:math.floor((len(rc_reference_sequence)-pbs_j+int(rtt_length))/3)]}")
+                print(f"Extended Codons (Here): {extended_codons[math.floor((len(rc_f5_seq_f3_nuc)-pbs_j)/3)-1:math.floor((len(rc_f5_seq_f3_nuc)-pbs_j+int(rtt_length))/3)]}")
             for i,(rc_rtt_wt_codon_frame,rc_rtt_codon_frame) in enumerate(zip(rc_rtt_wt_codon_frames,rc_rtt_codon_frames)): # Search for in-frame nucleotide sequence
                 if comments==True:
                     print(f"rc_rtt_wt_codon_frame: {rc_rtt_wt_codon_frame}")
                 
-                index = found_list_in_order(reference_sequence_codons[math.floor((len(rc_reference_sequence)-pbs_j)/3)-1:math.floor((len(rc_reference_sequence)-pbs_j+rtt_length)/3)],rc_rtt_wt_codon_frame)
+                index = found_list_in_order(extended_codons[math.floor((len(rc_f5_seq_f3_nuc)-pbs_j)/3)-1:math.floor((len(rc_f5_seq_f3_nuc)-pbs_j+rtt_length)/3)],rc_rtt_wt_codon_frame)
                 if index != -1: # Codon frame from reverse complement of rtt matches extended codons of in-frame nucleotide sequence
                     rc_rtt_inframe_nuc_codons_flank5 = rc_rtt[:i] # Save codon frame flank 5'
                     rc_rtt_inframe_nuc_codons = rc_rtt_codon_frame # Save codon frame
@@ -350,32 +365,32 @@ def enzyme_codon_swap(pegRNAs: pd.DataFrame | str, enzyme: str,
         elif strand=='-': # Spacer: - strand; PBS & RTT: + strand
             
             # Find spacer in sequence
-            spacer_j = rc_reference_sequence.find(spacer)
+            spacer_j = rc_f5_seq_f3_nuc.find(spacer)
             if spacer_j == -1:
-                raise ValueError(f"Spacer sequence '{spacer}' not found in reference sequence.")
-            if spacer_j != rc_reference_sequence.rfind(spacer):
-                raise ValueError(f"Multiple matches found for spacer sequence '{spacer}' not found in reference sequence. Please check the input file.")
+                raise ValueError(f"Spacer sequence '{spacer}' not found in target sequence. Please check the input file.")
+            if spacer_j != rc_f5_seq_f3_nuc.rfind(spacer):
+                raise ValueError(f"Multiple matches found for spacer sequence '{spacer}' not found in target sequence. Please check the input file.")
 
             # Find PBS in sequence
-            pbs_j = reference_sequence.find(pbs)
+            pbs_j = f5_seq_f3_nuc.find(pbs)
             if pbs_j == -1:
-                raise ValueError(f"PBS sequence '{pbs}' not found in reference sequence")
-            if pbs_j != reference_sequence.rfind(pbs):
-                print(pbs,pbs_j,reference_sequence.rfind(pbs))
-                raise ValueError(f"Multiple matches found for PBS sequence '{pbs}' not found in reference sequence")
+                raise ValueError(f"PBS sequence '{pbs}' not found in target sequence. Please check the input file.")
+            if pbs_j != f5_seq_f3_nuc.rfind(pbs):
+                print(pbs,pbs_j,f5_seq_f3_nuc.rfind(pbs))
+                raise ValueError(f"Multiple matches found for PBS sequence '{pbs}' not found in target sequence. Please check the input file.")
 
             # Obtain WT RTT & edit RTT in-frame from + strand
             rtt_codon_frames = get_codon_frames(rtt) # codons
 
-            rtt_wt = reference_sequence[pbs_j-int(rtt_length):pbs_j]
+            rtt_wt = f5_seq_f3_nuc[pbs_j-int(rtt_length):pbs_j]
             rtt_wt_codon_frames = get_codon_frames(rtt_wt) # codons
             if comments==True:
-                print(f"Reference Sequence Codons (Here): {reference_sequence_codons[math.ceil((pbs_j-rtt_length)/3)-1:math.ceil(pbs_j/3)]}")
+                print(f"Extended Codons (Here): {extended_codons[math.ceil((pbs_j-rtt_length)/3)-1:math.ceil(pbs_j/3)]}")
             for i,(rtt_wt_codon_frame,rtt_codon_frame) in enumerate(zip(rtt_wt_codon_frames,rtt_codon_frames)): # Search for in-frame nucleotide sequence
                 if comments==True:
                     print(f"rtt_wt_codon_frame: {rtt_wt_codon_frame}")
 
-                index = found_list_in_order(reference_sequence_codons[math.ceil((pbs_j-rtt_length)/3)-1:math.ceil(pbs_j/3)],rtt_wt_codon_frame)
+                index = found_list_in_order(extended_codons[math.ceil((pbs_j-rtt_length)/3)-1:math.ceil(pbs_j/3)],rtt_wt_codon_frame)
                 if index != -1: # Codon frame from rtt matches extended codons of in-frame nucleotide sequence
                     rtt_inframe_nuc_codons_flank5 = rtt[:i] # Save codon frame flank 5'
                     rtt_inframe_nuc_codons = rtt_codon_frame # Save codon frame
@@ -718,7 +733,7 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
                     obj=pegRNAs_enzyme)
             
             # Codon swap pegRNAs with enzyme recognition site
-            pegRNAs_enzyme = enzyme_codon_swap(pegRNAs=pegRNAs_enzyme,enzyme=enzyme)
+            pegRNAs_enzyme = enzyme_codon_swap(pegRNAs=pegRNAs_enzyme,in_file=in_file,enzyme=enzyme)
             io.save(dir=f'../pegRNAs/{enzyme}/codon_swap_after',
                     file=f'{int(pegRNAs_enzyme.iloc[0]['PBS_length'])}.csv',
                     obj=pegRNAs_enzyme)
