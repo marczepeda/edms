@@ -1577,7 +1577,7 @@ def main():
     - epegRNA_linkers(): Generate epegRNA linkers between PBS and 3' hairpin motif & finish annotations
     - merge(): rejoins epeg/ngRNAs & creates ngRNA_groups
     - sensor_designer(): design pegRNA sensors
-    - pegRNA_outcome(): confirm that pegRNAs should create the predicted edit
+    - pegRNA_outcome(): confirm that pegRNAs should create the predicted edits
     - pegRNA_signature(): create signatures for pegRNA outcomes using alignments
     '''
     parser_pe = subparsers.add_parser("pe", help="Prime Editing", formatter_class=MyFormatter)
@@ -1721,8 +1721,7 @@ Examples:[/red]
 
     # sensor_designer():
     parser_pe_sensor_designer.add_argument("--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
-    parser_pe_sensor_designer.add_argument("--in_file", type=str, help="Path to PrimeDesign input file (required columns: target_name, target_sequence, index)", required=True)
-
+    
     parser_pe_sensor_designer.add_argument("--sensor_length", type=int, default=60, help="Total length of the sensor in bp (Default: 60)")
     parser_pe_sensor_designer.add_argument("--before_spacer", type=int, default=5, help="Amount of nucleotide context to put before the protospacer in the sensor (Default = 5)")
     parser_pe_sensor_designer.add_argument("--sensor_orientation", type=str, default='revcom', help="Orientation of the sensor relative to the protospacer (Options: 'revcom' [Default b/c minimize recombination] or ’forward’")
@@ -1732,8 +1731,8 @@ Examples:[/red]
 
     # pegRNA_outcome():
     parser_pe_pegRNA_outcome.add_argument("--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
-    parser_pe_pegRNA_outcome.add_argument("--in_file", type=str, help="Path to PrimeDesign input file (required columns: target_name, target_sequence, index)", required=True)
 
+    parser_pe_pegRNA_outcome.add_argument("--in_file", type=str, help="Path to PrimeDesign input file (required columns: target_name, target_sequence, index). Verify all expected edits are present in pegRNA library (for saturation mutagenesis only)")
     parser_pe_pegRNA_outcome.add_argument("--out_dir", type=str, help="Output directory (Default: ../pegRNA_outcome)", default='../pegRNA_outcome')
     parser_pe_pegRNA_outcome.add_argument("--out_file", type=str, help="Name of the output file (Default: pegRNAs.csv)", default='pegRNAs.csv')
     parser_pe_pegRNA_outcome.add_argument("--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
@@ -1742,8 +1741,7 @@ Examples:[/red]
     parser_pe_pegRNA_outcome.add_argument("--mismatch_score", type=float, help="Mismatch score for pairwise alignment", default=argparse.SUPPRESS)
     parser_pe_pegRNA_outcome.add_argument("--open_gap_score", type=float, help="Open gap score for pairwise alignment", default=argparse.SUPPRESS)
     parser_pe_pegRNA_outcome.add_argument("--extend_gap_score", type=float, help="Extend gap score for pairwise alignment", default=argparse.SUPPRESS)
-    parser_pe_pegRNA_outcome.add_argument("--comments", action='store_true', help="Print comments (Default: False)", default=False)
-
+    
     # pegRNA_signature():
     parser_pe_pegRNA_signature.add_argument("--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
     parser_pe_pegRNA_signature.add_argument("--in_file", type=str, help="Path to PrimeDesign input file (required columns: target_name, target_sequence, index)", required=True)
