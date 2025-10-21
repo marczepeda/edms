@@ -12,6 +12,9 @@ Usage:
 
 [Package .csv files]
 - load_resource_csv(): load .csv file from resources
+
+[Execute bash script]    
+- run_bundled_script(): Run a bundled script from the package script resources.
 '''
 # Import packages
 import os

@@ -644,12 +644,12 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
             pegRNAs['AA_number'] = [int(re.findall(r'-?\d+',edit)[0]) if edit is not None else index for edit in pegRNAs['Edit']]
             cols=['pegRNA_number','gRNA_type','Strand','Edit','AA_number','Edit_type', # Important metadata
                 'Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence',  # Sequence information
-                'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide','Reference_sequence', 'Edit_sequence'] # Less important metadata
+                'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide','Reference_sequence', 'Edit_sequence', 'Silent_mutation_relative_to_edit'] # Less important metadata
         else: 
             pegRNAs['Base_number'] = [int(re.findall(r'-?\d+',edit)[0]) if edit is not None else index for edit in pegRNAs['Edit']]
             cols=['pegRNA_number','gRNA_type','Strand','Edit','Base_number','Edit_type', # Important metadata
                 'Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence',  # Sequence information
-                'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide','Reference_sequence', 'Edit_sequence'] # Less important metadata
+                'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide','Reference_sequence', 'Edit_sequence', 'Silent_mutation_relative_to_edit'] # Less important metadata
         for pegRNA_col in pegRNAs.columns: # Keep any additional columns in pegRNAs DataFrame
             if pegRNA_col not in cols and pegRNA_col not in ['ngRNA-to-pegRNA_distance','Spacer_sequence_order_TOP','Spacer_sequence_order_BOTTOM','pegRNA_extension_sequence_order_TOP','pegRNA_extension_sequence_order_BOTTOM']:
                 cols.append(pegRNA_col)
@@ -667,12 +667,12 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
             ngRNAs['AA_number'] = [int(re.findall(r'-?\d+',edit)[0]) if edit is not None else index for edit in ngRNAs['Edit']]
             cols = ['pegRNA_number','ngRNA_number','gRNA_type','Strand','Edit','AA_number', # Important metadata
                 'Spacer_sequence','Scaffold_sequence',  # Sequence information
-                'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Annotation','Nick_index','ngRNA-to-pegRNA_distance','Reference_sequence', 'Edit_sequence'] # Less important metadata
+                'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Annotation','Nick_index','ngRNA-to-pegRNA_distance','Reference_sequence', 'Edit_sequence', 'Silent_mutation_relative_to_edit'] # Less important metadata
         else: 
             ngRNAs['Base_number'] = [int(re.findall(r'-?\d+',edit)[0]) if edit is not None else index for edit in ngRNAs['Edit']]
             cols = ['pegRNA_number','ngRNA_number','gRNA_type','Strand','Edit','Base_number', # Important metadata
                 'Spacer_sequence','Scaffold_sequence',  # Sequence information
-                'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Annotation','Nick_index','ngRNA-to-pegRNA_distance','Reference_sequence', 'Edit_sequence'] # Less important metadata
+                'Target_name','Target_sequence','Spacer_GC_content','PAM_sequence','Annotation','Nick_index','ngRNA-to-pegRNA_distance','Reference_sequence', 'Edit_sequence', 'Silent_mutation_relative_to_edit'] # Less important metadata
         
         for ngRNA_col in ngRNAs.columns: # Keep any additional columns in ngRNAs DataFrame
             if ngRNA_col not in cols and ngRNA_col not in ['Spacer_sequence_order_TOP','Spacer_sequence_order_BOTTOM','pegRNA_extension_sequence_order_TOP','pegRNA_extension_sequence_order_BOTTOM']:
@@ -693,7 +693,7 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
         pegRNAs['Target_name']=[target_name_in_file]*len(pegRNAs)
         cols = ['Target_name','pegRNA_number','gRNA_type','Strand','Edit_type', # Important metadata
                 'Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence',  # Sequence information
-                'Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide','Reference_sequence', 'Edit_sequence'] # Less important metadata
+                'Target_sequence','Spacer_GC_content','PAM_sequence','Extension_sequence','Annotation','pegRNA-to-edit_distance','Nick_index','PBS_length','PBS_GC_content','RTT_length','RTT_GC_content','First_extension_nucleotide','Reference_sequence', 'Edit_sequence', 'Silent_mutation_relative_to_edit'] # Less important metadata
         for pegRNA_col in pegRNAs.columns: # Keep any additional columns in pegRNAs DataFrame
             if pegRNA_col not in cols and pegRNA_col not in ['ngRNA-to-pegRNA_distance','Spacer_sequence_order_TOP','Spacer_sequence_order_BOTTOM','pegRNA_extension_sequence_order_TOP','pegRNA_extension_sequence_order_BOTTOM']:
                 cols.append(pegRNA_col)
@@ -705,7 +705,7 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
         ngRNAs['ngRNA_number']=list(np.arange(1,len(ngRNAs)+1))
         cols = ['Target_name','ngRNA_number','gRNA_type','Strand', # Important metadata
                 'Spacer_sequence','Scaffold_sequence',  # Sequence information
-                'Target_sequence','Spacer_GC_content','PAM_sequence','Annotation','Nick_index','ngRNA-to-pegRNA_distance','Reference_sequence', 'Edit_sequence'] # Less important metadata
+                'Target_sequence','Spacer_GC_content','PAM_sequence','Annotation','Nick_index','ngRNA-to-pegRNA_distance','Reference_sequence', 'Edit_sequence', 'Silent_mutation_relative_to_edit'] # Less important metadata
         for ngRNA_col in ngRNAs.columns: # Keep any additional columns in ngRNAs DataFrame
             if ngRNA_col not in cols and ngRNA_col not in ['Spacer_sequence_order_TOP','Spacer_sequence_order_BOTTOM','pegRNA_extension_sequence_order_TOP','pegRNA_extension_sequence_order_BOTTOM']:
                 cols.append(ngRNA_col)

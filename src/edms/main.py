@@ -29,7 +29,6 @@ Usage:
 '''
 # Import packages
 from __future__ import annotations # NEEDS TO BE FIRST LINE
-from cgitb import text
 import json, os, sys
 from pathlib import Path
 import argparse
@@ -548,14 +547,6 @@ def main():
             "argparse.epilog": "",              # ... -h; epilog at the bottom
             "argparse.syntax": "white",         # []
         }
-        
-        def _split_lines(self, text, width):
-            """Render help text as block (preserve line breaks and indentation)."""
-            return text.splitlines()
-        
-        def _fill_text(self, text, width, indent):
-            """Preserve newlines/indentation for description/epilog"""
-            return "\n".join(line if line.strip() else "" for line in text.splitlines())
 
     # Add parser and subparsers
     parser = argparse.ArgumentParser(prog="edms", description="Endogenous Deep Mutational Scans (EDMS)", formatter_class=MyFormatter)
@@ -565,7 +556,7 @@ def main():
     edms.utils:
     - run_bundled_script(): Run a bundled script from the package script resources.
     '''
-    subparsers.add_parser("autocomplete", help="Enable edms autocomplete", description="Enable edms autocomplete") # Run autocomplete script (args.command == "autocomplete")
+    subparsers.add_parser("autocomplete", help="Enable edms autocomplete", description="Enable edms autocomplete", formatter_class=MyFormatter) # Run autocomplete script (args.command == "autocomplete")
 
     '''
     edms.config:
