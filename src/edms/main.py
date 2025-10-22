@@ -1744,9 +1744,12 @@ Examples:[/red]
     
     # pegRNA_signature():
     parser_pe_pegRNA_signature.add_argument("--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
-    parser_pe_pegRNA_signature.add_argument("--in_file", type=str, help="Path to PrimeDesign input file (required columns: target_name, target_sequence, index)", required=True)
+    parser_pe_pegRNA_signature.add_argument("--flank5", type=str, dest='flank5_sequence', help=f"Flank 5' sequence", required=True)
+    parser_pe_pegRNA_signature.add_argument("--flank3", type=str, dest='flank3_sequence', help=f"Flank 3' sequence", required=True)
     
-    parser_pe_pegRNA_signature.add_argument("--post_RTT_sequence", type=str, help="Column name for post RTT sequences (Default: 'post_RTT_sequence'). Change to 'Edit_sequence' if pegRNA_outcome was skipped.", default='Post_RTT_sequence')
+    parser_pe_pegRNA_signature.add_argument("--flank_length", type=int, help="Length of flank sequences to include in alignment (Default: 15)", default=15)
+    parser_pe_pegRNA_signature.add_argument("--reference_sequence", type=str, help="Column name for reference sequences (Default: 'Reference_sequence')", default='Reference_sequence')
+    parser_pe_pegRNA_signature.add_argument("--edit_sequence", type=str, help="Column name for edit sequences (Default: 'Edit_sequence')", default='Edit_sequence')
     parser_pe_pegRNA_signature.add_argument("--out_dir", type=str, help="Output directory (Default: ../pegRNA_signature)", default='../pegRNA_signature')
     parser_pe_pegRNA_signature.add_argument("--out_file", type=str, help="Name of the output file (Default: pegRNAs.csv)", default='pegRNAs.csv')
     parser_pe_pegRNA_signature.add_argument("--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)

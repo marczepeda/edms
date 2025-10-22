@@ -249,10 +249,11 @@ def enzyme_codon_swap(pegRNAs: pd.DataFrame | str, enzyme: str,
 
     pegRNAs = pegRNAs[enzyme_rtt]
 
-    # Get new RTT sequences
+    # Get new RTT and edit sequences
     new_rtt_ls = []
-    for (strand,spacer,scaffold,rtt,pbs,rtt_length,enzyme_fwd_i_ls,enzyme_rc_i_ls,reference_sequence) in t.zip_cols(df=pegRNAs,
-        cols=['Strand','Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence', 'RTT_length',f'{enzyme}_fwd_i',f'{enzyme}_rc_i','Reference_sequence']):
+    new_edit_sequence_ls = []
+    for (strand,spacer,scaffold,rtt,pbs,rtt_length,enzyme_fwd_i_ls,enzyme_rc_i_ls,reference_sequence,edit_sequence) in t.zip_cols(df=pegRNAs,
+        cols=['Strand','Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence', 'RTT_length',f'{enzyme}_fwd_i',f'{enzyme}_rc_i','Reference_sequence','Edit_sequence']):
         
         # Get reverse complement and codons of reference sequence
         reference_sequence = Seq(reference_sequence)
@@ -264,14 +265,14 @@ def enzyme_codon_swap(pegRNAs: pd.DataFrame | str, enzyme: str,
             # Find spacer in sequence
             spacer_j = reference_sequence.find(spacer)
             if spacer_j == -1:
-                raise ValueError(f"Spacer sequence '{spacer}' not found in reference sequence.")
+                raise ValueError(f"Spacer sequence '{spacer}' not found in reference sequence: {reference_sequence}")
             elif spacer_j != reference_sequence.rfind(spacer):
                 raise ValueError(f"Multiple matches found for spacer sequence '{spacer}'.")
 
             # Find PBS in reverse complement sequence
             pbs_j = rc_reference_sequence.find(pbs)
             if pbs_j == -1:
-                raise ValueError(f"PBS sequence '{pbs}' not found in reference sequence.")
+                raise ValueError(f"PBS sequence '{pbs}' not found in reference sequence: {reference_sequence}")
             elif pbs_j != rc_reference_sequence.rfind(pbs):
                 print(pbs,pbs_j,rc_reference_sequence.rfind(pbs))
                 raise ValueError(f"Multiple matches found for PBS sequence '{pbs}'.")
@@ -322,43 +323,55 @@ def enzyme_codon_swap(pegRNAs: pd.DataFrame | str, enzyme: str,
                 enzyme_codon_i = math.floor(enzyme_i/3)
             else:
                 new_rtt_ls.append(None)
+                new_edit_sequence_ls.append(None)
                 continue
             
             if comments==True:
                 print(f'Enzyme site index: {enzyme_i}')
                 print(f'Enzyme codon index: {enzyme_codon_i}')
 
-            # Change codon swap enzyme site & save new RTT sequence
+            # Change codon swap enzyme site; save new RTT sequence and edit sequence
             codons = [str(codon).lower() for codon in aa_dna_codon_table[str(rc_rtt_inframe_prot[enzyme_codon_i])] if str(codon).upper() != str(rc_rtt_inframe_nuc_codons[enzyme_codon_i]).upper()]
             if comments==True:
                 print(f'Codons: {codons}')
             if len(codons)!=0:
                 rc_rtt_inframe_nuc_codons[enzyme_codon_i] = codons[0]
+                new_rtt = str(Seq.reverse_complement(Seq(rc_rtt_inframe_nuc_codons_flank5)+Seq('').join(rc_rtt_inframe_nuc_codons)+Seq(rc_rtt_inframe_nuc_codons_flank3)))
+                new_rtt_ls.append(new_rtt)
+                edit_sequence = str(edit_sequence)
+                rc_rtt = str(rc_rtt)
+                rc_rtt_edit_sequence_i = edit_sequence.upper().find(rc_rtt.upper())
+                if rc_rtt_edit_sequence_i == -1:
+                    raise ValueError(f"RTT sequence (RC) '{rc_rtt}' not found in edit sequence '{edit_sequence}'.")
+                new_edit_sequence = edit_sequence[:rc_rtt_edit_sequence_i] + str(Seq.reverse_complement(Seq(new_rtt))) + edit_sequence[rc_rtt_edit_sequence_i+len(new_rtt):]
+                new_edit_sequence_ls.append(new_edit_sequence)
+
                 if comments==True:
                     print(f'Nucleotides In-Frame (New): {Seq('').join(rc_rtt_inframe_nuc_codons)}')
                     print(f'Amino Acid In-Frame (New): {Seq.translate(Seq('').join(rc_rtt_inframe_nuc_codons))}')
-                    print(f'RTT (New): {str(Seq.reverse_complement(Seq(rc_rtt_inframe_nuc_codons_flank5)+Seq('').join(rc_rtt_inframe_nuc_codons)+Seq(rc_rtt_inframe_nuc_codons_flank3)))}')
+                    print(f'RTT (New): {new_rtt}')
                     print(f'RTT (Old): {rtt}')
                     print(f'RTT (WT): {rtt_wt}')
-                new_rtt_ls.append(str(Seq.reverse_complement(Seq(rc_rtt_inframe_nuc_codons_flank5)+
-                                                             Seq('').join(rc_rtt_inframe_nuc_codons)+
-                                                             Seq(rc_rtt_inframe_nuc_codons_flank3))))
+                    print(f'Edit Sequence (New): {new_edit_sequence}')
+                    print(f'Edit Sequence (Old): {edit_sequence}')
+                
             else:
                 new_rtt_ls.append(None)
+                new_edit_sequence_ls.append(None)
 
         elif strand=='-': # Spacer: - strand; PBS & RTT: + strand
             
             # Find spacer in sequence
             spacer_j = rc_reference_sequence.find(spacer)
             if spacer_j == -1:
-                raise ValueError(f"Spacer sequence '{spacer}' not found in reference sequence.")
+                raise ValueError(f"Spacer sequence '{spacer}' not found in reference sequence: {reference_sequence}")
             if spacer_j != rc_reference_sequence.rfind(spacer):
                 raise ValueError(f"Multiple matches found for spacer sequence '{spacer}' not found in reference sequence. Please check the input file.")
 
             # Find PBS in sequence
             pbs_j = reference_sequence.find(pbs)
             if pbs_j == -1:
-                raise ValueError(f"PBS sequence '{pbs}' not found in reference sequence")
+                raise ValueError(f"PBS sequence '{pbs}' not found in reference sequence: {reference_sequence}")
             if pbs_j != reference_sequence.rfind(pbs):
                 print(pbs,pbs_j,reference_sequence.rfind(pbs))
                 raise ValueError(f"Multiple matches found for PBS sequence '{pbs}' not found in reference sequence")
@@ -406,6 +419,7 @@ def enzyme_codon_swap(pegRNAs: pd.DataFrame | str, enzyme: str,
                 enzyme_codon_i = math.floor(enzyme_i/3)
             else:
                 new_rtt_ls.append(None)
+                new_edit_sequence_ls.append(None)
                 continue
             
             if comments==True:
@@ -418,20 +432,32 @@ def enzyme_codon_swap(pegRNAs: pd.DataFrame | str, enzyme: str,
                 print(f'Codons: {codons}')
             if len(codons)!=0:
                 rtt_inframe_nuc_codons[enzyme_codon_i] = codons[0]
+                new_rtt = str(Seq(rtt_inframe_nuc_codons_flank5)+Seq('').join(rtt_inframe_nuc_codons)+Seq(rtt_inframe_nuc_codons_flank3))
+                new_rtt_ls.append(new_rtt)
+                edit_sequence = str(edit_sequence)
+                rtt = str(rtt)
+                rtt_edit_sequence_i = edit_sequence.upper().find(rtt.upper())
+                if rtt_edit_sequence_i == -1:
+                    raise ValueError(f"RTT sequence '{rtt}' not found in edit sequence '{edit_sequence}'.")
+                new_edit_sequence = edit_sequence[:rtt_edit_sequence_i] + new_rtt + edit_sequence[rtt_edit_sequence_i+len(new_rtt):]
+                new_edit_sequence_ls.append(new_edit_sequence)
+
                 if comments==True:
                     print(f'Nucleotides In-Frame (New): {Seq('').join(rtt_inframe_nuc_codons)}')
                     print(f'Amino Acid In-Frame (New): {Seq.translate(Seq('').join(rtt_inframe_nuc_codons))}')
-                    print(f'RTT (New): {str(Seq(rtt_inframe_nuc_codons_flank5)+Seq('').join(rtt_inframe_nuc_codons)+Seq(rtt_inframe_nuc_codons_flank3))}')
+                    print(f'RTT (New): {new_rtt}')
                     print(f'RTT (Old): {rtt}')
                     print(f'RTT (WT): {rtt_wt}')
-                new_rtt_ls.append(str(Seq(rtt_inframe_nuc_codons_flank5)+
-                                      Seq('').join(rtt_inframe_nuc_codons)+
-                                      Seq(rtt_inframe_nuc_codons_flank3)))
+                    print(f'Edit Sequence (New): {new_edit_sequence}')
+                    print(f'Edit Sequence (Old): {edit_sequence}')
+
             else:
                 new_rtt_ls.append(None)
+                new_edit_sequence_ls.append(None)
 
-    # Update pegRNAs DataFrame with new RTT sequences
+    # Update pegRNAs DataFrame with new RTT and edit sequences
     pegRNAs['RTT_sequence'] = new_rtt_ls
+    pegRNAs['Edit_sequence'] = new_edit_sequence_ls
     pegRNAs = pegRNAs[pegRNAs['RTT_sequence'].isna()==False].reset_index(drop=True)  # Filter out None RTT sequences
 
     # Update extension & oligonucleotide sequence
@@ -717,7 +743,7 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
                     obj=pegRNAs_enzyme)
             
             # Codon swap pegRNAs with enzyme recognition site
-            pegRNAs_enzyme = enzyme_codon_swap(pegRNAs=pegRNAs_enzyme,enzyme=enzyme)
+            pegRNAs_enzyme = enzyme_codon_swap(pegRNAs=pegRNAs_enzyme,enzyme=enzyme,comments=True)
             io.save(dir=f'../pegRNAs/{enzyme}/codon_swap_after',
                     file=f'{int(pegRNAs_enzyme.iloc[0]['PBS_length'])}.csv',
                     obj=pegRNAs_enzyme)
@@ -1475,16 +1501,20 @@ def pegRNA_outcome(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str = No
         io.save(dir=out_dir,file=out_file,obj=pegRNAs)
     if return_df==True: return pegRNAs
 
-def pegRNA_signature(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, flank_length: int = 21, post_RTT_sequence: str='Post_RTT_sequence',
-                     match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, extend_gap_score: float = -0.1,
-                     out_dir: str=None, out_file: str=None, save_alignments: bool=False, return_df: bool=True, literal_eval: bool=True) -> pd.DataFrame:
+def pegRNA_signature(pegRNAs: pd.DataFrame | str, flank5_sequence: str | Seq, flank3_sequence: str | Seq, flank_length: int=15,
+                    reference_sequence: str='Reference_sequence', edit_sequence: str='Edit_sequence',
+                    match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, extend_gap_score: float = -0.1,
+                    out_dir: str=None, out_file: str=None, save_alignments: bool=False, return_df: bool=True, literal_eval: bool=True) -> pd.DataFrame:
     ''' 
     pegRNA_signature(): create signatures for pegRNA outcomes using alignments
     
+    Parameters:
     pegRNAs (dataframe | str): pegRNAs DataFrame (or file path)
-    in_file (dataframe | str): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence,index (column names required)
-    flank_length (int, optional): length of flanking sequences to include in signature (Default: 21)
-    post_RTT_sequence (str, optional): column name for post RTT sequences (Default: 'Post_RTT_sequence'). Change to 'Edit_sequence' if pegRNA_outcome() was skipped.
+    flank5_sequence (str | Seq): flank5 sequence
+    flank3_sequence (str | Seq): flank3 sequence
+    flank_length (int, optional): length of flank sequences to include in alignment (Default: 15)
+    reference_sequence (str, optional): column name for reference sequences (Default: 'Reference_sequence')
+    edit_sequence (str, optional): column name for post RTT sequences (Default: 'Edit_sequence')
     match_score (float, optional): match score for pairwise alignment (Default: 2)
     mismatch_score (float, optional): mismatch score for pairwise alignment (Default: -1)
     open_gap_score (float, optional): open gap score for pairwise alignment (Default: -10)
@@ -1499,11 +1529,9 @@ def pegRNA_signature(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, f
     memory_timer(reset=True)
     memories = []
 
-    # Get pegRNAs & PrimeDesign input DataFrame from file path if needed
+    # Get pegRNAs DataFrame from file path if needed
     if type(pegRNAs)==str:
         pegRNAs = io.get(pt=pegRNAs,literal_eval=literal_eval)
-    if type(in_file)==str:
-        in_file = io.get(pt=in_file,literal_eval=literal_eval)
 
     # High sequence homology; punish gaps
     aligner = PairwiseAligner()
@@ -1513,23 +1541,37 @@ def pegRNA_signature(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, f
     aligner.open_gap_score = open_gap_score  # Penalty for opening a gap; applied to both strands
     aligner.extend_gap_score = extend_gap_score  # Penalty for extending a gap; applied to both strands
 
-    # Get wt sequence
-    target_sequence = in_file.iloc[0]['target_sequence'] 
-    seq = target_sequence.split('(')[1].split(')')[0] # Break apart target sequences
-    if len(seq)%3 != 0: raise(ValueError(f"Length of target sequence ({len(seq)}) must divisible by 3. Check input file."))
-    flank5 = target_sequence.split('(')[0]
-    if len(flank5)%3 != 0: raise(ValueError(f"Length of flank5 ({len(flank5)}) must divisible by 3. Check input file."))
-    flank3 = target_sequence.split(')')[1]
-    if len(flank3)%3 != 0: raise(ValueError(f"Length of flank3 ({len(flank3)}) must divisible by 3. Check input file."))
+    # Get alignments and signatures
+    aligments_list = []
+    signatures_list = []
+    for i,(reference_seq, edit_seq) in enumerate(t.zip_cols(df=pegRNAs, cols=[reference_sequence,edit_sequence])): # Iterate through reference and edit sequences
+        
+        # Convert Seq objects to strings
+        flank5_sequence = str(flank5_sequence)
+        flank3_sequence = str(flank3_sequence)
+        reference_seq = str(reference_seq)
+        edit_seq = str(edit_seq)
 
-    # Create alignments and Signatures
-    start_i = len(flank5)
-    end_i = start_i + len(seq)
-    pegRNAs['Alignment'] = [aligner.align(Seq(flank5[-flank_length:])+Seq(seq)+Seq(flank3[:flank_length]),
-                                        Seq((post_RTT_seq[start_i-flank_length:end_i+flank_length])))[0] for post_RTT_seq in pegRNAs[post_RTT_sequence]]
-    pegRNAs['Signature'] = [signature_from_alignment(ref_seq=flank5[-flank_length:]+seq+flank3[:flank_length],
-                                                    query_seq=post_RTT_seq[start_i-flank_length:end_i+flank_length],
-                                                    alignment=alignment) for alignment,post_RTT_seq in t.zip_cols(df=pegRNAs, cols=['Alignment', post_RTT_sequence])]
+        # Trim flanks from reference and edit sequences
+        if reference_seq.find(flank5_sequence)==-1 or reference_seq.rfind(flank3_sequence)==-1:
+            raise(ValueError(f"Flank5 or Flank3 sequences were not found in reference sequence for pegRNAs row {i}.\nPlease check the flank5 ({flank5_sequence}) and flank3 ({flank3_sequence}) sequences.\nReference sequence: {reference_seq}"))
+        if edit_seq.find(flank5_sequence)==-1 or edit_seq.rfind(flank3_sequence)==-1:
+            raise(ValueError(f"Flank5 or Flank3 sequences were not found in edit sequence for pegRNAs row {i}.\nPlease check the flank5 ({flank5_sequence}) and flank3 ({flank3_sequence}) sequences.\nEdit sequence: {edit_seq}"))
+        reference_seq = reference_seq[reference_seq.find(flank5_sequence)+len(flank5_sequence)-flank_length : reference_seq.rfind(flank3_sequence)+flank_length]
+        edit_seq = edit_seq[edit_seq.find(flank5_sequence)+len(flank5_sequence)-flank_length : edit_seq.rfind(flank3_sequence)+flank_length]
+
+        # Create and append alignment
+        alignment = aligner.align(Seq(reference_seq), Seq(edit_seq))[0]
+        aligments_list.append(alignment)
+
+        # Create and append signature
+        signatures_list.append(signature_from_alignment(ref_seq=reference_seq, query_seq=edit_seq, alignment=alignment))
+
+    # Create Alignment and Signature columns
+    pegRNAs['Alignment'] = aligments_list
+    pegRNAs['Signature'] = signatures_list
+    
+    # Drop Alignment column if not saving
     if save_alignments==False:
         pegRNAs.drop(columns=['Alignment'],inplace=True)
 
@@ -1537,11 +1579,14 @@ def pegRNA_signature(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str, f
     snvs_ls = []
     ins_ls = []
     dels_ls = []
-    for sign in pegRNAs['Signature']:
-        
+    for sign in pegRNAs['Signature']: # Iterate through signatures
+
+        # Count SNVs, insertions, deletions
         snvs_ls.append(len([snv for snv in sign.snvs]))
         ins_ls.append(sum([len(ind.ins) for ind in sign.indels]))
         dels_ls.append(sum([ind.dellen for ind in sign.indels]))
+
+    # Create count columns
     pegRNAs['SNV_count'] = snvs_ls
     pegRNAs['ins_count'] = ins_ls
     pegRNAs['del_count'] = dels_ls
