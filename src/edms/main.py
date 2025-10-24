@@ -410,7 +410,9 @@ def add_common_plot_stack_args(subparser):
     subparser.add_argument("--dir", type=str, help="Output directory path", default='./out')
     subparser.add_argument("--file", type=str, help="Output filename", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_stack.png')
     
-    subparser.add_argument("--cutoff", type=float, default=0, help="Minimum value cutoff for inclusion in stack")
+    subparser.add_argument("--cutoff_group", type=str, default=argparse.SUPPRESS, help="Column name to group by when applying cutoff")
+    subparser.add_argument("--cutoff_value", type=float, default=0, help="Y-axis values needs be greater than (e.g. 0)")
+    subparser.add_argument("--cutoff_remove", dest="cutoff_keep",action="store_false", help="Remove values below cutoff", default=True)
     subparser.add_argument("--cols_ord", nargs="+", help="Order of values in the color column")
     subparser.add_argument("--x_ord", nargs="+", help="Custom order of X-axis categories")
     subparser.add_argument("--palette_or_cmap", type=str, default="Set2", help="Seaborn palette or Matplotlib colormap for stacked bars")

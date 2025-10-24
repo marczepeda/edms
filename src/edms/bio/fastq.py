@@ -1623,7 +1623,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
     io.save(dir=out_dir,file=out_file,obj=out_df)
 
     stack(df=out_df,x='fastq_file',y='fraction',cols=edit_col,vertical=False,
-          palette_or_cmap='tab20',repeats=math.ceil(len(out_df[edit_col].unique())/20),cutoff=0,legend_bbox_to_anchor=(0,-.1),legend_ncol=8,
+          palette_or_cmap='tab20',repeats=math.ceil(len(out_df[edit_col].unique())/20),cutoff_group='fastq_file',cutoff_value=0,legend_bbox_to_anchor=(0,-.1),legend_ncol=8,
           figsize=(15,10), title='Edit Outcomes', dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}{plot_suf}", show=show, **plot_kwargs)
 
     if return_df: return out_df
@@ -3228,8 +3228,8 @@ def cat(typ: str, df: pd.DataFrame | str, x: str, y: str, errorbar: str=None, co
           legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_items=legend_items,show=show,space_capitalize=space_capitalize,
           **kwargs)
 
-def stack(df: pd.DataFrame | str, x: str='sample', y: str='fraction', cols: str='edit', cutoff: float=0.01, cols_ord: list=[], x_ord: list=[],
-          file: str=None, dir: str=None, palette_or_cmap: str='tab20', repeats: int=1, errcap: int=4, vertical: bool=True,
+def stack(df: pd.DataFrame | str, x: str='sample', y: str='fraction', cols: str='edit', cutoff_group: str='sample', cutoff_value: float=0.01, cutoff_keep: bool=True, 
+          cols_ord: list=[], x_ord: list=[], file: str=None, dir: str=None, palette_or_cmap: str='tab20', repeats: int=1, errcap: int=4, vertical: bool=True,
           figsize=(10,6), title: str='Editing Outcomes', title_size: int=18, title_weight: str='bold', title_font: str='Arial',
           x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_ticks_rot: int=0, x_ticks_font: str='Arial',
           y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_ticks_rot: int=0, y_ticks_font: str='Arial',
@@ -3243,7 +3243,9 @@ def stack(df: pd.DataFrame | str, x: str='sample', y: str='fraction', cols: str=
     x (str, optional): x-axis column name
     y (str, optional): y-axis column name
     cols (str, optional): color column name
-    cutoff (float, optional): y-axis values needs be greater than (e.g. 0.01)
+    cutoff_group (str, optional): column name to group by when applying cutoff
+    cutoff_value (float, optional): y-axis values needs be greater than (Default: 0.01)
+    cutoff_keep (bool, optional): keep cutoff group even if below cutoff (Default: True)
     cols_ord (list, optional): color column values order
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
@@ -3285,13 +3287,17 @@ def stack(df: pd.DataFrame | str, x: str='sample', y: str='fraction', cols: str=
         df = io.get(pt=df)
 
     # Omit smaller than cutoff and convert it to <cutoff
-    df_cut=df[df[y]>=cutoff]
-    df_other=df[df[y]<cutoff]
-    for x_val in list(df_other[x].value_counts().keys()):
-        df_temp = df_other[df_other[x]==x_val]
-        df_temp[y]=sum(df_temp[y])
-        df_temp[cols]=f'<{cutoff}'
-        df_cut = pd.concat([df_cut,df_temp.iloc[:1]])
+    if cutoff_group in df.columns and cutoff_value>0: # If cutoff group and value specified
+        df_cut=df[df[y]>=cutoff_value]
+        if cutoff_keep==True: # Keep cutoff group even if below cutoff
+            df_other=df[df[y]<cutoff_value]
+            for group in list(df_other[cutoff_group].value_counts().keys()):
+                df_temp = df_other[df_other[cutoff_group]==group]
+                df_temp[y]=sum(df_temp[y])
+                df_temp[cols]=f'<{cutoff_value}'
+                df_cut = pd.concat([df_cut,df_temp.iloc[:1]])
+    else: # Otherwise use full dataframe
+        df_cut=df
 
     # Sort pivot table columns by genotype position
     if cols_ord==[]:
@@ -3299,7 +3305,7 @@ def stack(df: pd.DataFrame | str, x: str='sample', y: str='fraction', cols: str=
         positions = list()
         for geno in genotypes:
             numbers = re.findall(r'\d+\.?\d*', geno)
-            if geno==f'<{cutoff}':positions.append(100000) # Places <cutoff near the end
+            if geno==f'<{cutoff_value}':positions.append(100000) # Places <cutoff near the end
             elif len(numbers)==0: positions.append(100001) # Places WT at the end
             else: positions.append(sum([int(n) for n in numbers])/len(numbers))
         assign = pd.DataFrame({'positions':positions,
@@ -3307,7 +3313,7 @@ def stack(df: pd.DataFrame | str, x: str='sample', y: str='fraction', cols: str=
         cols_ord = list(assign.sort_values(by='positions')['genotypes'])
     
     # Make stacked barplot
-    p.stack(df=df_cut,x=x,y=y,cols=cols,cutoff=0,cols_ord=cols_ord,x_ord=x_ord,
+    p.stack(df=df_cut,x=x,y=y,cols=cols,cutoff_group=cutoff_group,cutoff_value=0,cutoff_keep=cutoff_keep,cols_ord=cols_ord,x_ord=x_ord,
             file=file,dir=dir,palette_or_cmap=palette_or_cmap,repeats=repeats,errcap=errcap,vertical=vertical,
             figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
             x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,

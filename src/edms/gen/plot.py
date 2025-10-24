@@ -872,7 +872,7 @@ def heat(df: pd.DataFrame | str, x: str=None, y: str=None, vars: str=None, vals:
         plt.savefig(fname=os.path.join(dir, file), dpi=600, bbox_inches='tight', format=f'{file.split(".")[-1]}')
     if show: plt.show()
 
-def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff: float=0, cols_ord: list=[], x_ord: list=[],
+def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str='', cutoff_value: float=0, cutoff_keep: bool=True, cols_ord: list=[], x_ord: list=[],
           file: str=None, dir: str=None, palette_or_cmap: str='tab20', repeats: int=1, errcap: int=4, vertical: bool=True,
           figsize: tuple=(10,6), title: str='', title_size: int=18, title_weight: str='bold', title_font: str='Arial',
           x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_ticks_rot: int=0, x_ticks_font: str='Arial',
@@ -887,7 +887,9 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff: float=0, co
     x (str, optional): x-axis column name
     y (str, optional): y-axis column name
     cols (str, optional): color column name
-    cutoff (float, optional): y-axis values needs be greater than (e.g. 0)
+    cutoff_group (str, optional): column name to group by when applying cutoff
+    cutoff_value (float, optional): y-axis values needs be greater than (e.g. 0)
+    cutoff_keep (bool, optional): keep cutoff group even if below cutoff (Default: True)
     cols_ord (list, optional): color column values order
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
@@ -929,16 +931,19 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff: float=0, co
         df = io.get(pt=df)
 
     # Omit smaller than cutoff and convert it to <cutoff
-    df_cut=df[df[y]>=cutoff]
-    df_other=df[df[y]<cutoff]
-    for x_val in list(df_other[x].value_counts().keys()):
-        df_temp = df_other[df_other[x]==x_val]
-        df_temp[y]=sum(df_temp[y])
-        df_temp[cols]=f'<{cutoff}'
-        df_cut = pd.concat([df_cut,df_temp.iloc[:1]])
+    if cutoff_group in df.columns and cutoff_value>0: # If cutoff group and value specified
+        df_cut=df[df[y]>=cutoff_value]
+        if cutoff_keep==True: # Keep cutoff group even if below cutoff
+            df_other=df[df[y]<cutoff_value]
+            for group in list(df_other[cutoff_group].value_counts().keys()):
+                df_temp = df_other[df_other[cutoff_group]==group]
+                df_temp[y]=sum(df_temp[y])
+                df_temp[cols]=f'<{cutoff_value}'
+                df_cut = pd.concat([df_cut,df_temp.iloc[:1]])
+    else: # Otherwise use full dataframe
+        df_cut=df
 
     # Make pivot table
-    df_cut=df[df[y]>=cutoff]
     df_pivot=pd.pivot_table(df_cut, index=x, columns=cols, values=y, aggfunc=np.mean)
     df_pivot_err=pd.pivot_table(df_cut, index=x, columns=cols, values=y, aggfunc=np.std)
     if cols_ord!=[]: df_pivot=df_pivot.reindex(columns=cols_ord)
