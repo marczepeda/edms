@@ -1499,7 +1499,6 @@ def main():
 
     parser_fastq_trim_motifs.add_argument("--motif_length", type=int, help="Trim 'in_file' motifs to this length (Default: 21)", default=21)
     parser_fastq_trim_motifs.add_argument("--error_rate", type=float, help="Maximum error rate allowed in each motif (Default: 0.1 = 10%%)", default=0.1)
-    parser_fastq_trim_motifs.add_argument("--max_distance", type=int, help="Maximum number of errors allowed in each motif (Default: 2)", default=2)
     parser_fastq_trim_motifs.add_argument("--env", help="Conda environment with cutadapt installed (Default: umi_tools)", default="umi_tools")
 
     # make_sams():
@@ -1748,8 +1747,9 @@ Examples:[/red]
     parser_pe_pegRNA_signature.add_argument("--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
     parser_pe_pegRNA_signature.add_argument("--flank5", type=str, dest='flank5_sequence', help=f"Flank 5' sequence", required=True)
     parser_pe_pegRNA_signature.add_argument("--flank3", type=str, dest='flank3_sequence', help=f"Flank 3' sequence", required=True)
-    
-    parser_pe_pegRNA_signature.add_argument("--flank_length", type=int, help="Length of flank sequences to include in alignment (Default: 15)", default=15)
+
+    parser_pe_pegRNA_signature.add_argument("--flank5_length", type=int, help="Length of flank5 sequence to include in alignment (Default: 0)", default=0)
+    parser_pe_pegRNA_signature.add_argument("--flank3_length", type=int, help="Length of flank3 sequence to include in alignment (Default: 0)", default=0)
     parser_pe_pegRNA_signature.add_argument("--reference_sequence", type=str, help="Column name for reference sequences (Default: 'Reference_sequence')", default='Reference_sequence')
     parser_pe_pegRNA_signature.add_argument("--edit_sequence", type=str, help="Column name for edit sequences (Default: 'Edit_sequence')", default='Edit_sequence')
     parser_pe_pegRNA_signature.add_argument("--out_dir", type=str, help="Output directory (Default: ../pegRNA_signature)", default='../pegRNA_signature')

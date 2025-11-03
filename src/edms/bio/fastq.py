@@ -2458,7 +2458,7 @@ def extract_umis(fastq_dir: str, out_dir: str='./extract_umis',
 def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs', 
                 in_file: pd.DataFrame | str = None, motif5: str=None, motif3: str=None, 
                 motif_length: int=21, error_rate: float=0.1,
-                max_distance: int=2, env: str='umi_tools'):
+                env: str='umi_tools'):
     ''' 
     trim_motifs(): trimming motifs with cutadapt
 
@@ -2472,7 +2472,6 @@ def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs',
 
     motif_length (int, optional): trim 'in_file' motifs to this length (Default: 21)
     error_rate (float, optional): maximum error rate allowed in each motif (Default: 0.1)
-    max_distance (int, optional): maximum number of errors allowed in each motif (Default: 2)
     cutadapt (str, optional): Conda environment with cutadapt installed (Default: umi_tools)
     '''
     # Memory reporting
@@ -2499,8 +2498,8 @@ def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs',
     # Iterate through fastq files in the directory
     for file in os.listdir(path=fastq_dir):
         if file.endswith('.fastq') or file.endswith('.fastq.gz'):
-            # Trim motifs using cutadapt (only keep reads with both motifs (up to 2 errors or 10% error rate))
-            command = f'conda run -n {env} cutadapt -g {motif5} -e {error_rate} --max-ee {max_distance} --trimmed-only -o {os.path.join(out_dir,".trim5",file.replace(".gz",""))} {os.path.join(fastq_dir,file)} > {os.path.join(out_dir,".trim_motifs",file)}_trim5.log'
+            # Trim motifs using cutadapt (only keep reads with both motifs (up to 10% error rate))
+            command = f'conda run -n {env} cutadapt -g {motif5} -e {error_rate} --trimmed-only -o {os.path.join(out_dir,".trim5",file.replace(".gz",""))} {os.path.join(fastq_dir,file)} > {os.path.join(out_dir,".trim_motifs",file)}_trim5.log'
             print(f"{command}")
             result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
             
@@ -2508,7 +2507,7 @@ def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs',
             if result.stdout: print(f"output:\n{result.stdout}")
             if result.stderr: print(f"errors:\n{result.stderr}")
 
-            command = f'conda run -n {env} cutadapt -a {motif3} -e {error_rate} --max-ee {max_distance} --trimmed-only -o {os.path.join(out_dir,file.replace(".gz",""))} {os.path.join(out_dir,".trim5",file.replace(".gz",""))} > {os.path.join(out_dir,".trim_motifs",file)}_trim53.log'
+            command = f'conda run -n {env} cutadapt -a {motif3} -e {error_rate} --trimmed-only -o {os.path.join(out_dir,file.replace(".gz",""))} {os.path.join(out_dir,".trim5",file.replace(".gz",""))} > {os.path.join(out_dir,".trim_motifs",file)}_trim53.log'
             print(f"{command}")
             result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
 
