@@ -1510,7 +1510,9 @@ def pegRNA_outcome(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str = No
         io.save(dir=out_dir,file=out_file,obj=pegRNAs)
     if return_df==True: return pegRNAs
 
-def pegRNA_signature(pegRNAs: pd.DataFrame | str, flank5_sequence: str | Seq, flank3_sequence: str | Seq, flank5_length: int=0, flank3_length: int=0,
+def pegRNA_signature(pegRNAs: pd.DataFrame | str, 
+                    flank5_sequence: str | Seq = None, flank3_sequence: str | Seq = None, 
+                    flank5_length: int=0, flank3_length: int=0,
                     reference_sequence: str='Reference_sequence', edit_sequence: str='Edit_sequence',
                     match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, extend_gap_score: float = -0.1,
                     out_dir: str=None, out_file: str=None, save_alignments: bool=False, return_df: bool=True, literal_eval: bool=True) -> pd.DataFrame:
@@ -1519,10 +1521,10 @@ def pegRNA_signature(pegRNAs: pd.DataFrame | str, flank5_sequence: str | Seq, fl
     
     Parameters:
     pegRNAs (dataframe | str): pegRNAs DataFrame (or file path)
-    flank5_sequence (str | Seq): flank5 sequence
-    flank3_sequence (str | Seq): flank3 sequence
-    flank5_length (int, optional): length of flank5 sequence to include in alignment (Default: 0)
-    flank3_length (int, optional): length of flank3 sequence to include in alignment (Default: 0)
+    flank5_sequence (str | Seq, optional): flank5 sequence
+    flank3_sequence (str | Seq, optional): flank3 sequence
+    flank5_length (int, optional): length of flank5 sequence to include in alignment if provided (Default: 0)
+    flank3_length (int, optional): length of flank3 sequence to include in alignment if provided (Default: 0)
     reference_sequence (str, optional): column name for reference sequences (Default: 'Reference_sequence')
     edit_sequence (str, optional): column name for post RTT sequences (Default: 'Edit_sequence')
     match_score (float, optional): match score for pairwise alignment (Default: 2)
@@ -1551,24 +1553,30 @@ def pegRNA_signature(pegRNAs: pd.DataFrame | str, flank5_sequence: str | Seq, fl
     aligner.open_gap_score = open_gap_score  # Penalty for opening a gap; applied to both strands
     aligner.extend_gap_score = extend_gap_score  # Penalty for extending a gap; applied to both strands
 
+    # Convert Seq objects to strings if provided
+    if flank5_sequence is not None and flank3_sequence is not None:
+        flank5_sequence = str(flank5_sequence)
+        flank3_sequence = str(flank3_sequence)
+
     # Get alignments and signatures
     aligments_list = []
     signatures_list = []
     for i,(reference_seq, edit_seq) in enumerate(t.zip_cols(df=pegRNAs, cols=[reference_sequence,edit_sequence])): # Iterate through reference and edit sequences
         
         # Convert Seq objects to strings
-        flank5_sequence = str(flank5_sequence)
-        flank3_sequence = str(flank3_sequence)
         reference_seq = str(reference_seq)
         edit_seq = str(edit_seq)
 
-        # Trim flanks from reference and edit sequences
-        if reference_seq.find(flank5_sequence)==-1 or reference_seq.rfind(flank3_sequence)==-1:
-            raise(ValueError(f"Flank5 or Flank3 sequences were not found in reference sequence for pegRNAs row {i}.\nPlease check the flank5 ({flank5_sequence}) and flank3 ({flank3_sequence}) sequences.\nReference sequence: {reference_seq}"))
-        if edit_seq.find(flank5_sequence)==-1 or edit_seq.rfind(flank3_sequence)==-1:
-            raise(ValueError(f"Flank5 or Flank3 sequences were not found in edit sequence for pegRNAs row {i}.\nPlease check the flank5 ({flank5_sequence}) and flank3 ({flank3_sequence}) sequences.\nEdit sequence: {edit_seq}"))
-        reference_seq = reference_seq[reference_seq.find(flank5_sequence)+len(flank5_sequence)-flank5_length : reference_seq.rfind(flank3_sequence)+flank3_length]
-        edit_seq = edit_seq[edit_seq.find(flank5_sequence)+len(flank5_sequence)-flank5_length : edit_seq.rfind(flank3_sequence)+flank3_length]
+        # Trim flanks if provided
+        if flank5_sequence is not None and flank3_sequence is not None:
+            if reference_seq.find(flank5_sequence)==-1 or reference_seq.rfind(flank3_sequence)==-1:
+                raise(ValueError(f"Flank5 or Flank3 sequences were not found in reference sequence for pegRNAs row {i}.\nPlease check the flank5 ({flank5_sequence}) and flank3 ({flank3_sequence}) sequences.\nReference sequence: {reference_seq}"))
+            if edit_seq.find(flank5_sequence)==-1 or edit_seq.rfind(flank3_sequence)==-1:
+                raise(ValueError(f"Flank5 or Flank3 sequences were not found in edit sequence for pegRNAs row {i}.\nPlease check the flank5 ({flank5_sequence}) and flank3 ({flank3_sequence}) sequences.\nEdit sequence: {edit_seq}"))
+            
+            # Trim flanks from reference and edit sequences
+            reference_seq = reference_seq[reference_seq.find(flank5_sequence)+len(flank5_sequence)-flank5_length : reference_seq.rfind(flank3_sequence)+flank3_length]
+            edit_seq = edit_seq[edit_seq.find(flank5_sequence)+len(flank5_sequence)-flank5_length : edit_seq.rfind(flank3_sequence)+flank3_length]
 
         # Create and append alignment
         alignment = aligner.align(Seq(reference_seq), Seq(edit_seq))[0]

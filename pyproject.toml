@@ -42,6 +42,9 @@ classifiers = [
 
 [project.scripts]
 edms = "edms.main:main"
+edms_expected_errors = "edms.bio.models.expected_errors:main"
+edms_mutation_rate = "edms.bio.models.mutation_rate:main"
+edms_possion_bias = "edms.bio.models.possion_bias:main"
 
 [project.urls]
 Homepage = "https://github.com/marczepeda/edms"

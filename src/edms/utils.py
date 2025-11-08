@@ -15,6 +15,10 @@ Usage:
 
 [Execute bash script]    
 - run_bundled_script(): Run a bundled script from the package script resources.
+
+[Supporting argument methods]
+- parse_tuple_int(arg): Parse a string argument into a tuple of integers
+- parse_tuple_float(arg): Parse a string argument into a tuple of floats
 '''
 # Import packages
 import os
@@ -22,6 +26,7 @@ import psutil
 import time
 import importlib.resources
 import pandas as pd
+import argparse
 
 import shutil
 import stat
@@ -131,3 +136,22 @@ def run_bundled_script(package: str="edms.scripts", relpath: str='autocomplete.s
         # Run with inherited stdio
         proc = subprocess.run([dst, *args], check=False)
         return proc.returncode
+
+# Supporting argument methods
+def parse_tuple_int(arg):
+    '''
+    parse_tuple_int(arg): Parse a string argument into a tuple of integers
+    '''
+    try:
+        return tuple(map(int, arg.split(',')))
+    except:
+        raise argparse.ArgumentTypeError(f"{arg} must be formatted as 'int,int,...'")
+    
+def parse_tuple_float(arg):
+    '''
+    parse_tuple_float(arg): Parse a string argument into a tuple of floats
+    '''
+    try:
+        return tuple(map(float, arg.split(',')))
+    except:
+        raise argparse.ArgumentTypeError(f"{arg} must be formatted as 'float,float,...'")

@@ -6,7 +6,7 @@ edms -h # or edms <TAB>
 ## Package Organization
 - gen: input/output, data wrangling, generating plots, and statistics.
     ```shell
-    import edms.gen.cli as cli
+    import edms.gen.com as com
     import edms.gen.image as im
     import edms.gen.io as io
     import edms.gen.plot as p

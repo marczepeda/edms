@@ -1,6 +1,8 @@
 '''
 src/edms/bio/                   EDMS Biology module
 ├── __init__.py                 Initializer
+├── models/                     Models module
+├── cli.py                      Command Line Interface
 ├── clone.py                    Clone module
 ├── fastq.py                    FASTQ module
 ├── genbank.py                  GenBank module
