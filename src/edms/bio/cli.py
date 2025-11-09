@@ -16,7 +16,7 @@ import sys
 from rich import print as rprint
 
 from . import ngs, sanger, clone as cl, fastq as fq, pe, qPCR, transfect as tf
-from edms import utils
+from ..utils import parse_tuple_int, parse_tuple_float
 
 def add_subparser(subparsers, formatter_class=None):
     """
@@ -262,7 +262,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_clone_umi = subparsers_clone.add_parser("umi", help="Generate unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance", description="Generate unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance", formatter_class=formatter_class)
 
     parser_clone_umi.add_argument("--length", type=int, help="Length of UMI (Default: 15)", default=15)
-    parser_clone_umi.add_argument("--GC_fract", type=utils.parse_tuple_float, default=(0.4,0.6), help="Pair of GC content boundaries written as fractions (Default: 0.4,0.6)")
+    parser_clone_umi.add_argument("--GC_fract", type=parse_tuple_float, default=(0.4,0.6), help="Pair of GC content boundaries written as fractions (Default: 0.4,0.6)")
     parser_clone_umi.add_argument("--hamming", type=int, help="Minimum Hamming distance between UMIs (Default: 4)", default=4)
     parser_clone_umi.add_argument("--nrows", type=int, help="# of UMIs to compare iteratively for hamming filtering (Default: 1000)", default=1000)
     parser_clone_umi.add_argument("--pt", type=str, help="Shuffled UMI file path if already made (Default: None)", default=argparse.SUPPRESS)
@@ -488,8 +488,8 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_plot_motif.add_argument("--numeric", choices=["count", "fraction"], default="count", help="Numeric column to use for plotting (Default: 'count')")
     parser_fastq_plot_motif.add_argument("--id_col", default="fastq_file", help="Column used for sample ID (Default: 'fastq_file')")
     parser_fastq_plot_motif.add_argument("--id_axis", default="fastq", help="Label to use on the plot axis (Default: 'fastq')")
-    parser_fastq_plot_motif.add_argument("--stack_figsize", type=utils.parse_tuple_int, default=(7, 3), help="Stacked plot figure size formatted as 'width,height'")
-    parser_fastq_plot_motif.add_argument("--heat_figsize", type=utils.parse_tuple_int, help="Heatmap figure size formateed as 'width,height'")
+    parser_fastq_plot_motif.add_argument("--stack_figsize", type=parse_tuple_int, default=(7, 3), help="Stacked plot figure size formatted as 'width,height'")
+    parser_fastq_plot_motif.add_argument("--heat_figsize", type=parse_tuple_int, help="Heatmap figure size formateed as 'width,height'")
     parser_fastq_plot_motif.add_argument("--cutoff_frac", type=float, default=0.01, help="Minimum fraction to include in y-axis (Default: 0.01)")
 
     # plot_alignments():
@@ -515,7 +515,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_count_region.add_argument("--mismatch_score", type=float, default=-1, help="Score for mismatches (Default: -1)")
     parser_fastq_count_region.add_argument("--open_gap_score", type=float, default=-10, help="Gap opening score (Default: -10)")
     parser_fastq_count_region.add_argument("--extend_gap_score", type=float, default=-0.1, help="Gap extension score (Default: -0.1)")
-    parser_fastq_count_region.add_argument("--align_dims", type=utils.parse_tuple_int, default=(0, 0), help="Alignment range formatted as 'start,end' (Default: 0,0 = all reads)")
+    parser_fastq_count_region.add_argument("--align_dims", type=parse_tuple_int, default=(0, 0), help="Alignment range formatted as 'start,end' (Default: 0,0 = all reads)")
     parser_fastq_count_region.add_argument("--align_ckpt", type=int, default=10000, help="Checkpoint frequency (Default: 10000)")
     parser_fastq_count_region.add_argument("--plot_suf", type=str, help="Plot suffix type (e.g. '.pdf')")
     parser_fastq_count_region.add_argument("--show", action="store_true", help="Display plots interactively", default=False)
@@ -532,7 +532,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_count_alignments.add_argument("--mismatch_score", type=float, default=-1, help="Mismatch penalty (Default: -1)")
     parser_fastq_count_alignments.add_argument("--open_gap_score", type=float, default=-10, help="Gap open penalty (Default: -10)")
     parser_fastq_count_alignments.add_argument("--extend_gap_score", type=float, default=-0.1, help="Gap extension penalty (Default: -0.1)")
-    parser_fastq_count_alignments.add_argument("--align_dims", type=utils.parse_tuple_int, default=(0, 0), help="Alignment range as 'start,end' (Default: 0,0 = all reads)")
+    parser_fastq_count_alignments.add_argument("--align_dims", type=parse_tuple_int, default=(0, 0), help="Alignment range as 'start,end' (Default: 0,0 = all reads)")
     parser_fastq_count_alignments.add_argument("--align_ckpt", type=int, default=10000, help="Checkpoint frequency for saving alignment progress")
     parser_fastq_count_alignments.add_argument("--plot_suf", type=str, help="Plot file suffix (e.g. .pdf, .png)")
     parser_fastq_count_alignments.add_argument("--show", action="store_true", help="Show plots interactively")
@@ -585,7 +585,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_count_signatures.add_argument("--mismatch_score", type=float, default=-1, help="Score for mismatches (Default: -1)")
     parser_fastq_count_signatures.add_argument("--open_gap_score", type=float, default=-10, help="Gap opening score (Default: -10)")
     parser_fastq_count_signatures.add_argument("--extend_gap_score", type=float, default=-0.1, help="Gap extension score (Default: -0.1)")
-    parser_fastq_count_signatures.add_argument("--align_dims", type=utils.parse_tuple_int, default=(0, 0), help="Alignment range formatted as 'start,end' (Default: 0,0 = all reads)")
+    parser_fastq_count_signatures.add_argument("--align_dims", type=parse_tuple_int, default=(0, 0), help="Alignment range formatted as 'start,end' (Default: 0,0 = all reads)")
     parser_fastq_count_signatures.add_argument("--align_ckpt", type=int, default=10000, help="Checkpoint frequency (Default: 10000)")
     parser_fastq_count_signatures.add_argument("--save_alignments", action="store_true", help="Save alignments (Default: False, save memory)", default=False)
     parser_fastq_count_signatures.add_argument("--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)

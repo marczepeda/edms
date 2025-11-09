@@ -7,11 +7,11 @@ src/edms/dat/cli.py             Command Line Interface for EDMS Database module
 '''
 import argparse
 import datetime
-import sys
-from rich import print as rprint
+import sys # might use later
+from rich import print as rprint # might use later
 
 from . import cosmic as co, cvar
-from edms import utils
+from ..utils import parse_tuple_int, parse_tuple_float # might use later
 
 def add_subparser(subparsers, formatter_class=None):
     """
