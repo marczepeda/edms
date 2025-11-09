@@ -24,6 +24,7 @@ from Bio.Seq import Seq
 import os
 from ..gen import io
 from ..gen import tidy as t
+from ..utils import mkdir
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -338,7 +339,7 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col: str='
     pcr1_thermo = thermocycler(df=df, n=1, cycles=cycles, pcr_fwd_col=pcr1_fwd_col, pcr_rev_col=pcr1_rev_col)
         
     if dir is not None and file is not None: # Save file if dir & file are specified
-        io.mkdir(dir=dir)
+        mkdir(dir=dir)
         with pd.ExcelWriter(os.path.join(dir,file)) as writer:
             sr = 0 # starting row
             for key,pivot in pivots.items():

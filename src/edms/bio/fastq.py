@@ -93,7 +93,7 @@ from ..bio.signature import parse_signature_literal, signature_from_alignment
 from ..gen import io
 from ..gen import tidy as t
 from ..gen import plot as p
-from ..utils import memory_timer
+from ..utils import memory_timer, mkdir
 from .. import config
 
 # Supporting methods for sequences
@@ -143,7 +143,7 @@ def revcom_fastqs(in_dir: str, out_dir: str):
     
     Dependencies: Bio.SeqIO, gzip, os, & Bio.Seq.Seq
     '''
-    io.mkdir(out_dir) # Ensure the output directory exists
+    mkdir(out_dir) # Ensure the output directory exists
 
     for filename in os.listdir(in_dir): # Find all .fastq.gz & .fastq files in the input directory
 
@@ -181,7 +181,7 @@ def unzip_fastqs(in_dir: str, out_dir: str):
     
     Dependencies: gzip & os
     '''
-    io.mkdir(out_dir) # Ensure the output directory exists
+    mkdir(out_dir) # Ensure the output directory exists
 
     for in_file in os.listdir(in_dir): # Find all .fastq.gz & .fastq files in the input directory
         print(f"Processing {in_file}...")
@@ -202,7 +202,7 @@ def comb_fastqs(in_dir: str, out_dir: str, out_file: str):
     
     Dependencies: gzip & os
     '''
-    io.mkdir(out_dir) # Ensure the output directory exists
+    mkdir(out_dir) # Ensure the output directory exists
 
     if out_file.endswith(".fastq.gz"):
         with gzip.open(os.path.join(out_dir,out_file), 'wt') as out:
@@ -2432,7 +2432,7 @@ def extract_umis(fastq_dir: str, out_dir: str='./extract_umis',
     memories = []
 
     # Create output directory and .extract_umi subdirectory for logs
-    io.mkdir(os.path.join(out_dir,'.extract_umi'))
+    mkdir(os.path.join(out_dir,'.extract_umi'))
 
     # Iterate through fastq files in the directory
     for file in os.listdir(path=fastq_dir):
@@ -2479,8 +2479,8 @@ def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs',
     memories = []
 
     # Create output directory and .trim_motifs subdirectory for logs
-    io.mkdir(os.path.join(out_dir,'.trim_motifs'))
-    io.mkdir(os.path.join(out_dir,'.trim5'))
+    mkdir(os.path.join(out_dir,'.trim_motifs'))
+    mkdir(os.path.join(out_dir,'.trim5'))
     
     # Get motifs from in_file if needed
     if motif5 is None and motif3 is None:
@@ -2553,7 +2553,7 @@ def make_sams(fastq_dir: str, out_dir: str='./make_sams',
     memories = []
 
     # Create output directory and .make_sams subdirectory for logs
-    io.mkdir(os.path.join(out_dir,'.make_sams'))
+    mkdir(os.path.join(out_dir,'.make_sams'))
 
     # Get fasta from in_file if needed
     if fasta is None:
@@ -2624,7 +2624,7 @@ def make_bams(sam_dir: str, out_dir: str='./make_bams', env: str='umi_tools'):
     memories = []
 
     # Create output directory and .make_bams subdirectory for logs
-    io.mkdir(os.path.join(out_dir,'.make_bams'))
+    mkdir(os.path.join(out_dir,'.make_bams'))
 
     # Iterate through SAM files in the directory
     for file in os.listdir(path=sam_dir):
@@ -2677,7 +2677,7 @@ def bam_umi_tags(bam_dir: str, out_dir: str='./bam_umi_tags',
     memories = []
 
     # Create output directory and .bam_umi_tags subdirectory for logs
-    io.mkdir(os.path.join(out_dir,'.bam_umi_tags'))
+    mkdir(os.path.join(out_dir,'.bam_umi_tags'))
 
     # Iterate through BAM files in the directory
     for file in os.listdir(path=bam_dir):
@@ -2731,9 +2731,9 @@ def group_umis(bam_dir: str, out_dir: str='./group_umis',
     memories = []
 
     # Create output directory and .group_umis, family_hist, & grouping_metrics subdirectories for logs
-    io.mkdir(os.path.join(out_dir,'.group_umis'))
-    io.mkdir(os.path.join(out_dir,'family_hist'))
-    io.mkdir(os.path.join(out_dir,'grouping_metrics'))
+    mkdir(os.path.join(out_dir,'.group_umis'))
+    mkdir(os.path.join(out_dir,'family_hist'))
+    mkdir(os.path.join(out_dir,'grouping_metrics'))
 
     # Iterate through BAM files in the directory
     for file in os.listdir(path=bam_dir):
@@ -2773,7 +2773,7 @@ def consensus_umis(bam_dir: str, out_dir: str='./consensus_umis',
     memories = []
 
     # Create output directory and .consensus_umis subdirectory for logs
-    io.mkdir(os.path.join(out_dir,'.consensus_umis'))
+    mkdir(os.path.join(out_dir,'.consensus_umis'))
 
     # Iterate through grouped BAM files in the directory
     for file in os.listdir(path=bam_dir):
@@ -2810,7 +2810,7 @@ def bam_to_fastq(bam_dir: str, out_dir: str='./bam_to_fastq', env: str='umi_tool
     memories = []
 
     # Create output directory and .bam_to_fastq subdirectory for logs
-    io.mkdir(os.path.join(out_dir,'.bam_to_fastq'))
+    mkdir(os.path.join(out_dir,'.bam_to_fastq'))
 
     # Iterate through BAM files in the directory
     for file in os.listdir(path=bam_dir):
@@ -3409,7 +3409,7 @@ def heat(df: pd.DataFrame | str, cond: str, x: str='number', y: str='after', val
 
     # Save & show fig
     if file is not None and dir is not None:
-        io.mkdir(dir) # Make output directory if it does not exist
+        mkdir(dir) # Make output directory if it does not exist
         plt.savefig(fname=os.path.join(dir, file), dpi=600, bbox_inches='tight', format=f'{file.split(".")[-1]}')
     if show: plt.show()
 
@@ -3653,7 +3653,7 @@ def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple
 
     # Save & show fig; return dataframe
     if file is not None and dir is not None:
-        io.mkdir(dir) # Make output directory if it does not exist
+        mkdir(dir) # Make output directory if it does not exist
         plt.savefig(fname=os.path.join(dir, file), dpi=600, bbox_inches='tight', format=f'{file.split(".")[-1]}')
     if show: plt.show()
     if return_df: return df     

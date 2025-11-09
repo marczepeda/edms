@@ -18,7 +18,7 @@ Usage:
 import os
 from PIL import Image
 import pandas as pd
-from . import io
+from ..utils import mkdir
 
 # Image processing
 def crop(in_dir: str, out_dir: str, box_dims: tuple=None, box_fracs: tuple=None):
@@ -31,10 +31,10 @@ def crop(in_dir: str, out_dir: str, box_dims: tuple=None, box_fracs: tuple=None)
     box_dims (tuple, optional 1): A 4-tuple defining the left, upper, right, and lower absolute pixel coordinates for the crop (left, top, right, bottom).
     box_facs (tuple, optional 1): A 4-tuple defining the left, upper, right, and lower fraction pixel coordinates for the crop (left, top, right, bottom).
 
-    Dependencies: os,PIL,io
+    Dependencies: os,PIL,utils.mkdir()
     """
     # Ensure output folder exists
-    io.mkdir(out_dir)
+    mkdir(out_dir)
 
     if box_dims is not None:
         # Check box_dims is a tuple with 4 integers 
@@ -87,10 +87,10 @@ def convert(in_dir: str, out_dir: str, suffix: str):
     out_dir (str): Path to the folder where converted images will be saved.
     suffix (str): desired image format suffix (e.g., '.png', '.jpeg', '.tiff', '.webp', etc.).
 
-    Dependencies: PIL,os,io
+    Dependencies: PIL,os,utils.mkdir()
     """
     # Ensure output folder exists
-    io.mkdir(out_dir)
+    mkdir(out_dir)
     
     # Loop through all files in the input folder
     for filename in os.listdir(in_dir):
@@ -115,10 +115,10 @@ def combine(in_dir: str, out_dir: str, out_file: str):
     out_dir (str): Path for the output PDF file directory.
     out_file (str): PDF filename.
 
-    Dependencies: PIL,os,io
+    Dependencies: PIL,os,utils.mkdir()
     """
     # Ensure output folder exists
-    io.mkdir(out_dir)
+    mkdir(out_dir)
 
     images = []
     

@@ -16,6 +16,7 @@ import numpy as np
 import os
 import re
 from ..gen import io
+from ..utils import mkdir
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -140,7 +141,7 @@ def PE3(plasmids: pd.DataFrame | str, epegRNAs: pd.DataFrame | str, ngRNAs: pd.D
              }
     
     if dir is not None and file is not None: # Save file if dir & file are specified
-        io.mkdir(dir=dir)
+        mkdir(dir=dir)
         with pd.ExcelWriter(os.path.join(dir,file)) as writer:
             sr = 0 # starting row
             for key,pivot in pivots.items():

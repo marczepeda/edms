@@ -16,6 +16,13 @@ Usage:
 [Execute bash script]    
 - run_bundled_script(): Run a bundled script from the package script resources.
 
+[Parsing Python literals]
+- df_try_parse(): apply try_parse() to dataframe columns and return dataframe
+- recursive_json_decode(): recursively decode JSON strings in a nested structure
+
+[Make directories]
+- mkdir(): make directory if it does not exist (including parent directories)
+
 [Supporting argument methods]
 - parse_tuple_int(arg): Parse a string argument into a tuple of integers
 - parse_tuple_float(arg): Parse a string argument into a tuple of floats
@@ -27,7 +34,7 @@ import time
 import importlib.resources
 import pandas as pd
 import argparse
-
+import ast
 import shutil
 import stat
 import subprocess 
@@ -136,6 +143,65 @@ def run_bundled_script(package: str="edms.scripts", relpath: str='autocomplete.s
         # Run with inherited stdio
         proc = subprocess.run([dst, *args], check=False)
         return proc.returncode
+
+# Parsing Python literals
+def try_parse(value):
+    """
+    try_parse(): try to parse a string as a Python literal; if not possible, return the original value
+    
+    Parameters:
+    value: value of any type (looking for strings)
+
+    Dependencies: ast,recusive_parse()
+    """
+    if isinstance(value, str):  # Only attempt parsing for strings
+        try:
+            parsed_value = ast.literal_eval(value)
+            # If parsed_value is a dictionary, list, etc., recursively evaluate its contents
+            if isinstance(parsed_value, (dict, list, set, tuple)):
+                return recursive_parse(parsed_value)
+            return parsed_value
+        except (ValueError, SyntaxError):
+            # Return the value as-is if it can't be parsed
+            return value
+    return value
+
+def recursive_parse(data):
+    """
+    recursive_parse(): recursively parse nested structures
+    
+    Parameters:
+    data: data of any type (looking for dict, list, set, or tuple)
+
+    Dependencies: ast,try_parse()
+    """
+    if isinstance(data, dict):
+        return {k: try_parse(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [try_parse(item) for item in data]
+    elif isinstance(data, set):
+        return {try_parse(item) for item in data}
+    elif isinstance(data, tuple):
+        return tuple(try_parse(item) for item in data)
+    return data  # Return the data as-is if it doesn't match any known structure
+
+# Make directories
+def mkdir(dir: str, sep='/'):
+    '''
+    mkdir(): make directory if it does not exist (including parent directories)
+
+    Parameters:
+    dir (str): directory path
+    sep (str): seperator directory path
+
+    Dependencies: os
+    '''
+    dirs = dir.split(sep)
+    for i in range(len(dirs)):
+        check_dir = sep.join(dirs[:i+1])
+        if (os.path.exists(check_dir)==False)&(i!=0):
+            os.mkdir(check_dir)
+            print(f'Created {check_dir}')
 
 # Supporting argument methods
 def parse_tuple_int(arg):

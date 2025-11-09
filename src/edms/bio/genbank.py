@@ -109,7 +109,9 @@ def viewer(pt: str, feature_colors: dict=None, exclude: list=[], region:tuple=No
                                 GraphicFeature(start=int(feature.location.start), # Get feature information
                                                end=int(feature.location.end), 
                                                strand=feature.location.strand, 
-                                               label=feature.qualifiers['label'][0], 
+                                               label=next((feature.qualifiers.get(k, [None])[0] 
+                                                    for k in ('label', 'gene', 'product', 'note') 
+                                                    if k in feature.qualifiers), 'Unnamed'),
                                                color=color_scheme.get(feature.type, "#cccccc")))) # Default color (gray)
         else: # Specified region
             if feature.type not in exclude: # Check if features should be excluded
@@ -118,7 +120,9 @@ def viewer(pt: str, feature_colors: dict=None, exclude: list=[], region:tuple=No
                                     GraphicFeature(start=int(feature.location.start), # Get feature information
                                                    end=int(feature.location.end), 
                                                    strand=feature.location.strand, 
-                                                   label=feature.qualifiers['label'][0], 
+                                                   label=next((feature.qualifiers.get(k, [None])[0] 
+                                                    for k in ('label', 'gene', 'product', 'note') 
+                                                    if k in feature.qualifiers), 'Unnamed'),
                                                    color=color_scheme.get(feature.type, "#cccccc")))) # Default color (gray)
 
     # Create a GraphicRecord for visualization

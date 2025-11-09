@@ -284,7 +284,8 @@ def add_subparser(subparsers, formatter_class=None):
     parser_clone_pcrsim.add_argument("--fwd_ext_col", type=str, help="Column name for forward primer extension region")
     parser_clone_pcrsim.add_argument("--rev_ext_col", type=str, help="Column name for reverse primer extension region")
     parser_clone_pcrsim.add_argument("--product_col", type=str, default="PCR Product", help="Column name for output PCR product")
-    
+    parser_clone_pcrsim.add_argument("--no_primer_in_product", dest="primer_in_product", action="store_false",  default=True, help="don't include primer binding and extension regions in PCR product (Default: True)")
+ 
     parser_clone_pcrsim.set_defaults(func=cl.pcr_sim)
 
     # off_targets(): Find off-target sequences for a list of sequences using pairwise alignment.

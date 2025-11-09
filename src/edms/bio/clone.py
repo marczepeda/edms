@@ -627,7 +627,7 @@ def pcr_mm(primers: pd.Series, template_uL: int, template: str='1-2 ng/uL templa
 # Simulation
 def pcr_sim(df: pd.DataFrame | str,template_col: str, fwd_bind_col: str, rev_bind_col: str,
             fwd_ext_col: str=None, rev_ext_col: str=None, product_col: str='PCR Product',
-            dir:str=None, file:str=None) -> pd.DataFrame:
+            primer_in_product: bool=True, dir:str=None, file:str=None) -> pd.DataFrame:
     '''
     pcr_sim(): returns dataframe with simulated pcr product 
     
@@ -639,6 +639,7 @@ def pcr_sim(df: pd.DataFrame | str,template_col: str, fwd_bind_col: str, rev_bin
     fwd_ext_col (str, optional): fwd primer extension region column name (Default: None)
     rev_ext_col (str, optional): rev primer extension region column name (Default: None)
     product_col (str, optional): pcr product column name (Default: 'PCR Product')
+    primer_in_product (bool, optional): include primer binding and extension regions in PCR product (Default: True)
     dir (str, optional): save directory
     file (str, optional): save file
 
@@ -648,8 +649,12 @@ def pcr_sim(df: pd.DataFrame | str,template_col: str, fwd_bind_col: str, rev_bin
         df = io.get(pt=df)
 
     pcr_product_ls = []
-
-    if fwd_ext_col is not None and rev_ext_col is not None: # FWD & REV primers have extension regions
+    
+    if primer_in_product == False: # Don't include PCR primers in products; useful for alignments
+       for (template,fwd_bind,rev_bind) in t.zip_cols(df=df,cols=[template_col,fwd_bind_col,rev_bind_col]):
+           rc_rev_bind = ''.join(Seq(rev_bind).reverse_complement())
+           pcr_product_ls.append(template[template.find(fwd_bind)+len(fwd_bind):template.find(rc_rev_bind)]) # template between primers
+    elif fwd_ext_col is not None and rev_ext_col is not None: # FWD & REV primers have extension regions
         for (template,fwd_bind,rev_bind,fwd_ext,rev_ext) in t.zip_cols(df=df,cols=[template_col,fwd_bind_col,rev_bind_col,fwd_ext_col,rev_ext_col]):
             fwd = fwd_ext + fwd_bind
             rev = rev_ext + rev_bind

@@ -6,8 +6,6 @@ Description: Input/Output
 
 Usage:
 [Parsing Python literals]
-- try_parse(): try to parse a string as a Python literal; if not possible, return the original value
-- recursive_parse(): recursively parse nested structures
 - df_try_parse(): apply try_parse() to dataframe columns and return dataframe
 - recursive_json_decode(): recursively decode JSON strings in a nested structure
 
@@ -16,7 +14,6 @@ Usage:
 - get_dir(): returns python dictionary of dataframe from files within a directory
 
 [Output]
-- mkdir(): make directory if it does not exist (including parent directories)
 - save(): save .csv file to a specified output directory from obj
 - save_dir(): save .csv files to a specified output directory from dictionary of objs
 
@@ -43,49 +40,10 @@ import shutil
 import datetime
 import json
 
-from .. import config
+from ..utils import try_parse, mkdir
+from ..config import get_info
 
 # Parsing Python literals
-def try_parse(value):
-    """
-    try_parse(): try to parse a string as a Python literal; if not possible, return the original value
-    
-    Parameters:
-    value: value of any type (looking for strings)
-
-    Dependencies: ast,recusive_parse()
-    """
-    if isinstance(value, str):  # Only attempt parsing for strings
-        try:
-            parsed_value = ast.literal_eval(value)
-            # If parsed_value is a dictionary, list, etc., recursively evaluate its contents
-            if isinstance(parsed_value, (dict, list, set, tuple)):
-                return recursive_parse(parsed_value)
-            return parsed_value
-        except (ValueError, SyntaxError):
-            # Return the value as-is if it can't be parsed
-            return value
-    return value
-
-def recursive_parse(data):
-    """
-    recursive_parse(): recursively parse nested structures
-    
-    Parameters:
-    data: data of any type (looking for dict, list, set, or tuple)
-
-    Dependencies: ast,try_parse()
-    """
-    if isinstance(data, dict):
-        return {k: try_parse(v) for k, v in data.items()}
-    elif isinstance(data, list):
-        return [try_parse(item) for item in data]
-    elif isinstance(data, set):
-        return {try_parse(item) for item in data}
-    elif isinstance(data, tuple):
-        return tuple(try_parse(item) for item in data)
-    return data  # Return the data as-is if it doesn't match any known structure
-
 def df_try_parse(df: pd.DataFrame) -> pd.DataFrame:
     '''
     df_try_parse(): apply try_parse() to dataframe columns and return dataframe
@@ -93,7 +51,7 @@ def df_try_parse(df: pd.DataFrame) -> pd.DataFrame:
     Parameters: 
     df (dataframe): dataframe with columns to try_parse()
 
-    Dependencies: try_parse()
+    Dependencies: utils.try_parse()
     '''
     # Apply the parsing function to all columns
     for col in df.columns:
@@ -133,7 +91,7 @@ def get(pt: str, literal_eval:bool=False, **kwargs) -> pd.DataFrame | dict[pd.Da
         (2) recursively evaluates nested structures
     **kwargs: pandas.read_csv() parameters
     
-    Dependencies: pandas,ast,try_parse(),recursive_parse(),df_try_parse()
+    Dependencies: pandas,ast,utils[try_parse(),recursive_parse()],df_try_parse()
     '''
     suf = pt.split('.')[-1]
     if suf=='csv': 
@@ -178,24 +136,6 @@ def get_dir(dir: str, suf: str='.csv', literal_eval: bool=False, **kwargs) -> di
     return dc
 
 # Output
-def mkdir(dir: str, sep: str='/'):
-    '''
-    mkdir(): make directory if it does not exist (including parent directories)
-
-    Parameters:
-    dir (str): directory path
-    sep (str): seperator directory path
-
-    Dependencies: os
-    '''
-    dirs = dir.split(sep)
-    for i in range(len(dirs)):
-        check_dir = sep.join(dirs[:i+1])
-        if (os.path.exists(check_dir)==False)&(i!=0):
-            os.mkdir(check_dir)
-            print(f'Created {check_dir}')
-
-
 def save(dir: str, file: str, obj, cols: list=[], id: bool=False, sort: bool=True, **kwargs):
     ''' 
     save(): save .csv file to a specified output directory from obj
@@ -208,7 +148,7 @@ def save(dir: str, file: str, obj, cols: list=[], id: bool=False, sort: bool=Tru
     id (bool, optional): include dataframe index (False)
     sort (bool, optional): sort set, list, or series before saving (True)
     
-    Dependencies: pandas, os, csv & mkdir()
+    Dependencies: pandas, os, csv & utils.mkdir()
     '''
     mkdir(dir) # Make output directory if it does not exist
 
@@ -374,11 +314,11 @@ def create_sh(dir: str, file: str,
     partition (str, optional): The partition to submit the job to (Default: 'serial_requeue').
     time (str, optional): The maximum runtime for the job in D-HH:MM format (Default: '0-00:10').
     mem (int, optional): The amount of memory to request for the job in MB (Default: 1000).
-    email (str, optional): The email address (Default: None = get_info('Harvard')).
+    email (str, optional): The email address (Default: None = get_info('Harvard')['email']).
     python (str, optional): The python module to load (Default: 'python/3.12.5-fasrc01').
     env (str, optional): The conda environment to activate (Default: 'edms').
 
-    Dependencies: os, datetime
+    Dependencies: os, datetime, utils.mkdir(), config.get_info()
     '''
     # Check if the directory exists
     mkdir(dir)
@@ -390,7 +330,7 @@ def create_sh(dir: str, file: str,
     # Get email from config if not provided
     if email is None:
         try:
-            email = config.get_info('Harvard')['email']
+            email = get_info('Harvard')['email']
         except Exception as e:
             print(f"Error retrieving email from config: {e}")
             return
@@ -426,7 +366,7 @@ def split_R1_R2(dir: str):
     Parameters:
     dir (str): path to parent directory
 
-    Depedencies: os, shutil, mkdir()
+    Depedencies: os, shutil, utils.mkdir()
     '''
     r1_dir = os.path.join(dir, 'R1')
     r2_dir = os.path.join(dir, 'R2')

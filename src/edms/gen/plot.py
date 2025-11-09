@@ -39,7 +39,7 @@ import matplotlib.colors as mcolors
 from matplotlib.ticker import MaxNLocator
 import numpy as np
 from adjustText import adjust_text
-from . import io
+from ..utils import mkdir
 
 # Supporting methods
 def re_un_cap(input: str) -> str:
@@ -256,7 +256,7 @@ def formatter(typ:str,ax,df:pd.DataFrame,x:str,y:str,cols:str,file:str,dir:str,p
 
     # Save & show fig
     if file is not None and dir is not None:
-        io.mkdir(dir) # Make output directory if it does not exist
+        mkdir(dir) # Make output directory if it does not exist
         plt.savefig(fname=os.path.join(dir, file), dpi=600, bbox_inches='tight', format=f'{file.split(".")[-1]}')
     if show: plt.show()
 
@@ -758,7 +758,7 @@ def dist(typ: str, df: pd.DataFrame | str, x: str, cols: str=None, cols_ord: lis
         g.figure.legend(title=legend_title,title_fontsize=legend_title_size,fontsize=legend_size,
                         loc=legend_loc,bbox_to_anchor=legend_bbox_to_anchor)
         if file is not None and dir is not None:
-            io.mkdir(dir) # Make output directory if it does not exist
+            mkdir(dir) # Make output directory if it does not exist
             plt.savefig(fname=os.path.join(dir, file), dpi=600, bbox_inches='tight', format=f'{file.split(".")[-1]}')
         if show: plt.show()
     else:
@@ -868,7 +868,7 @@ def heat(df: pd.DataFrame | str, x: str=None, y: str=None, vars: str=None, vals:
     
     # Save & show fig
     if file is not None and dir is not None:
-        io.mkdir(dir) # Make output directory if it does not exist
+        mkdir(dir) # Make output directory if it does not exist
         plt.savefig(fname=os.path.join(dir, file), dpi=600, bbox_inches='tight', format=f'{file.split(".")[-1]}')
     if show: plt.show()
 
@@ -1005,7 +1005,7 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str='
     
     # Save & show fig
     if file is not None and dir is not None:
-        io.mkdir(dir) # Make output directory if it does not exist
+        mkdir(dir) # Make output directory if it does not exist
         plt.savefig(fname=os.path.join(dir, file), dpi=600, bbox_inches='tight', format=f'{file.split(".")[-1]}')
     if show: plt.show()
 
@@ -1221,7 +1221,7 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str=None, size: str=None, 
 
     # Save & show fig; return dataframe
     if file is not None and dir is not None:
-        io.mkdir(dir) # Make output directory if it does not exist
+        mkdir(dir) # Make output directory if it does not exist
         plt.savefig(fname=os.path.join(dir, file), dpi=600, bbox_inches='tight', format=f'{file.split(".")[-1]}')
     if show: plt.show()
     if return_df: return df

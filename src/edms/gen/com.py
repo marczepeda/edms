@@ -21,7 +21,7 @@ import os
 from pathlib import Path
 from typing import Literal
 
-from . import io
+from ..utils import mkdir
 
 # Common commands for fastq files
 def access(pt: str):
@@ -51,7 +51,7 @@ def smaller_fastq(pt: str, reads: int, suf: str='.fastq.gz'):
     reads (int): maximum # of reads per fastq file
     suf (str, optional): fastq file suffix (Default: .fastq.gz)
 
-    Dependencies: subprocess,os
+    Dependencies: subprocess,os,utils.mkdir()
     '''
     # Get fastq files
     files = os.listdir(pt)
@@ -59,7 +59,7 @@ def smaller_fastq(pt: str, reads: int, suf: str='.fastq.gz'):
 
     # Make output directory
     out_dir = os.path.join(pt,f'{reads}_reads')
-    io.mkdir(out_dir)
+    mkdir(out_dir)
 
     # Run commands in the directory
     print(f"terminal:\ncd {pt}")

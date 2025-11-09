@@ -5,10 +5,6 @@ Created: 2024-12-25
 Description: Configuration
 
 Usage:
-[Supporting]
-- str_dc(): Check that all dictionary components are strings
-- mkdir(): make directory if it does not exist (including parent directories)
-
 [CONFIG_FILE]
 - load_config(): Load configuration from the file
 - save_config(): Save configuration to the file
@@ -21,46 +17,14 @@ Usage:
 # Import Packages
 import json
 import os
-from .gen import io
-
-# Supporting
-def str_dc(dc):
-    '''
-    str_dc(): Check that all dictionary components are strings
-
-    Parameters:
-    dc: recursive object from dictionary
-    '''
-    if isinstance(dc,dict):
-        for key,val in dc.items():
-            if isinstance(key,str)==False: TypeError(f"{key} was not a string")
-            str_dc(val)
-    elif isinstance(dc, str): return
-    else: TypeError(f"{dc} was not a string")
-
-def mkdir(dir: str, sep='/'):
-    '''
-    mkdir(): make directory if it does not exist (including parent directories)
-
-    Parameters:
-    dir (str): directory path
-    sep (str): seperator directory path
-
-    Dependencies: os
-    '''
-    dirs = dir.split(sep)
-    for i in range(len(dirs)):
-        check_dir = sep.join(dirs[:i+1])
-        if (os.path.exists(check_dir)==False)&(i!=0):
-            os.mkdir(check_dir)
-            print(f'Created {check_dir}')
+from .utils import try_parse, mkdir
 
 # CONFIG_FILE
 dir = os.path.expanduser("~/.config/edms") # Make directory for configuration file
 mkdir(dir)
 CONFIG_FILE = os.path.join(dir,".config.json") # Define the path for the configuration file
 
-def load_config() -> dict:
+def load_config():
     """
     load_config(): Load configuration from the file
     
@@ -81,7 +45,7 @@ def save_config(config):
         json.dump(config, file, indent=4)
 
 # Information
-def get_info(id: str=None) -> str | dict:
+def get_info(id: str=None):
     """
     get_info(): Retrieve information based on id
     
@@ -99,24 +63,36 @@ def get_info(id: str=None) -> str | dict:
     else: print(f"Configuration File:\n{json.dumps(config, indent=4)}")
     return info
 
-def set_info(id: str, info: str | dict):
+def set_info(id: str, info: str | dict | list | set | tuple):
     """
     set_info(): Store a information based on id
     
     Parameters:
     id (str): identifier for configuration file
-    info (str | dict): information for configuration file
+    info (str | dict | list | set | tuple): information for configuration file
 
-    Dependencies: load_config(),save_config()
+    Dependencies: try_parse(),load_config(),save_config()
     """
-    # Check that info dictionaries only contain strings
-    if isinstance(info,dict):
-        for key,val in info.items():
-            if isinstance(key,str)==False: TypeError(f"{key} was not a string")
-            str_dc(val)
+    # Parse info
+    info = try_parse(info)
 
     # (Over)write information to configuration file
     config = load_config()
     config[id] = info
     save_config(config)
     print(f"Set {id}: {info}")
+
+def del_info(id: str):
+    """
+    del_info(): Delete information based on id
+    
+    Parameters:
+    id (str): identifier for configuration file
+
+    Dependencies: load_config(),save_config()
+    """
+    # (Over)write information to configuration file
+    config = load_config()
+    config.pop(id, None)
+    save_config(config)
+    print(f"Deleted {id}")
