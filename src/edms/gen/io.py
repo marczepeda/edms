@@ -350,7 +350,7 @@ def create_sh(dir: str, file: str,
 #SBATCH --mail-type=ALL \t# Email     
 #SBATCH --mail-user={email} \t# Email
 
-echo -e "File: {file}\\nTime: {time}\\nMemory: {mem/1000:.3f} GB" \t# Print job parameters
+echo -e "File: {file}\\nTime: {time}\\nMemory: {mem} MB" \t# Print job parameters
 module load {python} \t# Load python module
 mamba activate {env} \t# Activate conda environment
 export PYTHONUNBUFFERED=1 \t# Ensure prints from python script are written to .out file
