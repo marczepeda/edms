@@ -1,5 +1,5 @@
 ''' 
-src/edms/gen/cli.py             Command Line Interface for EDMS Biology module
+src/edms/gen/cli.py             Command Line Interface for EDMS General module
 ├── __init__.py                 Initializer
 ├── io.py                       Input/Output module
 ├── plot.py                     Plot module

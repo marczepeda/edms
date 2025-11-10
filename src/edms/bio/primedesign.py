@@ -392,7 +392,7 @@ def saturating_mutagenesis_input_sequences(target_name, target_sequence, sm_type
 				inner_sequence_left = sequence_to_edit[:base_index]
 				inner_sequence_right = sequence_to_edit[base_index+3:]
 
-				aa_edit_list = [x for x in aa2codon if x != '*']
+				aa_edit_list = [x for x in aa2codon if x != 'X']
 				for aa_edit in aa_edit_list:
 
 					codon_edit = aa2codon[aa_edit][0][0]

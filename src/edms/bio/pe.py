@@ -426,7 +426,7 @@ def enzyme_codon_swap(pegRNAs: pd.DataFrame | str, enzyme: str,
                 print(f'Enzyme site index: {enzyme_i}')
                 print(f'Enzyme codon index: {enzyme_codon_i}')
 
-            # Change codon swap enzyme site & save new RTT sequence
+            # Change codon swap enzyme site; save new RTT and edit sequence
             codons = [str(codon).lower() for codon in aa_dna_codon_table[str(rtt_inframe_prot[enzyme_codon_i])] if str(codon).upper() != str(rtt_inframe_nuc_codons[enzyme_codon_i]).upper()]
             if comments==True:
                 print(f'Codons: {codons}')
