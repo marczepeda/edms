@@ -1784,25 +1784,32 @@ def region(fastqs: dict, flank5: str, flank3: str, save: bool=True, masks: bool=
     # Memory reporting
     memories = []
 
-    # Check flank lengths
-    if (len(flank5)<9)|(len(flank3)<9): print('Warning: flank5 or flank3 less than 9.')
-
     # Remove fastq records that do not have flanks
-    fastqs_1=dict()
-    missing_flank5s = []
-    missing_flank3s = []
-    for file,fastq in fastqs.items():
-        missing_flank5 = set()
-        missing_flank3 = set()
-        for i,seq in enumerate(fastq['seq']):
-            if seq.find(flank5)==-1:
-                missing_flank5.add(i)
-            if (seq.find(flank3)==-1) | (seq.find(flank3)<seq.find(flank5)+len(flank5)): # flank3 not found or before flank5
-                missing_flank3.add(i)
+    if flank5!='' and flank3!='': # if flanks are provided
+        # Check flank lengths
+        if (len(flank5)<9)|(len(flank3)<9): print('Warning: flank5 or flank3 less than 9.')
 
-        fastqs_1[file] = fastq.drop(sorted(missing_flank5.union(missing_flank3))).reset_index(drop=True)
-        missing_flank5s.append(len(missing_flank5))
-        missing_flank3s.append(len(missing_flank3))
+        # Remove fastq records that do not have flanks
+        fastqs_1=dict()
+        missing_flank5s = []
+        missing_flank3s = []
+        for file,fastq in fastqs.items():
+            missing_flank5 = set()
+            missing_flank3 = set()
+            for i,seq in enumerate(fastq['seq']):
+                if seq.find(flank5)==-1:
+                    missing_flank5.add(i)
+                if (seq.find(flank3)==-1) | (seq.find(flank3)<seq.find(flank5)+len(flank5)): # flank3 not found or before flank5
+                    missing_flank3.add(i)
+
+            fastqs_1[file] = fastq.drop(sorted(missing_flank5.union(missing_flank3))).reset_index(drop=True)
+            missing_flank5s.append(len(missing_flank5))
+            missing_flank3s.append(len(missing_flank3))
+    
+    else: # if no flanks are provided
+        fastqs_1 = fastqs
+        missing_flank5s = [0]*len(fastqs)
+        missing_flank3s = [0]*len(fastqs)
     
     # Retain fastqs file length
     fastqs_reads_filtered = {file:len(fastqs[file]) for file in fastqs.keys()}
@@ -2180,7 +2187,7 @@ def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=N
     Parameters:
     in_dir (str): directory with fastq files
     config_key (str, optional 1): config file key (FWD primer-REV primer) with 'sequence' & 'res' parameters
-    sequence (str, optional 2): sequence formatted flank5(genotype region)flank3
+    sequence (str, optional 2): sequence formatted flank5(genotype region)flank3 or genotype region only
     res (int, optional 2): first AA number in genotype region
     out_dir (str, optional): output directory (Default: None)
     out_file (str, optional): output file (Default: None)
@@ -2211,13 +2218,22 @@ def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=N
         config_key = config.get_info(id=config_key)
         sequence = config_key['sequence']
         res = config_key['res']
+    
+    # Check sequence 
+    if len(re.findall(r'[()]+', sequence)) == 0: # and genotype region
+        flank5 = ''
+        wt = sequence
+        flank3 = ''
+        print(f'Warning - Skipping region() because missing "(" or ")" in sequence:\n{sequence}')
 
-    # Check sequence and obtain flank5(genotype region)flank3
-    if '(' not in sequence or ')' not in sequence:
-        raise(ValueError(f'Missing "(" or ")" in sequence:\n{sequence}'))
-    flank5 = sequence.split('(')[0]
-    wt = sequence.split('(')[1].split(')')[0]
-    flank3 = sequence.split(')')[1]
+    elif len(re.findall(r'[(]+', sequence)) == 1 and len(re.findall(r'[)]+', sequence)) == 1: # and obtain flank5(genotype region)flank3
+        flank5 = sequence.split('(')[0]
+        wt = sequence.split('(')[1].split(')')[0]
+        flank3 = sequence.split(')')[1]
+
+    else: # incorrect sequence format
+        raise(ValueError(f'Incorrect sequence format:\n{sequence}\nExpected format: flank5(genotype region)flank3 or genotype region only'))
+    
     if len(wt)%3!=0:
         raise(ValueError(f'WT sequence is not in-frame:\n{wt}'))
 
