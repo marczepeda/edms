@@ -20,10 +20,14 @@ Usage:
                                 (if you add that explicitly).
 - left_align_indels(): Left-align simple indels within repeat context on the reference
 - signature_from_alignment(): Get Signature from reference-query sequence alignment
+- expand_signature_units(): Decompose a Signature into per-nucleotide 'units' so equality/containment is unambiguous.
+- compare_signature_with_n_extra_nt_or_less(): Determine if 'query' == 'reference' plus n nucleotide differences or less.
+- is_reference_match_with_n_extra_nt_or_less(): Convenience boolean-only checker
 '''
 
 # Import packages
-from typing import Tuple, List, Dict, Any
+from collections import Counter
+from typing import Iterable, Tuple, List, Dict, Any, Optional
 from dataclasses import dataclass, is_dataclass
 import ast
 
@@ -52,8 +56,12 @@ _ALLOWED_CTORS: Dict[str, type] = {
     "Indel": Indel,
 }
 
+# Exception for parsing errors
 class SignatureParseError(ValueError):
     pass
+
+# Datastructure for expanded units
+Unit = Tuple[Any, ...] # tuple types: see expand_signature_units()
 
 def parse_signature_literal(text: str) -> Signature:
     """
@@ -267,3 +275,90 @@ def signature_from_alignment(alignment, ref_seq: str, query_seq: str) -> Signatu
     snvs.sort(key=lambda s: s.pos)
     indels_list.sort(key=lambda d: (d.pos, d.dellen, d.ins))
     return Signature(snvs=tuple(snvs), indels=tuple(indels_list))
+
+def expand_signature_units(sig: Signature) -> Counter:
+    """
+    Decompose a Signature into per-nucleotide 'units' so equality/containment is unambiguous.
+
+    Unit definitions:
+      - SNV: ("SNV", pos, ref, alt)
+      - DEL nucleotide i (0-based within event): ("DEL", pos+i)
+      - INS nucleotide i (0-based within event): ("INS", pos, i, base)
+
+    Returns:
+      Counter of units (multiset). Each unit counts as one nucleotide difference.
+    """
+    units: List[Unit] = []
+
+    # SNVs: one unit each
+    for s in sig.snvs:
+        units.append(("SNV", s.pos, s.ref.upper(), s.alt.upper()))
+
+    # Indels: expand per nucleotide
+    for d in sig.indels:
+        if d.dellen and d.dellen > 0:
+            # one unit per deleted base position
+            for i in range(d.dellen):
+                units.append(("DEL", d.pos + i))
+        elif d.ins:
+            # one unit per inserted base, keep order
+            for i, base in enumerate(d.ins.upper()):
+                units.append(("INS", d.pos, i, base))
+        else:
+            # No-op indel (shouldn't happen), skip
+            pass
+
+    return Counter(units)
+
+
+def compare_signature_with_n_extra_nt_or_less(
+    query: Signature, reference: Signature, n_extra_nt: int = 1
+    ) -> Dict[str, Any]:
+    """
+    compare_signature_with_n_extra_nt_or_less(): Determine if 'query' == 'reference' plus n nucleotide differences or less.
+
+    Conditions:
+      1) All per-nucleotide units present in 'reference' must appear in 'query'
+         (i.e., 'reference' is a subset of 'query' at nucleotide resolution).
+      2) The multiset difference query - reference must contain n_extra_nt units or less.
+
+    Returns a structured report:
+      {
+        "is_match_with_one_extra_nt": bool,
+        "missing_from_query": Counter,   # ref units not found in query (should be empty if True)
+        "extra_in_query": Counter,       # the extra unit(s) in query
+        "n_extra_nt": int,               # count of extra nucleotides
+      }
+
+    Parameters:
+    query (Signature): query Signature
+    reference (Signature): reference Signature
+    n_extra_nt (int): number of extra nucleotide differences allowed
+    """
+    q_units = expand_signature_units(query)
+    r_units = expand_signature_units(reference)
+
+    missing = r_units - q_units          # units required by ref but not present in query
+    extra   = q_units - r_units          # units present in query but not in ref
+
+    n_extra = sum(extra.values())
+    ok = (not missing) and (n_extra <= n_extra_nt)
+
+    return {
+        f"is_match_with_{n_extra_nt}_extra_nt_or_less": ok,
+        "missing_from_query": missing,
+        "extra_in_query": extra,
+        "n_extra_nt": n_extra,
+    }
+
+# Convenience boolean-only checker
+def is_reference_match_with_n_extra_nt_or_less(query: Signature, reference: Signature, n_extra_nt: int=1) -> bool:
+    """
+    is_reference_match_with_n_extra_nt_or_less(): Convenience boolean-only checker for compare_signature_with_n_extra_nt_or_less()
+    
+    Parameters:
+    query (Signature): query Signature
+    reference (Signature): reference Signature
+    n_extra_nt (int): number of extra nucleotide differences allowed
+    """
+    return compare_signature_with_n_extra_nt_or_less(query, reference, n_extra_nt=n_extra_nt)[f"is_match_with_{n_extra_nt}_extra_nt_or_less"]

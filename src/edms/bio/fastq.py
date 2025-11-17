@@ -1527,6 +1527,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
         signature_ls = []
         id_ls = []
         edit_ls = []
+        exact_ls = [] #new
         for s,read_seq in enumerate(seqs): # Iterate though sequences
             
             # Alignment Status
@@ -1558,6 +1559,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                 signature_ls.append(None)
                 id_ls.append("Not WT")
                 edit_ls.append("Not WT")
+                exact_ls.append(None) #new
 
             else: # Found region
                 alignment = aligner.align(Seq(ref_seq),Seq(read_seq))[0]
@@ -1570,6 +1572,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                 if not signature.snvs and not signature.indels:
                     id_ls.append('WT')
                     edit_ls.append('WT')
+                    exact_ls.append(True) #new
                     continue
                 
                 found = False
@@ -1577,9 +1580,11 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                     if signature == id_signature:
                         id_ls.append(id)
                         edit_ls.append(edit)
+                        exact_ls.append(True) #new
                         found = True
                         break
                 if found == False:
+                    # Opportunity to search for near-matches here in the future
                     id_ls.append("Not WT")
                     edit_ls.append("Not WT")
         
@@ -1807,7 +1812,7 @@ def region(fastqs: dict, flank5: str, flank3: str, save: bool=True, masks: bool=
             missing_flank3s.append(len(missing_flank3))
     
     else: # if no flanks are provided
-        fastqs_1 = fastqs
+        fastqs_1 = fastqs.copy()
         missing_flank5s = [0]*len(fastqs)
         missing_flank3s = [0]*len(fastqs)
     
