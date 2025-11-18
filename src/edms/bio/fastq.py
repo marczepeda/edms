@@ -1865,15 +1865,15 @@ def get_fastqs(in_dir: str, qall:int=10, qavg:int=30, qtrim:int=0, qmask:int=0, 
     if return_memories: return fastqs,memories
     else: return fastqs
 
-def region(fastqs: dict, flank5: str, flank3: str, save: bool=True, masks: bool=False, 
+def region(fastqs: dict, flank5: str='', flank3: str='', save: bool=True, masks: bool=False, 
            return_memories: bool=False, out_dir: str=None) -> tuple[dict[pd.DataFrame], list] | dict[pd.DataFrame]:
     ''' 
     region(): gets DNA and AA sequence for records within flanks
     
     Parameters:
     fastqs (dict): dictionary from get_fastqs
-    flank5 (str): top strand flanking sequence 5'
-    flank3 (str): top strand flanking sequence 3'
+    flank5 (str, optional): top strand flanking sequence 5' (Default: '')
+    flank3 (str, optional): top strand flanking sequence 3' (Default: '')
     save (bool, optional): save reads statistics file to local directory (Default: True)
     masks (bool, optional): include masked sequence and translation (Default: False)
     return_memories (bool, optional): return memories (Default: False)
@@ -1884,8 +1884,9 @@ def region(fastqs: dict, flank5: str, flank3: str, save: bool=True, masks: bool=
     # Memory reporting
     memories = []
 
-    # Remove fastq records that do not have flanks
-    if flank5!='' and flank3!='': # if flanks are provided
+    # Flanks...
+    if flank5!='' and flank3!='': # both are provided
+
         # Check flank lengths
         if (len(flank5)<9)|(len(flank3)<9): print('Warning: flank5 or flank3 less than 9.')
 
@@ -1905,47 +1906,88 @@ def region(fastqs: dict, flank5: str, flank3: str, save: bool=True, masks: bool=
             fastqs_1[file] = fastq.drop(sorted(missing_flank5.union(missing_flank3))).reset_index(drop=True)
             missing_flank5s.append(len(missing_flank5))
             missing_flank3s.append(len(missing_flank3))
+
+        # Retain fastqs file length
+        fastqs_reads_filtered = {file:len(fastqs[file]) for file in fastqs.keys()}
+        del fastqs # Save memory
+
+        # Obtain nucleotide and AA sequences within flanks; remove fastq records with phred scores within flanks
+        if save == True: out = pd.DataFrame()
+        for j,(file,fastq) in enumerate(fastqs_1.items()):
+            nuc=[]
+            prot=[]
+            if masks==True:
+                nucN=[]
+                protN=[]
+            
+            for i,seq in enumerate(fastq['seq']):
+                nuc.append(seq[seq.find(flank5)+len(flank5):seq.find(flank3)])
+                prot.append(Seq.translate(seq[seq.find(flank5)+len(flank5):seq.find(flank3)]))
+                if masks==True:
+                    nucN.append(fastq.iloc[i]['seqN'][seq.find(flank5)+len(flank5):seq.find(flank3)])
+                    protN.append(Seq.translate(fastq.iloc[i]['seqN'][seq.find(flank5)+len(flank5):seq.find(flank3)]))
+            
+            fastqs_1[file]['nuc']=nuc
+            fastqs_1[file]['prot']=prot
+            if masks==True:
+                fastqs_1[file]['nucN']=nucN
+                fastqs_1[file]['protN']=protN
+            
+            print(f'{file}:\t{fastqs_reads_filtered[file]} reads\t=>\t{len(fastqs_1[file])} reads;\tmissing {missing_flank5s[j]} flank5;\tmissing {missing_flank3s[j]} flank3')
+            if save==True: out = pd.concat([out,
+                                            pd.DataFrame({'file': [file],
+                                                        'reads_filtered': [fastqs_reads_filtered[file]],
+                                                        'reads_w_flanks': [len(fastqs_1[file])],
+                                                        'reads_wo_flank5': [missing_flank5s[j]],
+                                                        'reads_wo_flank3': [missing_flank3s[j]]})
+                                            ])
+            memories.append(memory_timer(task=file))
     
-    else: # if no flanks are provided
+    elif flank5!='' or flank3!='': # one is provided
+        raise ValueError('Error: Both flank5 and flank3 must be provided, or neither.')
+
+    else: # none are provided
+
+        # Don't remove fastq records based on flanks
         fastqs_1 = fastqs.copy()
         missing_flank5s = [0]*len(fastqs)
         missing_flank3s = [0]*len(fastqs)
-    
-    # Retain fastqs file length
-    fastqs_reads_filtered = {file:len(fastqs[file]) for file in fastqs.keys()}
-    del fastqs # Save memory
+        del fastqs # Save memory
 
-    # Obtain nucleotide and AA sequences within flanks; remove fastq records with phred scores within flanks
-    if save == True: out = pd.DataFrame()
-    for j,(file,fastq) in enumerate(fastqs_1.items()):
-        nuc=[]
-        prot=[]
-        if masks==True:
-            nucN=[]
-            protN=[]
-        
-        for i,seq in enumerate(fastq['seq']):
-            nuc.append(seq[seq.find(flank5)+len(flank5):seq.find(flank3)])
-            prot.append(Seq.translate(seq[seq.find(flank5)+len(flank5):seq.find(flank3)]))
+        # Retain fastqs file length
+        fastqs_reads_filtered = {file:len(fastqs_1[file]) for file in fastqs_1.keys()}
+
+        # Obtain nucleotide and AA sequences within flanks; remove fastq records with phred scores within flanks
+        if save == True: out = pd.DataFrame()
+        for j,(file,fastq) in enumerate(fastqs_1.items()):
+            nuc=[]
+            prot=[]
             if masks==True:
-                nucN.append(fastq.iloc[i]['seqN'][seq.find(flank5)+len(flank5):seq.find(flank3)])
-                protN.append(Seq.translate(fastq.iloc[i]['seqN'][seq.find(flank5)+len(flank5):seq.find(flank3)]))
-        
-        fastqs_1[file]['nuc']=nuc
-        fastqs_1[file]['prot']=prot
-        if masks==True:
-            fastqs_1[file]['nucN']=nucN
-            fastqs_1[file]['protN']=protN
-        
-        print(f'{file}:\t{fastqs_reads_filtered[file]} reads\t=>\t{len(fastqs_1[file])} reads;\tmissing {missing_flank5s[j]} flank5;\tmissing {missing_flank3s[j]} flank3')
-        if save==True: out = pd.concat([out,
-                                        pd.DataFrame({'file': [file],
-                                                      'reads_filtered': [fastqs_reads_filtered[file]],
-                                                      'reads_w_flanks': [len(fastqs_1[file])],
-                                                      'reads_wo_flank5': [missing_flank5s[j]],
-                                                      'reads_wo_flank3': [missing_flank3s[j]]})
-                                        ])
-        memories.append(memory_timer(task=file))
+                nucN=[]
+                protN=[]
+            
+            for i,seq in enumerate(fastq['seq']):
+                nuc.append(seq)
+                prot.append(Seq.translate(seq))
+                if masks==True:
+                    nucN.append(fastq.iloc[i]['seqN'])
+                    protN.append(Seq.translate(fastq.iloc[i]['seqN']))
+
+            fastqs_1[file]['nuc']=nuc
+            fastqs_1[file]['prot']=prot
+            if masks==True:
+                fastqs_1[file]['nucN']=nucN
+                fastqs_1[file]['protN']=protN
+            
+            print(f'{file}:\t{fastqs_reads_filtered[file]} reads\t=>\t{len(fastqs_1[file])} reads;\tmissing {missing_flank5s[j]} flank5;\tmissing {missing_flank3s[j]} flank3')
+            if save==True: out = pd.concat([out,
+                                            pd.DataFrame({'file': [file],
+                                                        'reads_filtered': [fastqs_reads_filtered[file]],
+                                                        'reads_w_flanks': [len(fastqs_1[file])],
+                                                        'reads_wo_flank5': [missing_flank5s[j]],
+                                                        'reads_wo_flank3': [missing_flank3s[j]]})
+                                            ])
+            memories.append(memory_timer(task=file))
     
     if save==True: 
         if out_dir is None: out_dir = '.'
