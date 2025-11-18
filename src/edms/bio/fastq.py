@@ -89,7 +89,7 @@ from typing import Literal
 import math
 import subprocess
 
-from ..bio.signature import parse_signature_literal, signature_from_alignment
+from ..bio.signature import parse_signature_literal, signature_from_alignment, is_reference_match_with_n_extra_nt_or_less
 from ..gen import io
 from ..gen import tidy as t
 from ..gen import plot as p
@@ -1200,7 +1200,7 @@ def paired_regions(meta_dir: str, region1_dir: str, region2_dir: str, out_dir: s
 
 ### Signature 
 def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str, edit_col: str, fastq_dir: str, 
-                     out_dir: str, out_file: str, target_sequence: str=None, in_file: pd.DataFrame | str=None, 
+                     out_dir: str, out_file: str, target_sequence: str=None, in_file: pd.DataFrame | str=None, n_extra_nt: int=0,
                      df_motif5: pd.DataFrame | str=None, df_motif3: pd.DataFrame | str=None, fastq_col: str=None,  meta: pd.DataFrame | str=None, 
                      match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, extend_gap_score: float = -0.1, 
                      align_dims: tuple=(0,0), align_ckpt: int=10000, save_alignments: bool=False, return_df: bool=False, 
@@ -1220,6 +1220,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
     target_sequence (str, option 1): Target sequence; retrieved from input file if not provided
     in_file (dataframe | str, option 2): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence,aa_index (column names required)
     
+    n_extra_nt (int, optional): number of extra nucleotide differences allowed for Signature match (Default: 0)
     df_motif5 (dataframe | str, optional): 5' motif dataframe (or file path)
     df_motif3 (dataframe | str, optional): 3' motif dataframe (or file path)
     fastq_col (str, optional): fastq column name in the annotated reference library (Default: None)
@@ -1316,7 +1317,11 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
     df_ref[signature_col] = [parse_signature_literal(signature) for signature in df_ref[signature_col]]
 
     # Create output dataframe with counts and fraction from fastq files and reference dataframe
-    out_df = pd.DataFrame()
+    out_df = pd.DataFrame() # Individual edits
+    out_df2 = pd.DataFrame() # Aggregate edits
+    if n_extra_nt>0:
+        out_df3 = pd.DataFrame() # Individual edits minus extra nt differences
+        out_df4 = pd.DataFrame() # Aggregate edits minus extra nt differences
     for fastq_file in os.listdir(fastq_dir): # Iterate through fastq files
         
         print(f"Processing {fastq_file}...") # Get reads
@@ -1527,7 +1532,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
         signature_ls = []
         id_ls = []
         edit_ls = []
-        exact_ls = [] #new
+        exact_ls = []
         for s,read_seq in enumerate(seqs): # Iterate though sequences
             
             # Alignment Status
@@ -1557,11 +1562,12 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
             if read_seq is None: # Missing region
                 if save_alignments==True: alignment_ls.append(None)
                 signature_ls.append(None)
-                id_ls.append("Not WT")
-                edit_ls.append("Not WT")
-                exact_ls.append(None) #new
+                id_ls.append(None)
+                edit_ls.append(None)
+                exact_ls.append(None)
 
             else: # Found region
+                # Alignment & Signature
                 alignment = aligner.align(Seq(ref_seq),Seq(read_seq))[0]
                 signature = signature_from_alignment(ref_seq=ref_seq,
                                                      query_seq=read_seq,
@@ -1569,53 +1575,128 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                 if save_alignments==True: alignment_ls.append(alignment)
                 signature_ls.append(signature)
                 
+                # WT: no SNVs or indels
                 if not signature.snvs and not signature.indels:
                     id_ls.append('WT')
                     edit_ls.append('WT')
-                    exact_ls.append(True) #new
+                    exact_ls.append('WT')
                     continue
                 
+                # Edit: search for exact signature match in reference dataframe
                 found = False
                 for edit, id, id_signature in t.zip_cols(df=fastq_df_ref,cols=[edit_col, id_col, signature_col]):
-                    if signature == id_signature:
+                    if signature == id_signature: # Found exact match
                         id_ls.append(id)
                         edit_ls.append(edit)
-                        exact_ls.append(True) #new
+                        exact_ls.append(id)
                         found = True
                         break
+
+                # Edit: search for near-match (n extra nt) in reference dataframe or declare Not WT
                 if found == False:
-                    # Opportunity to search for near-matches here in the future
-                    id_ls.append("Not WT")
-                    edit_ls.append("Not WT")
-        
+                    found_w_error = False
+                    if n_extra_nt>0: # Search for near match
+                        for edit, id, id_signature in t.zip_cols(df=fastq_df_ref,cols=[edit_col, id_col, signature_col]):
+                            if is_reference_match_with_n_extra_nt_or_less(query=signature, reference=id_signature, n_extra_nt=n_extra_nt): # Found near match
+                                id_ls.append(id)
+                                edit_ls.append(edit)
+                                exact_ls.append("Not WT")
+                                found_w_error = True
+                                break
+
+                    # Not WT: no exact or near match found
+                    if found_w_error == False:
+                        id_ls.append("Not WT")
+                        edit_ls.append("Not WT")
+                        exact_ls.append("Not WT")
+
         if save_alignments==True: 
             df_fastq = pd.DataFrame({'Read_i': np.arange(0,len(signature_ls)),
                                     'Alignment': alignment_ls,
                                     'Signature': signature_ls,
                                     id_col: id_ls,
-                                    edit_col: edit_ls})
+                                    edit_col: edit_ls,
+                                    'Exact_match': exact_ls}) 
         else:
             df_fastq = pd.DataFrame({'Read_i': np.arange(0,len(signature_ls)),
                                      'Signature': signature_ls,
                                      id_col: id_ls,
-                                     edit_col: edit_ls})  
+                                     edit_col: edit_ls,
+                                     'Exact_match': exact_ls}) 
         
         io.save(dir=os.path.join(out_dir,'Signature'), 
                 file=f'{fastq_name}.csv', 
                 obj=df_fastq)
         memories.append(memory_timer(task=f"{fastq_name} (alignment/signature)"))
 
-        # Remove None, merge ID counts with reference dataframe, calculate fraction, & append to out dataframe
+        # Remove None
         df_fastq.dropna(subset=[signature_col], inplace=True, ignore_index=True)
-        fastq_df_ref = pd.merge(left=fastq_df_ref,right=df_fastq[id_col].value_counts().reset_index(), on=id_col, how='left')
-        fastq_df_ref[edit_col] = [id if isinstance(edit, float) else edit for edit,id in t.zip_cols(df=fastq_df_ref, cols=['Edit', 'ID'])]
-        fastq_df_ref.fillna(value={'count': 0},inplace=True)
-        total_count = sum(fastq_df_ref['count'])
-        fastq_df_ref['fraction'] = [cts/total_count for cts in fastq_df_ref['count']]
-        fastq_df_ref['fastq_file'] = [fastq_file]*len(fastq_df_ref)
-        del total_count # Save memory
+
+        # Merge ID counts with reference dataframe [ID column], calculate fraction, & append to out dataframe
+        fastq_df_ref_by_id = pd.merge(left=fastq_df_ref,right=df_fastq[id_col].value_counts().reset_index(), on=id_col, how='left')
+        fastq_df_ref_by_id[edit_col] = [id if isinstance(edit, float) else edit for edit,id in t.zip_cols(df=fastq_df_ref_by_id, cols=[edit_col, id_col])]
+        fastq_df_ref_by_id.fillna(value={'count': 0},inplace=True)
+        total_count = sum(fastq_df_ref_by_id['count'])
+        fastq_df_ref_by_id['fraction'] = [cts/total_count for cts in fastq_df_ref_by_id['count']]
+        fastq_df_ref_by_id['fastq_file'] = [fastq_file]*len(fastq_df_ref_by_id)
+        out_df = pd.concat([out_df,fastq_df_ref_by_id], ignore_index=True)
+
+        # Total Editing Outcomes
+        cts = 0
+        fracs = 0
+        for edit,count,fraction in t.zip_cols(df=fastq_df_ref_by_id,cols=[edit_col,'count','fraction']):
+            if edit!='WT' and edit!='Not WT':
+                cts += count
+                fracs += fraction
+
+        fastq_df_ref_by_id_agg = fastq_df_ref_by_id[fastq_df_ref_by_id[id_col].isin(['WT','Not WT'])].reset_index(drop=True)
+        fastq_df_ref_by_id_agg = pd.concat([fastq_df_ref_by_id_agg,
+                                            pd.DataFrame({id_col: ['Edit'],
+                                                        edit_col: ['Edit'],
+                                                        'count': [cts],
+                                                        'fraction': [fracs],
+                                                        'fastq_file': [fastq_file]})], ignore_index=True)
+        out_df2 = pd.concat([out_df2,fastq_df_ref_by_id_agg], ignore_index=True)
+
+        # Save memory & clear for next use
+        del total_count
+        del fastq_df_ref_by_id
+        del fastq_df_ref_by_id_agg
+
+        # Merge Exact_match counts with reference dataframe [ID column], calculate fraction, & append to out dataframe
+        if n_extra_nt>0:
+            fastq_df_ref_by_exact = pd.merge(left=fastq_df_ref,right=df_fastq[exact_ls].value_counts().reset_index(), left_on=id_col, right_on="Exact_match", how='left')
+            fastq_df_ref_by_exact[edit_col] = [id if isinstance(edit, float) else edit for edit,id in t.zip_cols(df=fastq_df_ref_by_exact, cols=[edit_col, id_col])]
+            fastq_df_ref_by_exact.fillna(value={'count': 0},inplace=True)
+            total_count = sum(fastq_df_ref_by_exact['count'])
+            fastq_df_ref_by_exact['fraction'] = [cts/total_count for cts in fastq_df_ref_by_exact['count']]
+            fastq_df_ref_by_exact['fastq_file'] = [fastq_file]*len(fastq_df_ref_by_exact)
+            out_df3 = pd.concat([out_df3,fastq_df_ref_by_exact], ignore_index=True)
+
+            # Total Editing Outcomes minus extra nt differences
+            cts = 0
+            fracs = 0
+            for edit,count,fraction in t.zip_cols(df=fastq_df_ref_by_exact_agg,cols=[edit_col,'count','fraction']):
+                if edit!='WT' and edit!='Not WT':
+                    cts += count
+                    fracs += fraction
+
+            fastq_df_ref_by_exact_agg = fastq_df_ref_by_exact[fastq_df_ref_by_exact[id_col].isin(['WT','Not WT'])].reset_index(drop=True)
+            fastq_df_ref_by_exact_agg = pd.concat([fastq_df_ref_by_exact_agg,
+                                                    pd.DataFrame({id_col: ['Edit'],
+                                                                edit_col: ['Edit'],
+                                                                'count': [cts],
+                                                                'fraction': [fracs],
+                                                                'fastq_file': [fastq_file]})], ignore_index=True)
+            out_df4 = pd.concat([out_df4,fastq_df_ref_by_exact_agg], ignore_index=True)
+
+            # Save memory & clear for next use
+            del total_count
+            del fastq_df_ref_by_exact
+            del fastq_df_ref_by_exact_agg
+
+        # Save memory & clear for next use
         del df_fastq
-        out_df = pd.concat([out_df,fastq_df_ref], ignore_index=True)
 
     # Save, plot, and return
     memories.append(memory_timer(task='count_signature()'))
@@ -1625,11 +1706,25 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
     io.save(dir=os.path.join(out_dir,'.count_signature'),
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+    
     io.save(dir=out_dir,file=out_file,obj=out_df)
-
+    io.save(dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}_aggregate.{out_file.split('.')[-1]}",obj=out_df2)
     stack(df=out_df,x='fastq_file',y='fraction',cols=edit_col,vertical=False,
           palette_or_cmap='tab20',repeats=math.ceil(len(out_df[edit_col].unique())/20),cutoff_group='fastq_file',cutoff_value=0,legend_bbox_to_anchor=(0,-.1),legend_ncol=8,
           figsize=(15,10), title='Edit Outcomes', dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}{plot_suf}", show=show, **plot_kwargs)
+    stack(df=out_df2,x='fastq_file',y='fraction',cols=edit_col,vertical=False,
+          palette_or_cmap='tab20',repeats=1,cutoff_group='fastq_file',cutoff_value=0,legend_bbox_to_anchor=(0,-.1),legend_ncol=3,
+          figsize=(15,10), title='Edit Outcomes', dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}_aggregate{plot_suf}", show=show, **plot_kwargs)
+    
+    if n_extra_nt>0:
+        io.save(dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}_without_{n_extra_nt}_extra_nt.{out_file.split('.')[-1]}",obj=out_df3)
+        io.save(dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}_aggregate_without_{n_extra_nt}_extra_nt.{out_file.split('.')[-1]}",obj=out_df4)
+        stack(df=out_df3,x='fastq_file',y='fraction',cols=edit_col,vertical=False,
+            palette_or_cmap='tab20',repeats=math.ceil(len(out_df3[edit_col].unique())/20),cutoff_group='fastq_file',cutoff_value=0,legend_bbox_to_anchor=(0,-.1),legend_ncol=8,
+            figsize=(15,10), title='Edit Outcomes', dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}_without_{n_extra_nt}_extra_nt{plot_suf}", show=show, **plot_kwargs)
+        stack(df=out_df4,x='fastq_file',y='fraction',cols=edit_col,vertical=False,
+            palette_or_cmap='tab20',repeats=1,cutoff_group='fastq_file',cutoff_value=0,legend_bbox_to_anchor=(0,-.1),legend_ncol=3,
+            figsize=(15,10), title='Edit Outcomes', dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}_aggregate_without_{n_extra_nt}_extra_nt{plot_suf}", show=show, **plot_kwargs)
 
     if return_df: return out_df
 
