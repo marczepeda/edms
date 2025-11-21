@@ -1596,8 +1596,11 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                 if found == False:
                     found_w_error = False
                     if n_extra_nt>0: # Search for near match
-                        for edit, id, id_signature in t.zip_cols(df=fastq_df_ref,cols=[edit_col, id_col, signature_col]):
-                            if is_reference_match_with_n_extra_nt_or_less(query=signature, reference=id_signature, n_extra_nt=n_extra_nt): # Found near match
+                        for edit, id, id_signature in t.zip_cols(df=fastq_df_ref[(fastq_df_ref[id_col]!='WT') & (fastq_df_ref[id_col]!='Not WT')],
+                                                                 cols=[edit_col, id_col, signature_col]):
+                            if is_reference_match_with_n_extra_nt_or_less(query=signature, 
+                                                                          reference=id_signature, 
+                                                                          n_extra_nt=n_extra_nt): # Found near match
                                 id_ls.append(id)
                                 edit_ls.append(edit)
                                 exact_ls.append("Not WT")
