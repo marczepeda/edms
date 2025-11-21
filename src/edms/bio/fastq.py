@@ -1668,7 +1668,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
 
         # Merge Exact_match counts with reference dataframe [ID column], calculate fraction, & append to out dataframe
         if n_extra_nt>0:
-            fastq_df_ref_by_exact = pd.merge(left=fastq_df_ref,right=df_fastq[exact_ls].value_counts().reset_index(), left_on=id_col, right_on="Exact_match", how='left')
+            fastq_df_ref_by_exact = pd.merge(left=fastq_df_ref,right=df_fastq['Exact_match'].value_counts().reset_index(), left_on=id_col, right_on="Exact_match", how='left')
             fastq_df_ref_by_exact[edit_col] = [id if isinstance(edit, float) else edit for edit,id in t.zip_cols(df=fastq_df_ref_by_exact, cols=[edit_col, id_col])]
             fastq_df_ref_by_exact.fillna(value={'count': 0},inplace=True)
             total_count = sum(fastq_df_ref_by_exact['count'])
