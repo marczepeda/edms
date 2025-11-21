@@ -1679,7 +1679,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
             # Total Editing Outcomes minus extra nt differences
             cts = 0
             fracs = 0
-            for edit,count,fraction in t.zip_cols(df=fastq_df_ref_by_exact_agg,cols=[edit_col,'count','fraction']):
+            for edit,count,fraction in t.zip_cols(df=fastq_df_ref_by_exact,cols=[edit_col,'count','fraction']):
                 if edit!='WT' and edit!='Not WT':
                     cts += count
                     fracs += fraction
