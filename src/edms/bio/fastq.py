@@ -1720,14 +1720,14 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
           figsize=(15,10), title='Edit Outcomes', dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}_aggregate{plot_suf}", show=show, **plot_kwargs)
     
     if n_extra_nt>0:
-        io.save(dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}_without_{n_extra_nt}_extra_nt.{out_file.split('.')[-1]}",obj=out_df3)
-        io.save(dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}_aggregate_without_{n_extra_nt}_extra_nt.{out_file.split('.')[-1]}",obj=out_df4)
+        io.save(dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}_wo_{n_extra_nt}_extra_nt.{out_file.split('.')[-1]}",obj=out_df3)
+        io.save(dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}_wo_{n_extra_nt}_extra_nt_aggregate.{out_file.split('.')[-1]}",obj=out_df4)
         stack(df=out_df3,x='fastq_file',y='fraction',cols=edit_col,vertical=False,
             palette_or_cmap='tab20',repeats=math.ceil(len(out_df3[edit_col].unique())/20),cutoff_group='fastq_file',cutoff_value=0,legend_bbox_to_anchor=(0,-.1),legend_ncol=8,
-            figsize=(15,10), title='Edit Outcomes', dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}_without_{n_extra_nt}_extra_nt{plot_suf}", show=show, **plot_kwargs)
+            figsize=(15,10), title='Edit Outcomes', dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}_wo_{n_extra_nt}_extra_nt{plot_suf}", show=show, **plot_kwargs)
         stack(df=out_df4,x='fastq_file',y='fraction',cols=edit_col,vertical=False,
             palette_or_cmap='tab20',repeats=1,cutoff_group='fastq_file',cutoff_value=0,legend_bbox_to_anchor=(0,-.1),legend_ncol=3,
-            figsize=(15,10), title='Edit Outcomes', dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}_aggregate_without_{n_extra_nt}_extra_nt{plot_suf}", show=show, **plot_kwargs)
+            figsize=(15,10), title='Edit Outcomes', dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}_wo_{n_extra_nt}_extra_nt_aggregate{plot_suf}", show=show, **plot_kwargs)
 
     if return_df: return out_df
 
