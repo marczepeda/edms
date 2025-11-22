@@ -310,9 +310,8 @@ def expand_signature_units(sig: Signature) -> Counter:
 
     return Counter(units)
 
-
 def compare_signature_with_n_extra_nt_or_less(
-    query: Signature, reference: Signature, n_extra_nt: int = 1
+    query: Signature | Counter[List[Unit]], reference: Signature | Counter[List[Unit]], n_extra_nt: int = 1
     ) -> Dict[str, Any]:
     """
     compare_signature_with_n_extra_nt_or_less(): Determine if 'query' == 'reference' plus n nucleotide differences or less.
@@ -331,12 +330,24 @@ def compare_signature_with_n_extra_nt_or_less(
       }
 
     Parameters:
-    query (Signature): query Signature
-    reference (Signature): reference Signature
+    query (Signature | Counter[List[Unit]]): query Signature or Counter of Signature Units
+    reference (Signature | Counter[List[Unit]]): reference Signature or Counter of Signature Units
     n_extra_nt (int): number of extra nucleotide differences allowed
     """
-    q_units = expand_signature_units(query)
-    r_units = expand_signature_units(reference)
+    # Expand signatures to unit Counters if needed
+    if isinstance(query, Counter):
+        q_units = query
+    elif isinstance(query, Signature):
+        q_units = expand_signature_units(query)
+    else:
+        raise ValueError(f"Query must be a Signature or Counter of Units.\nQuery: {query}\nType: {type(query)}")
+
+    if isinstance(reference, Counter):
+        r_units = reference
+    elif isinstance(reference, Signature):
+        r_units = expand_signature_units(reference)
+    else:
+        raise ValueError(f"Reference must be a Signature or Counter of Units.\nReference: {reference}\nType: {type(reference)}")
 
     missing = r_units - q_units          # units required by ref but not present in query
     extra   = q_units - r_units          # units present in query but not in ref
@@ -352,13 +363,15 @@ def compare_signature_with_n_extra_nt_or_less(
     }
 
 # Convenience boolean-only checker
-def is_reference_match_with_n_extra_nt_or_less(query: Signature, reference: Signature, n_extra_nt: int=1) -> bool:
+def is_reference_match_with_n_extra_nt_or_less(query: Signature | Counter[List[Unit]], 
+                                               reference: Signature | Counter[List[Unit]], 
+                                               n_extra_nt: int=1) -> bool:
     """
     is_reference_match_with_n_extra_nt_or_less(): Convenience boolean-only checker for compare_signature_with_n_extra_nt_or_less()
     
     Parameters:
-    query (Signature): query Signature
-    reference (Signature): reference Signature
-    n_extra_nt (int): number of extra nucleotide differences allowed
+    query (Signature | Counter[List[Unit]]): query Signature or Counter of Signature Units
+    reference (Signature | Counter[List[Unit]]): reference Signature or Counter of Signature Units
+    n_extra_nt (int, optional): number of extra nucleotide differences allowed (Default: 1)
     """
     return compare_signature_with_n_extra_nt_or_less(query, reference, n_extra_nt=n_extra_nt)[f"is_match_with_{n_extra_nt}_extra_nt_or_less"]

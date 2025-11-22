@@ -89,7 +89,7 @@ from typing import Literal
 import math
 import subprocess
 
-from ..bio.signature import parse_signature_literal, signature_from_alignment, is_reference_match_with_n_extra_nt_or_less
+from ..bio.signature import parse_signature_literal, signature_from_alignment, expand_signature_units, is_reference_match_with_n_extra_nt_or_less
 from ..gen import io
 from ..gen import tidy as t
 from ..gen import plot as p
@@ -1525,7 +1525,11 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
         Not_WT_WT_df[id_col] = ['Not WT', 'WT']
         Not_WT_WT_df[edit_col] = ['Not WT', 'WT']
         fastq_df_ref = pd.concat([fastq_df_ref, Not_WT_WT_df], ignore_index=True)
-        
+
+        # Expand Signature Units from Signature Objects in the reference dataframe
+        if n_extra_nt > 0:
+            fastq_df_ref[f"{signature_col}_units"] = [expand_signature_units(signature) if signature is not None else None for signature in fastq_df_ref[signature_col]]
+
         # Perform alignments, compute Signatures, assign genotype id, & append to fastq dataframe to dictionary
         print("Perform Alignments & Compute Signatures")
         if save_alignments==True: alignment_ls = []
@@ -1596,10 +1600,11 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                 if found == False:
                     found_w_error = False
                     if n_extra_nt>0: # Search for near match
-                        for edit, id, id_signature in t.zip_cols(df=fastq_df_ref[(fastq_df_ref[id_col]!='WT') & (fastq_df_ref[id_col]!='Not WT')],
-                                                                 cols=[edit_col, id_col, signature_col]):
-                            if is_reference_match_with_n_extra_nt_or_less(query=signature, 
-                                                                          reference=id_signature, 
+                        signature_units = expand_signature_units(signature) # Expand Signature Units
+                        for edit, id, id_signature_units in t.zip_cols(df=fastq_df_ref[(fastq_df_ref[id_col]!='WT') & (fastq_df_ref[id_col]!='Not WT')],
+                                                                       cols=[edit_col, id_col, f"{signature_col}_units"]):
+                            if is_reference_match_with_n_extra_nt_or_less(query=signature_units, 
+                                                                          reference=id_signature_units, 
                                                                           n_extra_nt=n_extra_nt): # Found near match
                                 id_ls.append(id)
                                 edit_ls.append(edit)
