@@ -1528,7 +1528,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
 
         # Expand Signature Units from Signature Objects in the reference dataframe
         if n_extra_nt > 0:
-            fastq_df_ref[f"{signature_col}_units"] = [expand_signature_units(signature) if signature is not None else None for signature in fastq_df_ref[signature_col]]
+            fastq_df_ref[f"{signature_col}_units"] = [expand_signature_units(signature) if id != 'Not WT' and id != 'WT' else None for id,signature in t.zip_cols(df=fastq_df_ref, cols=[id_col,signature_col])]
 
         # Perform alignments, compute Signatures, assign genotype id, & append to fastq dataframe to dictionary
         print("Perform Alignments & Compute Signatures")
