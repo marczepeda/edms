@@ -401,12 +401,11 @@ def add_common_plot_vol_args(subparser):
     subparser.add_argument("--legend_size", type=int, default=9, help="Font size for legend items")
     subparser.add_argument("--legend_bbox_to_anchor", type=parse_tuple_float, default=(1, 1), help="Bounding box anchor for legend")
     subparser.add_argument("--legend_loc", type=str, default="upper left", help="Legend location on the plot")
-    subparser.add_argument("--legend_items", type=parse_tuple_int, default=(0, 0), help="Tuple defining legend layout")
     subparser.add_argument("--legend_ncol", type=int, default=1, help="Number of columns in the legend")
 
     # Boolean switches
     subparser.add_argument("--display_size", action="store_true", help="Show point sizes as annotations", default=False)
-    subparser.add_argument("--display_labels", action="store_true", help="Display text labels for selected points", default=False)
+    subparser.add_argument("--display_labels", type=str, nargs="+", help="Display labels for values if label column specified (Options: 'FC & p-value', 'FC', 'p-value', 'NS', 'all', or ['label1', 'label2', ..., 'labeln'])", default=["FC & p-value"])
     subparser.add_argument("--return_df", action="store_true", help="Return annotated DataFrame after plotting", default=False)
     subparser.add_argument("--show", action="store_true", help="Show the plot in an interactive window", default=False)
     subparser.add_argument("--space_capitalize", action="store_true", help="Capitalize and space labels/legend items", default=False)

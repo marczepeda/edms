@@ -273,7 +273,7 @@ def correlation(df: pd.DataFrame | str, var_cols: list=[], value_cols: list=[], 
 
 # Comparison
 def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str, var: str, count: str, psuedocount: int=1, 
-            dir:str=None, file:str=None) -> pd.DataFrame:
+            dir:str=None, file:str=None, verbose:bool=False) -> pd.DataFrame:
     ''' 
     compare(): computes FC, pval, and log transformations relative to a specified condition
 
@@ -287,6 +287,7 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str, var:
     psuedocount (int, optional): psuedocount to avoid log(0) & /0 (Default: 1)
     dir (str, optional): save directory
     file (str, optional): save file
+    verbose (bool, optional): print progress to console (Default: False)
     
     Dependencies: Bio.Seq.Seq, pandas, numpy, io, tidy, edit_1(), dms_cond(), & aa_props
     '''
@@ -298,59 +299,94 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str, var:
     meta_cols = list(df.columns)
     meta_cols.remove(count)
 
-    print(f'Add psuedocount ({psuedocount}) to avoid log(0) & compute fraction per million (FPM)')
-    df[f'{count}+{psuedocount}'] = df[count]+psuedocount
-    dc = t.split(df=df,key=sample)
-    for s,df_sample in dc.items():
-        count_total = sum(df_sample[count])
-        dc[s]['FPM']=[c/count_total*1000000 for c in df_sample[count]]
+    if verbose: print(f'Add psuedocount ({psuedocount}) to avoid log(0) & compute fraction per million (FPM)')
+    df[f'{count}+{psuedocount}'] = df[count] + psuedocount
+    dc = t.split(df=df, key=sample)
+    for s, df_sample in dc.items():
+        count_total = float(df_sample[count].sum())
+        n_rows = int(df_sample.shape[0])
+        count_total_pc = count_total + psuedocount * n_rows
 
-    print('Group samples by condition & compute averages')
+        # Classic FPM; avoid divide-by-zero
+        if count_total > 0:
+            dc[s]['FPM'] = [c / count_total * 1_000_000 for c in df_sample[count]]
+        else:
+            dc[s]['FPM'] = [0.0] * n_rows
+
+        # Pseudocount-adjusted FPM for robust FC (adds psuedocount to each observation and to the library size)
+        if count_total_pc > 0:
+            dc[s]['FPM_pc'] = [(c + psuedocount) / count_total_pc * 1_000_000 for c in df_sample[count]]
+        else:
+            dc[s]['FPM_pc'] = [0.0] * n_rows
+
+    if verbose: print('Group samples by condition & compute averages')
     df_cond_stat = pd.DataFrame()
     # Define aggregation dictionary dynamically
-    agg_dict = {count: 'mean', 
-                f'{count}+{psuedocount}': 'mean',
-                'FPM': ['mean',list]} # Include both mean and list of original values
-    for col in meta_cols: # Add metadata columns to be aggregated as sets
+    agg_dict = {
+        count: 'mean',
+        f'{count}+{psuedocount}': 'mean',
+        'FPM': ['mean', list],
+        'FPM_pc': ['mean', list]
+    }  # Include both mean and list of original values
+    for col in meta_cols:
         agg_dict[col] = lambda x: set(x)
 
     # Join samples back into 1 dataframe and split by condition
-    for c,df_cond in t.split(df=t.join(dc=dc,col=sample),key=cond).items(): # Iterate through conditions
-        print(c)
-        # Group by variable and aggregate
-        df_cond_agg = df_cond.groupby(by=var).agg(agg_dict).reset_index(drop=True)
-        df_cond_agg.columns = ['_'.join(col).strip('_') for col in df_cond_agg.columns] # Flatten multi-level column names
-        for col in df_cond_agg.columns: # Change metadata sets to comma-seperated strings or lists
+    for c, df_cond in t.split(df=t.join(dc=dc, col=sample), key=cond).items():
+        if verbose: print(c)
+        # Group by variable and aggregate; keep grouping key as a column
+        df_cond_agg = df_cond.groupby(by=var, as_index=False).agg(agg_dict)
+        df_cond_agg.columns = ['_'.join(col).strip('_') for col in df_cond_agg.columns]
+        for col in df_cond_agg.columns:
             if '_<lambda>' in col:
-                if any(isinstance(item, str) for item in df_cond_agg.iloc[0][col]): 
-                    ls = [] # Handling columns with str & other datatypes
-                    for s in df_cond_agg[col]: ls.append([s_ if isinstance(s_,str) else str(s_) for s_ in s])
-                    df_cond_agg[col] = [','.join(sorted(l)) for l in ls] # Sort list and join
-                else: df_cond_agg[col] = [sorted(s) for s in df_cond_agg[col]]
-        df_cond_agg.columns = df_cond_agg.columns.str.replace('_<lambda>', '', regex=True) # Remove '_<lambda>' in column names
-        df_cond_agg[cond]=c
-        df_cond_stat = pd.concat([df_cond_stat,df_cond_agg]).reset_index(drop=True)
+                if any(isinstance(item, str) for item in df_cond_agg.iloc[0][col]):
+                    ls = []
+                    for s in df_cond_agg[col]: ls.append([s_ if isinstance(s_, str) else str(s_) for s_ in s])
+                    df_cond_agg[col] = [','.join(sorted(l)) for l in ls]
+                else:
+                    df_cond_agg[col] = [sorted(s) for s in df_cond_agg[col]]
+        df_cond_agg.columns = df_cond_agg.columns.str.replace('_<lambda>', '', regex=True)
+        df_cond_agg[cond] = c
+        df_cond_stat = pd.concat([df_cond_stat, df_cond_agg]).reset_index(drop=True)
     
     # Fold change & p-value relative comparison group
-    print(f'Compute FC & pval relative to {cond_comp}:')
+    if verbose: print(f'Compute FC & pval relative to {cond_comp}:')
     df_stat = pd.DataFrame()
-    df_comp = df_cond_stat[df_cond_stat[cond]==cond_comp] # Isolate comparison group
-    df_other = df_cond_stat[df_cond_stat[cond]!=cond_comp] # From other groups
-    for v in set(df_other[var].tolist()): # iterate through variables
-        print(f'{v}')
-        df_other_edit = df_other[df_other[var]==v]
-        df_comp_edit = df_comp[df_comp[var]==v]
-        df_other_edit[f'{count}_mean_compare'] = [df_comp_edit.iloc[0][f'{count}_mean']]*df_other_edit.shape[0]
-        df_other_edit[f'{count}+{psuedocount}_mean_compare'] = [df_comp_edit.iloc[0][f'{count}+{psuedocount}_mean']]*df_other_edit.shape[0]
-        df_other_edit['FPM_mean_compare'] = [df_comp_edit.iloc[0]['FPM_mean']]*df_other_edit.shape[0]
-        df_other_edit['FC'] = df_other_edit['FPM_mean']/df_comp_edit.iloc[0]['FPM_mean']
-        ttests = [ttest_ind(list(other_fraction_ls),list(df_comp_edit.iloc[0]['FPM_list'])) 
-                                 for other_fraction_ls in df_other_edit['FPM_list']]
+    df_comp = df_cond_stat[df_cond_stat[cond] == cond_comp]
+    df_other = df_cond_stat[df_cond_stat[cond] != cond_comp]
+    # Only evaluate variables present in both the comparison group and the other groups
+    vars_in_both = sorted(set(df_other[var].tolist()).intersection(set(df_comp[var].tolist())))
+    for v in vars_in_both:
+        if verbose: print(f'{v}')
+        df_other_edit = df_other[df_other[var] == v].copy()
+        df_comp_edit = df_comp[df_comp[var] == v]
+
+        # If the comparison group has no rows for this variable, skip
+        if df_comp_edit.empty:
+            continue
+
+        # Carry through comparison means for transparency
+        df_other_edit[f'{count}_mean_compare'] = [df_comp_edit.iloc[0][f'{count}_mean']] * df_other_edit.shape[0]
+        df_other_edit[f'{count}+{psuedocount}_mean_compare'] = [df_comp_edit.iloc[0][f'{count}+{psuedocount}_mean']] * df_other_edit.shape[0]
+        df_other_edit['FPM_pc_mean_compare'] = [df_comp_edit.iloc[0]['FPM_pc_mean']] * df_other_edit.shape[0]
+        df_other_edit['FPM_mean_compare'] = [df_comp_edit.iloc[0]['FPM_mean']] * df_other_edit.shape[0]
+
+        # Robust FC using pseudocount-adjusted FPM; guard against zero denominator
+        _den = float(df_comp_edit.iloc[0]['FPM_pc_mean'])
+        if _den <= 0:
+            _den = np.finfo(float).eps
+        df_other_edit['FC'] = df_other_edit['FPM_pc_mean'] / _den
+
+        # Two-sample t-tests using the adjusted per-sample values
+        ttests = [
+            ttest_ind(list(other_vals), list(df_comp_edit.iloc[0]['FPM_pc_list']))
+            for other_vals in df_other_edit['FPM_pc_list']
+        ]
         df_other_edit['pval'] = [ttest[1] for ttest in ttests]
         df_other_edit['tstat'] = [ttest[0] for ttest in ttests]
-        df_stat = pd.concat([df_stat,df_other_edit])
-    df_stat['compare'] = [cond_comp]*df_stat.shape[0]
-    df_stat = df_stat.sort_values(by=[cond,var]).reset_index(drop=True)
+        df_stat = pd.concat([df_stat, df_other_edit])
+    df_stat['compare'] = [cond_comp] * df_stat.shape[0]
+    df_stat = df_stat.sort_values(by=[cond, var]).reset_index(drop=True)
 
     # Save & return statistics dataframe
     if dir is not None and file is not None:

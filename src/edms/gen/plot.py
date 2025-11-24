@@ -40,6 +40,7 @@ from matplotlib.ticker import MaxNLocator
 import numpy as np
 from adjustText import adjust_text
 from ..utils import mkdir
+from . import io
 
 # Supporting methods
 def re_un_cap(input: str) -> str:
@@ -1015,7 +1016,7 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str=None, size: str=None, 
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
         legend_title: str='', legend_title_size: int=12, legend_size: int=9, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left',
-        legend_items: tuple=(0,0),legend_ncol: int=1 ,display_size: bool=True, display_labels: bool=True, return_df: bool=True, show: bool=True, space_capitalize: bool=True,
+        legend_ncol: int=1 , display_size: bool=True, display_labels: str='FC & p-value', return_df: bool=True, show: bool=True, space_capitalize: bool=True,
         **kwargs) -> pd.DataFrame:
     ''' 
     vol(): creates volcano plot
@@ -1064,7 +1065,7 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str=None, size: str=None, 
     legend_loc (str): legend location
     legend_ncol (tuple, optional): # of columns
     display_size (bool, optional): display size on plot (Default: True)
-    display_labels (bool, optional): display labels for significant values (Default: True)
+    display_labels (str | list, optional): display labels for values if label column specified (Options: 'FC & p-value', 'FC', 'p-value', 'NS', 'all', or [])
     return_df (bool, optional): return dataframe (Default: True)
     show (bool, optional): show plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
@@ -1074,32 +1075,39 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str=None, size: str=None, 
     # Get dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
-
-    # Strings with subscripts
-    log2 = 'log\u2082'
-    log10 = 'log\u2081\u2080'
     
     # Log transform data
-    df[f'{log2}({x})'] = [np.log10(xval)/np.log10(2) for xval in df[x]]
-    df[f'-{log10}({y})'] = [-np.log10(yval) for yval in df[y]]
+    df[f'log2({x})'] = [np.log10(xval)/np.log10(2) for xval in df[x]]
+    df[f'-log10({y})'] = [-np.log10(yval) for yval in df[y]]
     
     # Organize data by significance
     signif = []
-    for (log2FC,log10P) in zip(df[f'{log2}({x})'],df[f'-{log10}({y})']):
+    for (log2FC,log10P) in zip(df[f'log2({x})'],df[f'-log10({y})']):
         if (np.abs(log2FC)>=np.log10(FC_threshold)/np.log10(2))&(log10P>=-np.log10(pval_threshold)): signif.append(f'FC & p-value')
         elif (np.abs(log2FC)<np.log10(FC_threshold)/np.log10(2))&(log10P>=-np.log10(pval_threshold)): signif.append('p-value')
         elif (np.abs(log2FC)>=np.log10(FC_threshold)/np.log10(2))&(log10P<-np.log10(pval_threshold)): signif.append('FC')
         else: signif.append('NS')
     df['Significance']=signif
-    #signif_order = ['NS','FC','p-value','FC & p-value']
-
+    
     # Organize data by abundance
     sizes=(1,100)
     if size_dims is not None: df = df[(df[size]>=size_dims[0])&(df[size]<=size_dims[1])]
 
+    # Shared size normalization across all scatter calls so marker areas are consistent
+    size_norm = None
+    _vmin, _vmax = None, None
+    if size is not None and display_size:
+        if size in df.columns and not df.empty:
+            _vmin = df[size].min()
+            _vmax = df[size].max()
+            # Guard against degenerate case where all values are equal
+            if _vmin == _vmax:
+                _vmax = _vmin + 1e-12
+            size_norm = mcolors.Normalize(vmin=_vmin, vmax=_vmax)
+    
     # Set dimensions
-    if x_axis_dims==(0,0): x_axis_dims=(min(df[f'{log2}({x})']),max(df[f'{log2}({x})']))
-    if y_axis_dims==(0,0): y_axis_dims=(0,max(df[f'-{log10}({y})']))
+    if x_axis_dims==(0,0): x_axis_dims=(min(df[f'log2({x})']),max(df[f'log2({x})']))
+    if y_axis_dims==(0,0): y_axis_dims=(0,max(df[f'-log10({y})']))
 
     # Generate figure
     fig, ax = plt.subplots(figsize=figsize)
@@ -1109,36 +1117,61 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str=None, size: str=None, 
         plt.vlines(x=-np.log10(FC_threshold)/np.log10(2), ymin=y_axis_dims[0], ymax=y_axis_dims[1], colors='k', linestyles='dashed', linewidth=1)
         plt.vlines(x=np.log10(FC_threshold)/np.log10(2), ymin=y_axis_dims[0], ymax=y_axis_dims[1], colors='k', linestyles='dashed', linewidth=1)
         plt.hlines(y=-np.log10(pval_threshold), xmin=x_axis_dims[0], xmax=x_axis_dims[1], colors='k', linestyles='dashed', linewidth=1)
-    
+
         # with data
         if display_size==False: size=None
-        sns.scatterplot(data=df[df['Significance']!='FC & p-value'], x=f'{log2}({x})', y=f'-{log10}({y})', 
-                        color=color, alpha=alpha,
-                        edgecolor=edgecol, style=stys,
-                        size=size, sizes=sizes,
-                        ax=ax, **kwargs)
-        sns.scatterplot(data=df[(df['Significance']=='FC & p-value')&(df[f'{log2}({x})']<0)], 
-                        x=f'{log2}({x})', y=f'-{log10}({y})', 
-                        hue=f'{log2}({x})',
-                        edgecolor=edgecol, palette='Blues_r', style=stys,
-                        size=size, sizes=sizes, legend=False,
-                        ax=ax, **kwargs)
-        sns.scatterplot(data=df[(df['Significance']=='FC & p-value')&(df[f'{log2}({x})']>0)], 
-                        x=f'{log2}({x})', y=f'-{log10}({y})', 
-                        hue=f'{log2}({x})',
-                        edgecolor=edgecol, palette='Reds', style=stys,
-                        size=size, sizes=sizes, legend=False,
-                        ax=ax, **kwargs)
+        sns.scatterplot(
+            data=df[df['Significance']!='FC & p-value'],
+            x=f'log2({x})', y=f'-log10({y})',
+            color=color, alpha=alpha,
+            edgecolor=edgecol, style=stys,
+            size=size if display_size else None, sizes=sizes, size_norm=size_norm,
+            legend=False,
+            ax=ax, **kwargs)
+        sns.scatterplot(
+            data=df[(df['Significance']=='FC & p-value')&(df[f'log2({x})']<0)],
+            x=f'log2({x})', y=f'-log10({y})',
+            hue=f'log2({x})',
+            edgecolor=edgecol, palette='Blues_r', style=stys,
+            size=size if display_size else None, sizes=sizes, size_norm=size_norm,
+            legend=False,
+            ax=ax, **kwargs)
+        sns.scatterplot(
+            data=df[(df['Significance']=='FC & p-value')&(df[f'log2({x})']>0)],
+            x=f'log2({x})', y=f'-log10({y})',
+            hue=f'log2({x})',
+            edgecolor=edgecol, palette='Reds', style=stys,
+            size=size if display_size else None, sizes=sizes, size_norm=size_norm, 
+            legend=False,
+            ax=ax, **kwargs)
+        
+        # Add consistent size legend with 5 representative values
+        if size_norm is not None and display_size and size is not None:
+            legend_vals = np.linspace(_vmin, _vmax, 5)
+            for lv in legend_vals:
+                plt.scatter([], [], s=np.interp(lv, [_vmin, _vmax], sizes), color='gray', alpha=0.7, label=f'{lv:.2g}')
+            plt.legend(title=legend_title if legend_title!='' else size, 
+                       title_fontsize=legend_title_size, fontsize=legend_size,
+                       bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol)
         
         # with labels
-        if display_labels and label is not None:
-            df_signif = df[df['Significance']=='FC & p-value']
-            adjust_text([plt.text(y=df_signif.iloc[i][f'{log2}({x})'], 
-                                  x=df_signif.iloc[i][f'-{log10}({y})'],
-                                  s=l) for i,l in enumerate(df_signif[label])])
+        if label is not None:
+            if display_labels in ['FC & p-value', 'FC', 'p-value', 'NS']:
+                df_signif = df[df['Significance']==display_labels]
+            elif display_labels=='all':
+                df_signif = df
+            elif isinstance(display_labels, list):
+                df_signif = df[df[label].isin(display_labels)]
+            else:
+                df_signif = df[df['Significance']=='FC & p-value']
+                print(f'Warning: defaulting to "FC & p-value" for label display due to invalid option for display_labels = {display_labels}')
+            for i,l in enumerate(df_signif[label]):
+                plt.text(x=df_signif.iloc[i][f'log2({x})'], 
+                                    y=df_signif.iloc[i][f'-log10({y})'],
+                                    s=l)
         
         # Set x axis
-        if x_axis=='': x_axis=f'{log2}({x})'
+        if x_axis=='': x_axis=f'log2({x})'
         plt.xlabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight,fontfamily=x_axis_font)
         if x_ticks==[]: 
             if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(rotation=x_ticks_rot,ha='center',fontfamily=x_ticks_font)
@@ -1148,7 +1181,7 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str=None, size: str=None, 
             else: plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font)
 
         # Set y axis
-        if y_axis=='': y_axis=f'-{log10}({y})'
+        if y_axis=='': y_axis=f'-log10({y})'
         plt.ylabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight,fontfamily=y_axis_font)
 
         if y_ticks==[]: plt.yticks(rotation=y_ticks_rot,fontfamily=y_ticks_font)
@@ -1162,33 +1195,58 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str=None, size: str=None, 
 
         # with data
         if display_size==False: size=None
-        sns.scatterplot(data=df[df['Significance']!='FC & p-value'], y=f'{log2}({x})', x=f'-{log10}({y})', 
-                        color=color, alpha=alpha,
-                        edgecolor=edgecol, style=stys,
-                        size=size, sizes=sizes,
-                        ax=ax, **kwargs)
-        sns.scatterplot(data=df[(df['Significance']=='FC & p-value')&(df[f'{log2}({x})']<0)], 
-                        y=f'{log2}({x})', x=f'-{log10}({y})', 
-                        hue=f'{log2}({x})',
-                        edgecolor=edgecol, palette='Blues_r', style=stys,
-                        size=size, sizes=sizes, legend=False,
-                        ax=ax, **kwargs)
-        sns.scatterplot(data=df[(df['Significance']=='FC & p-value')&(df[f'{log2}({x})']>0)], 
-                        y=f'{log2}({x})', x=f'-{log10}({y})', 
-                        hue=f'{log2}({x})',
-                        edgecolor=edgecol, palette='Reds', style=stys,
-                        size=size, sizes=sizes, legend=False,
-                        ax=ax, **kwargs)
+        sns.scatterplot(
+            data=df[df['Significance']!='FC & p-value'],
+            y=f'log2({x})', x=f'-log10({y})',
+            color=color, alpha=alpha,
+            edgecolor=edgecol, style=stys,
+            size=size if display_size else None, sizes=sizes, size_norm=size_norm,
+            legend=False,
+            ax=ax, **kwargs)
+        sns.scatterplot(
+            data=df[(df['Significance']=='FC & p-value')&(df[f'log2({x})']<0)],
+            y=f'log2({x})', x=f'-log10({y})',
+            hue=f'log2({x})',
+            edgecolor=edgecol, palette='Blues_r', style=stys,
+            size=size if display_size else None, sizes=sizes, size_norm=size_norm, 
+            legend=False,
+            ax=ax, **kwargs)
+        sns.scatterplot(
+            data=df[(df['Significance']=='FC & p-value')&(df[f'log2({x})']>0)],
+            y=f'log2({x})', x=f'-log10({y})',
+            hue=f'log2({x})',
+            edgecolor=edgecol, palette='Reds', style=stys,
+            size=size if display_size else None, sizes=sizes, size_norm=size_norm, 
+            legend=False,
+            ax=ax, **kwargs)
+        
+        # Add consistent size legend with 5 representative values
+        if size_norm is not None and display_size and size is not None:
+            legend_vals = np.linspace(_vmin, _vmax, 5)
+            for lv in legend_vals:
+                plt.scatter([], [], s=np.interp(lv, [_vmin, _vmax], sizes), color='gray', alpha=0.7, label=f'{lv:.2g}')
+            plt.legend(title=legend_title if legend_title!='' else size, 
+                       title_fontsize=legend_title_size, fontsize=legend_size,
+                       bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol)
         
         # with labels
-        if display_labels and label is not None:
-            df_signif = df[df['Significance']=='FC & p-value']
-            adjust_text([plt.text(y=df_signif.iloc[i][f'{log2}({x})'], 
-                                  x=df_signif.iloc[i][f'-{log10}({y})'],
-                                  s=l) for i,l in enumerate(df_signif[label])])
+        if label is not None:
+            if display_labels in ['FC & p-value', 'FC', 'p-value', 'NS']:
+                df_signif = df[df['Significance']==display_labels]
+            elif display_labels=='all':
+                df_signif = df
+            elif isinstance(display_labels, list):
+                df_signif = df[df[label].isin(display_labels)]
+            else:
+                df_signif = df[df['Significance']=='FC & p-value']
+                print(f'Warning: defaulting to "FC & p-value" for label display due to invalid option for display_labels = {display_labels}')
+            for i,l in enumerate(df_signif[label]):
+                plt.text(y=df_signif.iloc[i][f'log2({x})'], 
+                                    x=df_signif.iloc[i][f'-log10({y})'],
+                                    s=l)
         
         # Set x axis
-        if y_axis=='': y_axis=f'-{log10}({y})'
+        if y_axis=='': y_axis=f'-log10({y})'
         plt.xlabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight,fontfamily=y_axis_font)
         if y_ticks==[]: 
             if (y_ticks_rot==0)|(y_ticks_rot==90): plt.xticks(rotation=y_ticks_rot,ha='center',fontfamily=y_ticks_font)
@@ -1198,7 +1256,7 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str=None, size: str=None, 
             else: plt.xticks(ticks=y_ticks,labels=y_ticks,rotation=y_ticks_rot,ha='right',fontfamily=y_ticks_font)
 
         # Set y axis
-        if x_axis=='': x_axis=f'{log2}({x})'
+        if x_axis=='': x_axis=f'log2({x})'
         plt.ylabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight,fontfamily=x_axis_font)
 
         if x_ticks==[]: plt.yticks(rotation=x_ticks_rot,fontfamily=x_ticks_font)
@@ -1209,15 +1267,6 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str=None, size: str=None, 
         if space_capitalize: title=re_un_cap(".".join(file.split(".")[:-1]))
         else: ".".join(file.split(".")[:-1])
     plt.title(title, fontsize=title_size, fontweight=title_weight, family=title_font)
-
-    # Move legend to the right of the graph
-    if legend_items==(0,0): ax.legend(title=legend_title,title_fontsize=legend_title_size,fontsize=legend_size,
-                                        bbox_to_anchor=legend_bbox_to_anchor,loc=legend_loc,ncol=legend_ncol)
-    else: 
-        handles, labels = ax.get_legend_handles_labels()
-        ax.legend(title=legend_title,title_fontsize=legend_title_size,fontsize=legend_size,
-                  bbox_to_anchor=legend_bbox_to_anchor,loc=legend_loc,ncol=legend_ncol, # Move right of the graph
-                  handles=handles[legend_items[0]:legend_items[1]],labels=labels[legend_items[0]:legend_items[1]]) # Only retains specified labels
 
     # Save & show fig; return dataframe
     if file is not None and dir is not None:

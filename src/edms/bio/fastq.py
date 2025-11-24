@@ -3650,12 +3650,12 @@ def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple
     log10 = 'log\u2081\u2080'
     
     # Log transform data
-    df[f'{log2}({x})'] = [np.log10(xval)/np.log10(2) for xval in df[x]]
-    df[f'-{log10}({y})'] = [-np.log10(yval) for yval in df[y]]
+    df[f'log2({x})'] = [np.log10(xval)/np.log10(2) for xval in df[x]]
+    df[f'-log10({y})'] = [-np.log10(yval) for yval in df[y]]
     
     # Organize data by significance
     signif = []
-    for (log2FC,log10P) in zip(df[f'{log2}({x})'],df[f'-{log10}({y})']):
+    for (log2FC,log10P) in zip(df[f'log2({x})'],df[f'-log10({y})']):
         if (np.abs(log2FC)>1)&(log10P>-np.log10(0.05)): signif.append('FC & p-value')
         elif (np.abs(log2FC)<=1)&(log10P>-np.log10(0.05)): signif.append('p-value')
         elif (np.abs(log2FC)>1)&(log10P<=-np.log10(0.05)): signif.append('FC')
@@ -3692,8 +3692,8 @@ def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple
     if size_dims is not None: df = df[(df[size]>=size_dims[0])&(df[size]<=size_dims[1])]
 
     # Set dimensions
-    if x_axis_dims==(0,0): x_axis_dims=(min(df[f'{log2}({x})']),max(df[f'{log2}({x})']))
-    if y_axis_dims==(0,0): y_axis_dims=(0,max(df[f'-{log10}({y})']))
+    if x_axis_dims==(0,0): x_axis_dims=(min(df[f'log2({x})']),max(df[f'log2({x})']))
+    if y_axis_dims==(0,0): y_axis_dims=(0,max(df[f'-log10({y})']))
 
     # Generate figure
     fig, ax = plt.subplots(figsize=figsize)
@@ -3706,21 +3706,21 @@ def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple
     
         # with data
         if display_size==False: size=None
-        sns.scatterplot(data=df[df['Significance']!='FC & p-value'], x=f'{log2}({x})', y=f'-{log10}({y})', 
+        sns.scatterplot(data=df[df['Significance']!='FC & p-value'], x=f'log2({x})', y=f'-log10({y})', 
                         edgecolor=edgecol, color=color, alpha=alpha, style='Change',
                         style_order=sty_order, markers=mark_order, 
                         size=size, sizes=sizes,
                         ax=ax, **kwargs)
-        sns.scatterplot(data=df[(df['Significance']=='FC & p-value')&(df[f'{log2}({x})']<0)], 
-                        x=f'{log2}({x})', y=f'-{log10}({y})', 
-                        hue=f'{log2}({x})',
+        sns.scatterplot(data=df[(df['Significance']=='FC & p-value')&(df[f'log2({x})']<0)], 
+                        x=f'log2({x})', y=f'-log10({y})', 
+                        hue=f'log2({x})',
                         edgecolor=edgecol, palette='Blues_r', style='Change',
                         style_order=sty_order, markers=mark_order,
                         size=size, sizes=sizes, legend=False,
                         ax=ax, **kwargs)
-        sns.scatterplot(data=df[(df['Significance']=='FC & p-value')&(df[f'{log2}({x})']>0)], 
-                        x=f'{log2}({x})', y=f'-{log10}({y})', 
-                        hue=f'{log2}({x})',
+        sns.scatterplot(data=df[(df['Significance']=='FC & p-value')&(df[f'log2({x})']>0)], 
+                        x=f'log2({x})', y=f'-log10({y})', 
+                        hue=f'log2({x})',
                         edgecolor=edgecol, palette='Reds', style='Change',
                         style_order=sty_order, markers=mark_order,
                         size=size, sizes=sizes, legend=False,
@@ -3729,12 +3729,13 @@ def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple
         # with labels
         if display_labels:
             df_signif = df[df['Significance']=='FC & p-value']
-            adjust_text([plt.text(x=df_signif.iloc[i][f'{log2}({x})'], 
-                                  y=df_signif.iloc[i][f'-{log10}({y})'],
-                                  s=edit) for i,edit in enumerate(df_signif['edit'])])
+            for i,l in enumerate(df_signif['edit']):
+                plt.text(x=df_signif.iloc[i][f'log2({x})'], 
+                                    y=df_signif.iloc[i][f'-log10({y})'],
+                                    s=l)
         
         # Set x axis
-        if x_axis=='': x_axis=f'{log2}({x})'
+        if x_axis=='': x_axis=f'log2({x})'
         plt.xlabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight,fontfamily=x_axis_font)
         if x_ticks==[]: 
             if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(rotation=x_ticks_rot,ha='center',fontfamily=x_ticks_font)
@@ -3744,7 +3745,7 @@ def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple
             else: plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font)
 
         # Set y axis
-        if y_axis=='': y_axis=f'-{log10}({y})'
+        if y_axis=='': y_axis=f'-log10({y})'
         plt.ylabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight,fontfamily=y_axis_font)
 
         if y_ticks==[]: plt.yticks(rotation=y_ticks_rot,fontfamily=y_ticks_font)
@@ -3758,21 +3759,21 @@ def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple
 
         # with data
         if display_size==False: size=None
-        sns.scatterplot(data=df[df['Significance']!='FC & p-value'], y=f'{log2}({x})', x=f'-{log10}({y})', 
+        sns.scatterplot(data=df[df['Significance']!='FC & p-value'], y=f'log2({x})', x=f'-log10({y})', 
                         edgecolor=edgecol, color=color, alpha=alpha, style='Change',
                         style_order=sty_order, markers=mark_order, 
                         size=size, sizes=sizes,
                         ax=ax, **kwargs)
-        sns.scatterplot(data=df[(df['Significance']=='FC & p-value')&(df[f'{log2}({x})']<0)], 
-                        y=f'{log2}({x})', x=f'-{log10}({y})', 
-                        hue=f'{log2}({x})',
+        sns.scatterplot(data=df[(df['Significance']=='FC & p-value')&(df[f'log2({x})']<0)], 
+                        y=f'log2({x})', x=f'-log10({y})', 
+                        hue=f'log2({x})',
                         edgecolor=edgecol, palette='Blues_r', style='Change',
                         style_order=sty_order, markers=mark_order,
                         size=size, sizes=sizes, legend=False,
                         ax=ax, **kwargs)
-        sns.scatterplot(data=df[(df['Significance']=='FC & p-value')&(df[f'{log2}({x})']>0)], 
-                        y=f'{log2}({x})', x=f'-{log10}({y})', 
-                        hue=f'{log2}({x})',
+        sns.scatterplot(data=df[(df['Significance']=='FC & p-value')&(df[f'log2({x})']>0)], 
+                        y=f'log2({x})', x=f'-log10({y})', 
+                        hue=f'log2({x})',
                         edgecolor=edgecol, palette='Reds', style='Change',
                         style_order=sty_order, markers=mark_order,
                         size=size, sizes=sizes, legend=False,
@@ -3781,12 +3782,13 @@ def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple
         # with labels
         if display_labels:
             df_signif = df[df['Significance']=='FC & p-value']
-            adjust_text([plt.text(y=df_signif.iloc[i][f'{log2}({x})'], 
-                                  x=df_signif.iloc[i][f'-{log10}({y})'],
-                                  s=edit) for i,edit in enumerate(df_signif['edit'])])
+            for i,l in enumerate(df_signif['edit']):
+                plt.text(y=df_signif.iloc[i][f'log2({x})'], 
+                                    x=df_signif.iloc[i][f'-log10({y})'],
+                                    s=l)
         
         # Set x axis
-        if y_axis=='': y_axis=f'-{log10}({y})'
+        if y_axis=='': y_axis=f'-log10({y})'
         plt.xlabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight,fontfamily=y_axis_font)
         if y_ticks==[]: 
             if (y_ticks_rot==0)|(y_ticks_rot==90): plt.xticks(rotation=y_ticks_rot,ha='center',fontfamily=y_ticks_font)
@@ -3796,7 +3798,7 @@ def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple
             else: plt.xticks(ticks=y_ticks,labels=y_ticks,rotation=y_ticks_rot,ha='right',fontfamily=y_ticks_font)
 
         # Set y axis
-        if x_axis=='': x_axis=f'{log2}({x})'
+        if x_axis=='': x_axis=f'log2({x})'
         plt.ylabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight,fontfamily=x_axis_font)
 
         if x_ticks==[]: plt.yticks(rotation=x_ticks_rot,fontfamily=x_ticks_font)
