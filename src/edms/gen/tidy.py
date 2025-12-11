@@ -30,6 +30,7 @@ Usage:
 
 [String methods]
 - find_all(): Find all indexes of a substring in a string
+- split_nth(): Split a string at the nth occurrence of a specified substring
 '''
 # Import packages
 import pandas as pd
@@ -378,3 +379,30 @@ def find_all(string: str, substring: str) -> list:
         start += 1  # Move past the current match to find the next one
         
     return indexes
+
+def split_nth(string: str, sep: str, n: int) -> list:
+    """
+    split_nth(): Split a string at the nth occurrence of a specified substring
+    
+    Parameters:
+    string (str): the string to split
+    sep (str): the separator to split at
+    n (int): nth separator occurrence to split on
+    """
+    parts = []
+    count = 0
+    buffer = []
+
+    for piece in string.split(sep):
+        buffer.append(piece)
+        count += 1
+        if count == n:
+            parts.append(sep.join(buffer))
+            buffer = []
+            count = 0
+
+    # leftover tail
+    if buffer:
+        parts.append(sep.join(buffer))
+
+    return parts

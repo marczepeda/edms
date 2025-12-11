@@ -32,7 +32,9 @@ dependencies = [
   "psutil",
   "argcomplete",
   "rich",
-  "rich-argparse"
+  "rich-argparse",
+  "mpld3",
+  "mdanalysis"
 ]
 
 classifiers = [

@@ -3,14 +3,15 @@ src/edms/dat/cli.py             Command Line Interface for EDMS Database module
 ├── __init__.py                 Initializer
 ├── cosmic.py                   COSMIC module
 ├── cvar.py                     ClinVar module
-└── ncbi.py                     NCBI module
+├── cBioPortal.py               cBioPortal module
+└── uniprot.py                  Uniprot module
 '''
 import argparse
 import datetime
 import sys # might use later
-from rich import print as rprint # might use later
+from rich import print as rprint
 
-from . import cosmic as co, cvar
+from . import cosmic as co, cvar, cBioPortal as cBP, uniprot, pdb 
 from ..utils import parse_tuple_int, parse_tuple_float # might use later
 
 def add_subparser(subparsers, formatter_class=None):
@@ -131,3 +132,53 @@ def add_subparser(subparsers, formatter_class=None):
     parser_cvar_priority_edits.add_argument("--file", type=str, help="Output file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_pegRNAs_priority.csv')
 
     parser_cvar_priority_edits.set_defaults(func=cvar.priority_edits)
+
+    '''
+    edms.dat.cBioPortal:
+    - mutations(): Process cBioPortal mutation data for a single protein-coding gene.
+    '''
+    parser_cBP = subparsers.add_parser("cBioPortal", help="cBioPortal Database", description="cBioPortal Database", formatter_class=formatter_class)
+    subparsers_cBP = parser_cBP.add_subparsers()
+
+    # mutations(): returns cBioPortal mutations dataframe for a given gene
+    parser_cBP_mutations = subparsers_cBP.add_parser("mutations", help="Process cBioPortal mutation data for a single protein-coding gene. Retrieve cBioPortal mutation data from https://www.cbioportal.org/ (GENIE Cohort v18.0-public).", description="Process cBioPortal mutation data for a single protein-coding gene. Retrieve cBioPortal mutation data from https://www.cbioportal.org/ (GENIE Cohort v18.0-public).", formatter_class=formatter_class)
+    
+    parser_cBP_mutations.add_argument("--df", type=str, help="Path to cBioPortal mutation data TSV file", required=True)
+    parser_cBP_mutations.add_argument("--wt", type=str, help="Wild-type amino acid sequence", required=True)
+    parser_cBP_mutations.add_argument("--config", type=bool, help="Save to configuration directory", default=True)
+    parser_cBP_mutations.add_argument("--dir", type=str, help="Output directory",default='../out')
+    parser_cBP_mutations.add_argument("--file", type=str, help="Output file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_cBioPortal_mutations.csv')
+
+    parser_cBP_mutations.set_defaults(func=cBP.mutations)
+
+    '''
+    edms.dat.uniprot:
+    - retrieve(): Download a UniProt flat file entry via the REST API and save it to config and/or specified directory.
+    '''
+    parser_uniprot = subparsers.add_parser("uniprot", help="UniProt Database", description="UniProt Database", formatter_class=formatter_class)
+    subparsers_uniprot = parser_uniprot.add_subparsers()
+
+    # retrieve(): Download a UniProt flat file entry via the REST API and save it to config and/or specified directory.
+    parser_uniprot_retrieve = subparsers_uniprot.add_parser("retrieve", help="Download a UniProt flat file entry via the REST API and save it to config and/or specified directory.", description="Download a UniProt flat file entry via the REST API and save it to config and/or specified directory.", formatter_class=formatter_class)
+    
+    parser_uniprot_retrieve.add_argument("--accession", type=str, help="UniProt accession (e.g. P55317)", required=True)
+    parser_uniprot_retrieve.add_argument("--file", type=str, help="Output filename (e.g., FOXA1.txt). Gene name reccommended to match cBioPortal",default=argparse.SUPPRESS)
+    parser_uniprot_retrieve.add_argument("--dir", type=str, help="Save file to specified directory (Default: None -> only save to config directory)",default=argparse.SUPPRESS)
+    parser_uniprot_retrieve.add_argument("--no_config", action="store_false", dest='config', help="Do not save to configuration directory", default=True)
+
+    parser_uniprot_retrieve.set_defaults(func=uniprot.retrieve)
+
+    '''
+    edms.dat.pdb:
+    - retrieve(): Download a PDB or mmCIF file from the RCSB PDB REST API.
+    '''
+    parser_pdb = subparsers.add_parser("pdb", help="PDB Database", description="PDB Database", formatter_class=formatter_class)
+    subparsers_pdb = parser_pdb.add_subparsers()
+
+    # retrieve(): Download a PDB or PDBx/mmCIF file from the RCSB PDB REST API.
+    parser_pdb_retrieve = subparsers_pdb.add_parser("retrieve", help="Download a PDB or PDBx/mmCIF file from the RCSB PDB REST API.", description="Download a PDB or PDBx/mmCIF file from the RCSB PDB REST API.", formatter_class=formatter_class)
+    parser_pdb_retrieve.add_argument("--id", type=str, help="4-character PDB accession (e.g. 1CRN, case-insensitive)", required=True)
+    parser_pdb_retrieve.add_argument("--suf", type=str, help="Output filename suffix (e.g., .pdb or .cif (PDBx/mmCIF))",default=argparse.SUPPRESS)
+    parser_pdb_retrieve.add_argument("--dir", type=str, help="Save file to specified directory (Default: None -> only save to config directory)",default=argparse.SUPPRESS)
+    parser_pdb_retrieve.add_argument("--no_config", action="store_false", dest='config', help="Do not save to configuration directory", default=True)
+    parser_pdb_retrieve.set_defaults(func=pdb.retrieve)

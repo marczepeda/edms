@@ -88,6 +88,7 @@ def add_common_plot_scat_args(subparser):
     subparser.add_argument("--legend_ncol", type=int, default=1, help="Number of columns in legend")
 
     # Display and formatting
+    subparser.add_argument("--dpi", type=int, help="Figure dpi (Default: 600 for non-HTML, 150 for HTML)", default=0)
     subparser.add_argument("--show", action="store_true", help="Show the plot", default=False)
     subparser.add_argument("--space_capitalize", action="store_true", help="Capitalize label/legend strings and replace underscores with spaces")
 
@@ -155,6 +156,7 @@ def add_common_plot_cat_args(subparser):
     subparser.add_argument("--legend_ncol", type=int, default=1, help="Number of columns in the legend")
 
     # Display and formatting
+    subparser.add_argument("--dpi", type=int, help="Figure dpi (Default: 600 for non-HTML, 150 for HTML)", default=0)
     subparser.add_argument("--show", action="store_true", help="Show the plot in a window", default=False)
     subparser.add_argument("--space_capitalize", action="store_true", help="Capitalize labels and replace underscores with spaces")
 
@@ -226,6 +228,7 @@ def add_common_plot_dist_args(subparser):
     subparser.add_argument("--legend_ncol", type=int, default=1, help="Number of columns in the legend")
 
     # Final display
+    subparser.add_argument("--dpi", type=int, help="Figure dpi (Default: 600 for non-HTML, 150 for HTML)", default=0)
     subparser.add_argument("--show", action="store_true", help="Show the plot in an interactive window", default=False)
     subparser.add_argument("--space_capitalize", action="store_true", help="Capitalize and space legend/label values", default=False)
 
@@ -277,6 +280,7 @@ def add_common_plot_heat_args(subparser):
     subparser.add_argument("--y_ticks_font", type=str, default="Arial", help="Font family for Y-axis tick labels")
 
     # Final display
+    subparser.add_argument("--dpi", type=int, help="Figure dpi (Default: 600 for non-HTML, 150 for HTML)", default=0)
     subparser.add_argument("--show", action="store_true", help="Show the plot in an interactive window", default=False)
     subparser.add_argument("--space_capitalize", action="store_true", help="Capitalize and space labels/legend values", default=False)
 
@@ -336,6 +340,7 @@ def add_common_plot_stack_args(subparser):
     subparser.add_argument("--legend_ncol", type=int, default=1, help="Number of columns in the legend")
 
     # Display and formatting
+    subparser.add_argument("--dpi", type=int, help="Figure dpi (Default: 600 for non-HTML, 150 for HTML)", default=0)
     subparser.add_argument("--show", action="store_true", help="Show the plot in an interactive window", default=False)
     subparser.add_argument("--space_capitalize", action="store_true", help="Capitalize and space legend/label values", default=False)
 
@@ -353,6 +358,8 @@ def add_common_plot_vol_args(subparser):
     subparser.add_argument("--size", type=str, help="Column name used to scale point sizes")
     subparser.add_argument("--size_dims", type=parse_tuple_float, help="Size range for points formatted as min,max")
     subparser.add_argument("--label", type=str, help="Column containing text labels for points")
+    subparser.add_argument("--stys_order", type=str, nargs="+", help="Style column values order")
+    subparser.add_argument("--mark_order", type=str, nargs="+", help="Markers order for style column values order")
 
     # Thresholds
     subparser.add_argument("--FC_threshold", type=float, default=2, help="Fold change threshold for significance")
@@ -404,9 +411,11 @@ def add_common_plot_vol_args(subparser):
     subparser.add_argument("--legend_ncol", type=int, default=1, help="Number of columns in the legend")
 
     # Boolean switches
-    subparser.add_argument("--display_size", action="store_true", help="Show point sizes as annotations", default=False)
+    subparser.add_argument("--dont_display_legend", action="store_false", help="Don't display legend on plot", default=True)
     subparser.add_argument("--display_labels", type=str, nargs="+", help="Display labels for values if label column specified (Options: 'FC & p-value', 'FC', 'p-value', 'NS', 'all', or ['label1', 'label2', ..., 'labeln'])", default=["FC & p-value"])
+    subparser.add_argument("--display_lines", action="store_true", help="Display lines for threshold (Default: False)", default=False)
     subparser.add_argument("--return_df", action="store_true", help="Return annotated DataFrame after plotting", default=False)
+    subparser.add_argument("--dpi", type=int, help="Figure dpi (Default: 600 for non-HTML, 150 for HTML)", default=0)
     subparser.add_argument("--show", action="store_true", help="Show the plot in an interactive window", default=False)
     subparser.add_argument("--space_capitalize", action="store_true", help="Capitalize and space labels/legend items", default=False)
 
