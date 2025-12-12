@@ -50,71 +50,228 @@ from . import io
 import edms.resources.molstar as molstar_pkg
 import edms.resources.icon as icon_pkg
 
-# Supporting methods
-class ClickHighlight(mpld3.plugins.PluginBase):
-    """MPLD3 plugin: on point click, call window.highlightResidue(label)."""
+# --- Robust HTML Tooltip plugin for MPLD3 ---
+class SafeHTMLTooltip(mpld3.plugins.PluginBase):
+    """
+    MPLD3 plugin: robust HTML tooltip that safely handles missing labels/targets.
+    Replaces the use of mpld3.plugins.PointHTMLTooltip to avoid crashes when labels/targets are null.
+    """
 
     JAVASCRIPT = r"""
-mpld3.register_plugin("clickhighlight", ClickHighlight);
-ClickHighlight.prototype = Object.create(mpld3.Plugin.prototype);
-ClickHighlight.prototype.constructor = ClickHighlight;
+mpld3.register_plugin("safe_htmltooltip", SafeHtmlTooltipPlugin);
+SafeHtmlTooltipPlugin.prototype = Object.create(mpld3.Plugin.prototype);
+SafeHtmlTooltipPlugin.prototype.constructor = SafeHtmlTooltipPlugin;
+SafeHtmlTooltipPlugin.prototype.requiredProps = ["id"];
+SafeHtmlTooltipPlugin.prototype.defaultProps = {
+    labels: [],
+    targets: [],
+    hoffset: 0,
+    voffset: 10
+};
 
-// Explicitly declare props so mpld3 doesn't warn
-ClickHighlight.prototype.requiredProps = ["id", "labels"];
-ClickHighlight.prototype.defaultProps = {};
-
-function ClickHighlight(fig, props) {
+function SafeHtmlTooltipPlugin(fig, props) {
     mpld3.Plugin.call(this, fig, props);
 }
 
-ClickHighlight.prototype.draw = function(){
+SafeHtmlTooltipPlugin.prototype.draw = function() {
     var obj = mpld3.get_element(this.props.id, this.fig);
-    var labels = this.props.labels;
 
     if (!obj) {
-        console.warn("ClickHighlight: could not find element", this.props.id);
+        console.warn("SafeHtmlTooltipPlugin: no mpld3 element with id", this.props.id);
         return;
     }
 
-    obj.elements().on("click", function(d, i){
-        try {
-            // Extra-defensive guards so we never throw
-            if (!Array.isArray(labels)) {
-                console.warn("ClickHighlight: labels is not an array", labels);
-                return;
-            }
-            if (typeof i !== "number") {
-                console.warn("ClickHighlight: index is not a number", i);
-                return;
-            }
-            if (i < 0 || i >= labels.length) {
-                console.warn("ClickHighlight: index out of range for labels", i);
-                return;
-            }
+    // Always use arrays, never null
+    var labels  = Array.isArray(this.props.labels)  ? this.props.labels  : [];
+    var targets = Array.isArray(this.props.targets) ? this.props.targets : [];
 
-            var label = labels[i] || "";
+    var tooltip = d3.select("body").append("div")
+        .attr("class", "mpld3-tooltip")
+        .style("position", "absolute")
+        .style("z-index", "10")
+        .style("visibility", "hidden");
 
-            if (window.highlightResidue) {
-                window.highlightResidue(label);
-            } else {
-                console.log("Clicked point label:", label);
-            }
-        } catch (e) {
-            console.error("ClickHighlight: error handling click", e);
-        }
-    });
+    obj.elements()
+        .on("mouseover", function(d, i){
+            if (!labels.length || !labels[i]) return;
+            tooltip.html(labels[i])
+                   .style("visibility", "visible");
+        })
+        .on("mousemove", function(d, i){
+            tooltip
+                .style("top",  d3.event.pageY + this.props.voffset + "px")
+                .style("left", d3.event.pageX + this.props.hoffset + "px");
+        }.bind(this))
+        .on("mousedown.callout", function(d, i){
+            // Only try to open if we actually have a target URL
+            if (!targets.length || !targets[i]) return;
+            window.open(targets[i], "_blank");
+        })
+        .on("mouseout", function(d, i){
+            tooltip.style("visibility", "hidden");
+        });
 };
 """
 
-    def __init__(self, points, labels):
+    def __init__(self, points, labels, targets=None, hoffset=0, voffset=10):
+        """
+        Parameters
+        ----------
+        points : matplotlib PathCollection
+            The scatter/collection artist to which the tooltips are attached.
+        labels : sequence
+            HTML strings, one per point.
+        targets : sequence, optional
+            Optional list of URLs to open on mousedown; may be empty or None.
+        hoffset, voffset : int, optional
+            Pixel offsets for tooltip position.
+        """
+        if targets is None:
+            targets = []
+
+        # Normalize labels to strings and handle NaNs gracefully
+        labels_list = []
+        for v in labels:
+            if v is None or (isinstance(v, float) and math.isnan(v)):
+                labels_list.append("")
+            else:
+                labels_list.append(str(v))
+
         self.points = points
-        self.labels = labels
+        self.labels = labels_list
+        self.targets = list(targets)
+
         self.dict_ = dict(
-            type="clickhighlight",
+            type="safe_htmltooltip",
             id=mpld3.plugins.get_id(points),
-            labels=list(labels),
+            labels=self.labels,
+            targets=self.targets,
+            hoffset=hoffset,
+            voffset=voffset,
         )
 
+
+# Persistent click-to-toggle tooltip plugin for MPLD3
+class ClickTooltip(mpld3.plugins.PluginBase):
+    """MPLD3 plugin: persistent HTML tooltip that appears on point click.
+
+    Clicking a point shows its label in a tooltip that remains visible
+    until another point is clicked. Clicking a point with an empty label
+    hides the tooltip.
+    """
+
+    JAVASCRIPT = r"""
+mpld3.register_plugin("clicktooltip", ClickTooltipPlugin);
+ClickTooltipPlugin.prototype = Object.create(mpld3.Plugin.prototype);
+ClickTooltipPlugin.prototype.constructor = ClickTooltipPlugin;
+ClickTooltipPlugin.prototype.requiredProps = ["id"];
+ClickTooltipPlugin.prototype.defaultProps = {
+    labels: [],
+    hoffset: 0,
+    voffset: 10
+};
+
+function ClickTooltipPlugin(fig, props) {
+    mpld3.Plugin.call(this, fig, props);
+}
+
+ClickTooltipPlugin.prototype.draw = function() {
+    var obj = mpld3.get_element(this.props.id, this.fig);
+
+    if (!obj) {
+        console.warn("ClickTooltip: no mpld3 element with id", this.props.id);
+        return;
+    }
+
+    var labels = Array.isArray(this.props.labels) ? this.props.labels : [];
+    var hoffset = this.props.hoffset || 0;
+    var voffset = this.props.voffset || 10;
+
+    // Single tooltip div that we reuse for every click
+    var tooltip = d3.select("body").append("div")
+        .attr("class", "mpld3-tooltip")
+        .style("position", "absolute")
+        .style("z-index", "10")
+        .style("visibility", "hidden");
+
+    // Click on a point: show/hide tooltip & stop event so the background
+    // handler does not immediately hide it.
+    obj.elements().on("click", function(d, i) {
+        if (d3.event && typeof d3.event.stopPropagation === "function") {
+            d3.event.stopPropagation();
+        }
+
+        // d3.v3/v5 pattern: `d3.event` holds the mouse event
+        var label = labels.length > i ? labels[i] : "";
+        if (label == null) label = "";
+        label = String(label);
+
+        var hasLabel = label.trim().length > 0;
+
+        if (hasLabel) {
+            tooltip.html(label)
+                   .style("visibility", "visible")
+                   .style("top",  (d3.event.pageY + voffset) + "px")
+                   .style("left", (d3.event.pageX + hoffset) + "px");
+        } else {
+            // Clicking a point with no label hides any previous tooltip
+            tooltip.style("visibility", "hidden");
+        }
+    });
+
+    // Click anywhere else in the figure: hide tooltip
+    var canvas = this.fig.canvas;
+    if (canvas && typeof canvas.on === "function") {
+        canvas.on("click.clicktooltip-bg", function() {
+            var evt = d3.event || window.event;
+            var target = evt && evt.target ? evt.target : null;
+
+            // Determine if the click target is one of our points
+            var nodes;
+            if (typeof obj.elements().nodes === "function") {
+                // d3 v4/v5 selection
+                nodes = obj.elements().nodes();
+            } else {
+                // d3 v3 selection: first group of elements
+                nodes = obj.elements()[0] || [];
+            }
+
+            var isPoint = false;
+            for (var j = 0; nodes && j < nodes.length; j++) {
+                if (nodes[j] === target) {
+                    isPoint = true;
+                    break;
+                }
+            }
+
+            if (!isPoint) {
+                tooltip.style("visibility", "hidden");
+            }
+        });
+    }
+};
+"""
+
+    def __init__(self, points, labels, hoffset: int = 0, voffset: int = 10):
+        # Normalize labels similarly to SafeHTMLTooltip
+        labels_list = []
+        for v in labels:
+            if v is None or (isinstance(v, float) and math.isnan(v)):
+                labels_list.append("")
+            else:
+                labels_list.append(str(v))
+
+        self.points = points
+        self.labels = labels_list
+        self.dict_ = dict(
+            type="clicktooltip",
+            id=mpld3.plugins.get_id(points),
+            labels=self.labels,
+            hoffset=hoffset,
+            voffset=voffset,
+        )
+
+# Supporting Methods
 def export_mpld3_molstar_html(
     fig: plt.Figure,
     dir: str,
@@ -204,9 +361,9 @@ document.addEventListener('DOMContentLoaded', function () {{
     molstar.Viewer
         .create('molstar-viewer', {{
             layoutIsExpanded: false,
-            layoutShowControls: false,
+            layoutShowControls: true,
             layoutShowRemoteState: false,
-            layoutShowSequence: false,
+            layoutShowSequence: true,
             layoutShowLog: false,
             layoutShowLeftPanel: false
         }})
@@ -216,51 +373,6 @@ document.addEventListener('DOMContentLoaded', function () {{
 
             // Load structure from embedded data or URL
 {load_js}
-
-            // Define how mpld3 click events (ClickHighlight) talk to Mol*
-            // Current version: re-uses the loci from the last Mol* click and logs the mpld3 label.
-            window.highlightResidue = function(label) {{
-                if (!window.molstarViewer) {{
-                    console.warn("highlightResidue: no viewer");
-                    return;
-                }}
-
-                const plugin = window.molstarViewer.plugin;
-                const ib = plugin.behaviors.interaction;
-
-                if (!ib || !ib.click || !ib.click.value || !ib.click.value.current) {{
-                    console.warn("highlightResidue: no click interaction state; label =", label);
-                    return;
-                }}
-
-                const loci = ib.click.value.current.loci;
-                if (!loci) {{
-                    console.warn("highlightResidue: no current loci from Mol* click; label =", label);
-                    return;
-                }}
-
-                console.log("highlightResidue called with label:", label,
-                            "using loci from last Mol* click.");
-
-                try {{
-                    // 1) Clear any previous highlights (so only the new residue is emphasized)
-                    if (plugin.managers.interactivity.clearHighlights) {{
-                        plugin.managers.interactivity.clearHighlights();
-                    }}
-
-                    // 2) Reset selection to just this loci
-                    plugin.managers.interactivity.lociSelects.select({{
-                        loci: loci,
-                        reset: true
-                    }});
-
-                    // 3) Focus camera on it
-                    plugin.managers.camera.reset();
-                    plugin.managers.camera.focusLoci(loci);
-                }} catch (e) {{
-                    console.error("highlightResidue: error while trying to highlight residue in Mol*", e);
-                }}
-            }};
         }});
 }});
 </script>
@@ -732,19 +844,16 @@ def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, col
     if label is not None and label in df.columns:
         is_html = file is not None and file.split('.')[-1] == 'html'
         if is_html:
-            # Use invisible points to carry tooltips and click events in HTML
+            # Use invisible points to carry click-to-toggle tooltips in HTML
             pts = ax.scatter(
                 df[x],
                 df[y],
                 s=20,
                 alpha=0
             )
-            #labels_list = list(df[label])
-            labels_list = ["" if pd.isna(v) else str(v) for v in df[label]]
-            
-            tooltip = mpld3.plugins.PointHTMLTooltip(pts, labels=labels_list)
-            clicker = ClickHighlight(pts, labels_list)
-            mpld3.plugins.connect(fig, tooltip, clicker)
+            labels_list = df[label].fillna("").astype(str).tolist()
+            click_tooltip = ClickTooltip(pts, labels_list)
+            mpld3.plugins.connect(fig, click_tooltip)
         else:
             # For static images, draw permanent text labels
             for i, txt in enumerate(df[label]):
@@ -1563,10 +1672,11 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
                     alpha=0
                 )
                 #labels_list = list(df_signif[label])
-                labels_list = ["" if pd.isna(v) else str(v) for v in df_signif[label]]
-                
-                tooltip = mpld3.plugins.PointHTMLTooltip(pts, labels=labels_list)
-                clicker = ClickHighlight(pts, labels_list)
+                #labels_list = ["" if pd.isna(v) else str(v) for v in df_signif[label]]
+                labels_list = df_signif[label].fillna("").astype(str).tolist()
+                #tooltip = mpld3.plugins.PointHTMLTooltip(pts, labels=labels_list)
+                tooltip = SafeHTMLTooltip(pts, labels_list)
+                clicker = ClickTooltip(pts, labels_list)
                 mpld3.plugins.connect(fig, tooltip, clicker)
             else:
                 # For static images, keep labels as always-visible text
@@ -1667,10 +1777,11 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
                     alpha=0
                 )
                 #labels_list = list(df_signif[label])
-                labels_list = ["" if pd.isna(v) else str(v) for v in df_signif[label]]
-                
-                tooltip = mpld3.plugins.PointHTMLTooltip(pts, labels=labels_list)
-                clicker = ClickHighlight(pts, labels_list)
+                #labels_list = ["" if pd.isna(v) else str(v) for v in df_signif[label]]
+                labels_list = df_signif[label].fillna("").astype(str).tolist()
+                #tooltip = mpld3.plugins.PointHTMLTooltip(pts, labels=labels_list)
+                tooltip = SafeHTMLTooltip(pts, labels_list)
+                clicker = ClickTooltip(pts, labels_list)
                 mpld3.plugins.connect(fig, tooltip, clicker)
             else:
                 # For static images, keep labels as always-visible text
