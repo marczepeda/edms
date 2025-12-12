@@ -54,7 +54,7 @@ import edms.resources.icon as icon_pkg
 class ClickHighlight(mpld3.plugins.PluginBase):
     """MPLD3 plugin: on point click, call window.highlightResidue(label)."""
 
-    r"""
+    JAVASCRIPT = r"""
 mpld3.register_plugin("clickhighlight", ClickHighlight);
 ClickHighlight.prototype = Object.create(mpld3.Plugin.prototype);
 ClickHighlight.prototype.constructor = ClickHighlight;
@@ -70,7 +70,6 @@ function ClickHighlight(fig, props) {
 ClickHighlight.prototype.draw = function(){
     var obj = mpld3.get_element(this.props.id, this.fig);
     var labels = this.props.labels;
-    var that = this;
 
     if (!obj) {
         console.warn("ClickHighlight: could not find element", this.props.id);
@@ -78,17 +77,30 @@ ClickHighlight.prototype.draw = function(){
     }
 
     obj.elements().on("click", function(d, i){
-        // Guard against bad indices to avoid TypeError "reading '36'"
-        if (!labels || i == null || i < 0 || i >= labels.length) {
-            console.warn("ClickHighlight: index out of range for labels", i);
-            return;
-        }
+        try {
+            // Extra-defensive guards so we never throw
+            if (!Array.isArray(labels)) {
+                console.warn("ClickHighlight: labels is not an array", labels);
+                return;
+            }
+            if (typeof i !== "number") {
+                console.warn("ClickHighlight: index is not a number", i);
+                return;
+            }
+            if (i < 0 || i >= labels.length) {
+                console.warn("ClickHighlight: index out of range for labels", i);
+                return;
+            }
 
-        var label = labels[i] || "";
-        if (window.highlightResidue) {
-            window.highlightResidue(label);
-        } else {
-            console.log("Clicked point label:", label);
+            var label = labels[i] || "";
+
+            if (window.highlightResidue) {
+                window.highlightResidue(label);
+            } else {
+                console.log("Clicked point label:", label);
+            }
+        } catch (e) {
+            console.error("ClickHighlight: error handling click", e);
         }
     });
 };
@@ -183,6 +195,9 @@ def export_mpld3_molstar_html(
 </div>
 
 <script>
+// Keep a global handle for the Mol* viewer so mpld3 callbacks can access it
+window.molstarViewer = null;
+
 // Initialize Mol* viewer once the DOM is ready
 document.addEventListener('DOMContentLoaded', function () {{
     // 'molstar' global comes from molstar.js
@@ -196,8 +211,56 @@ document.addEventListener('DOMContentLoaded', function () {{
             layoutShowLeftPanel: false
         }})
         .then(function(viewer) {{
+            // Store globally so other scripts (e.g. mpld3 plugins) can talk to Mol*
+            window.molstarViewer = viewer;
+
             // Load structure from embedded data or URL
 {load_js}
+
+            // Define how mpld3 click events (ClickHighlight) talk to Mol*
+            // Current version: re-uses the loci from the last Mol* click and logs the mpld3 label.
+            window.highlightResidue = function(label) {{
+                if (!window.molstarViewer) {{
+                    console.warn("highlightResidue: no viewer");
+                    return;
+                }}
+
+                const plugin = window.molstarViewer.plugin;
+                const ib = plugin.behaviors.interaction;
+
+                if (!ib || !ib.click || !ib.click.value || !ib.click.value.current) {{
+                    console.warn("highlightResidue: no click interaction state; label =", label);
+                    return;
+                }}
+
+                const loci = ib.click.value.current.loci;
+                if (!loci) {{
+                    console.warn("highlightResidue: no current loci from Mol* click; label =", label);
+                    return;
+                }}
+
+                console.log("highlightResidue called with label:", label,
+                            "using loci from last Mol* click.");
+
+                try {{
+                    // 1) Clear any previous highlights (so only the new residue is emphasized)
+                    if (plugin.managers.interactivity.clearHighlights) {{
+                        plugin.managers.interactivity.clearHighlights();
+                    }}
+
+                    // 2) Reset selection to just this loci
+                    plugin.managers.interactivity.lociSelects.select({{
+                        loci: loci,
+                        reset: true
+                    }});
+
+                    // 3) Focus camera on it
+                    plugin.managers.camera.reset();
+                    plugin.managers.camera.focusLoci(loci);
+                }} catch (e) {{
+                    console.error("highlightResidue: error while trying to highlight residue in Mol*", e);
+                }}
+            }};
         }});
 }});
 </script>
@@ -295,81 +358,6 @@ def save_fig(file: str | None, dir: str | None, fig=None, dpi: int = 0, PDB_pt: 
                 json.dump(fig_dict, f)
 
         fig.set_dpi(original_dpi)
-        
-
-'''def save_fig(file: str | None, dir: str | None, fig=None, dpi: int = 0, PBD_ID: str = None) -> None:
-    """
-    save_fig(): save static image and optionally interactive HTML or JSON via mpld3.
-
-    Parameters:
-    file (str | None): output filename (static image by default; `.html` and `.json` trigger interactive mpld3 exports)
-    dir (str | None): output directory
-    fig: matplotlib Figure object (if None, uses current figure)
-    dpi (int, optional): resolution for static images and base resolution for interactive exports (default: 600)
-    PBD_ID (str, optional): PDB ID for 3Dmol.js visualization (Default: None)
-    """
-    if file is None or dir is None:
-        return
-
-    mkdir(dir)  # Ensure output directory exists
-
-    if fig is None:
-        fig = plt.gcf()
-
-    try:
-        fig.tight_layout()
-    except Exception:
-        pass
-    ext = file.split('.')[-1].lower()
-    if ext not in ('html', 'json'):  # Save static image
-        plt.savefig(
-            fname=os.path.join(dir, file),
-            dpi=dpi if dpi > 0 else 600,
-            bbox_inches='tight',
-            format=ext,
-        )
-    else:
-        # Interactive exports via mpld3
-        original_dpi = fig.get_dpi()
-        fig.set_dpi(dpi if dpi > 0 else 150)
-        if ext == 'html':
-            if PBD_ID is None:
-                mpld3.save_html(fig, os.path.join(dir, file))
-            else:
-                fig_html = mpld3.fig_to_html(fig)
-                html = f"""
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>EDMS plot + PDB viewer</title>
-  <script src="https://3dmol.org/build/3Dmol.js"></script>
-</head>
-<body>
-  <div style="display:flex; gap:20px;">
-    <div>{fig_html}</div>
-    <div id="pdb-viewer" style="width: 400px; height: 400px;"></div>
-  </div>
-  <script>
-    const element = document.getElementById("pdb-viewer");
-    const viewer = $3Dmol.createViewer(element, {{backgroundColor: "white"}});
-    $3Dmol.download("pdb:{PBD_ID}", viewer, {{}}, function() {{
-      viewer.setStyle({{}}, {{cartoon: {{color: "spectrum"}}}});
-      viewer.zoomTo();
-      viewer.render();
-    }});
-    window.edmsViewer = viewer;
-  </script>
-</body>
-</html>
-"""
-                Path(os.path.join(dir, file)).write_text(html)
-                #new
-        elif ext == 'json':
-            fig_dict = mpld3.fig_to_dict(fig)
-            with open(os.path.join(dir, file), 'w') as f:
-                json.dump(fig_dict, f)
-        fig.set_dpi(original_dpi)'''
 
 def re_un_cap(input: str) -> str:
     ''' 
@@ -751,7 +739,9 @@ def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, col
                 s=20,
                 alpha=0
             )
-            labels_list = list(df[label])
+            #labels_list = list(df[label])
+            labels_list = ["" if pd.isna(v) else str(v) for v in df[label]]
+            
             tooltip = mpld3.plugins.PointHTMLTooltip(pts, labels=labels_list)
             clicker = ClickHighlight(pts, labels_list)
             mpld3.plugins.connect(fig, tooltip, clicker)
@@ -1572,12 +1562,12 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
                     s=20,
                     alpha=0
                 )
-                labels_list = list(df[label])
+                #labels_list = list(df_signif[label])
+                labels_list = ["" if pd.isna(v) else str(v) for v in df_signif[label]]
+                
                 tooltip = mpld3.plugins.PointHTMLTooltip(pts, labels=labels_list)
                 clicker = ClickHighlight(pts, labels_list)
                 mpld3.plugins.connect(fig, tooltip, clicker)
-                #tooltip = mpld3.plugins.PointHTMLTooltip(pts, labels=list(df_signif[label]))
-                #mpld3.plugins.connect(fig, tooltip)
             else:
                 # For static images, keep labels as always-visible text
                 for i, l in enumerate(df_signif[label]):
@@ -1676,12 +1666,12 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
                     s=20,
                     alpha=0
                 )
-                labels_list = list(df[label])
+                #labels_list = list(df_signif[label])
+                labels_list = ["" if pd.isna(v) else str(v) for v in df_signif[label]]
+                
                 tooltip = mpld3.plugins.PointHTMLTooltip(pts, labels=labels_list)
                 clicker = ClickHighlight(pts, labels_list)
                 mpld3.plugins.connect(fig, tooltip, clicker)
-                #tooltip = mpld3.plugins.PointHTMLTooltip(pts, labels=list(df_signif[label]))
-                #mpld3.plugins.connect(fig, tooltip)
             else:
                 # For static images, keep labels as always-visible text
                 for i, l in enumerate(df_signif[label]):
