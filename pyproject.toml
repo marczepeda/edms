@@ -63,7 +63,7 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools.package-data]
-"edms.resources" = ["*.csv"]
+"edms.resources" = ["*.csv", "molstar/*", "icon/*"]
 "edms.scripts" = ["*.sh"]
 
 [tool.setuptools_scm]

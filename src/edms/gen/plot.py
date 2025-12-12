@@ -40,12 +40,15 @@ import matplotlib.colors as mcolors
 from matplotlib.ticker import MaxNLocator
 import numpy as np
 import json
-from adjustText import adjust_text # stopped using for vol
 import mpld3
 from pathlib import Path
+import shutil
+import importlib.resources as pkg_resources
 
 from ..utils import mkdir
 from . import io
+import edms.resources.molstar as molstar_pkg
+import edms.resources.icon as icon_pkg
 
 # Supporting methods
 class ClickHighlight(mpld3.plugins.PluginBase):
@@ -100,6 +103,126 @@ ClickHighlight.prototype.draw = function(){
             labels=list(labels),
         )
 
+def export_mpld3_molstar_html(
+    fig: plt.Figure,
+    dir: str,
+    file: str,
+    pdb_id: str | None = None,
+    pdb_url: str | None = None,
+) -> Path:
+    """
+    export_mpld3_molstar_html(): Create a standalone HTML file that combines:
+      - an mpld3 interactive Matplotlib plot
+      - a Mol* viewer panel for a PDB structure
+
+    Parameters
+    fig (matplotlib.figure.Figure): The Matplotlib figure to convert via mpld3.
+    output_html (str or Path): Target HTML file path.
+    pdb_id (str, optional): PDB ID to load from PDBe if pdb_url is not given.
+    pdb_url (str, optional): Direct URL to a structure file. If given, overrides pdb_id.
+
+    Returns
+    -------
+    Path
+        Path to the generated HTML file.
+    """
+    output_html = Path(os.path.join(dir, file))
+
+    # 1) Get mpld3 HTML for the figure (this is just a <div> + <script>, no full document)
+    fig_html = mpld3.fig_to_html(fig)
+
+    # 2) Mol* assets (use CDN for standalone HTML)
+    molstar_head = f"""
+<link rel="stylesheet" type="text/css" href="{file[:-5]}/molstar.css" />
+<script src="{file[:-5]}/molstar.js"></script>
+"""
+
+    # 3) Set up the structure URL
+    # If no explicit URL is given, assume a local PDB file named like '7VOX.pdb'
+    if pdb_url is None:
+        if pdb_id is None:
+            raise ValueError("Either pdb_id or pdb_url must be provided")
+        pdb_id_str = str(pdb_id).upper()
+        pdb_url = f"{pdb_id_str}.pdb"
+
+    # Infer Mol* format from the file extension (default to 'pdb')
+    pdb_ext = Path(pdb_url).suffix.lower().lstrip(".")
+    if pdb_ext in {"pdb", "cif", "bcif", "mmcif"}:
+        pdb_format = pdb_ext
+    else:
+        pdb_format = "pdb"
+
+    # Decide whether to load from URL (remote) or embed data (local file)
+    url_str = str(pdb_url)
+    is_remote = url_str.startswith("http://") or url_str.startswith("https://")
+
+    if is_remote:
+        # Keep using URL-based loading; suitable for HTTP(S) servers with CORS enabled
+        load_js = f"            viewer.loadStructureFromUrl('{url_str}', '{pdb_format}');"
+    else:
+        # Embed local file contents directly into the HTML so it works with file:// URLs
+        pdb_path = Path(pdb_url)
+        if not pdb_path.is_file():
+            raise FileNotFoundError(f"PDB file not found: {pdb_path}")
+        pdb_text = pdb_path.read_text()
+        pdb_js = json.dumps(pdb_text)
+        load_js = (
+            f"            const pdbData = {pdb_js};\n"
+            f"            viewer.loadStructureFromData(pdbData, '{pdb_format}');"
+        )
+
+    # 4) Mol* viewer container + initialization script
+    molstar_body = rf"""
+<div style="display: flex; align-items: flex-start; width: 100%; height: 100%;">
+  <div id="mpld3-container" style="width: 50%; min-width: 50%; max-width: 50%; padding-right: 20px; overflow: hidden;">
+    {fig_html}
+  </div>
+  <div id="molstar-container" style="width: 50%; min-width: 50%; max-width: 50%; margin-left: 20px; display: flex; flex-direction: column;">
+    <div id="molstar-viewer" style="position: relative; width: 95%; height: 600px;"></div>
+  </div>
+</div>
+
+<script>
+// Initialize Mol* viewer once the DOM is ready
+document.addEventListener('DOMContentLoaded', function () {{
+    // 'molstar' global comes from molstar.js
+    molstar.Viewer
+        .create('molstar-viewer', {{
+            layoutIsExpanded: false,
+            layoutShowControls: false,
+            layoutShowRemoteState: false,
+            layoutShowSequence: false,
+            layoutShowLog: false,
+            layoutShowLeftPanel: false
+        }})
+        .then(function(viewer) {{
+            // Load structure from embedded data or URL
+{load_js}
+        }});
+}});
+</script>
+"""
+
+    # 5) Assemble full HTML document
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>{file[:-5]}</title>
+<link rel="icon" type="image/svg+xml" href="{file[:-5]}/Python-logo-notext.svg">
+{molstar_head}
+</head>
+<body>
+{molstar_body}
+</body>
+</html>
+"""
+
+    # 6) Write final file
+    output_html.write_text(html, encoding="utf-8")
+
+    return output_html
+
 def save_fig(file: str | None, dir: str | None, fig=None, dpi: int = 0, PDB_pt: str = None) -> None:
     """
     save_fig(): save static image and optionally interactive HTML or JSON via mpld3.
@@ -142,200 +265,37 @@ def save_fig(file: str | None, dir: str | None, fig=None, dpi: int = 0, PDB_pt: 
                 # Plain mpld3 HTML
                 mpld3.save_html(fig, os.path.join(dir, file))
             else:
+                # Copy molstar JS and CSS paths
+                sub_dir = os.path.join(dir,file[:-5])
+                mkdir(sub_dir)
+                with pkg_resources.path(molstar_pkg, "molstar.js") as js_path:
+                    shutil.copy(js_path, Path(sub_dir) / "molstar.js")
+                with pkg_resources.path(molstar_pkg, "molstar.css") as css_path:
+                    shutil.copy(css_path, Path(sub_dir) / "molstar.css")
+                with pkg_resources.path(icon_pkg, "Python-logo-notext.svg") as svg_path:
+                    shutil.copy(svg_path, Path(sub_dir) / "Python-logo-notext.svg")
+                
                 # Build a combined HTML: mpld3 plot (left) + Mol* viewer (right)
-
                 if len(PDB_pt) == 4:
                     for PDB_file in os.listdir(os.path.expanduser('~/.config/edms/PDB/')):
                         if PDB_pt in PDB_file:
                             PDB_pt = f'{os.path.expanduser("~/.config/edms/PDB")}/{PDB_file}'
                             break
 
-                # Derive Mol* format from file suffix
-                PDB_suf = PDB_pt.split('.')[-1].lower()
-                if PDB_suf in ('cif', 'mmcif'):
-                    PDB_fmt = 'mmcif'
-                else:
-                    PDB_fmt = 'pdb'
-
-                # Make the PDB path relative to the HTML output directory, using POSIX-style separators
-                try:
-                    PDB_rel = os.path.relpath(PDB_pt, start=dir)
-                except Exception:
-                    PDB_rel = PDB_pt
-                PDB_rel = PDB_rel.replace(os.path.sep, '/')
-
-                # 1) Get full mpld3 HTML and split into <head> and <body> chunks
-                fig_html_full = mpld3.fig_to_html(fig)
-
-                fig_head = ""
-                fig_body = fig_html_full
-
-                head_start = fig_html_full.find("<head>")
-                head_end = fig_html_full.find("</head>")
-                if head_start != -1 and head_end != -1:
-                    fig_head = fig_html_full[head_start + len("<head>"):head_end].strip()
-
-                body_start = fig_html_full.find("<body>")
-                body_end = fig_html_full.rfind("</body>")
-                if body_start != -1 and body_end != -1:
-                    fig_body = fig_html_full[body_start + len("<body>"):body_end].strip()
-
-                # 2) Wrap everything in our own HTML shell with Mol* on the right
-                html = f"""<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>EDMS plot + PDB viewer</title>
-  {fig_head}
-  <link rel="stylesheet" type="text/css" href="https://molstar.org/viewer/molstar.css" />
-  <script src="https://molstar.org/viewer/molstar.js"></script>
-  <style>
-    body {{
-      font-family: sans-serif;
-    }}
-    .layout {{
-      display: flex;
-      flex-direction: row;
-      align-items: flex-start;
-      gap: 20px;
-    }}
-    #plot-container {{
-      flex: 1 1 auto;
-    }}
-    #pdb-viewer {{
-      flex: 0 0 400px;
-      width: 400px;
-      height: 400px;
-      border: 1px solid #ccc;
-    }}
-  </style>
-</head>
-<body>
-  <div class="layout">
-    <div id="plot-container">
-      {fig_body}
-    </div>
-    <div id="pdb-viewer"></div>
-  </div>
-
-  <script>
-    (async function() {{
-      const element = document.getElementById('pdb-viewer');
-      if (!element) return;
-
-      if (typeof molstar === 'undefined') {{
-        console.error('Mol* (molstar) is not loaded.');
-        return;
-      }}
-
-      // Create Mol* viewer instance
-      const viewer = new molstar.Viewer(element, {{
-        layoutIsExpanded: false,
-        layoutShowControls: true,
-        layoutShowSequence: true,
-        layoutShowLog: false,
-        layoutShowLeftPanel: true
-      }});
-
-      // Small test helper to exercise loadStructureFromUrl directly in the console, if needed.
-      window.testMolstarLoad = async function(url, format, isBinary) {{
-        try {{
-          await viewer.loadStructureFromUrl(url || '{PDB_rel}', format || '{PDB_fmt}', isBinary ?? false);
-          console.log('Mol* test loadStructureFromUrl succeeded for', url || '{PDB_rel}');
-        }} catch (e) {{
-          console.error('Mol* test loadStructureFromUrl failed:', e);
-        }}
-      }};
-
-      try {{
-        // Load structure from URL using Mol* Viewer API
-        await viewer.loadStructureFromUrl('{PDB_rel}', '{PDB_fmt}', false);
-        console.log('Mol* structure loaded for {PDB_rel} ({PDB_fmt})');
-      }} catch (err) {{
-        console.error('Error loading PDB into Mol*:', err);
-        return;
-      }}
-
-      // Expose viewer globally so mpld3 click handlers can use it
-      window.edmsViewer = viewer;
-
-      // Highlight a residue in Mol* based on the volcano-plot label HTML
-      window.highlightResidue = function(labelHtml) {{
-        try {{
-          if (!labelHtml) return;
-
-          // 1) Extract the core mutation label inside <u>...</u>, if present.
-          //    e.g., "<u>F254L</u>" -> "F254L"
-          var match = /<u>([^<]+)<\\/u>/i.exec(String(labelHtml));
-          var coreLabel = match ? match[1] : String(labelHtml);
-
-          // 2) Grab the first run of digits as the residue index.
-          //    e.g., "F254L" or "p.F254L" -> 254
-          var numMatch = /([0-9]+)/.exec(coreLabel);
-          if (!numMatch) {{
-            console.warn('highlightResidue: no residue index found in label:', coreLabel);
-            return;
-          }}
-          var resId = parseInt(numMatch[1], 10);
-          if (!resId || isNaN(resId)) {{
-            console.warn('highlightResidue: invalid residue index:', numMatch[1]);
-            return;
-          }}
-
-          var plugin = viewer.plugin;
-          if (!plugin) {{
-            console.error('highlightResidue: Mol* plugin not available.');
-            return;
-          }}
-
-          var structures = plugin.managers.structure.hierarchy.current.structures;
-          if (!structures || structures.length === 0 ||
-              !structures[0].cell || !structures[0].cell.obj) {{
-            console.warn('highlightResidue: no structure loaded.');
-            return;
-          }}
-
-          var structure = structures[0].cell.obj.data;
-          if (!structure) {{
-            console.warn('highlightResidue: structure data missing.');
-            return;
-          }}
-
-          // 3) Build a query selecting residues with this auth_seq_id
-          var MS = molstar.MolScriptBuilder;
-          var Q = molstar.Structure.Query;
-
-          var sel = Q.selection(Q.generators.atoms({{
-            residueTest: MS.core.rel.eq([MS.ammp('auth_seq_id'), resId])
-          }}));
-
-          var loci = sel(structure);
-
-          // 4) Clear previous selection & select this residue
-          plugin.managers.interactivity.lociSelects.deselectAll();
-          plugin.managers.interactivity.lociSelects.select({{ loci: loci }});
-
-          // 5) Focus camera on the selection
-          plugin.managers.camera.focusLoci(loci);
-
-          console.log('highlightResidue: selected residue auth_seq_id =', resId);
-        }} catch (e) {{
-          console.error('highlightResidue: error while selecting residue:', e);
-        }}
-      }};
-    }})();
-  </script>
-</body>
-</html>
-"""
-                Path(os.path.join(dir, file)).write_text(html)
-
+                export_mpld3_molstar_html(
+                    fig=fig,
+                    dir=dir,
+                    file=file,
+                    pdb_url=PDB_pt,
+                )
+                
         elif ext == 'json':
             fig_dict = mpld3.fig_to_dict(fig)
             with open(os.path.join(dir, file), 'w') as f:
                 json.dump(fig_dict, f)
 
         fig.set_dpi(original_dpi)
+        
 
 '''def save_fig(file: str | None, dir: str | None, fig=None, dpi: int = 0, PBD_ID: str = None) -> None:
     """
