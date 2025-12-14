@@ -519,6 +519,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_count_region.add_argument("--align_ckpt", type=int, default=10000, help="Checkpoint frequency (Default: 10000)")
     parser_fastq_count_region.add_argument("--plot_suf", type=str, help="Plot suffix type (e.g. '.pdf')")
     parser_fastq_count_region.add_argument("--show", action="store_true", help="Display plots interactively", default=False)
+    parser_fastq_count_region.add_argument("--exact", action="store_true", help="Perform exact matching only", default=False)
     
     # count_alignments():
     parser_fastq_count_alignments.add_argument("--df_ref", help="Annotated reference library file path", required=True)
@@ -536,6 +537,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_count_alignments.add_argument("--align_ckpt", type=int, default=10000, help="Checkpoint frequency for saving alignment progress")
     parser_fastq_count_alignments.add_argument("--plot_suf", type=str, help="Plot file suffix (e.g. .pdf, .png)")
     parser_fastq_count_alignments.add_argument("--show", action="store_true", help="Show plots interactively")
+    parser_fastq_count_alignments.add_argument("--exact", action="store_true", help="Perform exact matching only", default=False)
     
     # plot_paired():
     parser_fastq_plot_paired.add_argument("--df", help="Paired region file path", required=True)
