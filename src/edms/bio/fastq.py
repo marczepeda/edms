@@ -488,7 +488,7 @@ def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.pdf',numeri
 ### Region/read alignments: spacer,..., & ngRNA-epegRNA
 def mismatch_alignments(align_col: str, out_dir: str, fastq_name: str,
                         fastq_df_ref: pd.DataFrame, dc_alignments: dict, dc_aligned_reads: dict,
-                        dc_alignments_mismatch_pos: dict, dc_alignments_mismatch_num: dict,
+                        dc_alignments_mismatch_pos: dict, dc_alignments_mismatch_num: dict, 
                         return_df: bool=False) -> pd.DataFrame:
     '''
     mismatch_alignments(): Compute & save mismatch number and position per alignment; enables checkpoints
@@ -538,7 +538,7 @@ def mismatch_alignments(align_col: str, out_dir: str, fastq_name: str,
     if return_df: return df_fastq
 
 def perform_alignments(align_col: str, out_dir: str, fastq_name: str, fastq_df_ref: pd.DataFrame,
-                       aligner: PairwiseAligner, seqs: list, memories: list, align_ckpt: int) -> pd.DataFrame:
+                       aligner: PairwiseAligner, seqs: list, memories: list, align_ckpt: int, exact: bool) -> pd.DataFrame:
     '''
     perform_alignments(): perform alignments on fastq reads using PairwiseAligner and compute mismatches using mismatch_alignments()
 
@@ -551,6 +551,7 @@ def perform_alignments(align_col: str, out_dir: str, fastq_name: str, fastq_df_r
     seqs (list): list of sequences to align
     memories (list): list of memory timers
     align_ckpt (int): alignment checkpoint interval
+    exact (bool): perform exact matching only
     
     Dependencies: Bio.SeqIO, gzip, os, pandas, Bio.Seq.Seq, Bio.PairwiseAligner, count_region(), count_alignments(), perform_alignments(), io, tidy
     '''
@@ -575,10 +576,25 @@ def perform_alignments(align_col: str, out_dir: str, fastq_name: str, fastq_df_r
 
         seq_alignments_scores = []
         seq_alignments_aligned = []
-        for ref in fastq_df_ref[align_col]: # Iterate though reference sequences
-            seq_alignment = aligner.align(ref, seq[0:len(ref)]) # trim ngs sequence to reference sequence & align
-            seq_alignments_scores.append(seq_alignment[0].score) # Save highest alignment score
-            seq_alignments_aligned.append(seq_alignment[0].aligned[0]) # Save alignment matches
+        found_exact = False 
+        for ref in fastq_df_ref[align_col]: # Iterate though reference sequences (exact matches)
+            if str(ref) == str(seq[0:len(ref)]): # Exact match
+                seq_alignment = aligner.align(ref, seq[0:len(ref)]) # trim ngs sequence to reference sequence & align
+                seq_alignments_scores.append(seq_alignment[0].score) # Save highest alignment score
+                seq_alignments_aligned.append(seq_alignment[0].aligned[0]) # Save alignment matches
+                found_exact = True
+                break
+        
+        if not exact: # Allow non-exact matches
+            if not found_exact: # No exact match found; perform alignments
+                for ref in fastq_df_ref[align_col]: # Iterate though reference sequences
+                    seq_alignment = aligner.align(ref, seq[0:len(ref)]) # trim ngs sequence to reference sequence & align
+                    seq_alignments_scores.append(seq_alignment[0].score) # Save highest alignment score
+                    seq_alignments_aligned.append(seq_alignment[0].aligned[0]) # Save alignment matches
+        
+        else: # Exact matches only
+            if not found_exact: # No exact match found; skip
+                continue
 
         # Isolate maximum score alignment
         i = seq_alignments_scores.index(max(seq_alignments_scores))
@@ -665,7 +681,7 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
                  fastq_dir: str, df_motif5: pd.DataFrame | str, df_motif3: pd.DataFrame | str,
                  out_dir: str, fastq_col: str=None, match_score: float = 2, mismatch_score: float = -1, 
                  open_gap_score: float = -10, extend_gap_score: float = -0.1, align_dims: tuple=(0,0),
-                 align_ckpt: int=10000, plot_suf: str=None, show: bool=False, return_dc: bool=False,
+                 align_ckpt: int=10000, plot_suf: str=None, show: bool=False, return_dc: bool=False, exact: bool=False,
                  **plot_kwargs) -> dict[pd.DataFrame]:
     ''' 
     count_region(): align read region from fastq directory to the annotated library with mismatches; plot and return fastq alignments dictionary
@@ -688,6 +704,7 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
     plot_suf (str, optional): plot type suffix with '.' (Default: None)
     show (bool, optional): show plots (Default: False)
     return_dc (bool, optional): return fastqs dictionary (Default: False)
+    exact (bool, optional): perform exact matching only (Default: False)
     **plot_kwargs (optional): plot key word arguments
 
     Dependencies: Bio.SeqIO, gzip, os, pandas, Bio.Seq.Seq, Bio.PairwiseAligner, mismatch_alignments(), perform_alignments(), plot_alignments(), memory_timer(), io, tidy
@@ -863,7 +880,7 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
 
         # Perform alignments, compute mismatches, & append to fastq dataframe to dictionary
         df_fastq = perform_alignments(align_col=align_col, out_dir=out_dir, fastq_name=fastq_name, fastq_df_ref=fastq_df_ref,
-                                      aligner=aligner, seqs=seqs, memories=memories, align_ckpt=align_ckpt)
+                                      aligner=aligner, seqs=seqs, memories=memories, align_ckpt=align_ckpt, exact=exact)
         if return_dc: fastqs[fastq_name]=df_fastq
         memories.append(memory_timer(task=f"{fastq_name} (aligned)"))
 
@@ -885,7 +902,7 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
 def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
                      fastq_dir: str, out_dir: str, fastq_col: str=None, match_score: float = 2, mismatch_score: float = -1, 
                      open_gap_score: float = -10, extend_gap_score: float = -0.1, align_dims: tuple=(0,0),
-                     align_ckpt: int=10000, plot_suf: str=None, show: bool=False, return_dc: bool=False,
+                     align_ckpt: int=10000, plot_suf: str=None, show: bool=False, return_dc: bool=False, exact: bool=False,
                      **plot_kwargs) -> dict[pd.DataFrame]:
     ''' 
     count_alignments(): align reads from fastq directory to annotated library with mismatches; plot and return fastq alignments dictionary
@@ -906,6 +923,7 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
     plot_suf (str, optional): plot type suffix with '.' (Default: None)
     show (bool, optional): show plots (Default: False)
     return_dc (bool, optional): return fastqs dictionary (Default: False)
+    exact (bool, optional): perform exact matching only (Default: False)
     **plot_kwargs (optional): plot key word arguments
 
     Dependencies: Bio.SeqIO, gzip, os, pandas, Bio.Seq.Seq, Bio.PairwiseAligner, mismatch_alignments(), perform_alignments(), plot_alignments(), memory_timer(), io, tidy
@@ -1017,7 +1035,7 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
 
         # Perform alignments, compute mismatches, & append to fastq dataframe to dictionary
         df_fastq = perform_alignments(align_col=align_col, out_dir=out_dir, fastq_name=fastq_name, fastq_df_ref=fastq_df_ref,
-                                      aligner=aligner, seqs=seqs, memories=memories, align_ckpt=align_ckpt)
+                                      aligner=aligner, seqs=seqs, memories=memories, align_ckpt=align_ckpt, exact=exact)
         if return_dc: fastqs[fastq_name]=df_fastq
         memories.append(memory_timer(task=f"{fastq_name} (aligned)"))
 
