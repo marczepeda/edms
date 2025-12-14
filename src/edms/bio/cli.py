@@ -703,6 +703,7 @@ def add_subparser(subparsers, formatter_class=None):
     - sensor_designer(): design pegRNA sensors
     - pegRNA_outcome(): confirm that pegRNAs should create the predicted edits
     - pegRNA_signature(): create signatures for pegRNA outcomes using alignments
+    - epegRNA_fastas(): generate FASTA files representing epegRNAs cloned into a linearized vector
     '''
     parser_pe = subparsers.add_parser("pe", help="Prime Editing", formatter_class=formatter_class)
     subparsers_pe = parser_pe.add_subparsers()
@@ -714,6 +715,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_pe_sensor_designer = subparsers_pe.add_parser("sensor_designer", help='Design pegRNA sensors', description='Design pegRNA sensors', formatter_class=formatter_class)
     parser_pe_pegRNA_outcome = subparsers_pe.add_parser("pegRNA_outcome", help="Confirm that pegRNAs should create the predicted edit", description="Confirm that pegRNAs should create the predicted edit", formatter_class=formatter_class)
     parser_pe_pegRNA_signature = subparsers_pe.add_parser("pegRNA_signature", help="Create signatures for pegRNA outcomes using alignments", description="Create signatures for pegRNA outcomes using alignments", formatter_class=formatter_class)
+    parser_pe_epegRNA_fasta = subparsers_pe.add_parser("epegRNA_fasta", help="Generate FASTA files representing epegRNAs cloned into a linearized vector", description="Generate FASTA files representing epegRNAs cloned into a linearized vector", formatter_class=formatter_class)
 
     # prime_designer():
     parser_pe_prime_designer.add_argument("--file", type=str, dest='in_file', help="[Required (Option 1)] Input file (.csv or .txt) with sequences for PrimeDesign. Format: target_name,target_sequence,index (Required). See examples below...")
@@ -884,6 +886,22 @@ Examples:[/red]
     parser_pe_pegRNA_signature.add_argument("--open_gap_score", type=float, help="Open gap score for pairwise alignment", default=argparse.SUPPRESS)
     parser_pe_pegRNA_signature.add_argument("--extend_gap_score", type=float, help="Extend gap score for pairwise alignment", default=argparse.SUPPRESS)
 
+    # epegRNA_fastas():
+    parser_pe_epegRNA_fasta.add_argument("--df", type=str, help="Path to epegRNAs file", required=True)
+    parser_pe_epegRNA_fasta.add_argument("--linearized_vector", type=str, help="Linearized vector sequence (string or .fasta)", required=True)
+
+    parser_pe_epegRNA_fasta.add_argument("--out_dir", type=str, help="Output directory for FASTA files (Default: ./fasta)", default='./fasta')
+    parser_pe_epegRNA_fasta.add_argument("--id", type=str, help="epegRNA ID column name (Default: ID)", default='ID')
+    parser_pe_epegRNA_fasta.add_argument("--dont_tG", dest="tG", default=True, action="store_false", help="Don't add 5' G to spacer if needed")
+    parser_pe_epegRNA_fasta.add_argument("--dont_make_extension", dest="make_extension", default=True, action="store_false", help="Don't build extension from RTT, PBS, and linker")
+    parser_pe_epegRNA_fasta.add_argument("--epegRNA_spacer", type=str, help="epegRNA spacer column name (Default: Spacer_sequence)", default='Spacer_sequence')
+    parser_pe_epegRNA_fasta.add_argument("--epegRNA_scaffold", type=str, default="Scaffold_sequence", help="epegRNA scaffold column")
+    parser_pe_epegRNA_fasta.add_argument("--epegRNA_extension", type=str, default="Extension_sequence", help="epegRNA extension column")
+    parser_pe_epegRNA_fasta.add_argument("--epegRNA_RTT", type=str, default="RTT_sequence", help="epegRNA RTT column name")
+    parser_pe_epegRNA_fasta.add_argument("--epegRNA_PBS", type=str, default="PBS_sequence", help="epegRNA PBS column name")
+    parser_pe_epegRNA_fasta.add_argument("--epegRNA_linker", type=str, default="Linker_sequence", help="epegRNA Linker column name")
+    parser_pe_epegRNA_fasta.add_argument("--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
+
     # Set defaults
     parser_pe_prime_designer.set_defaults(func=pe.prime_designer)
     parser_pe_pilot_screen.set_defaults(func=pe.pilot_screen)
@@ -892,3 +910,4 @@ Examples:[/red]
     parser_pe_sensor_designer.set_defaults(func=pe.sensor_designer)
     parser_pe_pegRNA_outcome.set_defaults(func=pe.pegRNA_outcome)
     parser_pe_pegRNA_signature.set_defaults(func=pe.pegRNA_signature)
+    parser_pe_epegRNA_fasta.set_defaults(func=pe.epegRNA_fasta)

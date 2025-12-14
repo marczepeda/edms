@@ -30,6 +30,7 @@ Usage:
 - sensor_designer(): Design pegRNA sensors
 - pegRNA_outcome(): confirm that pegRNAs should create the predicted edits
 - pegRNA_signature(): create signatures for pegRNA outcomes using alignments
+- epegRNA_fasta(): generate FASTA files representing epegRNAs cloned into a linearized vector
 
 [Comparing pegRNA libraries]
 - print_shared_sequences(): prints spacer and PBS sequences from dictionary of shared_sequences libraries
@@ -48,6 +49,8 @@ import datetime
 from typing import Literal
 from Bio.Seq import Seq
 from Bio.Align import PairwiseAligner
+from Bio import SeqIO
+from Bio.SeqRecord import SeqRecord
 import math
 from typing import Literal
 
@@ -59,7 +62,7 @@ from ..gen import plot as p
 from ..dat import cosmic as co 
 from ..dat import cvar
 from ..bio import fastq as fq
-from ..utils import memory_timer,load_resource_csv
+from ..utils import memory_timer,load_resource_csv,mkdir
 
 # Biological Dictionaries
 ''' dna_aa_codon_table: DNA to AA codon table'''
@@ -1618,6 +1621,65 @@ def pegRNA_signature(pegRNAs: pd.DataFrame | str,
                 obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
         io.save(dir=out_dir,file=out_file,obj=pegRNAs)
     if return_df==True: return pegRNAs
+
+def epegRNA_fasta(df: pd.DataFrame | str, linearized_vector: str, out_dir: str, 
+                  id: str='ID', tG:bool=True, make_extension: bool=True,
+                  epegRNA_spacer: str='Spacer_sequence', epegRNA_scaffold: str='Scaffold_sequence',
+                  epegRNA_extension: str='Extension_sequence', epegRNA_RTT: str='RTT_sequence',
+                  epegRNA_PBS: str='PBS_sequence', epegRNA_linker: str='Linker_sequence',
+                  literal_eval: bool=True) -> None:
+    '''
+    epegRNA_fasta(): generate FASTA files representing epegRNAs cloned into a linearized vector
+    
+    Parameters:
+    df (dataframe | str): epegRNAs DataFrame (or file path)
+    linearized_vector (str): linearized vector sequence (or .fasta file path)
+    out_dir (str): output directory for FASTA files
+    id (str, optional): epegRNA ID column name (Default: ID)
+    tG (bool, optional): include 3' tG extension (Default: True)
+    make_extension (bool, optional): include epegRNA extension (Default: True)
+    epegRNA_spacer (str, optional): epegRNA spacer column name (Default: Spacer_sequence)
+    epegRNA_scaffold (str, optional): epegRNA scaffold sequence column name (Default: Scaffold_sequence)
+    epegRNA_extension (str, optional): epegRNA extension name (Default: Extension_sequence)
+    epegRNA_RTT (str, optional): epegRNA reverse transcripase template column name (Default: RTT_sequence)
+    epegRNA_PBS (str, optional): epegRNA primer binding site column name (Default: PBS_sequence)
+    epegRNA_linker (str, optional): epegRNA linker column name (Default: Linker_sequence)
+    literal_eval (bool, optional): convert string representations (Default: True)
+    '''
+    # Make output directory if it does not exist
+    mkdir(out_dir)
+
+    # Get pegRNAs DataFrame & linearized vector sequence from file paths if needed
+    if type(df)==str:
+        df = io.get(pt=df,literal_eval=literal_eval)
+    try:
+        linearized_vector = SeqIO.read(linearized_vector, "fasta")
+        linearized_vector_description = linearized_vector.description
+        linearized_vector = linearized_vector.seq
+    except:
+        linearized_vector = Seq(linearized_vector)
+        linearized_vector_description = "unknown linearized vector"
+    
+    # Make extension by concatenating RTT, PBS, and linker
+    if make_extension==True: df[epegRNA_extension] = df[epegRNA_RTT]+df[epegRNA_PBS]+df[epegRNA_linker]
+    else: print(f'Warning: Did not make extension sequence!\nMake sure "{epegRNA_extension}" column includes RTT+PBS+linker for epegRNAs.')
+    
+    # Generate epegRNA sequences & write FASTA files
+    df[f'{epegRNA_spacer}_nt1']=[s[0] for s in df[epegRNA_spacer]]
+    for i,(epegRNA_spacer_nt1) in enumerate(df[f'{epegRNA_spacer}_nt1']):
+        # Create epegRNA sequence
+        if (tG==True) & (epegRNA_spacer_nt1!='G'): # Append 5'G to spacer if not already present
+            epegRNA = 'G'+df.iloc[i][epegRNA_spacer]+df.iloc[i][epegRNA_scaffold]+df.iloc[i][epegRNA_extension]    
+        else: # Do not append 5'G to spacer if not already present or not wanted
+            epegRNA = df.iloc[i][epegRNA_spacer]+df.iloc[i][epegRNA_scaffold]+df.iloc[i][epegRNA_extension]
+        
+        # Write epegRNA FASTA file
+        with open(os.path.join(out_dir,df.iloc[i][id]+'.fasta'),'w') as f:
+                SeqIO.write(SeqRecord(linearized_vector+Seq(epegRNA.upper()), 
+                                      id=f"{df.iloc[i][id]}", 
+                                      description="cloned into "+linearized_vector_description), 
+                            f, 
+                            "fasta")
 
 # Comparing pegRNA libraries
 def print_shared_sequences(dc: dict):

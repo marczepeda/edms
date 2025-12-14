@@ -5,7 +5,14 @@ Created: 2024-08-05
 Description: Plot generation
 
 Usage:
+[HTML Tooltips]
+- SafeHTMLTooltip: robust HTML tooltip that safely handles missing labels/targets.
+- ClickTooltip: persistent HTML tooltip that appears on point click.
+
 [Supporting methods]
+- export_mpld3_molstar_html(): Create a standalone HTML file that combines:
+    - an mpld3 interactive Matplotlib plot
+    - a Mol* viewer panel for a PDB structure
 - save_fig(): save static image and optionally interactive HTML or JSON via mpld3.
 - re_un_cap(): replace underscores with spaces and capitalizes each word for a given string
 - round_up_pow_10(): rounds up a given number to the nearest power of 10
@@ -50,7 +57,7 @@ from . import io
 import edms.resources.molstar as molstar_pkg
 import edms.resources.icon as icon_pkg
 
-# --- Robust HTML Tooltip plugin for MPLD3 ---
+# HTML Tooltips
 class SafeHTMLTooltip(mpld3.plugins.PluginBase):
     """
     MPLD3 plugin: robust HTML tooltip that safely handles missing labels/targets.
