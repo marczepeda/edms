@@ -13,6 +13,9 @@ Usage:
 - unzip_fastqs(): Unzip gzipped fastqs and write to a new directory
 - comb_fastqs(): Combines one or more (un)compressed fastqs files into a single (un)compressed fastq file
 
+[Nanopore]
+- savemoney_samples(): create savemoney samples.csv for nanopore mixed WPS
+
 [Quantify epeg/ngRNA or Signature abundance]
 - [Motif search: mU6, ..., & target sequence flanks]
     - count_motif(): returns a dataframe with the sequence motif location per read and abundance for every fastq file in a directory
@@ -136,6 +139,54 @@ def fuzzy_substring_search(text: str, pattern: str, max_distance: int):
                          'distance': distances,
                          'start_i': starts_i,
                          'end_i': ends_i})
+
+# Nanopore
+def savemoney(fastq_dir: str='./fastq', fasta_dir: str='./fasta', pt: str='.', 
+              out_dir: str=None, out_file: str='samples.csv', return_df: bool=False) -> pd.DataFrame:
+    '''
+    savemoney(): create savemoney samples.csv for nanopore mixed WPS
+
+    Parameters:
+    fastq_dir (str, optional): path to fastq directory (contains .fastq files, not .fastq.gz files; Default: './fastq')
+    fasta_dir (str, optional): path to fasta directory (contains .fasta files; Default: './fasta')
+    pt (str, optional): working directory when running savemoney (Default: "." = current directory)
+    out_dir (str, optional): path to output directory (Default: None)
+    out_file (str, optional): name of output file (Default: 'samples.csv')
+    return_df (bool, optional): return dataframe (Default: False)
+
+    Dependencies: pandas, os
+    '''
+    mkdir(out_dir) # Ensure the output directory exists
+
+    # Get fastq & fasta files
+    fastq_files = [fastq_file for fastq_file in os.listdir(fastq_dir) if fastq_file.endswith(".fastq")]
+    fasta_files = [fasta_file for fasta_file in os.listdir(fasta_dir) if fasta_file.endswith(".fasta")]
+
+    # Sort files naturally
+    fastq_files = sorted(fastq_files, key=t.natural_key)
+    fasta_files = sorted(fasta_files, key=t.natural_key)
+
+    # Determine number of fasta files per fastq file
+    n_int = int(len(fasta_files)/len(fastq_files))
+    n_rem = len(fasta_files)%len(fastq_files)
+    n_ls = [n_int+1]*n_rem + [n_int]*(len(fastq_files)-n_rem)
+
+    # Create fastq filename and group name lists
+    fastq_fname_ls = []
+    group_name_ls = []
+    for i,n in enumerate(n_ls):
+        fastq_fname_ls += [f'{os.path.join(pt, fastq_files[i])}']*n
+        group_name_ls += [fastq_files[i]]*n
+    
+    # Create ref filename list
+    ref_fname_ls = [f'{os.path.join(pt, fasta_file)}' for fasta_file in fasta_files ]
+
+    # Create, save and return samples dataframe
+    df = pd.DataFrame({'group_name':group_name_ls,
+                       'fastq_fname':fastq_fname_ls,
+                       'ref_fname':ref_fname_ls})
+    if out_dir is not None and out_file is not None: io.save(dir=out_dir, file=out_file, obj=df)
+    if return_df: return df
 
 # Input/Output
 def revcom_fastqs(in_dir: str, out_dir: str):

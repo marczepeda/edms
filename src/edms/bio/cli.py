@@ -384,6 +384,7 @@ def add_subparser(subparsers, formatter_class=None):
     - revcom_fastqs(): write reverse complement of fastqs to a new directory
     - unzip_fastqs(): Unzip gzipped fastqs and write to a new directory
     - comb_fastqs(): Combines one or more (un)compressed fastqs files into a single (un)compressed fastq file
+    - savemoney_samples(): create savemoney samples.csv for nanopore mixed WPS
     - genotyping(): quantify edit outcomes workflow
     - abundances(): quantify desired edits count & fraction per sample
     - count_motif(): returns a dataframe with the sequence motif location with mismatches per read for every fastq file in a directory
@@ -407,6 +408,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq = subparsers.add_parser("fastq", help="FASTQ files", description="FASTQ files", formatter_class=formatter_class)
     subparsers_fastq = parser_fastq.add_subparsers()
 
+    parser_fastq_savemoney = subparsers_fastq.add_parser("savemoney", help="Create savemoney samples.csv for nanopore mixed WPS", description="Create savemoney samples.csv for nanopore mixed WPS", formatter_class=formatter_class)
     parser_fastq_revcom = subparsers_fastq.add_parser("revcom", help="Reverse complement all FASTQ files in a directory", description="Reverse complement all FASTQ files in a directory", formatter_class=formatter_class)
     parser_fastq_unzip = subparsers_fastq.add_parser("unzip", help="Unzip gzipped FASTQ files to a new directory", description="Unzip gzipped FASTQ files to a new directory", formatter_class=formatter_class)
     parser_fastq_comb = subparsers_fastq.add_parser("comb", help="Combine multiple FASTQ files into a single FASTQ (.fastq or .fastq.gz)", description="Combine multiple FASTQ files into a single FASTQ (.fastq or .fastq.gz)", formatter_class=formatter_class)
@@ -429,6 +431,13 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_group_umis = subparsers_fastq.add_parser("group_umis", help="Group BAM files by UMI using fgbio", description="Group BAM files by UMI using fgbio", formatter_class=formatter_class)
     parser_fastq_consensus_umis = subparsers_fastq.add_parser("consensus_umis", help="Generate consensus sequences from grouped UMIs using fgbio", description="Generate consensus sequences from grouped UMIs using fgbio", formatter_class=formatter_class)
     parser_fastq_bam_to_fastq = subparsers_fastq.add_parser("bam_to_fastq", help="Convert BAM files to FASTQ files using samtools", description="Convert BAM files to FASTQ files using samtools", formatter_class=formatter_class)
+
+    # savemoney():
+    parser_fastq_savemoney.add_argument("--fastq_dir", type=str, help="Path to fastq directory (contains .fastq files, not .fastq.gz files; Default: './fastq')", default='./fastq')
+    parser_fastq_savemoney.add_argument("--fasta_dir", type=str, help="Path to fasta directory (contains .fasta files; Default: './fasta')", default='./fasta')
+    parser_fastq_savemoney.add_argument("--pt", type=str, help="Working directory when running savemoney (Default: '.' = current directory)", default=".")
+    parser_fastq_savemoney.add_argument("--out_dir", type=str, help="Path to output directory (Default: '.' = current directory)", default='.')
+    parser_fastq_savemoney.add_argument("--out_file", type=str, help="Name of output file (Default: 'samples.csv')", default='samples.csv')
 
     # Add common arguments: revcom_fastqs(), unzip_fastqs(), comb_fastqs(), and genotyping()
     for parser_fastq_common in [parser_fastq_revcom,parser_fastq_unzip,parser_fastq_comb,parser_fastq_genotyping]:
@@ -671,6 +680,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_bam_to_fastq.add_argument("--env", help="Conda environment with samtools installed (Default: umi_tools)", default="umi_tools")
     
     # Set defaults
+    parser_fastq_savemoney.set_defaults(func=fq.savemoney)
     parser_fastq_revcom.set_defaults(func=fq.revcom_fastqs)
     parser_fastq_unzip.set_defaults(func=fq.unzip_fastqs)
     parser_fastq_comb.set_defaults(func=fq.comb_fastqs)

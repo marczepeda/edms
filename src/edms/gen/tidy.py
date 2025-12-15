@@ -31,6 +31,7 @@ Usage:
 [String methods]
 - find_all(): Find all indexes of a substring in a string
 - split_nth(): Split a string at the nth occurrence of a specified substring
+- natural_key(): sort strings containing numbers in human order
 '''
 # Import packages
 import pandas as pd
@@ -406,3 +407,12 @@ def split_nth(string: str, sep: str, n: int) -> list:
         parts.append(sep.join(buffer))
 
     return parts
+
+def natural_key(string: str) -> list:
+    """
+    natural_key(): sort strings containing numbers in human order
+    
+    Parameters:
+    string (str): the string to generate a natural sort key for
+    """
+    return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', string)]
