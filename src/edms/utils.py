@@ -221,3 +221,23 @@ def parse_tuple_float(arg):
         return tuple(map(float, arg.split(',')))
     except:
         raise argparse.ArgumentTypeError(f"{arg} must be formatted as 'float,float,...'")
+    
+def remove_argument(parser, option_string):
+    '''
+    remove_argument(): Remove an argument from an argparse.ArgumentParser instance.
+    
+    Parameters:
+    parser (argparse.ArgumentParser): The parser instance to modify.
+    option_string (str): The option string of the argument to remove (e.g., '--example').
+    '''
+    for action in list(parser._actions):
+        if option_string in action.option_strings:
+            # Remove from parser actions
+            parser._actions.remove(action)
+
+            # Remove from option_string_actions mapping
+            for opt in action.option_strings:
+                parser._option_string_actions.pop(opt, None)
+
+            return True
+    return False

@@ -1502,7 +1502,7 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_dims: tuple = (0, 0), y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
         legend_title: str = '', legend_title_size: int = 12, legend_size: int = 9, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left',
         legend_ncol: int = 1, display_legend: bool = True, display_labels: str = 'FC & p-value', display_lines: bool = False, return_df: bool = True, dpi: int = 0, show: bool = True, space_capitalize: bool = True,
-        PDB_pt: str = None, #new
+        PDB_pt: str = None, # only intended for fastq volcano plots
         **kwargs) -> pd.DataFrame:
     ''' 
     vol(): creates volcano plot
@@ -1559,7 +1559,7 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
     dpi (int, optional): figure dpi (Default: 600 for non-HTML, 150 for HTML)
     show (bool, optional): show plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
-    PDB_pt (str, optional): Path to PDB file for mol* visualization (Default: None)
+    PDB_pt (str, optional): Path to PDB file for mol* visualization; only intended for fastq volcano plots (Default: None)
     
     Dependencies: os, matplotlib, seaborn, & pandas
     '''

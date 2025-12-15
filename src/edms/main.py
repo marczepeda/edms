@@ -30,7 +30,7 @@ import sys
 from . import config
 from . import utils
 from .bio import cli as bio_cli
-from .dat import cli as dat_cli
+from .data import cli as data_cli
 from .gen import cli as gen_cli
 
 # Show post-install notice only once per version
@@ -166,7 +166,7 @@ def main():
     gen_cli.add_subparser(subparsers, MyFormatter)
 
     # Data module subparser
-    dat_cli.add_subparser(subparsers, MyFormatter)
+    data_cli.add_subparser(subparsers, MyFormatter)
 
     # Bio module subparser
     bio_cli.add_subparser(subparsers, MyFormatter)

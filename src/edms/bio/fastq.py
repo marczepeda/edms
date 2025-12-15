@@ -100,8 +100,8 @@ from ..bio.signature import parse_signature_literal, signature_from_alignment, e
 from ..gen import io
 from ..gen import tidy as t
 from ..gen import plot as p
-from ..dat import uniprot, pdb
-from ..utils import memory_timer, mkdir
+from ..data import uniprot, pdb
+from ..utils import memory_timer, mkdir, load_resource_csv
 from .. import config
 
 # Supporting methods for sequences
@@ -3442,7 +3442,7 @@ def make_label_info(label: str, before_aa_dict: dict, after_aa_dict: dict,
 
 def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, label_info: bool=True, 
                    aa_properties: bool | list=True, cBioPortal: str=None, UniProt: str=None, 
-                   PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None,) -> pd.DataFrame:
+                   PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None) -> pd.DataFrame:
     ''' 
     add_label_info(): AA properties for conservation (change to); plus additional info from cBioPortal, UniProt, PhosphoSitePlus, PDB if specified
     
@@ -3453,10 +3453,10 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
     label_info (bool, optional): include additional info for labels if .html plot (Default: True)
     aa_properties (bool |list, optional): use aa_properties to format labels (Default: True). Options: True | False; ['hydrophobicity', 'polarity', 'charge', 'vdw_volume', 'pKa_C_term', 'pKa_N_term', 'pKa_side_chain']
     cBioPortal (str, optional): gene name (if saved to ~/.config/edms/cBioPortal_mutations) or file path for cBioPortal mutation data processed through edms.dat.cBioPortal.mutations()
-    UniProt (str, optional): filename or UniProt accession (if saved to ~/.config/edms/UniProt) or file path for UniProt flat file. See edms.dat.uniprot.retrieve_flat_file() or edms uniprot retrieve -h for more information.
-    #WIP# PhosphoSitePlus (str, optional): filename or UniProt accession (if saved to ~/.config/edms/PhosphoSitePlus) or file path for PhosphoSitePlus data processed through edms.dat.phosphositeplus.retrieve()
-    PDB_contacts (str, optional): PDB ID or file path for PDB structure data processed through edms.dat.pdb.retrieve()
-    PDB_neighbors (str, optional): PDB ID or file path for PDB structure data processed through edms.dat.pdb.retrieve()
+    UniProt (str, optional): UniProt accession (if saved to ~/.config/edms/UniProt) or file path for UniProt flat file. See edms.dat.uniprot.retrieve() or edms uniprot retrieve -h for more information.
+    PhosphoSitePlus (str, optional): UniProt accession
+    PDB_contacts (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
+    PDB_neighbors (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
     
     Dependencies: make_label_info(), pandas
     '''
@@ -3478,7 +3478,10 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
             cBioPortal_df = io.get(pt=cBioPortal)
         except:
             try: # from config
-                cBioPortal_df = io.get(pt=os.path.expanduser(f"~/.config/edms/cBioPortal_mutations/{cBioPortal}.csv"))
+                for cBioPortal_file in os.listdir(os.path.expanduser('~/.config/edms/cBioPortal_mutations/')):
+                    if cBioPortal.lower() in cBioPortal_file.lower():
+                        cBioPortal_df = io.get(pt=os.path.expanduser(f"~/.config/edms/cBioPortal_mutations/{cBioPortal_file}"))
+                        break
             except:
                 raise FileNotFoundError(f"cBioPortal mutation data file not found: {cBioPortal}.\nPlease provide a valid gene name (if saved to {os.path.expanduser('~/.config/edms/cBioPortal_mutations/')} or file path for cBioPortal mutation data processed through edms.dat.cBioPortal.mutations()")
 
@@ -3496,7 +3499,7 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
         except:
             try: # from config
                 for UniProt_file in os.listdir(os.path.expanduser('~/.config/edms/UniProt/')):
-                    if UniProt in UniProt_file:
+                    if UniProt.lower() in UniProt_file.lower():
                         UniProt_ss = uniprot.secondary_structure_from_flat_file(obj=f'{os.path.expanduser("~/.config/edms/UniProt")}/{UniProt_file}')
                         UniProt_ptms = uniprot.ptms_from_flat_file(obj=f'{os.path.expanduser("~/.config/edms/UniProt")}/{UniProt_file}')
                         break
@@ -3533,18 +3536,12 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
     
     # Assign PhosphoSitePlus PTMs
     if PhosphoSitePlus is not None:
-        # Load PhosphoSitePlus file (can't be download directly until I get API access)
-        try: # from filepath
-            PhosphoSitePlus_ptms = io.get(pt=PhosphoSitePlus)
-        except:
-            try: # from config
-                for PhosphoSitePlus_file in os.listdir(os.path.expanduser('~/.config/edms/PhosphoSitePlus/')):
-                    if PhosphoSitePlus in PhosphoSitePlus_file:
-                        PhosphoSitePlus_ptms = io.get(pt=f'{os.path.expanduser("~/.config/edms/PhosphoSitePlus")}/{PhosphoSitePlus_file}')
-                        break
-            except:
-                raise FileNotFoundError(f"PhosphoSitePlus file not found: {PhosphoSitePlus}.\nPlease provide a valid filename or PhosphoSitePlus accession (if saved to {os.path.expanduser('~/.config/edms/PhosphoSitePlus/')}) or file path for PhosphoSitePlus file. See edms.dat.phosphositeplus.retrieve_flat_file() or edms phosphositeplus retrieve -h for more information.")
-
+        # Load PhosphoSitePlus file & filter for specified UniProt accession
+        PhosphoSitePlus_ptms = load_resource_csv(filename='PhosphoSitePlus.csv')
+        PhosphoSitePlus_ptms = PhosphoSitePlus_ptms[PhosphoSitePlus_ptms['ACC_ID']==PhosphoSitePlus].reset_index(drop=True)
+        if PhosphoSitePlus_ptms.empty:
+            print(f"Warning: No PhosphoSitePlus data found. Check UniProt accession: {PhosphoSitePlus}")
+        
         # Merge PhosphoSitePlus ptm data with volcano plot data
         ptms_ls = []
         for aa_num in df['AA Number']:
@@ -3552,8 +3549,8 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
             # Find PTMs
             found_ptm = 0
             ptm = f""
-            for start,end,desc,ref in t.zip_cols(df=PhosphoSitePlus_ptms, cols=['start','end','normalized_description', 'References']):
-                if aa_num>=start and aa_num<=end:
+            for start,end,desc,ref in t.zip_cols(df=PhosphoSitePlus_ptms, cols=['start','end','normalized_description', 'references']):
+                if aa_num==start or aa_num==end:
                     ptm += f"{desc} [{ref}]; "
                     found_ptm += 1
                     break
@@ -3570,7 +3567,7 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
         except:
             try: # from config
                 for PDB_contacts_file in os.listdir(os.path.expanduser('~/.config/edms/PDB/')):
-                    if PDB_contacts in PDB_contacts_file:
+                    if PDB_contacts.lower() in PDB_contacts_file.lower():
                         protein_contacts = pdb.compute_residue_contacts(f'{os.path.expanduser("~/.config/edms/PDB")}/{PDB_contacts_file}', "protein", "protein")
                         nucleic_contacts = pdb.compute_residue_contacts(f'{os.path.expanduser("~/.config/edms/PDB")}/{PDB_contacts_file}', "nucleic", "nucleic", exclude_backbone_backbone=False)
                         break
@@ -3610,7 +3607,7 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
         except:
             try: # from config
                 for PDB_neighbors_file in os.listdir(os.path.expanduser('~/.config/edms/PDB/')):
-                    if PDB_neighbors in PDB_neighbors_file:
+                    if PDB_neighbors.lower() in PDB_neighbors_file.lower():
                         protein_neighbors = pdb.compute_residue_neighbors(f'{os.path.expanduser("~/.config/edms/PDB")}/{PDB_neighbors_file}', "protein", "protein")
                         nucleic_neighbors = pdb.compute_residue_neighbors(f'{os.path.expanduser("~/.config/edms/PDB")}/{PDB_neighbors_file}', "nucleic", "nucleic")
                         break
@@ -4235,10 +4232,10 @@ def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple
     label_info (bool, optional): include additional info for labels if .html plot (Default: True)
     aa_properties (bool |list, optional): use aa_properties to format labels (Default: True). Options: True | False; ['hydrophobicity', 'polarity', 'charge', 'vdw_volume', 'pKa_C_term', 'pKa_N_term', 'pKa_side_chain']
     cBioPortal (str, optional): gene name (if saved to ~/.config/edms/cBioPortal_mutations) or file path for cBioPortal mutation data processed through edms.dat.cBioPortal.mutations()
-    UniProt (str, optional): filename or UniProt accession (if saved to ~/.config/edms/UniProt) or file path for UniProt flat file. See edms.dat.uniprot.retrieve_flat_file() or edms uniprot retrieve -h for more information.
-    #WIP# PhosphoSitePlus (str, optional): filename or UniProt accession (if saved to ~/.config/edms/PhosphoSitePlus) or file path for PhosphoSitePlus data processed through edms.dat.phosphositeplus.retrieve()
-    PDB_contacts (str, optional): PDB ID or file path for PDB structure data processed through edms.dat.pdb.retrieve()
-    PDB_neighbors (str, optional): PDB ID or file path for PDB structure data processed through edms.dat.pdb.retrieve()
+    UniProt (str, optional): UniProt accession (if saved to ~/.config/edms/UniProt) or file path for UniProt flat file. See edms.dat.uniprot.retrieve() or edms uniprot retrieve -h for more information.
+    PhosphoSitePlus (str, optional): UniProt accession
+    PDB_contacts (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
+    PDB_neighbors (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
     FC_threshold (float, optional): fold change threshold (Default: 2; log2(2)=1)
     pval_threshold (float, optional): p-value threshold (Default: 0.05; -log10(0.05)=1.3)
     file (str, optional): save plot to filename

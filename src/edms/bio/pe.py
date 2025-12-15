@@ -59,8 +59,8 @@ from ..bio import pegLIT as pegLIT
 from ..gen import io as io
 from ..gen import tidy as t
 from ..gen import plot as p
-from ..dat import cosmic as co 
-from ..dat import cvar
+from ..data import cosmic as co 
+from ..data import cvar
 from ..bio import fastq as fq
 from ..utils import memory_timer,load_resource_csv,mkdir
 
@@ -1633,7 +1633,7 @@ def epegRNA_fasta(df: pd.DataFrame | str, linearized_vector: str, out_dir: str,
     
     Parameters:
     df (dataframe | str): epegRNAs DataFrame (or file path)
-    linearized_vector (str): linearized vector sequence (or .fasta file path)
+    linearized_vector (str): linearized vector sequence such that final plasmid is linearized vector + insert (string or .fasta file path)
     out_dir (str): output directory for FASTA files
     id (str, optional): epegRNA ID column name (Default: ID)
     tG (bool, optional): include 3' tG extension (Default: True)

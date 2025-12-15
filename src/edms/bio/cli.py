@@ -16,7 +16,8 @@ import sys
 from rich import print as rprint
 
 from . import ngs, sanger, clone as cl, fastq as fq, pe, qPCR, transfect as tf
-from ..utils import parse_tuple_int, parse_tuple_float
+from ..utils import parse_tuple_int, parse_tuple_float, remove_argument
+from ..gen.cli import add_common_plot_vol_args
 
 def add_subparser(subparsers, formatter_class=None):
     """
@@ -381,12 +382,15 @@ def add_subparser(subparsers, formatter_class=None):
 
     '''
     edms.bio.fastq:
+    - savemoney(): create savemoney samples.csv for nanopore mixed WPS
+    
     - revcom_fastqs(): write reverse complement of fastqs to a new directory
     - unzip_fastqs(): Unzip gzipped fastqs and write to a new directory
     - comb_fastqs(): Combines one or more (un)compressed fastqs files into a single (un)compressed fastq file
-    - savemoney_samples(): create savemoney samples.csv for nanopore mixed WPS
+    
     - genotyping(): quantify edit outcomes workflow
     - abundances(): quantify desired edits count & fraction per sample
+    
     - count_motif(): returns a dataframe with the sequence motif location with mismatches per read for every fastq file in a directory
     - plot_motif(): generate plots highlighting motif mismatches, locations, and sequences
     - plot_alignments(): generate line & distribution plots from fastq alignments dictionary
@@ -394,8 +398,10 @@ def add_subparser(subparsers, formatter_class=None):
     - count_alignments(): align reads from fastq directory to annotated library with mismatches; plot and return fastq alignments dictionary
     - plot_paired(): generate stacked bar plots from paired_regions() dataframe
     - paired_regions(): quantify, plot, & return (un)paired regions that aligned to the annotated library
+    
     - count_signatures(): generate signatures from fastq read region alignments to WT sequence; count signatures, plot and return fastq signatures dataframe
     - editing_per_library(): Determine editing relative library abundance
+    
     - extract_umis(): extract UMIs using umi_tools
     - trim_motifs(): trimming motifs with cutadapt
     - make_sams(): generates alignments saved as a SAM files using bowtie2
@@ -404,16 +410,21 @@ def add_subparser(subparsers, formatter_class=None):
     - group_umis(): group BAM files by UMI using fgbio
     - consensus_umis(): generate consensus sequences from grouped UMIs using fgbio
     - bam_to_fastq(): convert BAM files to FASTQ files using samtools
+
+    - vol(): create volcano plot
     '''
     parser_fastq = subparsers.add_parser("fastq", help="FASTQ files", description="FASTQ files", formatter_class=formatter_class)
     subparsers_fastq = parser_fastq.add_subparsers()
 
     parser_fastq_savemoney = subparsers_fastq.add_parser("savemoney", help="Create savemoney samples.csv for nanopore mixed WPS", description="Create savemoney samples.csv for nanopore mixed WPS", formatter_class=formatter_class)
+    
     parser_fastq_revcom = subparsers_fastq.add_parser("revcom", help="Reverse complement all FASTQ files in a directory", description="Reverse complement all FASTQ files in a directory", formatter_class=formatter_class)
     parser_fastq_unzip = subparsers_fastq.add_parser("unzip", help="Unzip gzipped FASTQ files to a new directory", description="Unzip gzipped FASTQ files to a new directory", formatter_class=formatter_class)
     parser_fastq_comb = subparsers_fastq.add_parser("comb", help="Combine multiple FASTQ files into a single FASTQ (.fastq or .fastq.gz)", description="Combine multiple FASTQ files into a single FASTQ (.fastq or .fastq.gz)", formatter_class=formatter_class)
+    
     parser_fastq_genotyping = subparsers_fastq.add_parser("genotyping", help="Quantify edit outcomes workflow", description="Quantify edit outcomes workflow", formatter_class=formatter_class)
     parser_fastq_abundances = subparsers_fastq.add_parser("abundances", help="Quantify edit outcomes count & fraction per sample", description="Quantify edit outcomes count & fraction per sample", formatter_class=formatter_class)
+    
     parser_fastq_count_motif = subparsers_fastq.add_parser("count_motif", help="Count motif occurrences in FASTQ files", description="Count motif occurrences in FASTQ files", formatter_class=formatter_class)
     parser_fastq_plot_motif = subparsers_fastq.add_parser("plot_motif", help="Plot motif occurrences from FASTQ files", description="Plot motif occurrences from FASTQ files", formatter_class=formatter_class)
     parser_fastq_plot_alignments = subparsers_fastq.add_parser("plot_alignments", help="Plot alignments from FASTQ files", description="Plot alignments from FASTQ files", formatter_class=formatter_class)
@@ -421,8 +432,10 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_count_alignments = subparsers_fastq.add_parser("count_alignments", help="Count alignments in FASTQ files", description="Count alignments in FASTQ files", formatter_class=formatter_class)
     parser_fastq_plot_paired = subparsers_fastq.add_parser("plot_paired", help="Plot paired regions from FASTQ files", description="Plot paired regions from FASTQ files", formatter_class=formatter_class)
     parser_fastq_paired_regions = subparsers_fastq.add_parser("paired_regions", help="Extract paired regions from FASTQ files", description="Extract paired regions from FASTQ files", formatter_class=formatter_class)
+    
     parser_fastq_count_signatures = subparsers_fastq.add_parser("count_signatures", help="Generate signatures from fastq read region alignments to WT sequence", description="Generate signatures from fastq read region alignments to WT sequence", formatter_class=formatter_class)
     parser_fastq_editing_per_library = subparsers_fastq.add_parser("editing_per_library", help="Determine editing relative library abundance", description="Determine editing relative library abundance", formatter_class=formatter_class)
+    
     parser_fastq_extract_umis = subparsers_fastq.add_parser("extract_umis", help="Extract UMIs using umi_tools", description="Extract UMIs using umi_tools", formatter_class=formatter_class)
     parser_fastq_trim_motifs = subparsers_fastq.add_parser("trim_motifs", help="Trim motifs with cutadapt", description="Trim motifs with cutadapt", formatter_class=formatter_class)
     parser_fastq_make_sams = subparsers_fastq.add_parser("make_sams", help="Generate alignments saved as SAM files using bowtie2", description="Generate alignments saved as SAM files using bowtie2", formatter_class=formatter_class)
@@ -431,7 +444,9 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_group_umis = subparsers_fastq.add_parser("group_umis", help="Group BAM files by UMI using fgbio", description="Group BAM files by UMI using fgbio", formatter_class=formatter_class)
     parser_fastq_consensus_umis = subparsers_fastq.add_parser("consensus_umis", help="Generate consensus sequences from grouped UMIs using fgbio", description="Generate consensus sequences from grouped UMIs using fgbio", formatter_class=formatter_class)
     parser_fastq_bam_to_fastq = subparsers_fastq.add_parser("bam_to_fastq", help="Convert BAM files to FASTQ files using samtools", description="Convert BAM files to FASTQ files using samtools", formatter_class=formatter_class)
-
+    
+    parser_fastq_vol = subparsers_fastq.add_parser("vol", help="Create volcano plot", description="Create volcano plot", formatter_class=formatter_class)
+    
     # savemoney():
     parser_fastq_savemoney.add_argument("--fastq_dir", type=str, help="Path to fastq directory (contains .fastq files, not .fastq.gz files; Default: './fastq')", default='./fastq')
     parser_fastq_savemoney.add_argument("--fasta_dir", type=str, help="Path to fasta directory (contains .fasta files; Default: './fasta')", default='./fasta')
@@ -679,6 +694,20 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_bam_to_fastq.add_argument("--out_dir", help="Output directory (Default: ./bam_to_fastq)", default=f'./bam_to_fastq')
     parser_fastq_bam_to_fastq.add_argument("--env", help="Conda environment with samtools installed (Default: umi_tools)", default="umi_tools")
     
+    # vol():
+    add_common_plot_vol_args(parser_fastq_vol)
+    remove_argument(parser_fastq_vol, "--stys_order")
+    remove_argument(parser_fastq_vol, "--mark_order")
+    parser_fastq_vol.add_argument("--label_size", type=int, help="Label font size (Default: 16)", default=16)
+    parser_fastq_vol.add_argument("--no_label_info", dest='label_info', action="store_false", help="Don't include additional info for labels if .html plot (Default: True)", default=True)
+    parser_fastq_vol.add_argument("--aa_properties", nargs="+", help="Use aa_properties to format labels (Default: True). Options: hydrophobicity, polarity, charge, vdw_volume, pKa_C_term, pKa_N_term, pKa_side_chain", default=True)
+    parser_fastq_vol.add_argument("--cBioPortal", type=str, help="Gene name (if saved to ~/.config/edms/cBioPortal_mutations) or file path for cBioPortal mutation data processed through edms.dat.cBioPortal.mutations()", default=argparse.SUPPRESS)
+    parser_fastq_vol.add_argument("--UniProt", type=str, help="UniProt accession (if saved to ~/.config/edms/UniProt) or file path for UniProt flat file. See edms.dat.uniprot.retrieve_flat_file() or edms uniprot retrieve -h for more information.", default=argparse.SUPPRESS)
+    parser_fastq_vol.add_argument("--PhosphoSitePlus", type=str, help="UniProt accession", default=argparse.SUPPRESS)
+    parser_fastq_vol.add_argument("--PDB_contacts", type=str, help="PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.", default=argparse.SUPPRESS)
+    parser_fastq_vol.add_argument("--PDB_neighbors", type=str, help="PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.", default=argparse.SUPPRESS)
+
+
     # Set defaults
     parser_fastq_savemoney.set_defaults(func=fq.savemoney)
     parser_fastq_revcom.set_defaults(func=fq.revcom_fastqs)
@@ -703,9 +732,10 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_group_umis.set_defaults(func=fq.group_umis)
     parser_fastq_consensus_umis.set_defaults(func=fq.consensus_umis)
     parser_fastq_bam_to_fastq.set_defaults(func=fq.bam_to_fastq)
+    parser_fastq_vol.set_defaults(func=fq.vol)
 
     '''
-    Add pe.py
+    edms.bio.pe:
     - prime_designer(): Execute PrimeDesign saturation mutagenesis (EDMS version)
     - pilot_screen(): Create pilot screen for EDMS
     - epegRNA_linkers(): Generate epegRNA linkers between PBS and 3' hairpin motif & finish annotations
@@ -898,7 +928,7 @@ Examples:[/red]
 
     # epegRNA_fastas():
     parser_pe_epegRNA_fasta.add_argument("--df", type=str, help="Path to epegRNAs file", required=True)
-    parser_pe_epegRNA_fasta.add_argument("--linearized_vector", type=str, help="Linearized vector sequence (string or .fasta)", required=True)
+    parser_pe_epegRNA_fasta.add_argument("--linearized_vector", type=str, help="Linearized vector sequence such that final plasmid is linearized vector + insert (string or .fasta)", required=True)
 
     parser_pe_epegRNA_fasta.add_argument("--out_dir", type=str, help="Output directory for FASTA files (Default: ./fasta)", default='./fasta')
     parser_pe_epegRNA_fasta.add_argument("--id", type=str, help="epegRNA ID column name (Default: ID)", default='ID')

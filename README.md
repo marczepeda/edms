@@ -27,10 +27,13 @@ edms -h # or edms <TAB>
     import edms.bio.signature as signature
     import edms.bio.transfect as tf
     ```
-- dat: interacting with databases.
+- data: interacting with databases.
     ```shell
-    import edms.dat.cosmic as co
-    import edms.dat.cvar as cv
+    import edms.data.cBioPortal as cBP
+    import edms.data.cosmic as co
+    import edms.data.cvar as cv
+    import edms.data.pdb as pdb
+    import edms.data.uniprot as uniprot
     ```
 
 ## PyPI Instructions
