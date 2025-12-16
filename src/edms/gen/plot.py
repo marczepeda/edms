@@ -726,9 +726,10 @@ def repeat_palette_cmap(palette_or_cmap: str, repeats: int):
         return cmap
 
 # Graph methods
-def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, cols_ord: list = None, stys: str = None, cols_exclude: list | str = None, label: str | None = None,
+def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, cols_ord: list = None, cols_exclude: list | str = None, 
+         stys: str = None, stys_order: list = [], mark_order: list = [], label: str | None = None,
          file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', edgecol: str = 'black',
-         figsize: tuple = (10, 6), title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial',
+         figsize: tuple = (5, 5), title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial',
          x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
          y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
          legend_title: str = '', legend_title_size: int = 12, legend_size: int = 9, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_items: tuple = (0, 0), legend_ncol: int = 1,
@@ -743,8 +744,10 @@ def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, col
     y (str): y-axis column name
     cols (str, optional): color column name
     cols_ord (list, optional): color column values order
-    stys (str, optional): styles column name
     cols_exclude (list | str, optional): color column values exclude
+    stys (str, optional): styles column name
+    stys_order (list, optional): styles order
+    mark_order (list, optional): marker order
     label (str, optional): column name for point labels; static text for images, interactive tooltips for HTML
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
@@ -811,11 +814,11 @@ def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, col
     fig, ax = plt.subplots(figsize=figsize)
     
     if cols is not None and stys is not None:
-        if typ=='scat': sns.scatterplot(data=df, x=x, y=y, hue=cols, hue_order=cols_ord, style=stys, edgecolor=edgecol, palette=palette, ax=ax, **kwargs)
-        elif typ=='line': sns.lineplot(data=df, x=x, y=y, hue=cols, hue_order=cols_ord, style=stys, palette=palette, ax=ax, **kwargs)
+        if typ=='scat': sns.scatterplot(data=df, x=x, y=y, hue=cols, hue_order=cols_ord, style=stys, style_order=stys_order, markers=mark_order, edgecolor=edgecol, palette=palette, ax=ax, **kwargs)
+        elif typ=='line': sns.lineplot(data=df, x=x, y=y, hue=cols, hue_order=cols_ord, style=stys, style_order=stys_order, markers=mark_order, palette=palette, ax=ax, **kwargs)
         elif typ=='line_scat':
-            sns.lineplot(data=df, x=x, y=y, hue=cols, hue_order=cols_ord, style=stys, palette=palette, ax=ax, **kwargs)  
-            sns.scatterplot(data=df, x=x, y=y, hue=cols, hue_order=cols_ord, style=stys, edgecolor=edgecol, palette=palette, ax=ax, **kwargs)
+            sns.lineplot(data=df, x=x, y=y, hue=cols, hue_order=cols_ord, style=stys, style_order=stys_order, markers=mark_order, palette=palette, ax=ax, **kwargs)  
+            sns.scatterplot(data=df, x=x, y=y, hue=cols, hue_order=cols_ord, style=stys, style_order=stys_order, markers=mark_order, edgecolor=edgecol, palette=palette, ax=ax, **kwargs)
         else:
             print("Invalid type! scat, line, or line_scat")
             return
@@ -829,11 +832,11 @@ def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, col
             print("Invalid type! scat, line, or line_scat")
             return
     elif stys is not None:
-        if typ=='scat': sns.scatterplot(data=df, x=x, y=y, style=stys, edgecolor=edgecol, palette=palette, ax=ax, **kwargs)
-        elif typ=='line': sns.lineplot(data=df, x=x, y=y, style=stys, palette=palette, ax=ax, **kwargs)
+        if typ=='scat': sns.scatterplot(data=df, x=x, y=y, style=stys, style_order=stys_order, markers=mark_order,  edgecolor=edgecol, palette=palette, ax=ax, **kwargs)
+        elif typ=='line': sns.lineplot(data=df, x=x, y=y, style=stys, style_order=stys_order, markers=mark_order, palette=palette, ax=ax, **kwargs)
         elif typ=='line_scat':
-            sns.lineplot(data=df, x=x, y=y, style=stys, palette=palette, ax=ax, **kwargs)  
-            sns.scatterplot(data=df, x=x, y=y, style=stys, edgecolor=edgecol, palette=palette, ax=ax, **kwargs)
+            sns.lineplot(data=df, x=x, y=y, style=stys, style_order=stys_order, markers=mark_order, palette=palette, ax=ax, **kwargs)  
+            sns.scatterplot(data=df, x=x, y=y, style=stys, style_order=stys_order, markers=mark_order, edgecolor=edgecol, palette=palette, ax=ax, **kwargs)
         else:
             print("Invalid type! scat, line, or line_scat")
             return
@@ -859,8 +862,9 @@ def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, col
                 alpha=0
             )
             labels_list = df[label].fillna("").astype(str).tolist()
-            click_tooltip = ClickTooltip(pts, labels_list)
-            mpld3.plugins.connect(fig, click_tooltip)
+            tooltip = SafeHTMLTooltip(pts, labels_list)
+            clicker = ClickTooltip(pts, labels_list)
+            mpld3.plugins.connect(fig, tooltip, clicker)
         else:
             # For static images, draw permanent text labels
             for i, txt in enumerate(df[label]):
@@ -879,7 +883,7 @@ def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, col
 
 def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cols: str = None, cats_ord: list = None, cols_ord: list = None, cols_exclude: list | str = None,
         file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
-        figsize: tuple = (10, 6), title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial',
+        figsize: tuple = (5, 5), title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial',
         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
         legend_title: str = '', legend_title_size: int = 12, legend_size: int = 9, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_items: tuple = (0, 0), legend_ncol: int = 1,
@@ -1064,7 +1068,7 @@ def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cols: str = 
 
 def dist(typ: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord: list = None, cols_exclude: list | str = None, bins: int = 40, log10_low: int = 0,
          file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', edgecol: str = 'black', lw: int = 1, ht: float = 1.5, asp: int = 5, tp: float = .8, hs: int = 0, despine: bool = False,
-         figsize: tuple = (10, 6), title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial',
+         figsize: tuple = (5, 5), title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial',
          x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
          y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
          legend_title: str = '', legend_title_size: int = 12, legend_size: int = 9, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_items: tuple = (0, 0), legend_ncol: int = 1,
@@ -1245,7 +1249,7 @@ def dist(typ: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord: l
 
 def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vars: str = None, vals: str = None, vals_dims: tuple = None,
          file: str = None, dir: str = None, edgecol: str = 'black', lw: int = 1, annot: bool = False, cmap: str = "Reds", sq: bool = True, cbar: bool = True,
-         title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial', figsize: tuple = (10, 6),
+         title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial', figsize: tuple = (5, 5),
          x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_ticks_rot: int = 0, x_ticks_font: str = 'Arial',
          y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_ticks_rot: int = 0, y_ticks_font: str = 'Arial',
          dpi: int = 0, show: bool = True, space_capitalize: bool = True, **kwargs):
@@ -1356,7 +1360,7 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vars: str = None,
 
 def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str = '', cutoff_value: float = 0, cutoff_keep: bool = True, cols_ord: list = [], x_ord: list = [],
           file: str = None, dir: str = None, palette_or_cmap: str = 'tab20', repeats: int = 1, errcap: int = 4, vertical: bool = True,
-          figsize: tuple = (10, 6), title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial',
+          figsize: tuple = (5, 5), title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial',
           x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_ticks_rot: int = 0, x_ticks_font: str = 'Arial',
           y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_dims: tuple = (0, 0), y_ticks_rot: int = 0, y_ticks_font: str = 'Arial',
           legend_title: str = '', legend_title_size: int = 12, legend_size: int = 12,
@@ -1495,9 +1499,9 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
         else: 
             mpld3.show()
 
-def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = None, size_dims: tuple = None, label: str = None, stys_order: list = [], mark_order: list = [],
-        FC_threshold: float = 2, pval_threshold: float = 0.05, file: str = None, dir: str = None, color: str = 'lightgray', alpha: float = 0.5, edgecol: str = 'black', vertical: bool = True,
-        figsize: tuple = (10, 6), title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial',
+def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str | bool = None, size_dims: tuple = None, label: str = None, stys_order: list = [], mark_order: list = [],
+        FC_threshold: float = 1, pval_threshold: float = 1, file: str = None, dir: str = None, color: str = 'lightgray', alpha: float = 0.5, edgecol: str = 'black', vertical: bool = True,
+        figsize: tuple = (5, 5), title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial',
         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_dims: tuple = (0, 0), x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_dims: tuple = (0, 0), y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
         legend_title: str = '', legend_title_size: int = 12, legend_size: int = 9, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left',
@@ -1509,16 +1513,16 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
     
     Parameters:
     df (dataframe | str): pandas dataframe (or file path)
-    x (str): x-axis column name (FC)
-    y (str): y-axis column name (pval)
+    FC (str): fold change column name (x-axis)
+    pval (str): p-value column name (y-axis)
     stys (str, optional): style column name
-    size (str, optional): size column name
+    size (str | bool, optional): size column name (Default: -log10('pval'); specify False for no size)
     size_dims (tuple, optional): (minimum,maximum) values in size column (Default: None)
     label (str, optional): label column name
     stys_order (list, optional): style column values order
     mark_order (list, optional): markers order for style column values order
-    FC_threshold (float, optional): fold change threshold (Default: 2; log2(2)=1)
-    pval_threshold (float, optional): p-value threshold (Default: 0.05; -log10(0.05)=1.3)
+    FC_threshold (float, optional): fold change threshold (Default: 1; log2(1)=0)
+    pval_threshold (float, optional): p-value threshold (Default: 1; -log10(1)=0)
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     color (str, optional): matplotlib color for nonsignificant values
@@ -1568,40 +1572,51 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
         df = io.get(pt=df)
     
     # Determine if we are saving to HTML (for interactive behavior)
-    is_html = file is not None and file.split('.')[-1] == 'html'
+    if file is not None:
+        is_html = file.split('.')[-1] == 'html'
+    else:
+        is_html = False
     
     # Log transform data
-    df[f'log2({x})'] = [np.log10(xval)/np.log10(2) for xval in df[x]]
-    df[f'-log10({y})'] = [-np.log10(yval) for yval in df[y]]
+    df[f'log2({FC})'] = [np.log10(FC_val)/np.log10(2) for FC_val in df[FC]]
+    df[f'-log10({pval})'] = [-np.log10(pval_val) for pval_val in df[pval]]
     
     # Organize data by significance
     signif = []
-    for (log2FC,log10P) in zip(df[f'log2({x})'],df[f'-log10({y})']):
+    for (log2FC,log10P) in zip(df[f'log2({FC})'],df[f'-log10({pval})']):
         if (np.abs(log2FC)>=np.log10(FC_threshold)/np.log10(2))&(log10P>=-np.log10(pval_threshold)): signif.append(f'FC & p-value')
         elif (np.abs(log2FC)<np.log10(FC_threshold)/np.log10(2))&(log10P>=-np.log10(pval_threshold)): signif.append('p-value')
         elif (np.abs(log2FC)>=np.log10(FC_threshold)/np.log10(2))&(log10P<-np.log10(pval_threshold)): signif.append('FC')
         else: signif.append('NS')
     df['Significance']=signif
     
-    # Organize data by abundance
+    # Organize data by 'pval' or specified 'size' column, typically input abundance
     sizes=(1,100)
-    if size_dims is not None: df = df[(df[size]>=size_dims[0])&(df[size]<=size_dims[1])]
+    if size in [False,'False','false']: # No size
+        size = None 
 
-    # Shared size normalization across all scatter calls so marker areas are consistent
-    size_norm = None
-    _vmin, _vmax = None, None
-    if size is not None and display_legend:
-        if size in df.columns and not df.empty:
-            _vmin = df[size].min()
-            _vmax = df[size].max()
-            # Guard against degenerate case where all values are equal
-            if _vmin == _vmax:
-                _vmax = _vmin + 1e-12
-            size_norm = mcolors.Normalize(vmin=_vmin, vmax=_vmax)
+    else:
+        if size is None: size = f'-log10({pval})' # default to pval
+
+        if size is not None and size in df.columns:
+            # Filter by size dimensions
+            if size_dims is not None: 
+                df = df[(df[size]>=size_dims[0])&(df[size]<=size_dims[1])]
+
+            # Shared size normalization across all scatter calls so marker areas are consistent
+            size_norm = None
+            _vmin, _vmax = None, None
+            if display_legend:
+                _vmin = df[size].min()
+                _vmax = df[size].max()
+                # Guard against degenerate case where all values are equal
+                if _vmin == _vmax:
+                    _vmax = _vmin + 1e-12
+                size_norm = mcolors.Normalize(vmin=_vmin, vmax=_vmax)
     
     # Set dimensions
-    if x_axis_dims==(0,0): x_axis_dims=(min(df[f'log2({x})']),max(df[f'log2({x})']))
-    if y_axis_dims==(0,0): y_axis_dims=(0,max(df[f'-log10({y})']))
+    if x_axis_dims==(0,0): x_axis_dims=(min(df[f'log2({FC})']),max(df[f'log2({FC})']))
+    if y_axis_dims==(0,0): y_axis_dims=(0,max(df[f'-log10({pval})']))
 
     # Generate figure
     fig, ax = plt.subplots(figsize=figsize)
@@ -1617,43 +1632,43 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
         if display_legend==False: size=None
         sns.scatterplot(
             data=df[df['Significance']!='FC & p-value'],
-            x=f'log2({x})', y=f'-log10({y})',
+            x=f'log2({FC})', y=f'-log10({pval})',
             color=color, alpha=alpha, edgecolor=edgecol, 
             style=stys, style_order=stys_order if stys_order else None, markers=mark_order if mark_order else None, 
             size=size if display_legend else None, sizes=sizes, size_norm=size_norm,
             legend=False,
             ax=ax, **kwargs)
         sns.scatterplot(
-            data=df[(df['Significance']=='FC & p-value')&(df[f'log2({x})']<0)],
-            x=f'log2({x})', y=f'-log10({y})',
-            hue=f'log2({x})', edgecolor=edgecol, palette='Blues_r', 
+            data=df[(df['Significance']=='FC & p-value')&(df[f'log2({FC})']<0)],
+            x=f'log2({FC})', y=f'-log10({pval})',
+            hue=f'log2({FC})', edgecolor=edgecol, palette='Blues_r', 
             style=stys, style_order=stys_order if stys_order else None, markers=mark_order if mark_order else None,
             size=size if display_legend else None, sizes=sizes, size_norm=size_norm,
             legend=False,
             ax=ax, **kwargs)
         sns.scatterplot(
-            data=df[(df['Significance']=='FC & p-value')&(df[f'log2({x})']>0)],
-            x=f'log2({x})', y=f'-log10({y})',
-            hue=f'log2({x})', edgecolor=edgecol, palette='Reds', 
+            data=df[(df['Significance']=='FC & p-value')&(df[f'log2({FC})']>0)],
+            x=f'log2({FC})', y=f'-log10({pval})',
+            hue=f'log2({FC})', edgecolor=edgecol, palette='Reds', 
             style=stys, style_order=stys_order if stys_order else None, markers=mark_order if mark_order else None,
             size=size if display_legend else None, sizes=sizes, size_norm=size_norm, 
             legend=False,
             ax=ax, **kwargs)
         
-        # Add legend
+        # with legend
         if display_legend == True:
             if size_norm is not None and size is not None: # Add consistent size legend with 5 representative values
                 if stys is not None and mark_order is not None and stys_order is not None: # Add stys legend too
                     legend_vals = np.linspace(_vmin, _vmax, len(mark_order))
                     for lv,mark,sty in zip(legend_vals,mark_order,stys_order):
-                        plt.scatter([], [], s=np.interp(lv, [_vmin, _vmax], sizes), color='gray', alpha=0.7, label=f'{lv:.2g}; {sty}', marker=mark)
+                        plt.scatter([], [], s=np.interp(lv, [_vmin, _vmax], sizes), color=color, label=f'{lv:.2g}; {sty}', marker=mark)
                     plt.legend(title=legend_title if legend_title!='' else f'{size}; {stys}', 
                                 title_fontsize=legend_title_size, fontsize=legend_size,
                                 bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol)
                 else:
                     legend_vals = np.linspace(_vmin, _vmax, 5)
                     for lv in legend_vals:
-                        plt.scatter([], [], s=np.interp(lv, [_vmin, _vmax], sizes), color='gray', alpha=0.7, label=f'{lv:.2g}')
+                        plt.scatter([], [], s=np.interp(lv, [_vmin, _vmax], sizes), color=color, label=f'{lv:.2g}')
                     plt.legend(title=legend_title if legend_title!='' else size, 
                                 title_fontsize=legend_title_size, fontsize=legend_size,
                                 bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol)
@@ -1673,15 +1688,12 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
             if is_html:
                 # For HTML, show labels interactively as tooltips instead of static text
                 pts = ax.scatter(
-                    df_signif[f'log2({x})'],
-                    df_signif[f'-log10({y})'],
+                    x=df_signif[f'log2({FC})'],
+                    y=df_signif[f'-log10({pval})'],
                     s=20,
                     alpha=0
                 )
-                #labels_list = list(df_signif[label])
-                #labels_list = ["" if pd.isna(v) else str(v) for v in df_signif[label]]
                 labels_list = df_signif[label].fillna("").astype(str).tolist()
-                #tooltip = mpld3.plugins.PointHTMLTooltip(pts, labels=labels_list)
                 tooltip = SafeHTMLTooltip(pts, labels_list)
                 clicker = ClickTooltip(pts, labels_list)
                 mpld3.plugins.connect(fig, tooltip, clicker)
@@ -1689,13 +1701,13 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
                 # For static images, keep labels as always-visible text
                 for i, l in enumerate(df_signif[label]):
                     plt.text(
-                        x=df_signif.iloc[i][f'log2({x})'],
-                        y=df_signif.iloc[i][f'-log10({y})'],
+                        x=df_signif.iloc[i][f'log2({FC})'],
+                        y=df_signif.iloc[i][f'-log10({pval})'],
                         s=l
                     )
         
         # Set x axis
-        if x_axis=='': x_axis=f'log2({x})'
+        if x_axis=='': x_axis=f'log2({FC})'
         plt.xlabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight,fontfamily=x_axis_font)
         if x_ticks==[]: 
             if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(rotation=x_ticks_rot,ha='center',fontfamily=x_ticks_font)
@@ -1705,7 +1717,7 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
             else: plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font)
 
         # Set y axis
-        if y_axis=='': y_axis=f'-log10({y})'
+        if y_axis=='': y_axis=f'-log10({pval})'
         plt.ylabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight,fontfamily=y_axis_font)
 
         if y_ticks==[]: plt.yticks(rotation=y_ticks_rot,fontfamily=y_ticks_font)
@@ -1722,43 +1734,43 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
         if display_legend==False: size=None
         sns.scatterplot(
             data=df[df['Significance']!='FC & p-value'],
-            y=f'log2({x})', x=f'-log10({y})',
+            y=f'log2({FC})', x=f'-log10({pval})',
             color=color, alpha=alpha, edgecolor=edgecol, 
             style=stys, style_order=stys_order if stys_order else None, markers=mark_order if mark_order else None,
             size=size if display_legend else None, sizes=sizes, size_norm=size_norm,
             legend=False,
             ax=ax, **kwargs)
         sns.scatterplot(
-            data=df[(df['Significance']=='FC & p-value')&(df[f'log2({x})']<0)],
-            y=f'log2({x})', x=f'-log10({y})',
-            hue=f'log2({x})',edgecolor=edgecol, palette='Blues_r', 
+            data=df[(df['Significance']=='FC & p-value')&(df[f'log2({FC})']<0)],
+            y=f'log2({FC})', x=f'-log10({pval})',
+            hue=f'log2({FC})',edgecolor=edgecol, palette='Blues_r', 
             style=stys, style_order=stys_order if stys_order else None, markers=mark_order if mark_order else None,
             size=size if display_legend else None, sizes=sizes, size_norm=size_norm, 
             legend=False,
             ax=ax, **kwargs)
         sns.scatterplot(
-            data=df[(df['Significance']=='FC & p-value')&(df[f'log2({x})']>0)],
-            y=f'log2({x})', x=f'-log10({y})',
-            hue=f'log2({x})', edgecolor=edgecol, palette='Reds', 
+            data=df[(df['Significance']=='FC & p-value')&(df[f'log2({FC})']>0)],
+            y=f'log2({FC})', x=f'-log10({pval})',
+            hue=f'log2({FC})', edgecolor=edgecol, palette='Reds', 
             style=stys, style_order=stys_order if stys_order else None, markers=mark_order if mark_order else None,
             size=size if display_legend else None, sizes=sizes, size_norm=size_norm, 
             legend=False,
             ax=ax, **kwargs)
         
-        # Add legend
+        # with legend
         if display_legend == True:
             if size_norm is not None and size is not None: # Add consistent size legend with 5 representative values
                 if stys is not None and mark_order is not None and stys_order is not None: # Add stys legend too
                     legend_vals = np.linspace(_vmin, _vmax, len(mark_order))
                     for lv,mark,sty in zip(legend_vals,mark_order,stys_order):
-                        plt.scatter([], [], s=np.interp(lv, [_vmin, _vmax], sizes), color='gray', alpha=0.7, label=f'{lv:.2g}; {sty}', marker=mark)
+                        plt.scatter([], [], s=np.interp(lv, [_vmin, _vmax], sizes), color=color, label=f'{lv:.2g}; {sty}', marker=mark)
                     plt.legend(title=legend_title if legend_title!='' else f'{size}; {stys}', 
                                 title_fontsize=legend_title_size, fontsize=legend_size,
                                 bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol)
                 else:
                     legend_vals = np.linspace(_vmin, _vmax, 5)
                     for lv in legend_vals:
-                        plt.scatter([], [], s=np.interp(lv, [_vmin, _vmax], sizes), color='gray', alpha=0.7, label=f'{lv:.2g}')
+                        plt.scatter([], [], s=np.interp(lv, [_vmin, _vmax], sizes), color=color, label=f'{lv:.2g}')
                     plt.legend(title=legend_title if legend_title!='' else size, 
                                 title_fontsize=legend_title_size, fontsize=legend_size,
                                 bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol)
@@ -1778,15 +1790,12 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
             if is_html:
                 # For HTML, show labels interactively as tooltips instead of static text
                 pts = ax.scatter(
-                    df_signif[f'-log10({y})'],
-                    df_signif[f'log2({x})'],
+                    y=df_signif[f'log2({FC})'],
+                    x=df_signif[f'-log10({pval})'],
                     s=20,
                     alpha=0
                 )
-                #labels_list = list(df_signif[label])
-                #labels_list = ["" if pd.isna(v) else str(v) for v in df_signif[label]]
                 labels_list = df_signif[label].fillna("").astype(str).tolist()
-                #tooltip = mpld3.plugins.PointHTMLTooltip(pts, labels=labels_list)
                 tooltip = SafeHTMLTooltip(pts, labels_list)
                 clicker = ClickTooltip(pts, labels_list)
                 mpld3.plugins.connect(fig, tooltip, clicker)
@@ -1794,13 +1803,13 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
                 # For static images, keep labels as always-visible text
                 for i, l in enumerate(df_signif[label]):
                     plt.text(
-                        y=df_signif.iloc[i][f'log2({x})'],
-                        x=df_signif.iloc[i][f'-log10({y})'],
+                        y=df_signif.iloc[i][f'log2({FC})'],
+                        x=df_signif.iloc[i][f'-log10({pval})'],
                         s=l
                     )
         
         # Set x axis
-        if y_axis=='': y_axis=f'-log10({y})'
+        if y_axis=='': y_axis=f'-log10({pval})'
         plt.xlabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight,fontfamily=y_axis_font)
         if y_ticks==[]: 
             if (y_ticks_rot==0)|(y_ticks_rot==90): plt.xticks(rotation=y_ticks_rot,ha='center',fontfamily=y_ticks_font)
@@ -1810,7 +1819,7 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
             else: plt.xticks(ticks=y_ticks,labels=y_ticks,rotation=y_ticks_rot,ha='right',fontfamily=y_ticks_font)
 
         # Set y axis
-        if x_axis=='': x_axis=f'log2({x})'
+        if x_axis=='': x_axis=f'log2({FC})'
         plt.ylabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight,fontfamily=x_axis_font)
 
         if x_ticks==[]: plt.yticks(rotation=x_ticks_rot,fontfamily=x_ticks_font)
@@ -1823,7 +1832,7 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
     plt.title(title, fontsize=title_size, fontweight=title_weight, family=title_font)
 
     # Save & show fig; return dataframe
-    save_fig(file=file, dir=dir, fig=fig, dpi=dpi, PDB_pt=PDB_pt) #new
+    save_fig(file=file, dir=dir, fig=fig, dpi=dpi, PDB_pt=PDB_pt)
     if show:
         ext = file.split('.')[-1].lower() if file is not None else ''
         if ext not in ('html', 'json'):

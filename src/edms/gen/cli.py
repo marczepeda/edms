@@ -9,13 +9,16 @@ src/edms/gen/cli.py             Command Line Interface for EDMS General module
 └── image.py                    Image Processing module
 
 Usage:
+[fastq helper methods]
+- add_common_fastq_label_args(subparser): Add common label arguments for fastq-related subparsers
+
 [Plot subparser methods]
-- add_common_plot_scat_args(subparser): Add common arguments for scatter plot related graphs
+- add_common_plot_scat_args(subparser, fastq_parser=False): Add common arguments for scatter plot related graphs
 - add_common_plot_cat_args(subparser): Add common arguments for category dependent graphs
 - add_common_plot_dist_args(subparser): Add common arguments for distribution graphs
 - add_common_plot_heat_args(subparser): Add common arguments for heatmap graphs
 - add_common_plot_stack_args(subparser): Add common arguments for stacked bar plot
-- add_common_plot_vol_args(subparser): Add common arguments for volcano plot
+- add_common_plot_vol_args(subparser, fastq_parser=False): Add common arguments for volcano plot
 
 [Main subparser method]
 - add_subparser(): Attach all gen-related subparsers to the top-level CLI.
@@ -28,29 +31,59 @@ from rich import print as rprint # might use later
 from . import com, io, plot as p, stat as st
 from ..utils import parse_tuple_int, parse_tuple_float # might use later
 
+# fastq helper methods
+def add_common_fastq_label_args(subparser):
+    '''
+    add_common_fastq_label_args(subparser): Add common label arguments for fastq-related subparsers
+    '''
+    subparser.add_argument("--label_size", type=int, help="Label font size (Default: 16)", default=16)
+    subparser.add_argument("--no_label_info", dest='label_info', action="store_false", help="Don't include additional info for labels if .html plot (Default: True)", default=True)
+    subparser.add_argument("--aa_properties", nargs="+", help="Use aa_properties to format labels (Options: hydrophobicity, polarity, charge, vdw_volume, pKa_C_term, pKa_N_term, pKa_side_chain)", default=argparse.SUPPRESS)
+    subparser.add_argument("--cBioPortal", type=str, help="Gene name (if saved to ~/.config/edms/cBioPortal_mutations) or file path for cBioPortal mutation data processed through edms.dat.cBioPortal.mutations()", default=argparse.SUPPRESS)
+    subparser.add_argument("--UniProt", type=str, help="UniProt accession (if saved to ~/.config/edms/UniProt) or file path for UniProt flat file. See edms.dat.uniprot.retrieve_flat_file() or edms uniprot retrieve -h for more information.", default=argparse.SUPPRESS)
+    subparser.add_argument("--PhosphoSitePlus", type=str, help="UniProt accession", default=argparse.SUPPRESS)
+    subparser.add_argument("--PDB_contacts", type=str, help="PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.", default=argparse.SUPPRESS)
+    subparser.add_argument("--PDB_neighbors", type=str, help="PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.", default=argparse.SUPPRESS)
+
 # Plot subparser methods
-def add_common_plot_scat_args(subparser):
+def add_common_plot_scat_args(subparser, fastq_parser=False):
     '''
     add_common_plot_scat_args(subparser): Add common arguments for scatter plot related graphs
     '''
     # scat(): Required arguments
     subparser.add_argument("--df", help="Input dataframe file path", type=str, required=True)
-    subparser.add_argument("--x", help="X-axis column", type=str, required=True)
-    subparser.add_argument("--y", help="Y-axis column", type=str, required=True)
+    if fastq_parser == False:
+        subparser.add_argument("--x", help="X-axis column", type=str, required=True)
+        subparser.add_argument("--y", help="Y-axis column", type=str, required=True)
+    elif fastq_parser == True:
+        subparser.add_argument("--FC", help="Fold change column name (Y-axis)", type=str, required=True)
+        subparser.add_argument("--pval", help="p-value column name (size column if not specified)", type=str, required=True)
 
     # Optional core arguments
-    subparser.add_argument("--cols", type=str, help="Color column name")
-    subparser.add_argument("--cols_ord", nargs="+", help="Column order (list of values)")
-    subparser.add_argument("--cols_exclude", nargs="+", help="Columns to exclude from coloring")
-    subparser.add_argument("--stys", type=str, help="Style column name")
+    if fastq_parser == False:
+        subparser.add_argument("--cols", type=str, help="Color column name")
+        subparser.add_argument("--cols_ord", nargs="+", help="Column order (list of values)")
+        subparser.add_argument("--cols_exclude", nargs="+", help="Columns to exclude from coloring")
+        subparser.add_argument("--stys", type=str, help="Style column name")
+        subparser.add_argument("--stys_order", nargs="+", help="Style order (list of values)")
+        subparser.add_argument("--mark_order", nargs="+", help="Marker order (list of marker styles)")
+    elif fastq_parser == True:
+        subparser.add_argument("--size", type=str, help="Column name used to scale point sizes (Default: -log10('pval'); specify 'false' for no size)")
+        subparser.add_argument("--size_dims", type=parse_tuple_float, help="Size range for points formatted as min,max")
+    subparser.add_argument("--label", type=str, help="Column name for point labels; static text for images, interactive tooltips for HTML")
+
+    # Additional annotation data sources
+    if fastq_parser==True:
+        add_common_fastq_label_args(subparser)
 
     subparser.add_argument("--dir", help="Output directory path", type=str, default='./out')
     subparser.add_argument("--file", help="Output file name", type=str, required=False, default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_scat.png')
-    subparser.add_argument("--palette_or_cmap", type=str, default="colorblind", help="Seaborn palette or matplotlib colormap")
+    if fastq_parser == False:
+        subparser.add_argument("--palette_or_cmap", type=str, default="colorblind", help="Seaborn palette or matplotlib colormap")
     subparser.add_argument("--edgecol", type=str, default="black", help="Edge color for scatter points")
 
     # Figure appearance
-    subparser.add_argument("--figsize", type=parse_tuple_int, default=(10,6), help="Figure size as a tuple: width,height")
+    subparser.add_argument("--figsize", type=parse_tuple_int, default=(5,5), help="Figure size as a tuple: width,height")
     subparser.add_argument("--title", type=str, default="", help="Plot title")
     subparser.add_argument("--title_size", type=int, default=18, help="Plot title font size")
     subparser.add_argument("--title_weight", type=str, default="bold", help="Plot title font weight (e.g., bold, normal)")
@@ -118,7 +151,7 @@ def add_common_plot_cat_args(subparser):
     subparser.add_argument("--errcap", type=float, default=0.1, help="Cap size on error bars")
 
     # Figure appearance
-    subparser.add_argument("--figsize", type=parse_tuple_int, default=(10,6), help="Figure size formatted 'width,height'")
+    subparser.add_argument("--figsize", type=parse_tuple_int, default=(5,5), help="Figure size formatted 'width,height'")
     subparser.add_argument("--title", type=str, default="", help="Plot title text")
     subparser.add_argument("--title_size", type=int, default=18, help="Font size of the plot title")
     subparser.add_argument("--title_weight", type=str, default="bold", help="Font weight of the plot title (e.g., bold, normal)")
@@ -190,7 +223,7 @@ def add_common_plot_dist_args(subparser):
     subparser.add_argument("--des", action="store_true", help="Remove plot spines (despine)", default=False)
 
     # Figure appearance
-    subparser.add_argument("--figsize", type=parse_tuple_int, default=(10,6), help="Figure size formatted as 'width,height'")
+    subparser.add_argument("--figsize", type=parse_tuple_int, default=(5,5), help="Figure size formatted as 'width,height'")
     subparser.add_argument("--title", type=str, default="", help="Plot title text")
     subparser.add_argument("--title_size", type=int, default=18, help="Plot title font size")
     subparser.add_argument("--title_weight", type=str, default="bold", help="Plot title font weight (e.g., bold, normal)")
@@ -261,7 +294,7 @@ def add_common_plot_heat_args(subparser):
     subparser.add_argument("--title_size", type=int, default=18, help="Font size of the title")
     subparser.add_argument("--title_weight", type=str, default="bold", help="Font weight of the title (e.g., bold, normal)")
     subparser.add_argument("--title_font", type=str, default="Arial", help="Font family for the title")
-    subparser.add_argument("--figsize", type=parse_tuple_int, default=(10,6), help="Figure size formatted as 'width,height'")
+    subparser.add_argument("--figsize", type=parse_tuple_int, default=(5,5), help="Figure size formatted as 'width,height'")
 
     # X-axis
     subparser.add_argument("--x_axis", type=str, default="", help="X-axis label")
@@ -308,7 +341,7 @@ def add_common_plot_stack_args(subparser):
     subparser.add_argument("--vertical", action="store_true", help="Stack bars vertically (default True)", default=False)
 
     # Figure & layout
-    subparser.add_argument("--figsize", type=parse_tuple_int, default=(10,6), help="Figure size formatted as 'width,height'")
+    subparser.add_argument("--figsize", type=parse_tuple_int, default=(5,5), help="Figure size formatted as 'width,height'")
     subparser.add_argument("--title", type=str, default="", help="Plot title")
     subparser.add_argument("--title_size", type=int, default=18, help="Font size of the title")
     subparser.add_argument("--title_weight", type=str, default="bold", help="Font weight of the title (e.g., bold, normal)")
@@ -344,26 +377,31 @@ def add_common_plot_stack_args(subparser):
     subparser.add_argument("--show", action="store_true", help="Show the plot in an interactive window", default=False)
     subparser.add_argument("--space_capitalize", action="store_true", help="Capitalize and space legend/label values", default=False)
 
-def add_common_plot_vol_args(subparser):
+def add_common_plot_vol_args(subparser, fastq_parser=False):
     '''
     add_common_plot_vol_args(subparser): Add common arguments for volcano plot
     '''
     # Required arguments
     subparser.add_argument("--df", type=str, help="Input dataframe file path")
-    subparser.add_argument("--x", type=str, help="X-axis column name (e.g., fold change)")
-    subparser.add_argument("--y", type=str, help="Y-axis column name (e.g., p-value)")
+    subparser.add_argument("--FC", type=str, help="Fold change column name (X-axis)")
+    subparser.add_argument("--pval", type=str, help="P-value column name (Y-axis)")
 
     # Optional data columns
     subparser.add_argument("--stys", type=str, help="Style column name for custom markers")
-    subparser.add_argument("--size", type=str, help="Column name used to scale point sizes")
+    subparser.add_argument("--size", type=str, help="Column name used to scale point sizes (Default: -log10('pval'); specify 'false' for no size)")
     subparser.add_argument("--size_dims", type=parse_tuple_float, help="Size range for points formatted as min,max")
     subparser.add_argument("--label", type=str, help="Column containing text labels for points")
-    subparser.add_argument("--stys_order", type=str, nargs="+", help="Style column values order")
-    subparser.add_argument("--mark_order", type=str, nargs="+", help="Markers order for style column values order")
-
+    if fastq_parser==False:
+        subparser.add_argument("--stys_order", type=str, nargs="+", help="Style column values order")
+        subparser.add_argument("--mark_order", type=str, nargs="+", help="Markers order for style column values order")
+    
+    # Additional annotation data sources
+    if fastq_parser==True:
+        add_common_fastq_label_args(subparser)
+        
     # Thresholds
-    subparser.add_argument("--FC_threshold", type=float, default=2, help="Fold change threshold for significance")
-    subparser.add_argument("--pval_threshold", type=float, default=0.05, help="P-value threshold for significance")
+    subparser.add_argument("--FC_threshold", type=float, default=1, help="Fold change threshold for significance")
+    subparser.add_argument("--pval_threshold", type=float, default=1, help="P-value threshold for significance")
 
     # Output
     subparser.add_argument("--dir", type=str, help="Output directory path", default='./out')
@@ -376,7 +414,7 @@ def add_common_plot_vol_args(subparser):
     subparser.add_argument("--vertical", action="store_true", help="Use vertical layout for plot", default=False)
 
     # Figure setup
-    subparser.add_argument("--figsize", type=parse_tuple_int, default=(10,6), help="Figure size formatted as 'width,height'")
+    subparser.add_argument("--figsize", type=parse_tuple_int, default=(5,5), help="Figure size formatted as 'width,height'")
     subparser.add_argument("--title", type=str, default="", help="Plot title")
     subparser.add_argument("--title_size", type=int, default=18, help="Font size for plot title")
     subparser.add_argument("--title_weight", type=str, default="bold", help="Font weight for plot title (e.g., bold, normal)")

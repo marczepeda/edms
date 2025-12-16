@@ -74,6 +74,7 @@ Usage:
 - heat(): creates heatmap
 - stack(): creates stacked bar plot
 - vol(): creates volcano plot
+- torn(): creates tornado plot
 '''
 
 # Import packages
@@ -89,6 +90,10 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import matplotlib.cm as cm
+import matplotlib.colors as mcolors
+from matplotlib.ticker import MaxNLocator
+import mpld3
 from adjustText import adjust_text
 from scipy.stats import ttest_ind
 import Levenshtein
@@ -3831,7 +3836,7 @@ def subscript(df: pd.DataFrame, tick: str='before',tick_sub: str='number') -> pd
 # Plot methods
 def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols:bool=None, cols_ord:bool=None, stys:bool=None, cutoff: float=0.01, cols_exclude: list|str=None,
          file: bool=None, dir: bool=None, palette_or_cmap: str='colorblind', edgecol: str='black',
-         figsize: tuple=(10,6), title: str='', title_size=18, title_weight: str='bold', title_font: str='Arial',
+         figsize: tuple = (5, 5), title: str='', title_size=18, title_weight: str='bold', title_font: str='Arial',
          x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_scale: str='linear', x_axis_dims: tuple=(0,100), x_ticks_rot: int=0, x_ticks_font: str='Arial',x_ticks: list=[],
          y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_scale: str='linear', y_axis_dims: tuple=(0,100), y_ticks_rot: int=0, y_ticks_font: str='Arial',y_ticks: list=[],
          legend_title: str='', legend_title_size: int=12, legend_size: int=9, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_items: tuple=(0,0), show: bool=True, space_capitalized: bool=True,
@@ -3926,7 +3931,7 @@ def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols:bool=None, cols_
 
 def cat(typ: str, df: pd.DataFrame | str, x: str, y: str, errorbar: str=None, cols: str=None, cols_ord: list=None, cutoff: float=0.01, cols_exclude: list|str=None,
         file: str=None, dir: str=None, palette_or_cmap: str='colorblind', edgecol: str='black', lw: int=1,
-        figsize: tuple=(10,6), title: str='', title_size: int=18, title_weight: str='bold', title_font: str='Arial',
+        figsize: tuple = (5, 5), title: str='', title_size: int=18, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_scale: str='linear', x_axis_dims: tuple=(0,1), x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_scale: str='linear', y_axis_dims: tuple=(0,1), y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
         legend_title: str='', legend_title_size: int=12, legend_size: int=9, legend_bbox_to_anchor=(1,1), legend_loc: str='upper left', legend_items: tuple=(0,0), show: bool=True, space_capitalize: bool=True,
@@ -4024,7 +4029,7 @@ def cat(typ: str, df: pd.DataFrame | str, x: str, y: str, errorbar: str=None, co
 
 def heat(df: pd.DataFrame | str, cond: str, x: str='number', y: str='after', vals: str='fraction_avg', vals_dims:tuple=None,
          file=None, dir=None, edgecol: str='black', lw: int=1, annot=False, cmap: str="bone_r", sq: bool=True, cbar: bool=True,
-         title: str='', title_size: int=12, title_weight: str='bold', title_font: str='Arial', figsize: tuple=(20,7),
+         title: str='', title_size: int=12, title_weight: str='bold', title_font: str='Arial', figsize: tuple = (5, 5),
          x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_ticks_rot: int=45, x_ticks_font: str='Arial',
          y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_ticks_rot: int=0, y_ticks_font: str='Arial',
          show: bool=True, space_capitalize: bool=True, **kwargs):
@@ -4117,7 +4122,7 @@ def heat(df: pd.DataFrame | str, cond: str, x: str='number', y: str='after', val
 
 def stack(df: pd.DataFrame | str, x: str='sample', y: str='fraction', cols: str='edit', cutoff_group: str='sample', cutoff_value: float=0.01, cutoff_keep: bool=True, 
           cols_ord: list=[], x_ord: list=[], file: str=None, dir: str=None, palette_or_cmap: str='tab20', repeats: int=1, errcap: int=4, vertical: bool=True,
-          figsize=(10,6), title: str='Editing Outcomes', title_size: int=18, title_weight: str='bold', title_font: str='Arial',
+          figsize: tuple = (5, 5), title: str='Editing Outcomes', title_size: int=18, title_weight: str='bold', title_font: str='Arial',
           x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_ticks_rot: int=0, x_ticks_font: str='Arial',
           y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_ticks_rot: int=0, y_ticks_font: str='Arial',
           legend_title: str='', legend_title_size: int=12, legend_size: int=12,
@@ -4208,10 +4213,10 @@ def stack(df: pd.DataFrame | str, x: str='sample', y: str='fraction', cols: str=
             legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,
             legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_ncol=legend_ncol,show=show,space_capitalize=space_capitalize,**kwargs)
 
-def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple=None, label: str='Edit', label_size: int=16,
+def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: tuple=None, label: str='Edit', label_size: int=16,
         label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None,
         FC_threshold: float=2, pval_threshold: float=0.05, file: str=None, dir: str=None, color: str='lightgray', alpha: float=0.5, edgecol: str='black', vertical: bool=True,
-        figsize=(10,6), title: str='', title_size: int=18, title_weight: str='bold', title_font: str='Arial',
+        figsize: tuple = (5, 5), title: str='', title_size: int=18, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
         legend_title: str='',legend_title_size: int=12, legend_size: int=9, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left',
@@ -4222,10 +4227,10 @@ def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple
     
     Parameters:
     df (dataframe | str): pandas dataframe or file path
-    x (str): x-axis column name (FC)
-    y (str): y-axis column name (pval)
+    FC (str): fold change column name (x-axis)
+    pval (str): p-value column name (y-axis)
     cols (str, optional): color column name
-    size (str, optional): size column name
+    size (str | bool, optional): size column name (Default: pval; specify False for no size)
     size_dims (tuple, optional): (minimum,maximum) values in size column (Default: None)
     label (str, optional): label column name (Default: 'Edit'). Can't be None.
     label_size (int, optional): label font size (Default: 16)
@@ -4294,12 +4299,15 @@ def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple
                         aa_properties=aa_properties, cBioPortal=cBioPortal, UniProt=UniProt, 
                         PhosphoSitePlus=PhosphoSitePlus, PDB_contacts=PDB_contacts, PDB_neighbors=PDB_neighbors)
 
-    #new
     PDB_pt = None if PDB_contacts is None else PDB_contacts
     PDB_pt = PDB_pt if PDB_pt is not None else PDB_neighbors
 
+    if label_info == True or file is not None:
+        if file.endswith('.html') == True:
+            label = f'{label}_info'
+
     # Volcano plot
-    p.vol(df=df, x=x, y=y, size=size, stys='Change', size_dims=size_dims, label=label if label_info is False or file.endswith('.html') is False else f'{label}_info', stys_order=stys_order, mark_order=mark_order,
+    p.vol(df=df, FC=FC, pval=pval, size=size, stys='Change', size_dims=size_dims, label=label, stys_order=stys_order, mark_order=mark_order,
           FC_threshold=FC_threshold, pval_threshold=pval_threshold, file=file, dir=dir, color=color, alpha=alpha, edgecol=edgecol, vertical=vertical,
           figsize=figsize, title=title, title_size=title_size, title_weight=title_weight, title_font=title_font, 
           x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_dims=x_axis_dims, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
@@ -4308,3 +4316,224 @@ def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple
           legend_ncol=legend_ncol, display_legend=display_legend, display_labels=display_labels, display_lines=display_lines, return_df=return_df, dpi=dpi, show=show, space_capitalize=space_capitalize,
           PDB_pt=PDB_pt,
           **kwargs)
+
+def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size_dims: tuple=None, label: str='Edit', label_size: int=16,
+        label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None,
+        file: str=None, dir: str=None, edgecol: str='black', figsize=(10,6), title: str='', title_size: int=18, title_weight: str='bold', title_font: str='Arial',
+        x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
+        y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
+        legend_title: str='',legend_title_size: int=12, legend_size: int=9, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left',
+        legend_ncol: int=1, display_legend: bool=True, display_labels: bool=True, return_df: bool=True, dpi: int = 0, show: bool=True, space_capitalize: bool=True,
+        **kwargs) -> pd.DataFrame:
+    ''' 
+    torn(): creates tornado plot
+    
+    Parameters:
+    df (dataframe | str): pandas dataframe or file path
+    FC (str): fold change column name (y-axis)
+    pval (str): p-value column name (size column if not specified)
+    size (str | bool, optional): size column name (Default: pval; specify False for no size)
+    size_dims (tuple, optional): (minimum,maximum) values in size column (Default: None)
+    label (str, optional): label column name (Default: 'Edit'). Can't be None.
+    label_size (int, optional): label font size (Default: 16)
+    label_info (bool, optional): include additional info for labels if .html plot (Default: True)
+    aa_properties (bool |list, optional): use aa_properties to format labels (Default: True). Options: True | False; ['hydrophobicity', 'polarity', 'charge', 'vdw_volume', 'pKa_C_term', 'pKa_N_term', 'pKa_side_chain']
+    cBioPortal (str, optional): gene name (if saved to ~/.config/edms/cBioPortal_mutations) or file path for cBioPortal mutation data processed through edms.dat.cBioPortal.mutations()
+    UniProt (str, optional): UniProt accession (if saved to ~/.config/edms/UniProt) or file path for UniProt flat file. See edms.dat.uniprot.retrieve() or edms uniprot retrieve -h for more information.
+    PhosphoSitePlus (str, optional): UniProt accession
+    PDB_contacts (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
+    PDB_neighbors (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
+    file (str, optional): save plot to filename
+    dir (str, optional): save plot to directory
+    edgecol (str, optional): point edge color
+    figsize (tuple, optional): figure size
+    title (str, optional): plot title
+    title_size (int, optional): plot title font size
+    title_weight (str, optional): plot title bold, italics, etc.
+    title_font (str, optional): plot title font
+    x_axis (str, optional): x-axis name
+    x_axis_size (int, optional): x-axis name font size
+    x_axis_weight (str, optional): x-axis name bold, italics, etc.
+    x_axis_font (str, optional): x-axis font
+    x_axis_dims (tuple, optional): x-axis dimensions (start, end)
+    x_ticks_rot (int, optional): x-axis ticks rotation
+    x_axis_font (str, optional): x-axis font
+    x_ticks (list, optional): x-axis tick values
+    y_axis (str, optional): y-axis name
+    y_axis_size (int, optional): y-axis name font size
+    y_axis_weight (str, optional): y-axis name bold, italics, etc.
+    y_axis_font (str, optional): y-axis font
+    y_axis_dims (tuple, optional): y-axis dimensions (start, end)
+    y_ticks_rot (int, optional): y-axis ticks rotation
+    y_ticks_font (str, optional): y_ticks font
+    y_ticks (list, optional): y-axis tick values
+    legend_title (str, optional): legend title
+    legend_title_size (str, optional): legend title font size
+    legend_size (str, optional): legend font size
+    legend_bbox_to_anchor (tuple, optional): coordinates for bbox anchor
+    legend_loc (str): legend location
+    legend_ncol (tuple, optional): # of columns
+    display_legend (bool, optional): display legend on plot (Default: True)
+    display_labels (bool, optional): display labels for significant values (Default: True)
+    dpi (int, optional): figure dpi (Default: 600 for non-HTML, 150 for HTML)
+    return_df (bool, optional): return dataframe (Default: True)
+    show (bool, optional): show plot (Default: True)
+    space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
+    
+    Dependencies: os, matplotlib, seaborn, pandas, & edit_change()
+    '''
+     # Get dataframe from file path if needed
+    if type(df)==str:
+        df = io.get(pt=df)
+    
+    # Organize data by conservation (changed to)
+    stys_order = ['Conserved','Basic','Acidic','Polar','Nonpolar','Complex']
+    mark_order = ['D','^','v','<','>','o']
+
+    # Add label info: AA properties for conservation (change to); plus additional info from cBioPortal, UniProt, PhosphoSitePlus, PDB if specified
+    df = add_label_info(df=df, label=label, label_size=label_size, label_info=label_info,
+                        aa_properties=aa_properties, cBioPortal=cBioPortal, UniProt=UniProt, 
+                        PhosphoSitePlus=PhosphoSitePlus, PDB_contacts=PDB_contacts, PDB_neighbors=PDB_neighbors)
+    
+    PDB_pt = None if PDB_contacts is None else PDB_contacts
+    PDB_pt = PDB_pt if PDB_pt is not None else PDB_neighbors
+
+    # Determine if we are saving to HTML (for interactive behavior)
+    if label_info == True or file is not None:
+        if file.endswith('.html') == True:
+            label = f'{label}_info'
+            is_html = True
+        else:
+            is_html = False
+    else:
+        is_html = False
+
+    ### Tornado plot #### Log transform data
+    df[f'log2({FC})'] = [np.log10(FC_val)/np.log10(2) for FC_val in df[FC]]
+    df[f'-log10({pval})'] = [-np.log10(pval_val) for pval_val in df[pval]]
+    
+    # Organize data by 'pval' or specified 'size' column, typically input abundance
+    sizes=(1,100)
+    if size in [False,'False','false']: # No size
+        size = None 
+
+    else:
+        if size is None: size = f'-log10({pval})' # default to pval
+
+        if size is not None and size in df.columns:
+            # Filter by size dimensions
+            if size_dims is not None: 
+                df = df[(df[size]>=size_dims[0])&(df[size]<=size_dims[1])]
+
+            # Shared size normalization across all scatter calls so marker areas are consistent
+            size_norm = None
+            _vmin, _vmax = None, None
+            if display_legend:
+                _vmin = df[size].min()
+                _vmax = df[size].max()
+                # Guard against degenerate case where all values are equal
+                if _vmin == _vmax:
+                    _vmax = _vmin + 1e-12
+                size_norm = mcolors.Normalize(vmin=_vmin, vmax=_vmax)
+    
+    # Set dimensions
+    if x_axis_dims==(0,0): x_axis_dims=(min(df[f'AA Number']),max(df[f'AA Number']))
+    if y_axis_dims==(0,0): y_axis_dims=(min(df[f'log2({FC})']),max(df[f'log2({FC})']))
+
+    # Generate figure
+    fig, ax = plt.subplots(figsize=figsize)
+
+    # with data
+    if display_legend==False: size=None
+    stys='Change'
+    sns.scatterplot(
+        data=df[df[f'log2({FC})']<0],
+        x='AA Number', y=f'log2({FC})',
+        hue=f'log2({FC})', edgecolor=edgecol, palette='Blues_r', 
+        style=stys, style_order=stys_order if stys_order else None, markers=mark_order if mark_order else None,
+        size=size if display_legend else None, sizes=sizes, size_norm=size_norm,
+        legend=False,
+        ax=ax, **kwargs)
+    sns.scatterplot(
+        data=df[df[f'log2({FC})']>=0],
+        x='AA Number', y=f'log2({FC})',
+        hue=f'log2({FC})', edgecolor=edgecol, palette='Reds', 
+        style=stys, style_order=stys_order if stys_order else None, markers=mark_order if mark_order else None,
+        size=size if display_legend else None, sizes=sizes, size_norm=size_norm, 
+        legend=False,
+        ax=ax, **kwargs)
+
+    # with legend
+    if display_legend == True:
+        if size_norm is not None and size is not None: # Add consistent size legend with 5 representative values
+            if stys is not None and mark_order is not None and stys_order is not None: # Add stys legend too
+                legend_vals = np.linspace(_vmin, _vmax, len(mark_order))
+                for lv,mark,sty in zip(legend_vals,mark_order,stys_order):
+                    plt.scatter([], [], s=np.interp(lv, [_vmin, _vmax], sizes), color='lightgray', label=f'{lv:.2g}; {sty}', marker=mark)
+                plt.legend(title=legend_title if legend_title!='' else f'{size}; {stys}', 
+                            title_fontsize=legend_title_size, fontsize=legend_size,
+                            bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol)
+            else:
+                legend_vals = np.linspace(_vmin, _vmax, 5)
+                for lv in legend_vals:
+                    plt.scatter([], [], s=np.interp(lv, [_vmin, _vmax], sizes), color='lightgray', label=f'{lv:.2g}')
+                plt.legend(title=legend_title if legend_title!='' else size, 
+                            title_fontsize=legend_title_size, fontsize=legend_size,
+                            bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol)
+    
+    # with labels
+    if display_labels == True:
+        if is_html:
+            # For HTML, show labels interactively as tooltips instead of static text
+            pts = ax.scatter(
+                x=df['AA Number'],
+                y=df[f'log2({FC})'],
+                s=20,
+                alpha=0
+            )
+            labels_list = df[label].fillna("").astype(str).tolist()
+            tooltip = p.SafeHTMLTooltip(pts, labels_list)
+            clicker = p.ClickTooltip(pts, labels_list)
+            mpld3.plugins.connect(fig, tooltip, clicker)
+        else:
+            # For static images, keep labels as always-visible text
+            for i, l in enumerate(df[label]):
+                plt.text(
+                    x=df.iloc[i]['AA Number'],
+                    y=df.iloc[i][f'log2({FC})'],
+                    s=l
+                )
+    
+    # Set x axis
+    if x_axis=='': x_axis='AA Number'
+    plt.xlabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight,fontfamily=x_axis_font)
+    if x_ticks==[]: 
+        if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(rotation=x_ticks_rot,ha='center',fontfamily=x_ticks_font)
+        else: plt.xticks(rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font)
+    else: 
+        if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot, ha='center',fontfamily=x_ticks_font)
+        else: plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font)
+
+    # Set y axis
+    if y_axis=='': y_axis=f'log2({FC})'
+    plt.ylabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight,fontfamily=y_axis_font)
+
+    if y_ticks==[]: plt.yticks(rotation=y_ticks_rot,fontfamily=y_ticks_font)
+    else: plt.yticks(ticks=y_ticks,labels=y_ticks,rotation=y_ticks_rot,fontfamily=y_ticks_font)
+
+    # Set title
+    if title=='' and file is not None: 
+        if space_capitalize: title=p.re_un_cap(".".join(file.split(".")[:-1]))
+        else: ".".join(file.split(".")[:-1])
+    plt.title(title, fontsize=title_size, fontweight=title_weight, family=title_font)
+
+    # Save & show fig; return dataframe
+    p.save_fig(file=file, dir=dir, fig=fig, dpi=dpi, PDB_pt=PDB_pt)
+    if show:
+        ext = file.split('.')[-1].lower() if file is not None else ''
+        if ext not in ('html', 'json'):
+            plt.show()
+        else:
+            mpld3.show(fig)
+    if return_df:
+        return df

@@ -16,8 +16,8 @@ import sys
 from rich import print as rprint
 
 from . import ngs, sanger, clone as cl, fastq as fq, pe, qPCR, transfect as tf
-from ..utils import parse_tuple_int, parse_tuple_float, remove_argument
-from ..gen.cli import add_common_plot_vol_args
+from ..utils import parse_tuple_int, parse_tuple_float
+from ..gen.cli import add_common_plot_scat_args, add_common_plot_vol_args
 
 def add_subparser(subparsers, formatter_class=None):
     """
@@ -446,7 +446,8 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_bam_to_fastq = subparsers_fastq.add_parser("bam_to_fastq", help="Convert BAM files to FASTQ files using samtools", description="Convert BAM files to FASTQ files using samtools", formatter_class=formatter_class)
     
     parser_fastq_vol = subparsers_fastq.add_parser("vol", help="Create volcano plot", description="Create volcano plot", formatter_class=formatter_class)
-    
+    parser_fastq_torn = subparsers_fastq.add_parser("torn", help="Create tornado plot", description="Create tornado plot", formatter_class=formatter_class)
+
     # savemoney():
     parser_fastq_savemoney.add_argument("--fastq_dir", type=str, help="Path to fastq directory (contains .fastq files, not .fastq.gz files; Default: './fastq')", default='./fastq')
     parser_fastq_savemoney.add_argument("--fasta_dir", type=str, help="Path to fasta directory (contains .fasta files; Default: './fasta')", default='./fasta')
@@ -695,19 +696,11 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_bam_to_fastq.add_argument("--env", help="Conda environment with samtools installed (Default: umi_tools)", default="umi_tools")
     
     # vol():
-    add_common_plot_vol_args(parser_fastq_vol)
-    remove_argument(parser_fastq_vol, "--stys_order")
-    remove_argument(parser_fastq_vol, "--mark_order")
-    parser_fastq_vol.add_argument("--label_size", type=int, help="Label font size (Default: 16)", default=16)
-    parser_fastq_vol.add_argument("--no_label_info", dest='label_info', action="store_false", help="Don't include additional info for labels if .html plot (Default: True)", default=True)
-    parser_fastq_vol.add_argument("--aa_properties", nargs="+", help="Use aa_properties to format labels (Default: True). Options: hydrophobicity, polarity, charge, vdw_volume, pKa_C_term, pKa_N_term, pKa_side_chain", default=True)
-    parser_fastq_vol.add_argument("--cBioPortal", type=str, help="Gene name (if saved to ~/.config/edms/cBioPortal_mutations) or file path for cBioPortal mutation data processed through edms.dat.cBioPortal.mutations()", default=argparse.SUPPRESS)
-    parser_fastq_vol.add_argument("--UniProt", type=str, help="UniProt accession (if saved to ~/.config/edms/UniProt) or file path for UniProt flat file. See edms.dat.uniprot.retrieve_flat_file() or edms uniprot retrieve -h for more information.", default=argparse.SUPPRESS)
-    parser_fastq_vol.add_argument("--PhosphoSitePlus", type=str, help="UniProt accession", default=argparse.SUPPRESS)
-    parser_fastq_vol.add_argument("--PDB_contacts", type=str, help="PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.", default=argparse.SUPPRESS)
-    parser_fastq_vol.add_argument("--PDB_neighbors", type=str, help="PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.", default=argparse.SUPPRESS)
-
-
+    add_common_plot_vol_args(parser_fastq_vol, fastq_parser=True)
+    
+    # torn():
+    add_common_plot_scat_args(parser_fastq_torn, fastq_parser=True)
+    
     # Set defaults
     parser_fastq_savemoney.set_defaults(func=fq.savemoney)
     parser_fastq_revcom.set_defaults(func=fq.revcom_fastqs)
@@ -733,6 +726,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_consensus_umis.set_defaults(func=fq.consensus_umis)
     parser_fastq_bam_to_fastq.set_defaults(func=fq.bam_to_fastq)
     parser_fastq_vol.set_defaults(func=fq.vol)
+    parser_fastq_torn.set_defaults(func=fq.torn)
 
     '''
     edms.bio.pe:
