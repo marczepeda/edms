@@ -75,6 +75,8 @@ def add_common_plot_scat_args(subparser, fastq_parser=False):
     # Additional annotation data sources
     if fastq_parser==True:
         add_common_fastq_label_args(subparser)
+        subparser.add_argument("--ss_h", action="store_true", help="Height for secondary structure in the plot (Default: autogenerate)", default=argparse.SUPPRESS)
+        subparser.add_argument("--ss_y", type=int, help="Y position for secondary structure track in the plot (Default: autogenerate)", default=argparse.SUPPRESS)
 
     subparser.add_argument("--dir", help="Output directory path", type=str, default='./out')
     subparser.add_argument("--file", help="Output file name", type=str, required=False, default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_scat.png')

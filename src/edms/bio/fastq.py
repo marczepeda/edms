@@ -4302,7 +4302,7 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: t
     PDB_pt = None if PDB_contacts is None else PDB_contacts
     PDB_pt = PDB_pt if PDB_pt is not None else PDB_neighbors
 
-    if label_info == True or file is not None:
+    if label_info == True and file is not None:
         if file.endswith('.html') == True:
             label = f'{label}_info'
 
@@ -4318,8 +4318,8 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: t
           **kwargs)
 
 def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size_dims: tuple=None, label: str='Edit', label_size: int=16,
-        label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None,
-        file: str=None, dir: str=None, edgecol: str='black', figsize=(10,6), title: str='', title_size: int=18, title_weight: str='bold', title_font: str='Arial',
+        label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None, ss_h: int=None, ss_y: int=None,
+        file: str=None, dir: str=None, edgecol: str='black', figsize=(5,5), title: str='', title_size: int=18, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
         legend_title: str='',legend_title_size: int=12, legend_size: int=9, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left',
@@ -4343,6 +4343,8 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
     PhosphoSitePlus (str, optional): UniProt accession
     PDB_contacts (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
     PDB_neighbors (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
+    ss_h (int, optional): height for secondary structure in the plot (Default: autogenerate)
+    ss_y (int, optional): y position for secondary structure in the plot (Default: autogenerate)
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     edgecol (str, optional): point edge color
@@ -4382,7 +4384,7 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
     
     Dependencies: os, matplotlib, seaborn, pandas, & edit_change()
     '''
-     # Get dataframe from file path if needed
+    # Get dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
     
@@ -4399,7 +4401,7 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
     PDB_pt = PDB_pt if PDB_pt is not None else PDB_neighbors
 
     # Determine if we are saving to HTML (for interactive behavior)
-    if label_info == True or file is not None:
+    if label_info == True and file is not None:
         if file.endswith('.html') == True:
             label = f'{label}_info'
             is_html = True
@@ -4408,7 +4410,7 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
     else:
         is_html = False
 
-    ### Tornado plot #### Log transform data
+    # Log transform data
     df[f'log2({FC})'] = [np.log10(FC_val)/np.log10(2) for FC_val in df[FC]]
     df[f'-log10({pval})'] = [-np.log10(pval_val) for pval_val in df[pval]]
     
@@ -4462,6 +4464,37 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
         size=size if display_legend else None, sizes=sizes, size_norm=size_norm, 
         legend=False,
         ax=ax, **kwargs)
+    
+    # with secondary structure
+    if UniProt is not None:
+        # Load UniProt flat file data
+        try: # from filepath
+            UniProt_ss = uniprot.secondary_structure_from_flat_file(obj=UniProt)
+        except:
+            try: # from config
+                for UniProt_file in os.listdir(os.path.expanduser('~/.config/edms/UniProt/')):
+                    if UniProt.lower() in UniProt_file.lower():
+                        UniProt_ss = uniprot.secondary_structure_from_flat_file(obj=f'{os.path.expanduser("~/.config/edms/UniProt")}/{UniProt_file}')
+                        break
+            except:
+                raise FileNotFoundError(f"UniProt flat file not found: {UniProt}.\nPlease provide a valid filename or UniProt accession (if saved to {os.path.expanduser('~/.config/edms/UniProt/')}) or file path for UniProt flat file. See edms.dat.uniprot.retrieve_flat_file() or edms uniprot retrieve -h for more information.")
+        
+        # parameters for the secondary-structure "track"
+        diff = max(df[f'log2({FC})']) - min(df[f'log2({FC})']) # y-axis range
+        if ss_h is None:
+            ss_h  = 3/diff # height relative to y-axis range
+        if ss_y is None:
+            ss_y  = min(df[f'log2({FC})'])-2*3/diff # position below min y value
+
+        # helices
+        helix_df = UniProt_ss[UniProt_ss["type"] == "α-helix"]
+        helix_spans = [(row.start, row.end - row.start + 1) for _, row in helix_df.iterrows()]
+        ax.broken_barh(helix_spans, (ss_y, ss_h), label="α-helix", facecolors='coral')
+
+        # β-strands
+        strand_df = UniProt_ss[UniProt_ss["type"] == "β-strand"]
+        strand_spans = [(row.start, row.end - row.start + 1) for _, row in strand_df.iterrows()]
+        ax.broken_barh(strand_spans, (ss_y, ss_h), label="β-strand", facecolors='gold')
 
     # with legend
     if display_legend == True:
@@ -4537,3 +4570,11 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
             mpld3.show(fig)
     if return_df:
         return df
+
+def corr():
+    ''' 
+    corr(): Creates correlation plot
+
+    two dataframes
+    '''
+    pass
