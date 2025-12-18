@@ -46,41 +46,49 @@ def add_common_fastq_label_args(subparser):
     subparser.add_argument("--PDB_neighbors", type=str, help="PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.", default=argparse.SUPPRESS)
 
 # Plot subparser methods
-def add_common_plot_scat_args(subparser, fastq_parser=False):
+def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_parser=False):
     '''
     add_common_plot_scat_args(subparser): Add common arguments for scatter plot related graphs
     '''
     # scat(): Required arguments
     subparser.add_argument("--df", help="Input dataframe file path", type=str, required=True)
-    if fastq_parser == False:
+    if fastq_torn_parser == False and fastq_corr_parser == False:
         subparser.add_argument("--x", help="X-axis column", type=str, required=True)
         subparser.add_argument("--y", help="Y-axis column", type=str, required=True)
-    elif fastq_parser == True:
+    else:
+        if fastq_corr_parser == True:
+            subparser.add_argument("--cond_col", help="condition column name for comparison", type=str, required=True)
+            subparser.add_argument("--cond_vals", nargs="+", help="two condition values for comparison (x and y-axis)", type=str, required=True)
         subparser.add_argument("--FC", help="Fold change column name (Y-axis)", type=str, required=True)
         subparser.add_argument("--pval", help="p-value column name (size column if not specified)", type=str, required=True)
-
+        
     # Optional core arguments
-    if fastq_parser == False:
+    if fastq_torn_parser == False and fastq_corr_parser == False:
         subparser.add_argument("--cols", type=str, help="Color column name")
         subparser.add_argument("--cols_ord", nargs="+", help="Column order (list of values)")
         subparser.add_argument("--cols_exclude", nargs="+", help="Columns to exclude from coloring")
         subparser.add_argument("--stys", type=str, help="Style column name")
         subparser.add_argument("--stys_order", nargs="+", help="Style order (list of values)")
         subparser.add_argument("--mark_order", nargs="+", help="Marker order (list of marker styles)")
-    elif fastq_parser == True:
+    else:
         subparser.add_argument("--size", type=str, help="Column name used to scale point sizes (Default: -log10('pval'); specify 'false' for no size)")
         subparser.add_argument("--size_dims", type=parse_tuple_float, help="Size range for points formatted as min,max")
+        if fastq_corr_parser == True:
+            subparser.add_argument("--method", help="Correlation method (Default: 'pearson')", choices=['pearson', 'spearman', 'kendall'], type=str, default='pearson')
+            subparser.add_argument("--not_weighted", dest='weighted', action='store_false', help="Weighted correlation by size column (Default: True)", default=True)
+
     subparser.add_argument("--label", type=str, help="Column name for point labels; static text for images, interactive tooltips for HTML")
 
     # Additional annotation data sources
-    if fastq_parser==True:
+    if fastq_torn_parser==True or fastq_corr_parser==True:
         add_common_fastq_label_args(subparser)
-        subparser.add_argument("--ss_h", action="store_true", help="Height for secondary structure in the plot (Default: autogenerate)", default=argparse.SUPPRESS)
-        subparser.add_argument("--ss_y", type=int, help="Y position for secondary structure track in the plot (Default: autogenerate)", default=argparse.SUPPRESS)
+        if fastq_torn_parser==True:
+            subparser.add_argument("--ss_h", type=int, help="Height for secondary structure in the plot (Default: autogenerate)", default=argparse.SUPPRESS)
+            subparser.add_argument("--ss_y", type=int, help="Y position for secondary structure track in the plot (Default: autogenerate)", default=argparse.SUPPRESS)
 
     subparser.add_argument("--dir", help="Output directory path", type=str, default='./out')
     subparser.add_argument("--file", help="Output file name", type=str, required=False, default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_scat.png')
-    if fastq_parser == False:
+    if fastq_torn_parser == False and fastq_corr_parser == False:
         subparser.add_argument("--palette_or_cmap", type=str, default="colorblind", help="Seaborn palette or matplotlib colormap")
     subparser.add_argument("--edgecol", type=str, default="black", help="Edge color for scatter points")
 
@@ -126,6 +134,10 @@ def add_common_plot_scat_args(subparser, fastq_parser=False):
     subparser.add_argument("--dpi", type=int, help="Figure dpi (Default: 600 for non-HTML, 150 for HTML)", default=0)
     subparser.add_argument("--show", action="store_true", help="Show the plot", default=False)
     subparser.add_argument("--space_capitalize", action="store_true", help="Capitalize label/legend strings and replace underscores with spaces")
+    if fastq_torn_parser == True or fastq_corr_parser == True:
+        subparser.add_argument("--dont_display_legend", dest='display_legend', action="store_false", default=True, help="Display legend on plot (Default: True)")
+        subparser.add_argument("--dont_display_labels", dest='display_labels', action="store_false", default=True, help="Display labels for significant values (Default: True)")
+        subparser.add_argument("--dont_display_axis", dest='display_axis', action="store_false", default=True, help="Display x- and y-axis lines (Default: True)")
 
 def add_common_plot_cat_args(subparser):
     '''
@@ -453,6 +465,7 @@ def add_common_plot_vol_args(subparser, fastq_parser=False):
     # Boolean switches
     subparser.add_argument("--dont_display_legend", action="store_false", help="Don't display legend on plot", default=True)
     subparser.add_argument("--display_labels", type=str, nargs="+", help="Display labels for values if label column specified (Options: 'FC & p-value', 'FC', 'p-value', 'NS', 'all', or ['label1', 'label2', ..., 'labeln'])", default=["FC & p-value"])
+    subparser.add_argument("--dont_display_axis", dest='display_axis', action="store_false", default=True, help="Display x- and y-axis lines (Default: True)")
     subparser.add_argument("--display_lines", action="store_true", help="Display lines for threshold (Default: False)", default=False)
     subparser.add_argument("--return_df", action="store_true", help="Return annotated DataFrame after plotting", default=False)
     subparser.add_argument("--dpi", type=int, help="Figure dpi (Default: 600 for non-HTML, 150 for HTML)", default=0)

@@ -1505,7 +1505,7 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str 
         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_dims: tuple = (0, 0), x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_dims: tuple = (0, 0), y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
         legend_title: str = '', legend_title_size: int = 12, legend_size: int = 9, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left',
-        legend_ncol: int = 1, display_legend: bool = True, display_labels: str = 'FC & p-value', display_lines: bool = False, return_df: bool = True, dpi: int = 0, show: bool = True, space_capitalize: bool = True,
+        legend_ncol: int = 1, display_legend: bool = True, display_labels: str = 'FC & p-value', display_lines: bool = False, display_axis: bool = True, return_df: bool = True, dpi: int = 0, show: bool = True, space_capitalize: bool = True,
         PDB_pt: str = None, # only intended for fastq volcano plots
         **kwargs) -> pd.DataFrame:
     ''' 
@@ -1559,6 +1559,7 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str 
     display_legend (bool, optional): display legend on plot (Default: True)
     display_labels (str | list, optional): display labels for values if label column specified (Options: 'FC & p-value', 'FC', 'p-value', 'NS', 'all', or [])
     display_lines (bool, optional): display lines for threshold (Default: False)
+    display_axis (bool, optional): display x- and y-axis lines (Default: True)
     return_df (bool, optional): return dataframe (Default: True)
     dpi (int, optional): figure dpi (Default: 600 for non-HTML, 150 for HTML)
     show (bool, optional): show plot (Default: True)
@@ -1654,6 +1655,12 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str 
             size=size if display_legend else None, sizes=sizes, size_norm=size_norm, 
             legend=False,
             ax=ax, **kwargs)
+        
+        # with x- & y-axis lines
+        if display_axis == True:
+            ax.plot([x_axis_dims[0], x_axis_dims[1]], [0,0], color='black', linestyle='-', linewidth=1)
+            ax.plot([0,0], [y_axis_dims[0], y_axis_dims[1]], color='black', linestyle='-', linewidth=1)
+
         
         # with legend
         if display_legend == True:
@@ -1757,6 +1764,11 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str 
             legend=False,
             ax=ax, **kwargs)
         
+        # with x- & y-axis lines
+        if display_axis == True:
+            ax.plot([y_axis_dims[0], y_axis_dims[1]], [0,0], color='black', linestyle='-', linewidth=1)
+            ax.plot([0,0], [x_axis_dims[0], x_axis_dims[1]], color='black', linestyle='-', linewidth=1)
+
         # with legend
         if display_legend == True:
             if size_norm is not None and size is not None: # Add consistent size legend with 5 representative values

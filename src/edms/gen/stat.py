@@ -9,6 +9,11 @@ Usage:
 - describe(): returns descriptive statistics for numerical columns in a DataFrame
 - difference(): computes the appropriate statistical test(s) and returns the p-value(s)
 - correlation(): returns a correlation matrix
+- weighted_correlation(): computes the weighted correlation
+
+[Statistics & Plotting]
+- corr_line(): compute linear regression line and add it to the scatter plot 
+- weighted_corr_line(): compute weighted linear regression line and add it to the scatter plot
 
 [Comparison]
 - compare(): computes FC, pval, and log transformations relative to a specified condition
@@ -18,7 +23,7 @@ Usage:
 import itertools
 import pandas as pd
 import numpy as np
-from scipy.stats import skew, kurtosis, ttest_ind, ttest_rel, f_oneway, ttest_ind, ttest_rel, mannwhitneyu, wilcoxon
+from scipy.stats import skew, kurtosis, ttest_ind, ttest_rel, f_oneway, ttest_ind, ttest_rel, mannwhitneyu, wilcoxon, rankdata
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
 from statsmodels.stats.anova import AnovaRM
 from statsmodels.stats.multitest import multipletests
@@ -70,7 +75,7 @@ def describe(df: pd.DataFrame | str, cols:list=[], group:str='', dir:str=None, f
         io.save(dir=dir,file=file,obj=descriptive)  
     return descriptive
 
-def difference(df: pd.DataFrame | str,data_col: str, compare_col: str, compare: list,
+def difference(df: pd.DataFrame | str, data_col: str, compare_col: str, compare: list,
                same: bool=False, para: bool=True, alpha: float=0.05, within_cols:list=[], method:str='holm',
                dir: str=None, file: str=None) -> pd.DataFrame:
     ''' 
@@ -270,6 +275,164 @@ def correlation(df: pd.DataFrame | str, var_cols: list=[], value_cols: list=[], 
     if dir is not None and file is not None:
         io.save(dir=dir,file=file,obj=df_corr,id=True) 
     return df_corr
+
+def weighted_correlation(df: pd.DataFrame | str, x: str, y: str, weight: str=None,
+                        method: str='pearson') -> float:
+    ''' 
+    weighted_correlation(): computes the weighted correlation
+    
+    Parameters:
+    df (dataframe | str): pandas dataframe (or file path)
+    x (str): first variable column name
+    y (str): second variable column name
+    weight (str, optional): weights column name (Default: None)
+    method (str, optional): pearson, spearman, or kendall (Default: pearson)
+    
+    Dependencies: numpy
+    '''
+    # Get dataframe from file path if needed
+    if type(df)==str:
+        df = io.get(pt=df)
+    
+    if weight is None: # Unweighted correlation
+        weight ='__weight__'
+        df[weight] = [1]*len(df)
+
+    def weighted_pearson(x, y, w):
+        ''' 
+        weighted_pearson() Compute weighted Pearson correlation coefficient
+        '''
+        x = np.asarray(x, dtype=float)
+        y = np.asarray(y, dtype=float)
+        w = np.asarray(w, dtype=float)
+
+        # normalize weights (optional but numerically nicer)
+        w = w / w.sum()
+
+        mx = np.sum(w * x)
+        my = np.sum(w * y)
+
+        cov_xy = np.sum(w * (x - mx) * (y - my))
+        sx = np.sqrt(np.sum(w * (x - mx)**2))
+        sy = np.sqrt(np.sum(w * (y - my)**2))
+
+        return cov_xy / (sx * sy)
+
+    if method == 'pearson':
+        return weighted_pearson(df[x], df[y], df[weight])
+
+    elif method == 'spearman':
+        x = np.asarray(df[x], dtype=float)
+        y = np.asarray(df[y], dtype=float)
+        w = np.asarray(df[weight], dtype=float)
+
+        # rank the data (average ranks for ties, like standard Spearman)
+        rx = rankdata(x, method="average")
+        ry = rankdata(y, method="average")
+
+        return weighted_pearson(rx, ry, w)
+    
+    elif method == 'kendall':
+        x = np.asarray(df[x], dtype=float)
+        y = np.asarray(df[y], dtype=float)
+        n = len(x)
+        w = np.asarray(df[weight], dtype=float)
+
+        num = 0.0
+        den_x = 0.0
+        den_y = 0.0
+
+        for i in range(n - 1):
+            for j in range(i + 1, n):
+                wxw = w[i] * w[j]
+
+                sx = np.sign(x[i] - x[j])
+                sy = np.sign(y[i] - y[j])
+
+                # skip pairs tied in x or y (no ordering information)
+                if sx == 0 or sy == 0:
+                    continue
+
+                num += wxw * sx * sy      # +wxw for concordant, -wxw for discordant
+                den_x += wxw * (sx**2)    # == wxw
+                den_y += wxw * (sy**2)    # == wxw
+
+        if den_x == 0 or den_y == 0:
+            return np.nan
+
+        return num / np.sqrt(den_x * den_y)
+
+    else:
+        raise ValueError(f"Invalid method: {method}. Choose 'pearson', 'spearman', or 'kendall'.")
+
+# Statistics & Plotting
+def corr_line(df: pd.DataFrame, x: str, y: str, ax=None, 
+                color='black', linestyle='--', linewidth=1, alpha=0.5):
+    ''' 
+    corr_line(): compute linear regression line and add it to the scatter plot 
+
+    Parameters:
+    df (pandas.DataFrame): dataframe with x and y data
+    x (str): x data column
+    y (str): y data column
+    ax (matplotlib.axes.Axes, optional): Axes object to plot on
+    color (str, optional): line color (Default: 'black')
+    linestyle (str, optional): line style (Default: '--')
+    linewidth (int, optional): line width (Default: 1)
+    alpha (float, optional): transparency level (Default: 0.5)
+    '''
+    x = np.asarray(df[x], dtype=float)
+    y = np.asarray(df[y], dtype=float)
+
+    # Fit slope (b) and intercept (a)
+    b, a = np.polyfit(x, y, 1)
+
+    # Make line
+    xx = np.linspace(x.min(), x.max(), 200)
+    yy = a + b * xx
+
+    ax.plot(xx, yy, color=color, linestyle=linestyle, linewidth=linewidth, alpha=alpha)
+    return a, b
+
+def weighted_corr_line(df: pd.DataFrame, x: str, y: str, weight: str, ax=None, 
+                        color='black', linestyle='--', linewidth=1, alpha=0.5):
+    '''
+    weighted_corr_line(): compute weighted linear regression line and add it to the scatter plot
+
+    Parameters:
+    df (pandas.DataFrame): dataframe with x, y, and weight data
+    x (str): x data column
+    y (str): y data column
+    weight (str): weight data column
+    ax (matplotlib.axes.Axes, optional): Axes object to plot on
+    color (str, optional): line color (Default: 'black')
+    linestyle (str, optional): line style (Default: '--')
+    linewidth (int, optional): line width (Default: 1)
+    alpha (float, optional): transparency level (Default: 0.5)
+    '''
+    x = np.asarray(df[x], float)
+    y = np.asarray(df[y], float)
+    w = np.asarray(df[weight], float)
+
+    # Normalize weights
+    w = w / w.sum()
+
+    # Weighted means
+    mx = np.sum(w * x)
+    my = np.sum(w * y)
+
+    # Weighted slope
+    b = np.sum(w * (x - mx) * (y - my)) / np.sum(w * (x - mx)**2)
+
+    # Weighted intercept
+    a = my - b * mx
+
+    # Plot the line
+    xx = np.linspace(x.min(), x.max(), 200)
+    yy = a + b * xx
+
+    ax.plot(xx, yy, color=color, linestyle=linestyle, linewidth=linewidth, alpha=alpha)
+    return a, b
 
 # Comparison
 def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str, var: str, count: str, psuedocount: int=1, 

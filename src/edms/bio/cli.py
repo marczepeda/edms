@@ -412,6 +412,8 @@ def add_subparser(subparsers, formatter_class=None):
     - bam_to_fastq(): convert BAM files to FASTQ files using samtools
 
     - vol(): create volcano plot
+    - torn(): create tornado plot
+    - corr(): create correlation plot
     '''
     parser_fastq = subparsers.add_parser("fastq", help="FASTQ files", description="FASTQ files", formatter_class=formatter_class)
     subparsers_fastq = parser_fastq.add_subparsers()
@@ -447,6 +449,7 @@ def add_subparser(subparsers, formatter_class=None):
     
     parser_fastq_vol = subparsers_fastq.add_parser("vol", help="Create volcano plot", description="Create volcano plot", formatter_class=formatter_class)
     parser_fastq_torn = subparsers_fastq.add_parser("torn", help="Create tornado plot", description="Create tornado plot", formatter_class=formatter_class)
+    parser_fastq_corr = subparsers_fastq.add_parser("corr", help="Create correlation plot", description="Create correlation plot", formatter_class=formatter_class)
 
     # savemoney():
     parser_fastq_savemoney.add_argument("--fastq_dir", type=str, help="Path to fastq directory (contains .fastq files, not .fastq.gz files; Default: './fastq')", default='./fastq')
@@ -699,7 +702,10 @@ def add_subparser(subparsers, formatter_class=None):
     add_common_plot_vol_args(parser_fastq_vol, fastq_parser=True)
     
     # torn():
-    add_common_plot_scat_args(parser_fastq_torn, fastq_parser=True)
+    add_common_plot_scat_args(parser_fastq_torn, fastq_torn_parser=True)
+
+    # corr():
+    add_common_plot_scat_args(parser_fastq_corr, fastq_corr_parser=True)
     
     # Set defaults
     parser_fastq_savemoney.set_defaults(func=fq.savemoney)
