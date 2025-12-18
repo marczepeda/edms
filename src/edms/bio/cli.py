@@ -17,7 +17,7 @@ from rich import print as rprint
 
 from . import ngs, sanger, clone as cl, fastq as fq, pe, qPCR, transfect as tf
 from ..utils import parse_tuple_int, parse_tuple_float
-from ..gen.cli import add_common_plot_scat_args, add_common_plot_vol_args
+from ..gen.cli import add_common_plot_cat_args, add_common_plot_scat_args, add_common_plot_stack_args, add_common_plot_vol_args
 
 def add_subparser(subparsers, formatter_class=None):
     """
@@ -411,6 +411,8 @@ def add_subparser(subparsers, formatter_class=None):
     - consensus_umis(): generate consensus sequences from grouped UMIs using fgbio
     - bam_to_fastq(): convert BAM files to FASTQ files using samtools
 
+    - cat(): create categorical graphs
+    - stack(): create stacked bar plot
     - vol(): create volcano plot
     - torn(): create tornado plot
     - corr(): create correlation plot
@@ -447,6 +449,8 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_consensus_umis = subparsers_fastq.add_parser("consensus_umis", help="Generate consensus sequences from grouped UMIs using fgbio", description="Generate consensus sequences from grouped UMIs using fgbio", formatter_class=formatter_class)
     parser_fastq_bam_to_fastq = subparsers_fastq.add_parser("bam_to_fastq", help="Convert BAM files to FASTQ files using samtools", description="Convert BAM files to FASTQ files using samtools", formatter_class=formatter_class)
     
+    parser_fastq_cat = subparsers_fastq.add_parser("cat", help="Create categorical graphs", description="Create categorical graphs", formatter_class=formatter_class)
+    parser_fastq_stack = subparsers_fastq.add_parser("stack", help="Create stacked bar plot", description="Create stacked bar plot", formatter_class=formatter_class)
     parser_fastq_vol = subparsers_fastq.add_parser("vol", help="Create volcano plot", description="Create volcano plot", formatter_class=formatter_class)
     parser_fastq_torn = subparsers_fastq.add_parser("torn", help="Create tornado plot", description="Create tornado plot", formatter_class=formatter_class)
     parser_fastq_corr = subparsers_fastq.add_parser("corr", help="Create correlation plot", description="Create correlation plot", formatter_class=formatter_class)
@@ -698,6 +702,12 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_bam_to_fastq.add_argument("--out_dir", help="Output directory (Default: ./bam_to_fastq)", default=f'./bam_to_fastq')
     parser_fastq_bam_to_fastq.add_argument("--env", help="Conda environment with samtools installed (Default: umi_tools)", default="umi_tools")
     
+    # cat():
+    add_common_plot_cat_args(parser_fastq_cat, fastq_parser=True)
+
+    # stack():
+    add_common_plot_stack_args(parser_fastq_stack, fastq_parser=True)
+
     # vol():
     add_common_plot_vol_args(parser_fastq_vol, fastq_parser=True)
     
@@ -731,8 +741,11 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_group_umis.set_defaults(func=fq.group_umis)
     parser_fastq_consensus_umis.set_defaults(func=fq.consensus_umis)
     parser_fastq_bam_to_fastq.set_defaults(func=fq.bam_to_fastq)
+    parser_fastq_cat.set_defaults(func=fq.cat)
+    parser_fastq_stack.set_defaults(func=fq.stack)
     parser_fastq_vol.set_defaults(func=fq.vol)
     parser_fastq_torn.set_defaults(func=fq.torn)
+    parser_fastq_corr.set_defaults(func=fq.corr)
 
     '''
     edms.bio.pe:

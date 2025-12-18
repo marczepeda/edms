@@ -63,18 +63,20 @@ Usage:
 - make_change_table(): generate HTML table of amino acid property changes
 - make_label_info(): include additional info for labels including aa property changes and patient information
 - add_label_info(): AA properties for conservation (change to); plus additional info from cBioPortal, UniProt, PhosphoSitePlus, PDB if specified
-
+WIP:
 - dms_cond(): returns DMS grid data in tidy format grouped by condition
 - dms_comp(): returns comparison DMS grid dataframe in tidy format split by condition
 - subscript(): returns dataframe with subscripts to tick labels
 
 [Plot methods]
-- cat: creates category dependent graphs
-- heat(): creates heatmap
+- cat: creates categorical graphs
 - stack(): creates stacked bar plot
 - vol(): creates volcano plot
 - torn(): creates tornado plot
 - corr(): creates correlation plot
+WIP:
+- corr_matrix(): creates correlation matrix plot
+- heat(): creates heatmap
 '''
 
 # Import packages
@@ -2378,11 +2380,11 @@ def genotype(fastqs: dict, res: int, wt: str, save: bool=False, masks: bool=Fals
                     editsN.append(find_AA_edits(wt=wt_prot, res=res, seq=fastq.iloc[i]['protN']))
                     categoriesN.append('Substitution')
         
-        fastqs[file]['edit']=edits
-        fastqs[file]['category']=categories
+        fastqs[file]['Edit']=edits
+        fastqs[file]['Category']=categories
         if masks==True: 
-            fastqs[file]['editN']=editsN
-            fastqs[file]['categoryN']=categoriesN
+            fastqs[file]['EditN']=editsN
+            fastqs[file]['CategoryN']=categoriesN
         print(f'{file}:\t{len(fastqs[file])} reads')
         memories.append(memory_timer(task=file))
     
@@ -2393,13 +2395,13 @@ def genotype(fastqs: dict, res: int, wt: str, save: bool=False, masks: bool=Fals
     if return_memories: return fastqs,memories
     else: return fastqs
 
-def outcomes(fastqs: dict, col: str='edit', return_memories: bool=False) -> tuple[pd.DataFrame, list] | pd.DataFrame:
+def outcomes(fastqs: dict, col: str='Edit', return_memories: bool=False) -> tuple[pd.DataFrame, list] | pd.DataFrame:
     ''' 
     outcomes(): returns edit count & fraction per sample (tidy format)
 
     Parameters:
     fastqs (dict): dictionary from genotype
-    col (str, optional): column name (Default: edit)
+    col (str, optional): column name (Default: Edit)
     return_memories (bool, optional): return memories (Default: False)
     
     Dependencies: pandas
@@ -2409,7 +2411,7 @@ def outcomes(fastqs: dict, col: str='edit', return_memories: bool=False) -> tupl
 
     df = pd.DataFrame()
     for file,fastq in fastqs.items():
-        temp=pd.DataFrame({'sample':[file]*len(fastq[col].value_counts()),
+        temp=pd.DataFrame({'fastq_file':[file]*len(fastq[col].value_counts()),
                            col:list(fastq[col].value_counts().keys()),
                            'count':fastq[col].value_counts(),
                            'fraction':fastq[col].value_counts()/len(fastq[col])})
@@ -2504,7 +2506,7 @@ def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=N
     memories.append(memory_timer(task='outcomes()'))
     df_edits,memories1 = outcomes(fastqs=dc, **outcomes_kwargs)
     memories.extend(memories1)
-    df_categories,memories1  = outcomes(fastqs=dc, col='category', **outcomes_kwargs)
+    df_categories,memories1  = outcomes(fastqs=dc, col='Category', **outcomes_kwargs)
     memories.extend(memories1)
     del dc # Remove dc to save memory
 
@@ -2519,11 +2521,11 @@ def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=N
         io.save(dir=out_dir,file=f'{out_file_prefix}_category_outcomes.csv',obj=df_categories) # Edit categoy outcomes
     
     if return_dc: 
-        return {'edit': df_edits,
-                'category': df_categories}
+        return {'Edit': df_edits,
+                'Category': df_categories}
 
-def abundances(df: pd.DataFrame | str, desired_edits: list, sample_col: str='sample',
-               edit_col: str='edit', count_col: str='count', fraction_col: str='fraction',
+def abundances(df: pd.DataFrame | str, desired_edits: list, sample_col: str='fastq_file',
+               edit_col: str='Edit', count_col: str='count', fraction_col: str='fraction',
                combinations: int=1, return_memories: bool=False) -> pd.DataFrame | tuple[pd.DataFrame, list]:
     ''' 
     abundances(): quantify desired edits count & fraction per sample
@@ -2624,22 +2626,22 @@ def editing_per_library(edit_dc: dict | str, paired_regions_dc: dict | str, fast
     for edit_fq,edit_df in edit_dc.items(): # Iterate through edit outcomes dataframes
         paired_regions_fq = fastq_ids[fastq_ids['genotyping']==edit_fq]['paired_regions'].values[0]
 
-        # Check if paired regions file column has 'edit' column
-        if 'edit' not in paired_regions_dc[paired_regions_fq].columns:
-            if 'Edit' in paired_regions_dc[paired_regions_fq].columns: # Rename 'Edit' column to 'edit' for consistency
-                paired_regions_dc[paired_regions_fq].rename(columns={'Edit':'edit'}, inplace=True) 
+        # Check if paired regions file column has 'Edit' column
+        if 'Edit' not in paired_regions_dc[paired_regions_fq].columns:
+            if 'Edit' in paired_regions_dc[paired_regions_fq].columns: # Rename 'Edit' column to 'Edit' for consistency
+                paired_regions_dc[paired_regions_fq].rename(columns={'Edit':'Edit'}, inplace=True) 
             else:
-                raise(TypeError(f"Error: 'edit' column not found in {paired_regions_fq}. Please check the file."))
+                raise(TypeError(f"Error: 'Edit' column not found in {paired_regions_fq}. Please check the file."))
             
         # Get counts of epeg-ngRNAs
-        paired_regions_df = paired_regions_dc[paired_regions_fq][['edit','ID','desired']].value_counts().reset_index() 
+        paired_regions_df = paired_regions_dc[paired_regions_fq][['Edit','ID','desired']].value_counts().reset_index() 
         paired_regions_df = paired_regions_df[paired_regions_df['desired']==True] # Discard chimeras
 
         # Add missing edits
-        for edit in edit_df['edit']:
-            if edit not in paired_regions_df['edit'].values:
+        for edit in edit_df['Edit']:
+            if edit not in paired_regions_df['Edit'].values:
                 paired_regions_df = pd.concat([paired_regions_df,
-                                            pd.DataFrame({'edit':[edit], 'ID':[None], 'desired':[True], 'count':[0]})
+                                            pd.DataFrame({'Edit':[edit], 'ID':[None], 'desired':[True], 'count':[0]})
                                             ]).reset_index(drop=True)
         
         # Calculate fraction of epeg-ngRNAs with psuedocount...
@@ -2652,9 +2654,9 @@ def editing_per_library(edit_dc: dict | str, paired_regions_dc: dict | str, fast
         # ...to determine fraction of total epeg-ngRNAs for each edit and the editing per library
         library_count_psuedocount = []
         library_fraction_psuedocount = []
-        for edit in edit_df['edit']:
-            library_count_psuedocount.append(paired_regions_df[paired_regions_df['edit']==edit][f'count+{psuedocount}'].values[0])
-            library_fraction_psuedocount.append(paired_regions_df[paired_regions_df['edit']==edit][f'fraction+{psuedocount}'].values[0])
+        for edit in edit_df['Edit']:
+            library_count_psuedocount.append(paired_regions_df[paired_regions_df['Edit']==edit][f'count+{psuedocount}'].values[0])
+            library_fraction_psuedocount.append(paired_regions_df[paired_regions_df['Edit']==edit][f'fraction+{psuedocount}'].values[0])
         edit_df[f'library_count+{psuedocount}'] = library_count_psuedocount
         edit_df[f'library_fraction+{psuedocount}'] = library_fraction_psuedocount
         edit_df['editing_per_library'] = edit_df['fraction'] / edit_df[f'library_fraction+{psuedocount}']
@@ -2665,7 +2667,7 @@ def editing_per_library(edit_dc: dict | str, paired_regions_dc: dict | str, fast
             io.save(dir=os.path.join(out_dir,'split'), file=f"{edit_fq}.csv", obj=edit_df)
 
     # Save the output dictionary as a single dataframe
-    out_df = t.join(dc=out_dc, col='sample')
+    out_df = t.join(dc=out_dc, col='fastq_file')
     if out_dir is not None:
         io.save(dir=out_dir, file='editing_per_library.csv', obj=out_df)
     if return_df:
@@ -3680,7 +3682,7 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
     return df
 
 def dms_cond(df: pd.DataFrame, cond: str, wt:str, res: int, 
-             sample: str='sample', edit: str='edit', psuedocount: int=0) -> pd.DataFrame:
+             sample: str='fastq_file', edit: str='Edit', psuedocount: int=0) -> pd.DataFrame:
     ''' 
     dms_cond(): returns DMS grid data in tidy format grouped by condition
     
@@ -3689,8 +3691,8 @@ def dms_cond(df: pd.DataFrame, cond: str, wt:str, res: int,
     cond (str): Condition column name for grouping fastq outcomes dataframe
     wt (str): Expected wildtype nucleotide sequence (in frame AA)
     res (int): First AA number
-    sample (str, optional): Sample column name for splicing fastq outcomes dataframe (Default: 'sample')
-    edit (str, optional): Edit column name within fastq outcomes dataframe (Default: 'edit')
+    sample (str, optional): Sample column name for splicing fastq outcomes dataframe (Default: 'fastq_file')
+    edit (str, optional): Edit column name within fastq outcomes dataframe (Default: 'Edit')
     psuedocount (int, optional): psuedocount to avoid log(0) & /0 (Default: 0)
     
     Dependencies: Bio.Seq.Seq, pandas, numpy, tidy, edit_change(), & aa_props
@@ -3704,7 +3706,7 @@ def dms_cond(df: pd.DataFrame, cond: str, wt:str, res: int,
     dc2=dict() # Fill with DMS grid data in tidy format split by sample
     for key_sample,df_sample in dc.items():
         print(key_sample)
-        wt_fastq = df[(df['edit']=='WT')&(df[sample]==key_sample)] # Obtain WT fastq outcome
+        wt_fastq = df[(df['Edit']=='WT')&(df[sample]==key_sample)] # Obtain WT fastq outcome
         df_sample_DMS=pd.DataFrame(columns=wt_fastq.columns) # Fill with DMS grid data in tidy format
         
         for num in wt_nums: # Iterate through WT protein sequence
@@ -3764,7 +3766,7 @@ def dms_cond(df: pd.DataFrame, cond: str, wt:str, res: int,
             after_ls.append(df_cond_edit.iloc[0]['after'])
             number_ls.append(df_cond_edit.iloc[0]['number'])
         df_cond_stat = pd.concat([df_cond_stat,
-                                  pd.DataFrame({'edit':edit_ls,
+                                  pd.DataFrame({'Edit':edit_ls,
                                                 'before':before_ls,
                                                 'after':after_ls,
                                                 'number':number_ls,
@@ -3772,10 +3774,10 @@ def dms_cond(df: pd.DataFrame, cond: str, wt:str, res: int,
                                                 'fraction_avg':fraction_avg_ls,
                                                 'count_avg':count_avg_ls,
                                                 cond:[key_cond]*len(number_ls)})])
-    return df_cond_stat.drop_duplicates(subset=['edit','Description']).reset_index(drop=True)
+    return df_cond_stat.drop_duplicates(subset=['Edit','Description']).reset_index(drop=True)
 
 def dms_comp(df: pd.DataFrame, cond: str, cond_comp: str, wt: str, res: int, 
-             sample: str='sample', edit: str='edit', psuedocount: int=1) -> pd.DataFrame:
+             sample: str='fastq_file', edit: str='Edit', psuedocount: int=1) -> pd.DataFrame:
     ''' 
     dms_comp(): returns comparison DMS grid dataframe in tidy format split by condition
     
@@ -3785,8 +3787,8 @@ def dms_comp(df: pd.DataFrame, cond: str, cond_comp: str, wt: str, res: int,
     cond_comp (str): Condition for comparison group
     wt (str): Expected wildtype nucleotide sequence (in frame AA)
     res (int): First AA number
-    sample (str, optional): Sample column name for splicing fastq outcomes dataframe (Default: 'sample')
-    edit (str, optional): Edit column name within fastq outcomes dataframe (Default: 'edit')
+    sample (str, optional): Sample column name for splicing fastq outcomes dataframe (Default: 'fastq_file')
+    edit (str, optional): Edit column name within fastq outcomes dataframe (Default: 'Edit')
     psuedocount (int, optional): psuedocount to avoid log(0) & /0 (Default: 1)
     
     Dependencies: Bio.Seq.Seq, pandas, numpy, tidy, edit_change(), dms_cond(), & aa_props
@@ -3832,24 +3834,27 @@ def subscript(df: pd.DataFrame, tick: str='before',tick_sub: str='number') -> pd
     return pd.DataFrame({'tick':ticks,'label':labels}).sort_values(by='tick').reset_index(drop=True)
 
 # Plot methods
-def cat(typ: str, df: pd.DataFrame | str, x: str, y: str, errorbar: str=None, cols: str=None, cols_ord: list=None, cutoff: float=0.01, cols_exclude: list|str=None,
-        file: str=None, dir: str=None, palette_or_cmap: str='colorblind', edgecol: str='black', lw: int=1,
+def cat(typ: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list = None, cats_exclude: list|str = None, cols: str=None, cols_ord: list=None, cols_exclude: list|str=None, PDB_pt: str=None,
+        file: str=None, dir: str=None, palette_or_cmap: str='colorblind', edgecol: str='black', lw: int=1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
         figsize: tuple = (5, 5), title: str='', title_size: int=18, title_weight: str='bold', title_font: str='Arial',
-        x_axis: str='', x_axis_size=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_scale: str='linear', x_axis_dims: tuple=(0,1), x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
-        y_axis: str='', y_axis_size=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_scale: str='linear', y_axis_dims: tuple=(0,1), y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
+        x_axis: str='', x_axis_size=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_scale: str='linear', x_axis_dims: tuple=(0,0), x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
+        y_axis: str='', y_axis_size=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_scale: str='linear', y_axis_dims: tuple=(0,0), y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
         legend_title: str='', legend_title_size: int=12, legend_size: int=9, legend_bbox_to_anchor=(1,1), legend_loc: str='upper left', legend_items: tuple=(0,0), show: bool=True, space_capitalize: bool=True,
         **kwargs):
     ''' 
-    cat: creates category dependent graphs
+    cat: creates categorical graphs
     
     Parameters:
-    typ (str): plot type (bar, box, violin, swarm, strip, point, count, bar_swarm, box_swarm, violin_swarm)
+    typ (str): plot type (bar, box, violin, swarm, strip, point, count, bar_strip, box_strip, violin_strip, bar_swarm, box_swarm, violin_swarm)
     df (dataframe | str): pandas dataframe or file path
     x (str, optional): x-axis column name
     y (str, optional): y-axis column name
+    cats_ord (list, optional): category column values order (x- or y-axis)
+    cats_exclude (list | str, optional): category column values exclude (x- or y-axis)
     cols (str, optional): color column name
     cols_ord (list, optional): color column values order
     cols_exclude (list | str, optional): color column values exclude
+    PDB_pt (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     palette_or_cmap (str, optional): seaborn color palette or matplotlib color map
@@ -3895,136 +3900,48 @@ def cat(typ: str, df: pd.DataFrame | str, x: str, y: str, errorbar: str=None, co
     # Get dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
-    
-    # Omit data smaller than cutoff or excluded
-    df_cut=df[df[y]>=cutoff]
-    df_other=df[df[y]<cutoff]
-    for sample in list(df_other['sample'].value_counts().keys()):
-        df_temp = df_other[df_other['sample']==sample]
-        df_temp['fraction']=sum(df_temp['fraction'])
-        df_temp['edit']='Other'
-        df_cut = pd.concat([df_cut,df_temp.iloc[0].to_frame().T])
-    
-    # Omit excluded
-    if type(cols_exclude)==list: 
-        for exclude in cols_exclude: df_cut=df_cut[df_cut[cols]!=exclude]
-    elif type(cols_exclude)==str: df_cut=df_cut[df_cut[cols]!=cols_exclude]
 
     # Sort data by genotype position
-    if cols_ord==None:
-        genotypes = list(df_cut[cols].value_counts().keys())
+    if cats_ord is None:
+        cats = ''
+        if x!='': # Check that x column is numeric
+            if df[x].apply(lambda row: isinstance(row, (int, float))).all()==True: 
+                cats = x
+        if y!='' and cats=='': # Check that y column is numeric
+            if df[y].apply(lambda row: isinstance(row, (int, float))).all()==True: 
+                cats = y 
+        if cats=='': pass # No numeric column found
+        genotypes = list(df[cats].value_counts().keys())
         positions = list()
         for geno in genotypes:
             numbers = re.findall(r'\d+\.?\d*', geno)
-            if len(numbers)==0: positions.append(100000) # Places WT and Indel at the end
+            if 'Indel' == geno: positions.append(1000001) # Places Indel near the end
+            elif 'Not WT' == geno: positions.append(1000002) # Places Not WT near the end
+            elif 'WT' == geno: positions.append(1000003) # Places WT at the end
             else: positions.append(sum([int(n) for n in numbers])/len(numbers))
         assign = pd.DataFrame({'positions':positions,
                                'genotypes':genotypes})
         cols_ord = list(assign.sort_values(by='positions')['genotypes'])
 
-    p.cat(typ=typ,df=df_cut,x=x,y=y,errorbar=errorbar,cols=cols,cols_ord=cols_ord,cols_exclude=cols_exclude,
-          file=file,dir=dir,palette_or_cmap=palette_or_cmap,edgecol=edgecol,lw=lw,
+    # PDB label information
+    if PDB_pt is not None:
+        if len(PDB_pt)==4: # If PDB ID given
+            for PDB_file in os.listdir(os.path.expanduser('~/.config/edms/PDB/')):
+                if PDB_pt.lower() in PDB_file.lower():
+                    PDB_pt = f'{os.path.expanduser("~/.config/edms/PDB")}/{PDB_file}'
+                    break
+
+    p.cat(typ=typ,df=df,x=x,y=y,cats_ord=cats_ord,cats_exclude=cats_exclude,cols=cols,cols_ord=cols_ord,cols_exclude=cols_exclude,PDB_pt=PDB_pt,
+          file=file,dir=dir,palette_or_cmap=palette_or_cmap,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
           figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
           x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,x_ticks=x_ticks,
           y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_scale=y_axis_scale,y_axis_dims=y_axis_dims,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,y_ticks=y_ticks,
           legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_items=legend_items,show=show,space_capitalize=space_capitalize,
           **kwargs)
 
-def heat(df: pd.DataFrame | str, cond: str, x: str='number', y: str='after', vals: str='fraction_avg', vals_dims:tuple=None,
-         file=None, dir=None, edgecol: str='black', lw: int=1, annot=False, cmap: str="bone_r", sq: bool=True, cbar: bool=True,
-         title: str='', title_size: int=12, title_weight: str='bold', title_font: str='Arial', figsize: tuple = (5, 5),
-         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_ticks_rot: int=45, x_ticks_font: str='Arial',
-         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_ticks_rot: int=0, y_ticks_font: str='Arial',
-         show: bool=True, space_capitalize: bool=True, **kwargs):
-    ''' 
-    heat(): creates heatmap
-    
-    Parameters:
-    df (dataframe | str): tidy-formatted DMS dataframe (dms_cond() or dms_comp()) or file path
-    cond (str): Condition column name for grouping fastq outcomes dataframe
-    x (str, optional): x-axis column name (AA residues number column)
-    y (str, optional): y-axis column name (AA change column)
-    vals (str, optional): values column name
-    vals_dims (tuple, optional): vals minimum and maximum formatted (vmin, vmax; Default: None)
-    file (str, optional): save plot to filename
-    dir (str, optional): save plot to directory
-    edgecol (str, optional): point edge color
-    lw (int, optional): line width
-    annot (bool, optional): annotate values
-    cmap (str, optional): matplotlib color map
-    title (str, optional): plot title
-    title_size (int, optional): plot title font size
-    title_weight (str, optional): plot title bold, italics, etc.
-    title_font (str, optional): plot title font
-    figsize (tuple, optional): figure size per subplot
-    x_axis (str, optional): x-axis name
-    x_axis_size (int, optional): x-axis name font size
-    x_axis_weight (str, optional): x-axis name bold, italics, etc.
-    x_axis_font (str, optional): x-axis font
-    x_ticks_rot (int, optional): x-axis ticks rotation
-    x_ticks_font (str, optional): x-ticks font
-    y_axis (str, optional): y-axis name
-    y_axis_size (int, optional): y-axis name font size
-    y_axis_weight (str, optional): y-axis name bold, italics, etc.
-    y_axis_font (str, optional): y-axis font
-    y_ticks_rot (int, optional): y-axis ticks rotation
-    y_ticks_font (str, optional): y-ticks font
-    show (bool, optional): show plot (Default: True)
-    space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
-    
-    Dependencies: matplotlib, seaborn, pandas, & aa_props
-    '''
-    # Get dataframe from file path if needed
-    if type(df)==str:
-        df = io.get(pt=df)
-
-    # Find min and max values in the dataset for normalization
-    if vals_dims is None:
-        vmin = df[vals].values.min()
-        vmax = df[vals].values.max()
-    else:
-        vmin = vals_dims[0]
-        vmax = vals_dims[1]
-
-    # Make DMS grids
-    print('Make DMS grids')
-    dc=t.split(df,cond) # Split by condition
-    dc2={key:pd.pivot(df_cond,columns=x,index=y,values=vals).astype(float).reindex(list(aa_props.keys())) 
-         for key,df_cond in dc.items()} # Generate pivot tables
-    
-    # Create a single figure with multiple heatmap subplots
-    print('Create a single figure with multiple heatmap subplots')
-    fig, axes = plt.subplots(nrows=len(list(dc2.keys())),ncols=1,figsize=(figsize[0],figsize[1]*len(list(dc2.keys()))),sharex=False,sharey=True)
-    if isinstance(axes, np.ndarray)==False: axes = np.array([axes]) # Make axes iterable if there is only 1 heatmap
-    for (ax, key) in zip(axes, list(dc2.keys())):
-        print(f'{key}')
-        sns.heatmap(dc2[key],annot=annot,cmap=cmap,ax=ax,linecolor=edgecol,linewidths=lw,cbar=cbar,square=sq,vmin=vmin,vmax=vmax, **kwargs)
-        if len(list(dc2.keys()))>1: ax.set_title(key,fontsize=title_size,fontweight=title_weight,fontfamily=title_font)  # Add title to subplot
-        else: ax.set_title(title,fontsize=title_size,fontweight=title_weight,fontfamily=title_font)
-        if x_axis=='': 
-            if space_capitalize: ax.set_xlabel(p.re_un_cap(x),fontsize=x_axis_size,fontweight=x_axis_weight,fontfamily=x_axis_font) # Add x axis label
-            else: ax.set_xlabel(x,fontsize=x_axis_size,fontweight=x_axis_weight,fontfamily=x_axis_font) # Add x axis label
-        else: ax.set_xlabel(x_axis,fontsize=x_axis_size,fontweight=x_axis_weight,fontfamily=x_axis_font)
-        if y_axis=='': 
-            if space_capitalize: ax.set_ylabel(p.re_un_cap(y),fontsize=y_axis_size,fontweight=y_axis_weight,fontfamily=y_axis_font) # Add y axis label
-            else: ax.set_ylabel(y,fontsize=y_axis_size,fontweight=y_axis_weight,fontfamily=y_axis_font) # Add y axis label
-        else: ax.set_ylabel(y_axis,fontsize=y_axis_size,fontweight=y_axis_weight,fontfamily=y_axis_font)
-        ax.set_xticklabels(subscript(dc[key])['label'].to_list()) # Change x ticks to have subscript format
-        # Format x ticks
-        if (x_ticks_rot==0)|(x_ticks_rot==90): plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, ha="center",rotation_mode="anchor",fontname=x_ticks_font) 
-        else: plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, ha="right",rotation_mode="anchor",fontname=x_ticks_font) 
-        # Format y ticks
-        plt.setp(ax.get_yticklabels(), rotation=y_ticks_rot, va='center', ha="right",rotation_mode="anchor",fontname=y_ticks_font)
-        ax.set_facecolor('white')  # Set background to transparent
-
-    # Save & show fig
-    if file is not None and dir is not None:
-        mkdir(dir) # Make output directory if it does not exist
-        plt.savefig(fname=os.path.join(dir, file), dpi=600, bbox_inches='tight', format=f'{file.split(".")[-1]}')
-    if show: plt.show()
-
-def stack(df: pd.DataFrame | str, x: str='sample', y: str='fraction', cols: str='edit', cutoff_group: str='sample', cutoff_value: float=0.01, cutoff_keep: bool=True, 
-          cols_ord: list=[], x_ord: list=[], file: str=None, dir: str=None, palette_or_cmap: str='tab20', repeats: int=1, errcap: int=4, vertical: bool=True,
+def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: str='Edit', cutoff_group: str='fastq_file', cutoff_value: float=0, cutoff_keep: bool=True, 
+          cols_ord: list=[], x_ord: list=[], PDB_pt: str=None,
+          file: str=None, dir: str=None, palette_or_cmap: str='tab20', repeats: int=1, errcap: int=4, vertical: bool=True,
           figsize: tuple = (5, 5), title: str='Editing Outcomes', title_size: int=18, title_weight: str='bold', title_font: str='Arial',
           x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_ticks_rot: int=0, x_ticks_font: str='Arial',
           y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_ticks_rot: int=0, y_ticks_font: str='Arial',
@@ -4035,13 +3952,15 @@ def stack(df: pd.DataFrame | str, x: str='sample', y: str='fraction', cols: str=
 
     Parameters:
     df (dataframe | str): pandas dataframe or file path
-    x (str, optional): x-axis column name
-    y (str, optional): y-axis column name
-    cols (str, optional): color column name
-    cutoff_group (str, optional): column name to group by when applying cutoff
-    cutoff_value (float, optional): y-axis values needs be greater than (Default: 0.01)
+    x (str, optional): x-axis column name (Default: 'fastq_file')
+    y (str, optional): y-axis column name (Default: 'fraction')
+    cols (str, optional): color column name (Default: 'Edit')
+    cutoff_group (str, optional): column name to group by when applying cutoff (Default: 'fastq_file')
+    cutoff_value (float, optional): y-axis values needs be greater than (Default: 0)
     cutoff_keep (bool, optional): keep cutoff group even if below cutoff (Default: True)
     cols_ord (list, optional): color column values order
+    x_ord (list, optional): x-axis column values order
+    PDB_pt (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     palette_or_cmap (str, optional): seaborn palette or matplotlib color map
@@ -4100,13 +4019,23 @@ def stack(df: pd.DataFrame | str, x: str='sample', y: str='fraction', cols: str=
         positions = list()
         for geno in genotypes:
             numbers = re.findall(r'\d+\.?\d*', geno)
-            if geno==f'<{cutoff_value}':positions.append(100000) # Places <cutoff near the end
-            elif len(numbers)==0: positions.append(100001) # Places WT at the end
+            if geno==f'<{cutoff_value}':positions.append(1000000) # Places <cutoff near the end
+            elif 'Indel' == geno: positions.append(1000001) # Places Indel near the end
+            elif 'Not WT' == geno: positions.append(1000002) # Places Not WT near the end
+            elif 'WT' == geno: positions.append(1000003) # Places WT at the end
             else: positions.append(sum([int(n) for n in numbers])/len(numbers))
         assign = pd.DataFrame({'positions':positions,
                                'genotypes':genotypes})
         cols_ord = list(assign.sort_values(by='positions')['genotypes'])
     
+    # PDB label information
+    if PDB_pt is not None:
+        if len(PDB_pt)==4: # If PDB ID given
+            for PDB_file in os.listdir(os.path.expanduser('~/.config/edms/PDB/')):
+                if PDB_pt.lower() in PDB_file.lower():
+                    PDB_pt = f'{os.path.expanduser("~/.config/edms/PDB")}/{PDB_file}'
+                    break
+
     # Make stacked barplot
     p.stack(df=df_cut,x=x,y=y,cols=cols,cutoff_group=cutoff_group,cutoff_value=0,cutoff_keep=cutoff_keep,cols_ord=cols_ord,x_ord=x_ord,
             file=file,dir=dir,palette_or_cmap=palette_or_cmap,repeats=repeats,errcap=errcap,vertical=vertical,
@@ -4114,7 +4043,7 @@ def stack(df: pd.DataFrame | str, x: str='sample', y: str='fraction', cols: str=
             x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,
             y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_dims=y_axis_dims,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,
             legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,
-            legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_ncol=legend_ncol,show=show,space_capitalize=space_capitalize,**kwargs)
+            legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_ncol=legend_ncol,show=show,space_capitalize=space_capitalize,PDB_pt=PDB_pt,**kwargs)
 
 def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: tuple=None, label: str='Edit', label_size: int=16,
         label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None,
@@ -4310,6 +4239,12 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
         if file.endswith('.html') == True:
             label = f'{label}_info'
             is_html = True
+
+            # Match title fontsize for html plots
+            x_axis_size=title_size
+            y_axis_size=title_size
+            legend_title_size=title_size
+
         else:
             is_html = False
     else:
@@ -4605,6 +4540,12 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
         if file.endswith('.html') == True:
             label = f'{label}_info'
             is_html = True
+
+            # Match title fontsize for html plots
+            x_axis_size=title_size
+            y_axis_size=title_size
+            legend_title_size=title_size
+
         else:
             is_html = False
     else:
@@ -4808,3 +4749,96 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
             mpld3.show(fig)
     if return_df:
         return df
+
+def heat(df: pd.DataFrame | str, cond: str, x: str='number', y: str='after', vals: str='fraction_avg', vals_dims:tuple=None,
+         file=None, dir=None, edgecol: str='black', lw: int=1, annot=False, cmap: str="bone_r", sq: bool=True, cbar: bool=True,
+         title: str='', title_size: int=12, title_weight: str='bold', title_font: str='Arial', figsize: tuple = (5, 5),
+         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_ticks_rot: int=45, x_ticks_font: str='Arial',
+         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_ticks_rot: int=0, y_ticks_font: str='Arial',
+         show: bool=True, space_capitalize: bool=True, **kwargs):
+    ''' 
+    heat(): creates heatmap
+    
+    Parameters:
+    df (dataframe | str): tidy-formatted DMS dataframe (dms_cond() or dms_comp()) or file path
+    cond (str): Condition column name for grouping fastq outcomes dataframe
+    x (str, optional): x-axis column name (AA residues number column)
+    y (str, optional): y-axis column name (AA change column)
+    vals (str, optional): values column name
+    vals_dims (tuple, optional): vals minimum and maximum formatted (vmin, vmax; Default: None)
+    file (str, optional): save plot to filename
+    dir (str, optional): save plot to directory
+    edgecol (str, optional): point edge color
+    lw (int, optional): line width
+    annot (bool, optional): annotate values
+    cmap (str, optional): matplotlib color map
+    title (str, optional): plot title
+    title_size (int, optional): plot title font size
+    title_weight (str, optional): plot title bold, italics, etc.
+    title_font (str, optional): plot title font
+    figsize (tuple, optional): figure size per subplot
+    x_axis (str, optional): x-axis name
+    x_axis_size (int, optional): x-axis name font size
+    x_axis_weight (str, optional): x-axis name bold, italics, etc.
+    x_axis_font (str, optional): x-axis font
+    x_ticks_rot (int, optional): x-axis ticks rotation
+    x_ticks_font (str, optional): x-ticks font
+    y_axis (str, optional): y-axis name
+    y_axis_size (int, optional): y-axis name font size
+    y_axis_weight (str, optional): y-axis name bold, italics, etc.
+    y_axis_font (str, optional): y-axis font
+    y_ticks_rot (int, optional): y-axis ticks rotation
+    y_ticks_font (str, optional): y-ticks font
+    show (bool, optional): show plot (Default: True)
+    space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
+    
+    Dependencies: matplotlib, seaborn, pandas, & aa_props
+    '''
+    # Get dataframe from file path if needed
+    if type(df)==str:
+        df = io.get(pt=df)
+
+    # Find min and max values in the dataset for normalization
+    if vals_dims is None:
+        vmin = df[vals].values.min()
+        vmax = df[vals].values.max()
+    else:
+        vmin = vals_dims[0]
+        vmax = vals_dims[1]
+
+    # Make DMS grids
+    print('Make DMS grids')
+    dc=t.split(df,cond) # Split by condition
+    dc2={key:pd.pivot(df_cond,columns=x,index=y,values=vals).astype(float).reindex(list(aa_props.keys())) 
+         for key,df_cond in dc.items()} # Generate pivot tables
+    
+    # Create a single figure with multiple heatmap subplots
+    print('Create a single figure with multiple heatmap subplots')
+    fig, axes = plt.subplots(nrows=len(list(dc2.keys())),ncols=1,figsize=(figsize[0],figsize[1]*len(list(dc2.keys()))),sharex=False,sharey=True)
+    if isinstance(axes, np.ndarray)==False: axes = np.array([axes]) # Make axes iterable if there is only 1 heatmap
+    for (ax, key) in zip(axes, list(dc2.keys())):
+        print(f'{key}')
+        sns.heatmap(dc2[key],annot=annot,cmap=cmap,ax=ax,linecolor=edgecol,linewidths=lw,cbar=cbar,square=sq,vmin=vmin,vmax=vmax, **kwargs)
+        if len(list(dc2.keys()))>1: ax.set_title(key,fontsize=title_size,fontweight=title_weight,fontfamily=title_font)  # Add title to subplot
+        else: ax.set_title(title,fontsize=title_size,fontweight=title_weight,fontfamily=title_font)
+        if x_axis=='': 
+            if space_capitalize: ax.set_xlabel(p.re_un_cap(x),fontsize=x_axis_size,fontweight=x_axis_weight,fontfamily=x_axis_font) # Add x axis label
+            else: ax.set_xlabel(x,fontsize=x_axis_size,fontweight=x_axis_weight,fontfamily=x_axis_font) # Add x axis label
+        else: ax.set_xlabel(x_axis,fontsize=x_axis_size,fontweight=x_axis_weight,fontfamily=x_axis_font)
+        if y_axis=='': 
+            if space_capitalize: ax.set_ylabel(p.re_un_cap(y),fontsize=y_axis_size,fontweight=y_axis_weight,fontfamily=y_axis_font) # Add y axis label
+            else: ax.set_ylabel(y,fontsize=y_axis_size,fontweight=y_axis_weight,fontfamily=y_axis_font) # Add y axis label
+        else: ax.set_ylabel(y_axis,fontsize=y_axis_size,fontweight=y_axis_weight,fontfamily=y_axis_font)
+        ax.set_xticklabels(subscript(dc[key])['label'].to_list()) # Change x ticks to have subscript format
+        # Format x ticks
+        if (x_ticks_rot==0)|(x_ticks_rot==90): plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, ha="center",rotation_mode="anchor",fontname=x_ticks_font) 
+        else: plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, ha="right",rotation_mode="anchor",fontname=x_ticks_font) 
+        # Format y ticks
+        plt.setp(ax.get_yticklabels(), rotation=y_ticks_rot, va='center', ha="right",rotation_mode="anchor",fontname=y_ticks_font)
+        ax.set_facecolor('white')  # Set background to transparent
+
+    # Save & show fig
+    if file is not None and dir is not None:
+        mkdir(dir) # Make output directory if it does not exist
+        plt.savefig(fname=os.path.join(dir, file), dpi=600, bbox_inches='tight', format=f'{file.split(".")[-1]}')
+    if show: plt.show()

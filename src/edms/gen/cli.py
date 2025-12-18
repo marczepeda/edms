@@ -14,7 +14,7 @@ Usage:
 
 [Plot subparser methods]
 - add_common_plot_scat_args(subparser, fastq_parser=False): Add common arguments for scatter plot related graphs
-- add_common_plot_cat_args(subparser): Add common arguments for category dependent graphs
+- add_common_plot_cat_args(subparser): Add common arguments for categorical graphs
 - add_common_plot_dist_args(subparser): Add common arguments for distribution graphs
 - add_common_plot_heat_args(subparser): Add common arguments for heatmap graphs
 - add_common_plot_stack_args(subparser): Add common arguments for stacked bar plot
@@ -139,19 +139,26 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
         subparser.add_argument("--dont_display_labels", dest='display_labels', action="store_false", default=True, help="Display labels for significant values (Default: True)")
         subparser.add_argument("--dont_display_axis", dest='display_axis', action="store_false", default=True, help="Display x- and y-axis lines (Default: True)")
 
-def add_common_plot_cat_args(subparser):
+def add_common_plot_cat_args(subparser, fastq_parser=False):
     '''
-    add_common_plot_cat_args(subparser): Add common arguments for category dependent graphs
+    add_common_plot_cat_args(subparser): Add common arguments for categorical graphs
     '''
     # cat(): Required arguments
+    if fastq_parser == True:
+        subparser.add_argument("--type", dest="typ", help="Type of category plot", type=str, required=True, choices=['bar', 'box', 'violin', 'strip', 'swarm', 'point', 'count', 'bar_strip', 'box_strip', 'violin_strip', 'bar_swarm', 'box_swarm', 'violin_swarm'])
     subparser.add_argument("--df", help="Input dataframe file path", type=str, required=True)
 
     # Optional core arguments
     subparser.add_argument("--x", help="X-axis column name", type=str, default="")
     subparser.add_argument("--y", help="Y-axis column name", type=str, default="")
+    subparser.add_argument("--cats", type=str, help="Category column name (x- or y-axis)")
+    subparser.add_argument("--cats_ord", nargs="+", help="Category column values order (x- or y-axis)")
+    subparser.add_argument("--cats_exclude", nargs="+", help="Category column values exclude (x- or y-axis)")
     subparser.add_argument("--cols", type=str, help="Color column name for grouping")
     subparser.add_argument("--cols_ord", nargs="+", help="Color column values order")
     subparser.add_argument("--cols_exclude", nargs="+", help="Color column values to exclude")
+    if fastq_parser == True:
+        subparser.add_argument("--PDB_pt", type=str, help="PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information", default=argparse.SUPPRESS)
 
     subparser.add_argument("--file", type=str, help="Output filename", default='./out')
     subparser.add_argument("--dir", type=str, help="Output directory", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_cat.png')
@@ -331,7 +338,7 @@ def add_common_plot_heat_args(subparser):
     subparser.add_argument("--show", action="store_true", help="Show the plot in an interactive window", default=False)
     subparser.add_argument("--space_capitalize", action="store_true", help="Capitalize and space labels/legend values", default=False)
 
-def add_common_plot_stack_args(subparser):
+def add_common_plot_stack_args(subparser, fastq_parser=False):
     '''
     add_common_plot_stack_args(subparser): Add common arguments for stacked bar plot
     '''
@@ -353,6 +360,8 @@ def add_common_plot_stack_args(subparser):
     subparser.add_argument("--palette_or_cmap", type=str, default="Set2", help="Seaborn palette or Matplotlib colormap for stacked bars")
     subparser.add_argument("--errcap", type=int, default=4, help="Width of error bar caps")
     subparser.add_argument("--vertical", action="store_true", help="Stack bars vertically (default True)", default=False)
+    if fastq_parser==True:
+        subparser.add_argument("--PDB_pt", type=str, default=argparse.SUPPRESS, help="PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information")
 
     # Figure & layout
     subparser.add_argument("--figsize", type=parse_tuple_int, default=(5,5), help="Figure size formatted as 'width,height'")
@@ -483,7 +492,7 @@ def add_subparser(subparsers, formatter_class=None):
     '''
     edms.gen.plot:
     - scat(): creates scatter plot related graphs
-    - cat(): creates category dependent graphs
+    - cat(): creates categorical graphs
     - dist(): creates distribution graphs
     - heat(): creates heatmap graphs
     - stack(): creates stacked bar plot
@@ -501,7 +510,7 @@ def add_subparser(subparsers, formatter_class=None):
         add_common_plot_scat_args(parser_plot_scat)
         parser_plot_scat.set_defaults(func=p.scat)
 
-    # cat(): Creates category dependent graphs (bar, box, violin, swarm, strip, point, count, bar_swarm, box_swarm, violin_swarm)
+    # cat(): Creates categorical graphs (bar, box, violin, swarm, strip, point, count, bar_swarm, box_swarm, violin_swarm)
     parser_plot_type_bar = subparsers_plot.add_parser("bar", help="Create bar plot", description="Create bar plot", formatter_class=formatter_class)
     parser_plot_type_box = subparsers_plot.add_parser("box", help="Create box plot", description="Create box plot", formatter_class=formatter_class)
     parser_plot_type_violin = subparsers_plot.add_parser("violin", help="Create violin plot", description="Create violin plot", formatter_class=formatter_class)

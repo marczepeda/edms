@@ -25,7 +25,7 @@ Usage:
 
 [Graph methods]
 - scat(): creates scatter plot related graphs
-- cat(): creates category dependent graphs
+- cat(): creates categorical graphs
 - dist(): creates distribution graphs
 - heat(): creates heat plot related graphs
 - stack(): creates stacked bar plot
@@ -585,12 +585,12 @@ def extract_pivots(df: pd.DataFrame, x: str, y: str, vars: str='variable', vals:
         pivots[key]=pd.pivot(df[df[vars]==key],index=y,columns=x,values=vals)
     return pivots
 
-def formatter(typ: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: str, dir: str, palette_or_cmap: str,
+def formatter(typ: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: str, dir: str,
               title: str, title_size: int, title_weight: str, title_font: str,
               x_axis: str, x_axis_size: int, x_axis_weight: str, x_axis_font: str, x_axis_scale: str, x_axis_dims: tuple, x_ticks_rot: int, x_ticks_font: str, x_ticks: list,
               y_axis: str, y_axis_size: int, y_axis_weight: str, y_axis_font: str, y_axis_scale: str, y_axis_dims: tuple, y_ticks_rot: int, y_ticks_font: str, y_ticks: list,
               legend_title: str, legend_title_size: int, legend_size: int, legend_bbox_to_anchor: tuple, legend_loc: str, legend_items: tuple, legend_ncol: int,
-              dpi: int = 0, show: bool = True, space_capitalize: bool = True):
+              dpi: int = 0, show: bool = True, space_capitalize: bool = True, PDB_pt: str = None) -> None:
     ''' 
     formatter(): formats, displays, and saves plots
 
@@ -603,7 +603,6 @@ def formatter(typ: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: s
     cols (str, optional): color column name
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
-    palette_or_cmap (str, optional): seaborn color palette or matplotlib color map
     title (str, optional): plot title
     title_size (int, optional): plot title font size
     title_weight (str, optional): plot title bold, italics, etc.
@@ -631,6 +630,7 @@ def formatter(typ: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: s
     dpi (int, optional): figure dpi (Default: 600 for non-HTML, 150 for HTML)
     show (bool, optional): show plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
+    PDB_pt (str, optional): Path to PDB file for mol* visualization; only intended for fastq plots (Default: None)
 
     Dependencies: os, matplotlib, seaborn, io, re_un_cap(), & round_up_pow_10()
     '''
@@ -658,6 +658,15 @@ def formatter(typ: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: s
                 if (x_axis_dims==(0,0))&(x_axis_scale=='log'): plt.xlim(round_down_pow_10(min(df[x])),round_up_pow_10(max(df[x])))
                 elif x_axis_dims==(0,0): print('Default x axis dimensions.')
                 else: plt.xlim(x_axis_dims[0],x_axis_dims[1])
+            else:
+                if file is not None:
+                    if file.endswith('.html') == True: # put one tick per category, centered on each bar row
+                        ls = df[x].unique().tolist()
+                        ax.set_xticks(np.arange(len(ls)))
+                        ax.set_xticklabels(ls,
+                                        rotation=x_ticks_rot,
+                                        fontfamily=x_ticks_font)
+                        ax.set_xlim(-0.5, len(ls) - 0.5)  # avoid extra half-step ticks'''
         if x_ticks==[]: 
             if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(rotation=x_ticks_rot,ha='center',fontfamily=x_ticks_font)
             else: plt.xticks(rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font)
@@ -676,6 +685,15 @@ def formatter(typ: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: s
                 if (y_axis_dims==(0,0))&(y_axis_scale=='log'): plt.ylim(round_down_pow_10(min(df[y])),round_up_pow_10(max(df[y])))
                 elif y_axis_dims==(0,0): print('Default y axis dimensions.')
                 else: plt.ylim(y_axis_dims[0],y_axis_dims[1])
+            else:
+                if file is not None:
+                    if file.endswith('.html') == True: # put one tick per category, centered on each bar row
+                        ls = df[y].unique().tolist()
+                        ax.set_yticks(np.arange(len(ls)))
+                        ax.set_yticklabels(ls,
+                                        rotation=y_ticks_rot,
+                                        fontfamily=y_ticks_font)
+                        ax.set_ylim(-0.5, len(ls) - 0.5)  # avoid extra half-step ticks
         if y_ticks==[]: plt.yticks(rotation=y_ticks_rot,fontfamily=y_ticks_font)
         else: plt.yticks(ticks=y_ticks,labels=y_ticks,rotation=y_ticks_rot,fontfamily=y_ticks_font)
 
@@ -694,7 +712,7 @@ def formatter(typ: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: s
             else: move_dist_legend(ax,legend_loc,legend_title_size,legend_size,legend_bbox_to_anchor,legend_ncol)
 
     # Save & show fig
-    save_fig(file=file, dir=dir, fig=ax.figure, dpi=dpi)
+    save_fig(file=file, dir=dir, fig=ax.figure, dpi=dpi, PDB_pt=PDB_pt)
     if show:
         ext = file.split('.')[-1].lower() if file is not None else ''
         if ext not in ('html', 'json'):
@@ -874,30 +892,31 @@ def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, col
                     txt
                 )
 
-    formatter(typ, ax, df, x, y, cols, file, dir, palette_or_cmap,
-              title, title_size, title_weight, title_font,
-              x_axis, x_axis_size, x_axis_weight, x_axis_font, x_axis_scale, x_axis_dims, x_ticks_rot, x_ticks_font, x_ticks,
-              y_axis, y_axis_size, y_axis_weight, y_axis_font, y_axis_scale, y_axis_dims, y_ticks_rot, y_ticks_font, y_ticks,
-              legend_title, legend_title_size, legend_size, legend_bbox_to_anchor, legend_loc, legend_items, legend_ncol,
+    formatter(typ=typ, ax=ax, df=df, x=x, y=y, cols=cols, file=file, dir=dir, 
+              title=title, title_size=title_size, title_weight=title_weight, title_font=title_font,
+              x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
+              y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
+              legend_title=legend_title, legend_title_size=legend_title_size, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_items=legend_items, legend_ncol=legend_ncol,
               dpi=dpi, show=show, space_capitalize=space_capitalize)
 
-def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cols: str = None, cats_ord: list = None, cols_ord: list = None, cols_exclude: list | str = None,
+def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: list = None, cats_exclude: list|str = None, cols: str = None, cols_ord: list = None, cols_exclude: list | str = None,
         file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
         figsize: tuple = (5, 5), title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial',
         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
         legend_title: str = '', legend_title_size: int = 12, legend_size: int = 9, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_items: tuple = (0, 0), legend_ncol: int = 1,
-        dpi: int = 0, show: bool = True, space_capitalize: bool = True, **kwargs):
+        dpi: int = 0, show: bool = True, space_capitalize: bool = True, PDB_pt: str = None, **kwargs):
     ''' 
-    cat(): creates category dependent graphs
+    cat(): creates categorical graphs
 
     Parameters:
-    typ (str): plot type (bar, box, violin, swarm, strip, point, count, bar_swarm, box_swarm, violin_swarm)
+    typ (str): plot type (bar, box, violin, swarm, strip, point, count, bar_strip, box_strip, violin_strip, bar_swarm, box_swarm, violin_swarm)
     df (dataframe | str): pandas dataframe (or file path)
     x (str, optional): x-axis column name
     y (str, optional): y-axis column name
-    cols (str, optional): color column name
     cats_ord (list, optional): category column values order (x- or y-axis)
+    cats_exclude (list | str, optional): category column values exclude (x- or y-axis)
+    cols (str, optional): color column name
     cols_ord (list, optional): color column values order
     cols_exclude (list | str, optional): color column values exclude
     file (str, optional): save plot to filename
@@ -940,6 +959,7 @@ def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cols: str = 
     dpi (int, optional): figure dpi (Default: 600 for non-HTML, 150 for HTML)
     show (bool, optional): show plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
+    PDB_pt (str, optional): Path to PDB file for mol* visualization; only intended for fastq plots (Default: None)
     
     Dependencies: os, matplotlib, seaborn, formatter(), re_un_cap(), & round_up_pow_10()
     '''
@@ -947,8 +967,23 @@ def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cols: str = 
     if type(df)==str:
         df = io.get(pt=df)
     
+    # Match title fontsize for html plots
+    if file is not None:
+        if file.endswith('.html')==True:
+            x_axis_size=title_size
+            y_axis_size=title_size
+            legend_title_size=title_size
+
     # Omit excluded data
-    if type(cols_exclude)==list: 
+    if type(cats_exclude)==list: # Category exclusion
+        for exclude in cats_exclude: 
+            if x!='': df=df[df[x]!=exclude]
+            if y!='': df=df[df[y]!=exclude]
+    elif type(cats_exclude)==str: 
+        if x!='': df=df[df[x]!=cats_exclude]
+        if y!='': df=df[df[y]!=cats_exclude]
+
+    if type(cols_exclude)==list: # Color exclusion
         for exclude in cols_exclude: df=df[df[cols]!=exclude]
     elif type(cols_exclude)==str: df=df[df[cols]!=cols_exclude]
 
@@ -983,12 +1018,12 @@ def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cols: str = 
 
     if cols is not None:
 
-        if typ=='bar': sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, errcolor=edgecol, errwidth=errwid, capsize=errcap, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
+        if typ=='bar': sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
         elif typ=='box': sns.boxplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, linewidth=lw, palette=palette, ax=ax, **kwargs)
         elif typ=='violin': sns.violinplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
         elif typ=='swarm': sns.swarmplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, dodge=True, palette=palette, ax=ax, **kwargs)
         elif typ=='strip': sns.stripplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, dodge=True, palette=palette, ax=ax, **kwargs)
-        elif typ=='point': sns.pointplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, errwidth=errwid, capsize=errcap, hue=cols, hue_order=cols_ord, palette=palette, ax=ax, **kwargs)
+        elif typ=='point': sns.pointplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, err_kws={'linewidth':errwid}, capsize=errcap, hue=cols, hue_order=cols_ord, palette=palette, ax=ax, **kwargs)
         elif typ=='count': 
             if (x!='')&(y!=''):
                 print('Cannot make countplot with both x and y specified.')
@@ -999,7 +1034,7 @@ def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cols: str = 
                 print('Cannot make countplot without x or y specified.')
                 return
         elif typ=='bar_strip':
-            sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, errcolor=edgecol, errwidth=errwid, capsize=errcap, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
+            sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
             sns.stripplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, dodge=True, palette=palette, ax=ax, **kwargs)
         elif typ=='box_strip':
             sns.boxplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, linewidth=lw, palette=palette, ax=ax, **kwargs)
@@ -1008,7 +1043,7 @@ def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cols: str = 
             sns.violinplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
             sns.stripplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, dodge=True, palette=palette, ax=ax, **kwargs)
         elif typ=='bar_swarm':
-            sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, errcolor=edgecol, errwidth=errwid, capsize=errcap, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
+            sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
             sns.swarmplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, dodge=True, palette=palette, ax=ax, **kwargs)
         elif typ=='box_swarm':
             sns.boxplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, linewidth=lw, palette=palette, ax=ax, **kwargs)
@@ -1022,12 +1057,12 @@ def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cols: str = 
 
     else: # Cols was not specified
         
-        if typ=='bar': sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, errcolor=edgecol, errwidth=errwid, capsize=errcap, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
+        if typ=='bar': sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
         elif typ=='box': sns.boxplot(data=df, x=x, y=y, order=cats_ord, linewidth=lw, ax=ax, palette=palette, **kwargs)
         elif typ=='violin': sns.violinplot(data=df, x=x, y=y, order=cats_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
         elif typ=='swarm': sns.swarmplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, linewidth=lw, dodge=True, palette=palette, ax=ax, **kwargs)
         elif typ=='strip': sns.stripplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
-        elif typ=='point': sns.pointplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, errwidth=errwid, capsize=errcap, palette=palette, ax=ax, **kwargs)
+        elif typ=='point': sns.pointplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, err_kws={'linewidth':errwid}, capsize=errcap, palette=palette, ax=ax, **kwargs)
         elif typ=='count': 
             if (x!='')&(y!=''):
                 print('Cannot make countplot with both x and y specified.')
@@ -1038,7 +1073,7 @@ def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cols: str = 
                 print('Cannot make countplot without x or y specified.')
                 return
         elif typ=='bar_strip':
-            sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, errcolor=edgecol, errwidth=errwid, capsize=errcap, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
+            sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
             sns.stripplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
         elif typ=='box_strip':
             sns.boxplot(data=df, x=x, y=y, order=cats_ord, linewidth=lw, ax=ax, **kwargs)
@@ -1047,7 +1082,7 @@ def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cols: str = 
             sns.violinplot(data=df, x=x, y=y, order=cats_ord, edgecolor=edgecol, linewidth=lw, ax=ax, palette=palette, **kwargs)
             sns.stripplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, linewidth=lw, ax=ax, palette=palette, **kwargs)
         elif typ=='bar_swarm':
-            sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, errcolor=edgecol, errwidth=errwid, capsize=errcap, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
+            sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
             sns.swarmplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
         elif typ=='box_swarm':
             sns.boxplot(data=df, x=x, y=y, order=cats_ord, linewidth=lw, palette=palette, ax=ax, **kwargs)
@@ -1059,12 +1094,12 @@ def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cols: str = 
             print('Invalid type! bar, box, violin, swarm, strip, point, count, bar_strip, box_strip, violin_strip, bar_swarm, box_swarm, violin_swarm')
             return
 
-    formatter(typ, ax, df, x, y, cols, file, dir, palette_or_cmap,
-              title, title_size, title_weight, title_font,
-              x_axis, x_axis_size, x_axis_weight, x_axis_font, x_axis_scale, x_axis_dims, x_ticks_rot, x_ticks_font, x_ticks,
-              y_axis, y_axis_size, y_axis_weight, y_axis_font, y_axis_scale, y_axis_dims, y_ticks_rot, y_ticks_font, y_ticks,
-              legend_title, legend_title_size, legend_size, legend_bbox_to_anchor, legend_loc, legend_items, legend_ncol,
-              dpi=dpi, show=show, space_capitalize=space_capitalize)
+    formatter(typ=typ, ax=ax, df=df, x=x, y=y, cols=cols, file=file, dir=dir, 
+              title=title, title_size=title_size, title_weight=title_weight, title_font=title_font,
+              x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
+              y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
+              legend_title=legend_title, legend_title_size=legend_title_size, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_items=legend_items, legend_ncol=legend_ncol,
+              dpi=dpi, show=show, space_capitalize=space_capitalize, PDB_pt=PDB_pt)
 
 def dist(typ: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord: list = None, cols_exclude: list | str = None, bins: int = 40, log10_low: int = 0,
          file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', edgecol: str = 'black', lw: int = 1, ht: float = 1.5, asp: int = 5, tp: float = .8, hs: int = 0, despine: bool = False,
@@ -1178,11 +1213,11 @@ def dist(typ: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord: l
         else: sns.kdeplot(data=df, x=x, hue=cols, hue_order=cols_ord, linewidth=lw, ax=ax, **kwargs)
         y=''
         if y_axis=='': y_axis='Density'
-        formatter(typ, ax, df, x, y, cols, file, dir, palette_or_cmap,
-                  title, title_size, title_weight, title_font,
-                  x_axis, x_axis_size, x_axis_weight, x_axis_font, x_axis_scale, x_axis_dims, x_ticks_rot, x_ticks_font, x_ticks,
-                  y_axis, y_axis_size, y_axis_weight, y_axis_font, y_axis_scale, y_axis_dims, y_ticks_rot, y_ticks_font, y_ticks,
-                  legend_title, legend_title_size, legend_size, legend_bbox_to_anchor, legend_loc, legend_items, legend_ncol,
+        formatter(typ=typ, ax=ax, df=df, x=x, y=y, cols=cols, file=file, dir=dir, 
+                  title=title, title_size=title_size, title_weight=title_weight, title_font=title_font,
+                  x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
+                  y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
+                  legend_title=legend_title, legend_title_size=legend_title_size, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_items=legend_items, legend_ncol=legend_ncol,
                   dpi=dpi, show=show, space_capitalize=space_capitalize)
     elif typ=='hist_kde':
         fig, ax = plt.subplots(figsize=figsize)
@@ -1198,11 +1233,11 @@ def dist(typ: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord: l
         y=''
         if y_axis=='': y_axis='Count'
         ax.yaxis.set_major_locator(MaxNLocator(integer=True))
-        formatter(typ, ax, df, x, y, cols, file, dir, palette_or_cmap,
-                  title, title_size, title_weight, title_font,
-                  x_axis, x_axis_size, x_axis_weight, x_axis_font, x_axis_scale, x_axis_dims, x_ticks_rot, x_ticks_font, x_ticks,
-                  y_axis, y_axis_size, y_axis_weight, y_axis_font, y_axis_scale, y_axis_dims, y_ticks_rot, y_ticks_font, y_ticks,
-                  legend_title, legend_title_size, legend_size, legend_bbox_to_anchor, legend_loc, legend_items, legend_ncol,
+        formatter(typ=typ, ax=ax, df=df, x=x, y=y, cols=cols, file=file, dir=dir, 
+                  title=title, title_size=title_size, title_weight=title_weight, title_font=title_font,
+                  x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
+                  y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
+                  legend_title=legend_title, legend_title_size=legend_title_size, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_items=legend_items, legend_ncol=legend_ncol,
                   dpi=dpi, show=show, space_capitalize=space_capitalize)
     elif typ=='rid':
         # Set color scheme
@@ -1361,10 +1396,10 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vars: str = None,
 def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str = '', cutoff_value: float = 0, cutoff_keep: bool = True, cols_ord: list = [], x_ord: list = [],
           file: str = None, dir: str = None, palette_or_cmap: str = 'tab20', repeats: int = 1, errcap: int = 4, vertical: bool = True,
           figsize: tuple = (5, 5), title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial',
-          x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_ticks_rot: int = 0, x_ticks_font: str = 'Arial',
-          y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_dims: tuple = (0, 0), y_ticks_rot: int = 0, y_ticks_font: str = 'Arial',
+          x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_ticks_size: int = 10, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial',
+          y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_dims: tuple = (0, 0), y_ticks_size: int = 10, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial',
           legend_title: str = '', legend_title_size: int = 12, legend_size: int = 12,
-          legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_ncol: int = 1, dpi: int = 0, show: bool = True, space_capitalize: bool = True, **kwargs):
+          legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_ncol: int = 1, dpi: int = 0, show: bool = True, space_capitalize: bool = True, PDB_pt: str = None, **kwargs):
     ''' 
     stack(): creates stacked bar plot
 
@@ -1377,6 +1412,7 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
     cutoff_value (float, optional): y-axis values needs be greater than (e.g. 0)
     cutoff_keep (bool, optional): keep cutoff group even if below cutoff (Default: True)
     cols_ord (list, optional): color column values order
+    x_ord (list, optional): x-axis column values order
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     palette_or_cmap (str, optional): seaborn palette or matplotlib color map
@@ -1410,12 +1446,20 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
     dpi (int, optional): figure dpi (Default: 600 for non-HTML, 150 for HTML)
     show (bool, optional): show plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
+    PDB_pt (str, optional): Path to PDB file for mol* visualization; only intended for fastq plots (Default: None)
     
     Dependencies: re, os, pandas, numpy, matplotlib.pyplot, & io
     '''
     # Get dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
+    
+    # Match title fontsize for html plots
+    if file is not None:
+        if file.endswith('.html')==True:
+            x_axis_size=title_size
+            y_axis_size=title_size
+            legend_title_size=title_size
 
     # Omit smaller than cutoff and convert it to <cutoff
     if cutoff_group in df.columns and cutoff_value>0: # If cutoff group and value specified
@@ -1438,7 +1482,8 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
 
     # Make stacked barplot
     if vertical: # orientation
-        df_pivot.plot(kind='bar',yerr=df_pivot_err,capsize=errcap, figsize=figsize,colormap=repeat_palette_cmap(palette_or_cmap,repeats),stacked=True,**kwargs)
+        ax = df_pivot.plot(kind='bar',yerr=df_pivot_err,capsize=errcap, figsize=figsize,colormap=repeat_palette_cmap(palette_or_cmap,repeats),stacked=True,**kwargs)
+        fig = ax.get_figure()
         
         # Set x axis
         if x_axis=='': 
@@ -1459,7 +1504,8 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
         else: plt.ylim(y_axis_dims[0],y_axis_dims[1])
 
     else: # Horizontal orientation
-        df_pivot.plot(kind='barh',xerr=df_pivot_err,capsize=errcap, figsize=figsize,colormap=repeat_palette_cmap(palette_or_cmap,repeats),stacked=True,**kwargs)
+        ax = df_pivot.plot(kind='barh',xerr=df_pivot_err,capsize=errcap, figsize=figsize,colormap=repeat_palette_cmap(palette_or_cmap,repeats),stacked=True,**kwargs)
+        fig = ax.get_figure()
 
         # Set y axis
         if x_axis=='': 
@@ -1489,15 +1535,15 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
         else: legend_title=cols
     plt.legend(title=legend_title, title_fontsize=legend_title_size, fontsize=legend_size, 
                bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol)
-    
-    # Save & show fig
-    save_fig(file=file, dir=dir, fig=plt.gcf(), dpi=dpi)
+
+    # Save & show fig; return dataframe
+    save_fig(file=file, dir=dir, fig=fig, dpi=dpi, PDB_pt=PDB_pt)
     if show:
         ext = file.split('.')[-1].lower() if file is not None else ''
         if ext not in ('html', 'json'):
             plt.show()
-        else: 
-            mpld3.show()
+        else:
+            mpld3.show(fig)
 
 def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str | bool = None, size_dims: tuple = None, label: str = None, stys_order: list = [], mark_order: list = [],
         FC_threshold: float = 1, pval_threshold: float = 1, file: str = None, dir: str = None, color: str = 'lightgray', alpha: float = 0.5, edgecol: str = 'black', vertical: bool = True,
@@ -1506,7 +1552,7 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str 
         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_dims: tuple = (0, 0), y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
         legend_title: str = '', legend_title_size: int = 12, legend_size: int = 9, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left',
         legend_ncol: int = 1, display_legend: bool = True, display_labels: str = 'FC & p-value', display_lines: bool = False, display_axis: bool = True, return_df: bool = True, dpi: int = 0, show: bool = True, space_capitalize: bool = True,
-        PDB_pt: str = None, # only intended for fastq volcano plots
+        PDB_pt: str = None, # only intended for fastq plots
         **kwargs) -> pd.DataFrame:
     ''' 
     vol(): creates volcano plot
@@ -1564,7 +1610,7 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str 
     dpi (int, optional): figure dpi (Default: 600 for non-HTML, 150 for HTML)
     show (bool, optional): show plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
-    PDB_pt (str, optional): Path to PDB file for mol* visualization; only intended for fastq volcano plots (Default: None)
+    PDB_pt (str, optional): Path to PDB file for mol* visualization; only intended for fastq plots (Default: None)
     
     Dependencies: os, matplotlib, seaborn, & pandas
     '''
@@ -1577,6 +1623,12 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str 
         is_html = file.split('.')[-1] == 'html'
     else:
         is_html = False
+    
+    # Match title fontsize for html plots
+    if is_html==True:
+        x_axis_size=title_size
+        y_axis_size=title_size
+        legend_title_size=title_size
     
     # Log transform data
     df[f'log2({FC})'] = [np.log10(FC_val)/np.log10(2) for FC_val in df[FC]]
