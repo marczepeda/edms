@@ -17,7 +17,7 @@ from rich import print as rprint
 
 from . import ngs, sanger, clone as cl, fastq as fq, pe, qPCR, transfect as tf
 from ..utils import parse_tuple_int, parse_tuple_float
-from ..gen.cli import add_common_plot_cat_args, add_common_plot_scat_args, add_common_plot_stack_args, add_common_plot_vol_args
+from ..gen.cli import add_common_plot_cat_args, add_common_plot_heat_args, add_common_plot_scat_args, add_common_plot_stack_args, add_common_plot_vol_args
 
 def add_subparser(subparsers, formatter_class=None):
     """
@@ -416,6 +416,7 @@ def add_subparser(subparsers, formatter_class=None):
     - vol(): create volcano plot
     - torn(): create tornado plot
     - corr(): create correlation plot
+    - heat(): create heatmap plot
     '''
     parser_fastq = subparsers.add_parser("fastq", help="FASTQ files", description="FASTQ files", formatter_class=formatter_class)
     subparsers_fastq = parser_fastq.add_subparsers()
@@ -454,6 +455,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_vol = subparsers_fastq.add_parser("vol", help="Create volcano plot", description="Create volcano plot", formatter_class=formatter_class)
     parser_fastq_torn = subparsers_fastq.add_parser("torn", help="Create tornado plot", description="Create tornado plot", formatter_class=formatter_class)
     parser_fastq_corr = subparsers_fastq.add_parser("corr", help="Create correlation plot", description="Create correlation plot", formatter_class=formatter_class)
+    parser_fastq_heat = subparsers_fastq.add_parser("heat", help="Create heatmap plot", description="Create heatmap plot", formatter_class=formatter_class)
 
     # savemoney():
     parser_fastq_savemoney.add_argument("--fastq_dir", type=str, help="Path to fastq directory (contains .fastq files, not .fastq.gz files; Default: './fastq')", default='./fastq')
@@ -716,6 +718,9 @@ def add_subparser(subparsers, formatter_class=None):
 
     # corr():
     add_common_plot_scat_args(parser_fastq_corr, fastq_corr_parser=True)
+
+    # heat():
+    add_common_plot_heat_args(parser_fastq_heat, fastq_parser=True)
     
     # Set defaults
     parser_fastq_savemoney.set_defaults(func=fq.savemoney)
@@ -795,7 +800,7 @@ def add_subparser(subparsers, formatter_class=None):
                         help="Disable silent mutation", default=True)
     parser_pe_prime_designer.add_argument("--genome_wide_design", action="store_true",
                         help="Whether this is a genome-wide pooled design. This option designs a set of pegRNAs per input without ranging PBS and RTT parameters", default=False)
-    parser_pe_prime_designer.add_argument("--saturation_mutagenesis", type=str, choices=['aa', 'aa_subs', 'aa_ins', 'aa_dels', 'base'], help="Saturation mutagenesis design with prime editing. The 'aa' option makes all amino acid substitutions ('aa_subs'),  +1 amino acid insertions ('aa_ins'), and -1 amino acid deletions ('aa_dels'). The 'base' option makes DNA base changes.", default=None)
+    parser_pe_prime_designer.add_argument("--saturation_mutagenesis", type=str, choices=['aa', 'aa_subs', 'aa_ins', 'aa_dels', 'base'], help="Saturation mutagenesis design with prime editing. The 'aa' option makes all amino acid substitutions ('aa_subs'), +1 amino acid insertions ('aa_ins'), and -1 amino acid deletions ('aa_dels'). The 'base' option makes DNA base changes.", default=None)
     parser_pe_prime_designer.add_argument("--number_of_pegrnas", type=int, default=3,
                         help="Max number of pegRNAs to design (Default: 3)")
     parser_pe_prime_designer.add_argument("--number_of_ngrnas", type=int, default=3,

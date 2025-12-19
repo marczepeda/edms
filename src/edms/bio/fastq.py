@@ -63,10 +63,6 @@ Usage:
 - make_change_table(): generate HTML table of amino acid property changes
 - make_label_info(): include additional info for labels including aa property changes and patient information
 - add_label_info(): AA properties for conservation (change to); plus additional info from cBioPortal, UniProt, PhosphoSitePlus, PDB if specified
-WIP:
-- dms_cond(): returns DMS grid data in tidy format grouped by condition
-- dms_comp(): returns comparison DMS grid dataframe in tidy format split by condition
-- subscript(): returns dataframe with subscripts to tick labels
 
 [Plot methods]
 - cat: creates categorical graphs
@@ -74,9 +70,7 @@ WIP:
 - vol(): creates volcano plot
 - torn(): creates tornado plot
 - corr(): creates correlation plot
-WIP:
-- corr_matrix(): creates correlation matrix plot
-- heat(): creates heatmap
+- heat(): creates heatmap plot
 '''
 
 # Import packages
@@ -96,7 +90,6 @@ import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 from matplotlib.ticker import MaxNLocator
 import mpld3
-from adjustText import adjust_text
 from scipy.stats import ttest_ind
 import Levenshtein
 from typing import Literal
@@ -3120,6 +3113,7 @@ def bam_to_fastq(bam_dir: str, out_dir: str='./bam_to_fastq', env: str='umi_tool
     -------------------------------------------------------------------------
 '''
 aa_props = {
+    # Acidic (large -> small)
     'E': {'name': 'Glutamic acid', 'hydrophobicity': -3.5, 'weight': 147.1,
           'polarity': 12.3, 'charge': 'negative', 'vdw_volume': 83,
           'pKa_C_term': 2.10, 'pKa_N_term': 9.47, 'pKa_side_chain': 4.07},
@@ -3127,6 +3121,11 @@ aa_props = {
     'D': {'name': 'Aspartic acid', 'hydrophobicity': -3.5, 'weight': 133.1,
           'polarity': 13.0, 'charge': 'negative', 'vdw_volume': 54,
           'pKa_C_term': 1.99, 'pKa_N_term': 9.90, 'pKa_side_chain': 3.90},
+
+    # Basic (large -> small)
+    'K': {'name': 'Lysine', 'hydrophobicity': -3.9, 'weight': 146.2,
+          'polarity': 11.3, 'charge': 'positive', 'vdw_volume': 119,
+          'pKa_C_term': 2.16, 'pKa_N_term': 9.06, 'pKa_side_chain': 10.54},
 
     'R': {'name': 'Arginine', 'hydrophobicity': -4.5, 'weight': 174.2,
           'polarity': 10.5, 'charge': 'positive', 'vdw_volume': 124,
@@ -3136,46 +3135,66 @@ aa_props = {
           'polarity': 10.4, 'charge': 'positive', 'vdw_volume': 96,
           'pKa_C_term': 1.80, 'pKa_N_term': 9.33, 'pKa_side_chain': 6.04},
 
-    'K': {'name': 'Lysine', 'hydrophobicity': -3.9, 'weight': 146.2,
-          'polarity': 11.3, 'charge': 'positive', 'vdw_volume': 119,
-          'pKa_C_term': 2.16, 'pKa_N_term': 9.06, 'pKa_side_chain': 10.54},
+    # Aromatic
+    'W': {'name': 'Tryptophan', 'hydrophobicity': -0.9, 'weight': 204.2,
+          'polarity': 5.4, 'charge': 'neutral', 'vdw_volume': 170,
+          'pKa_C_term': 2.46, 'pKa_N_term': 9.41, 'pKa_side_chain': None},
 
     'F': {'name': 'Phenylalanine', 'hydrophobicity': 2.8, 'weight': 165.2,
           'polarity': 5.2, 'charge': 'neutral', 'vdw_volume': 132,
           'pKa_C_term': 2.20, 'pKa_N_term': 9.31, 'pKa_side_chain': None},
 
+    # Aromatic & hydroxyl
     'Y': {'name': 'Tyrosine', 'hydrophobicity': -1.3, 'weight': 181.2,
           'polarity': 6.2, 'charge': 'neutral', 'vdw_volume': 136,
           'pKa_C_term': 2.20, 'pKa_N_term': 9.21, 'pKa_side_chain': 10.46},
 
-    'W': {'name': 'Tryptophan', 'hydrophobicity': -0.9, 'weight': 204.2,
-          'polarity': 5.4, 'charge': 'neutral', 'vdw_volume': 170,
-          'pKa_C_term': 2.46, 'pKa_N_term': 9.41, 'pKa_side_chain': None},
-
+    # Hydroxyl
     'S': {'name': 'Serine', 'hydrophobicity': -0.8, 'weight': 105.1,
           'polarity': 9.2, 'charge': 'neutral', 'vdw_volume': 32,
           'pKa_C_term': 2.19, 'pKa_N_term': 9.21, 'pKa_side_chain': None},
-
-    'Q': {'name': 'Glutamine', 'hydrophobicity': -3.5, 'weight': 146.2,
-          'polarity': 10.5, 'charge': 'neutral', 'vdw_volume': 85,
-          'pKa_C_term': 2.17, 'pKa_N_term': 9.13, 'pKa_side_chain': None},
 
     'T': {'name': 'Threonine', 'hydrophobicity': -0.7, 'weight': 119.1,
           'polarity': 8.6, 'charge': 'neutral', 'vdw_volume': 61,
           'pKa_C_term': 2.09, 'pKa_N_term': 9.10, 'pKa_side_chain': None},
 
+    # Amide
+    'Q': {'name': 'Glutamine', 'hydrophobicity': -3.5, 'weight': 146.2,
+          'polarity': 10.5, 'charge': 'neutral', 'vdw_volume': 85,
+          'pKa_C_term': 2.17, 'pKa_N_term': 9.13, 'pKa_side_chain': None},
+
     'N': {'name': 'Asparagine', 'hydrophobicity': -3.5, 'weight': 132.1,
           'polarity': 11.6, 'charge': 'neutral', 'vdw_volume': 56,
           'pKa_C_term': 2.14, 'pKa_N_term': 8.72, 'pKa_side_chain': None},
 
+    # Sulfur
     'C': {'name': 'Cysteine', 'hydrophobicity': 2.5, 'weight': 121.2,
           'polarity': 5.5, 'charge': 'neutral', 'vdw_volume': 55,
           'pKa_C_term': 1.92, 'pKa_N_term': 10.70, 'pKa_side_chain': 8.37},
 
+    'M': {'name': 'Methionine', 'hydrophobicity': 1.9, 'weight': 149.2,
+          'polarity': 5.7, 'charge': 'neutral', 'vdw_volume': 105,
+          'pKa_C_term': 2.13, 'pKa_N_term': 9.28, 'pKa_side_chain': None},
+
+    # Inflexible
     'P': {'name': 'Proline', 'hydrophobicity': -1.6, 'weight': 115.1,
           'polarity': 8.0, 'charge': 'neutral', 'vdw_volume': 32.5,
           'pKa_C_term': 1.95, 'pKa_N_term': 10.64, 'pKa_side_chain': None},
 
+    # Branched
+    'L': {'name': 'Leucine', 'hydrophobicity': 3.8, 'weight': 131.2,
+          'polarity': 4.9, 'charge': 'neutral', 'vdw_volume': 111,
+          'pKa_C_term': 2.33, 'pKa_N_term': 9.74, 'pKa_side_chain': None},
+
+    'I': {'name': 'Isoleucine', 'hydrophobicity': 4.5, 'weight': 131.2,
+          'polarity': 5.2, 'charge': 'neutral', 'vdw_volume': 111,
+          'pKa_C_term': 2.32, 'pKa_N_term': 9.76, 'pKa_side_chain': None},
+
+    'V': {'name': 'Valine', 'hydrophobicity': 4.2, 'weight': 117.1,
+          'polarity': 5.9, 'charge': 'neutral', 'vdw_volume': 84,
+          'pKa_C_term': 2.29, 'pKa_N_term': 9.74, 'pKa_side_chain': None},
+
+    # Flexible
     'A': {'name': 'Alanine', 'hydrophobicity': 1.8, 'weight': 89.1,
           'polarity': 8.1, 'charge': 'neutral', 'vdw_volume': 31,
           'pKa_C_term': 2.35, 'pKa_N_term': 9.87, 'pKa_side_chain': None},
@@ -3184,22 +3203,7 @@ aa_props = {
           'polarity': 9.0, 'charge': 'neutral', 'vdw_volume': 3,
           'pKa_C_term': 2.35, 'pKa_N_term': 9.78, 'pKa_side_chain': None},
 
-    'M': {'name': 'Methionine', 'hydrophobicity': 1.9, 'weight': 149.2,
-          'polarity': 5.7, 'charge': 'neutral', 'vdw_volume': 105,
-          'pKa_C_term': 2.13, 'pKa_N_term': 9.28, 'pKa_side_chain': None},
-
-    'V': {'name': 'Valine', 'hydrophobicity': 4.2, 'weight': 117.1,
-          'polarity': 5.9, 'charge': 'neutral', 'vdw_volume': 84,
-          'pKa_C_term': 2.29, 'pKa_N_term': 9.74, 'pKa_side_chain': None},
-
-    'I': {'name': 'Isoleucine', 'hydrophobicity': 4.5, 'weight': 131.2,
-          'polarity': 5.2, 'charge': 'neutral', 'vdw_volume': 111,
-          'pKa_C_term': 2.32, 'pKa_N_term': 9.76, 'pKa_side_chain': None},
-
-    'L': {'name': 'Leucine', 'hydrophobicity': 3.8, 'weight': 131.2,
-          'polarity': 4.9, 'charge': 'neutral', 'vdw_volume': 111,
-          'pKa_C_term': 2.33, 'pKa_N_term': 9.74, 'pKa_side_chain': None},
-
+    # Stop codon
     '*': {'name': 'Stop', 'hydrophobicity': None, 'weight': None,
           'polarity': None, 'charge': None, 'vdw_volume': None,
           'pKa_C_term': None, 'pKa_N_term': None, 'pKa_side_chain': None},
@@ -3213,7 +3217,7 @@ def edit_change(df: pd.DataFrame, col: str='Edit', aa_properties: list=[]) -> pd
     df (dataframe): fastq outcomes dataframe
     col (str, optional): edit column name
     aa_properties (list, optional): list of properties to include in labels (Default: None). Options: 'hydrophobicity', 'polarity', 'charge', 'vdw_volume', 'pKa_C_term', 'pKa_N_term', 'pKa_side_chain'
-    
+
     Dependencies: pandas
     '''
     df = df[(df[col].str.contains(',')==False) & # Isolate single AA changes
@@ -3234,10 +3238,10 @@ def edit_change(df: pd.DataFrame, col: str='Edit', aa_properties: list=[]) -> pd
     df['After']=after_ls
     df['AA Number']=num_ls
 
-    basic = ['R','K', 'H'] # Organize data by conservation
-    acidic = ['D','E']
-    polar = ['S', 'T', 'N', 'Q', 'Y', 'C']
-    nonpolar = ['A','V','L','I','M','F','W','P','G']
+    basic = ['R', 'K', 'H'] # Organize data by conservation
+    acidic = ['D', 'E']
+    polar = ['S', 'T', 'Y', 'N', 'Q', 'C']
+    nonpolar = ['A', 'V', 'L', 'I', 'M', 'F', 'W', 'P', 'G']
     
     change = []
     if aa_properties is not None: 
@@ -3681,158 +3685,6 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
 
     return df
 
-def dms_cond(df: pd.DataFrame, cond: str, wt:str, res: int, 
-             sample: str='fastq_file', edit: str='Edit', psuedocount: int=0) -> pd.DataFrame:
-    ''' 
-    dms_cond(): returns DMS grid data in tidy format grouped by condition
-    
-    Parameters:
-    df (dataframe): fastq outcomes dataframe
-    cond (str): Condition column name for grouping fastq outcomes dataframe
-    wt (str): Expected wildtype nucleotide sequence (in frame AA)
-    res (int): First AA number
-    sample (str, optional): Sample column name for splicing fastq outcomes dataframe (Default: 'fastq_file')
-    edit (str, optional): Edit column name within fastq outcomes dataframe (Default: 'Edit')
-    psuedocount (int, optional): psuedocount to avoid log(0) & /0 (Default: 0)
-    
-    Dependencies: Bio.Seq.Seq, pandas, numpy, tidy, edit_change(), & aa_props
-    '''
-    wt_prot = Seq(wt).translate(table=1) # Obtain WT protein sequence
-    wt_nums = np.arange(res,res+len(wt_prot))
-    print('Isolate single aa change fastq outcomes')
-    dc=t.split(edit_change(df),sample) # Isolate single aa change fastq outcomes and split by sample
-    
-    print('Fill with DMS grid data for each sample:')
-    dc2=dict() # Fill with DMS grid data in tidy format split by sample
-    for key_sample,df_sample in dc.items():
-        print(key_sample)
-        wt_fastq = df[(df['Edit']=='WT')&(df[sample]==key_sample)] # Obtain WT fastq outcome
-        df_sample_DMS=pd.DataFrame(columns=wt_fastq.columns) # Fill with DMS grid data in tidy format
-        
-        for num in wt_nums: # Iterate through WT protein sequence
-            vals=dict() # Create dictionary with all amino acid changes for a given residue
-            
-            # Add metadata that is the same for all genotypes
-            meta = [x for x in df_sample.columns if x not in [edit,'count','fraction','before','after','number']]
-            for m in meta: 
-                vals[m]=[wt_fastq[m].to_list()[0]]*len(list(aa_props.keys()))
-            
-            # Create all amino acid changes
-            vals['before']=[wt_prot[num-res]]*len(list(aa_props.keys()))
-            vals['number']=[num]*len(list(aa_props.keys()))
-            vals['after']=list(aa_props.keys())
-            vals[edit]=[vals['before'][i]+str(num)+vals['after'][i] for i in range(len(vals['after']))]
-
-            # Fill in counts (+ psuedocount) for amino acid changes, WT, and none
-            counts=[]
-            num_mut = df_sample[df_sample['number']==num]
-            for a in vals['after']:
-                if a == wt_prot[num-res]: counts.append(wt_fastq['count'].to_list()[0]+psuedocount) # Wild type
-                elif a in num_mut['after'].to_list(): counts.append(num_mut[num_mut['after']==a]['count'].to_list()[0]+psuedocount) # Amino acid change present
-                else: counts.append(psuedocount) # Amino acid change absent
-            vals['count']=counts
-            sum_counts = sum(vals['count'])
-            vals['fraction']=[count/sum_counts for count in vals['count']]
-
-            df_sample_DMS = pd.concat([df_sample_DMS,pd.DataFrame(vals)]).reset_index(drop=True) # Append residue DMS data
-        
-        df_sample_DMS['number']=df_sample_DMS['number'].astype(int) # Set number as type int
-        df_sample_DMS['count']=df_sample_DMS['count'].astype(int) # Set count as type int for plotting
-
-        df_sample_DMS[sample] = [key_sample]*df_sample_DMS.shape[0]
-        dc2[key_sample]=df_sample_DMS # Append sample DMS data
-    del dc # Remove dc to save memory
-
-    print('Group samples by condition:')
-    dc3=t.split(t.join(dc2,sample),cond) # Join samples back into 1 dataframe & split by condition
-    del dc2 # Remove dc2 to save memory
-    df_cond_stat = pd.DataFrame()
-    for key_cond,df_cond in dc3.items(): # Iterate through conditions
-        print(key_cond)
-        edit_ls = []
-        fraction_avg_ls = []
-        fraction_ls = []
-        count_avg_ls = []
-        before_ls = []
-        after_ls = []
-        number_ls = []
-        for e in df_cond[edit]: # iterate through edits
-            df_cond_edit = df_cond[df_cond[edit]==e]
-            edit_ls.append(e)
-            fraction_avg_ls.append(sum(df_cond_edit['fraction'])/len(df_cond_edit['fraction']))
-            fraction_ls.append(df_cond_edit['fraction'].tolist())
-            count_avg_ls.append(sum(df_cond_edit['count'])/len(df_cond_edit['count']))
-            before_ls.append(df_cond_edit.iloc[0]['before'])
-            after_ls.append(df_cond_edit.iloc[0]['after'])
-            number_ls.append(df_cond_edit.iloc[0]['number'])
-        df_cond_stat = pd.concat([df_cond_stat,
-                                  pd.DataFrame({'Edit':edit_ls,
-                                                'before':before_ls,
-                                                'after':after_ls,
-                                                'number':number_ls,
-                                                'fraction_ls':fraction_ls,
-                                                'fraction_avg':fraction_avg_ls,
-                                                'count_avg':count_avg_ls,
-                                                cond:[key_cond]*len(number_ls)})])
-    return df_cond_stat.drop_duplicates(subset=['Edit','Description']).reset_index(drop=True)
-
-def dms_comp(df: pd.DataFrame, cond: str, cond_comp: str, wt: str, res: int, 
-             sample: str='fastq_file', edit: str='Edit', psuedocount: int=1) -> pd.DataFrame:
-    ''' 
-    dms_comp(): returns comparison DMS grid dataframe in tidy format split by condition
-    
-    Parameters:
-    df (dataframe): fastq outcomes dataframe
-    cond (str): Condition column name for grouping fastq outcomes dataframe
-    cond_comp (str): Condition for comparison group
-    wt (str): Expected wildtype nucleotide sequence (in frame AA)
-    res (int): First AA number
-    sample (str, optional): Sample column name for splicing fastq outcomes dataframe (Default: 'fastq_file')
-    edit (str, optional): Edit column name within fastq outcomes dataframe (Default: 'Edit')
-    psuedocount (int, optional): psuedocount to avoid log(0) & /0 (Default: 1)
-    
-    Dependencies: Bio.Seq.Seq, pandas, numpy, tidy, edit_change(), dms_cond(), & aa_props
-    '''
-    df_cond_stat = dms_cond(df,cond,wt,res,sample,edit,psuedocount) # Execute dms_cond()
-
-    # Fold change & p-value relative comparison group
-    print(f'Compute FC & pval relative to {cond_comp}:')
-    df_stat = pd.DataFrame()
-    df_comp = df_cond_stat[df_cond_stat[cond]==cond_comp] # Isolate comparison group
-    df_other = df_cond_stat[df_cond_stat[cond]!=cond_comp] # From other groups
-    for e in set(df_other[edit].tolist()): # iterate through edits
-        print(f'{e}')
-        df_other_edit = df_other[df_other[edit]==e]
-        df_comp_edit = df_comp[df_comp[edit]==e]
-        df_other_edit['fraction_avg_compare'] = [df_comp_edit.iloc[0]['fraction_avg']]*df_other_edit.shape[0]
-        df_other_edit['count_avg_compare'] = [df_comp_edit.iloc[0]['count_avg']]*df_other_edit.shape[0]
-        df_other_edit['FC'] = df_other_edit['fraction_avg']/df_comp_edit.iloc[0]['fraction_avg']
-        ttests = [ttest_ind(other_fraction_ls,df_comp_edit.iloc[0]['fraction_ls']) 
-                                 for other_fraction_ls in df_other_edit['fraction_ls']]
-        df_other_edit['pval'] = [ttest[1] for ttest in ttests]
-        df_other_edit['tstat'] = [ttest[0] for ttest in ttests]
-        df_stat = pd.concat([df_stat,df_other_edit])
-    df_stat['compare'] = [cond_comp]*df_stat.shape[0]
-    return df_stat[[edit,'before','after','number','FC','pval','tstat','fraction_avg','fraction_avg_compare','count_avg','count_avg_compare',cond,'compare']].sort_values(by=['number','after']).reset_index(drop=True)
-
-def subscript(df: pd.DataFrame, tick: str='before',tick_sub: str='number') -> pd.DataFrame:
-    ''' 
-    subscript(): returns dataframe with subscripts to tick labels
-    
-    Parameters:
-    df (dataframe): dataframe
-    tick (str, optional): new tick label column name
-    tick_sub (str, optional): previous numeric tick label that will become a subscript
-
-    Dependencies: pandas
-    '''
-    ticks = []
-    labels = []
-    for (t,ts) in set(zip(df[tick],df[tick_sub])):
-        ticks.append(ts)
-        labels.append('$\\mathrm{'+t+'_{'+str(ts)+'}}$')
-    return pd.DataFrame({'tick':ticks,'label':labels}).sort_values(by='tick').reset_index(drop=True)
-
 # Plot methods
 def cat(typ: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list = None, cats_exclude: list|str = None, cols: str=None, cols_ord: list=None, cols_exclude: list|str=None, PDB_pt: str=None,
         file: str=None, dir: str=None, palette_or_cmap: str='colorblind', edgecol: str='black', lw: int=1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
@@ -3846,7 +3698,7 @@ def cat(typ: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list =
     
     Parameters:
     typ (str): plot type (bar, box, violin, swarm, strip, point, count, bar_strip, box_strip, violin_strip, bar_swarm, box_swarm, violin_swarm)
-    df (dataframe | str): pandas dataframe or file path
+    df (dataframe | str): pandas dataframe (or file path)
     x (str, optional): x-axis column name
     y (str, optional): y-axis column name
     cats_ord (list, optional): category column values order (x- or y-axis)
@@ -3951,7 +3803,7 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
     stack(): creates stacked bar plot
 
     Parameters:
-    df (dataframe | str): pandas dataframe or file path
+    df (dataframe | str): pandas dataframe (or file path)
     x (str, optional): x-axis column name (Default: 'fastq_file')
     y (str, optional): y-axis column name (Default: 'fraction')
     cols (str, optional): color column name (Default: 'Edit')
@@ -4058,7 +3910,7 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: t
     vol(): creates volcano plot
     
     Parameters:
-    df (dataframe | str): pandas dataframe or file path
+    df (dataframe | str): pandas dataframe (or file path) from st.compare()
     FC (str): fold change column name (x-axis)
     pval (str): p-value column name (y-axis)
     cols (str, optional): color column name
@@ -4162,7 +4014,7 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
     torn(): creates tornado plot
     
     Parameters:
-    df (dataframe | str): pandas dataframe or file path
+    df (dataframe | str): pandas dataframe (or file path) from st.compare()
     FC (str): fold change column name (y-axis)
     pval (str): p-value column name (size column if not specified)
     size (str | bool, optional): size column name (Default: pval; specify False for no size)
@@ -4235,18 +4087,19 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
     PDB_pt = PDB_pt if PDB_pt is not None else PDB_neighbors
 
     # Determine if we are saving to HTML (for interactive behavior)
-    if label_info == True and file is not None:
-        if file.endswith('.html') == True:
-            label = f'{label}_info'
-            is_html = True
+    if file is not None:
+        is_html = file.endswith('.html')
 
+        if is_html == True:
             # Match title fontsize for html plots
             x_axis_size=title_size
             y_axis_size=title_size
             legend_title_size=title_size
 
-        else:
-            is_html = False
+            # Detailed labels for html plots
+            if label_info == True:
+                label = f'{label}_info'
+
     else:
         is_html = False
 
@@ -4404,7 +4257,7 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
     plt.title(title, fontsize=title_size, fontweight=title_weight, family=title_font)
 
     # Save & show fig; return dataframe
-    p.save_fig(file=file, dir=dir, fig=fig, dpi=dpi, PDB_pt=PDB_pt)
+    p.save_fig(file=file, dir=dir, fig=fig, dpi=dpi, PDB_pt=PDB_pt, icon='tornado')
     if show:
         ext = file.split('.')[-1].lower() if file is not None else ''
         if ext not in ('html', 'json'):
@@ -4427,7 +4280,7 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
     corr(): creates correlation plot
     
     Parameters:
-    df (dataframe | str): pandas dataframe or file path
+    df (dataframe | str): pandas dataframe (or file path) from st.compare()
     cond_col (str): condition column name for comparison
     cond_vals (list): two condition values for comparison (x and y-axis)
     FC (str): fold change column name (x and y-axis)
@@ -4536,18 +4389,19 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
     PDB_pt = PDB_pt if PDB_pt is not None else PDB_neighbors
 
     # Determine if we are saving to HTML (for interactive behavior)
-    if label_info == True and file is not None:
-        if file.endswith('.html') == True:
-            label = f'{label}_info'
-            is_html = True
+    if file is not None:
+        is_html = file.endswith('.html')
 
+        if is_html == True:
             # Match title fontsize for html plots
             x_axis_size=title_size
             y_axis_size=title_size
             legend_title_size=title_size
 
-        else:
-            is_html = False
+            # Detailed labels for html plots
+            if label_info == True:
+                label = f'{label}_info'
+
     else:
         is_html = False
 
@@ -4740,7 +4594,7 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
     plt.title(title, fontsize=title_size, fontweight=title_weight, family=title_font)
 
     # Save & show fig; return dataframe
-    p.save_fig(file=file, dir=dir, fig=fig, dpi=dpi, PDB_pt=PDB_pt)
+    p.save_fig(file=file, dir=dir, fig=fig, dpi=dpi, PDB_pt=PDB_pt, icon='scatter')
     if show:
         ext = file.split('.')[-1].lower() if file is not None else ''
         if ext not in ('html', 'json'):
@@ -4750,33 +4604,50 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
     if return_df:
         return df
 
-def heat(df: pd.DataFrame | str, cond: str, x: str='number', y: str='after', vals: str='fraction_avg', vals_dims:tuple=None,
-         file=None, dir=None, edgecol: str='black', lw: int=1, annot=False, cmap: str="bone_r", sq: bool=True, cbar: bool=True,
-         title: str='', title_size: int=12, title_weight: str='bold', title_font: str='Arial', figsize: tuple = (5, 5),
-         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_ticks_rot: int=45, x_ticks_font: str='Arial',
-         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_ticks_rot: int=0, y_ticks_font: str='Arial',
-         show: bool=True, space_capitalize: bool=True, **kwargs):
+def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str, wt_res: int, cutoff: float=0, aa: str='aa', label: str='Edit',
+        file=None, dir=None, edgecol: str='black', lw: int=1, center: float=0, cmap: str="seismic", cmap_WT: str='forestgreen', cmap_not_WT: str='lightgray', sq: bool=False, 
+        cbar: bool=True, cbar_label: str=None, cbar_label_size: int=None, cbar_label_weight: str='bold', cbar_tick_size: int=None, cbar_shrink: float=None, cbar_aspect: int=None, cbar_pad: float=None, cbar_orientation: str=None,
+        title: str='', title_size: int=12, title_weight: str='bold', title_font: str='Arial', figsize: tuple = (5, 5), vertical: bool=True,
+        x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_ticks_rot: int=45, x_ticks_font: str='Arial',
+        y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_ticks_rot: int=0, y_ticks_font: str='Arial',
+        dpi: int=0, show: bool=True, **kwargs):
     ''' 
-    heat(): creates heatmap
+    heat(): creates heatmap plot
     
     Parameters:
-    df (dataframe | str): tidy-formatted DMS dataframe (dms_cond() or dms_comp()) or file path
-    cond (str): Condition column name for grouping fastq outcomes dataframe
-    x (str, optional): x-axis column name (AA residues number column)
-    y (str, optional): y-axis column name (AA change column)
-    vals (str, optional): values column name
-    vals_dims (tuple, optional): vals minimum and maximum formatted (vmin, vmax; Default: None)
+    df (dataframe | str): pandas dataframe (or file path) from st.compare()
+    cond_col (str): Condition column name
+    cond (str): Condition column value for filtering
+    FC (str): fold change column name (values within heatmap after log2 transformation)
+    wt_prot (str): WT protein sequence
+    wt_res (int): WT protein sequence residue start number
+    cutoff (float, optional): comparison count mean cutoff for masking low-abundance values
+    aa (str, optional): AA saturation mutagenesis (Options: 'aa' [default], 'aa_subs', 'aa_ins', 'aa_dels'). The 'aa' option makes all amino acid substitutions ('aa_subs'), +1 amino acid insertions ('aa_ins'), and -1 amino acid deletions ('aa_dels').
+    label (str, optional): label column name (Default: 'Edit'). Can't be None.
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     edgecol (str, optional): point edge color
     lw (int, optional): line width
-    annot (bool, optional): annotate values
+    center (float, optional): center value for colormap
     cmap (str, optional): matplotlib color map
+    sq (bool, optional): square dimensions (Default: False)
+    cmap_WT (str, optional): color for WT values in colorbar
+    cmap_not_WT (str, optional): color for non-WT values in colorbar
+    cbar (bool, optional): show colorbar (Default: True)
+    cbar_label (str, optional): colorbar label
+    cbar_label_size (int, optional): colorbar label font size
+    cbar_label_weight (str, optional): colorbar label bold, normal, & heavy
+    cbar_tick_size (int, optional): colorbar tick font size
+    cbar_shrink (float, optional): colorbar shrink factor
+    cbar_aspect (int, optional): colorbar aspect ratio
+    cbar_pad (float, optional): colorbar padding
+    cbar_orientation (str, optional): colorbar orientation ('vertical' | 'horizontal')
     title (str, optional): plot title
     title_size (int, optional): plot title font size
     title_weight (str, optional): plot title bold, italics, etc.
     title_font (str, optional): plot title font
     figsize (tuple, optional): figure size per subplot
+    vertical (bool, optional): vertical orientation; otherwise horizontal (Default: True)
     x_axis (str, optional): x-axis name
     x_axis_size (int, optional): x-axis name font size
     x_axis_weight (str, optional): x-axis name bold, italics, etc.
@@ -4789,56 +4660,277 @@ def heat(df: pd.DataFrame | str, cond: str, x: str='number', y: str='after', val
     y_axis_font (str, optional): y-axis font
     y_ticks_rot (int, optional): y-axis ticks rotation
     y_ticks_font (str, optional): y-ticks font
+    dpi (int, optional): figure dpi (Default: 600 for non-HTML, 150 for HTML)
     show (bool, optional): show plot (Default: True)
-    space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     
     Dependencies: matplotlib, seaborn, pandas, & aa_props
     '''
     # Get dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
-
-    # Find min and max values in the dataset for normalization
-    if vals_dims is None:
-        vmin = df[vals].values.min()
-        vmax = df[vals].values.max()
-    else:
-        vmin = vals_dims[0]
-        vmax = vals_dims[1]
-
-    # Make DMS grids
-    print('Make DMS grids')
-    dc=t.split(df,cond) # Split by condition
-    dc2={key:pd.pivot(df_cond,columns=x,index=y,values=vals).astype(float).reindex(list(aa_props.keys())) 
-         for key,df_cond in dc.items()} # Generate pivot tables
     
-    # Create a single figure with multiple heatmap subplots
-    print('Create a single figure with multiple heatmap subplots')
-    fig, axes = plt.subplots(nrows=len(list(dc2.keys())),ncols=1,figsize=(figsize[0],figsize[1]*len(list(dc2.keys()))),sharex=False,sharey=True)
-    if isinstance(axes, np.ndarray)==False: axes = np.array([axes]) # Make axes iterable if there is only 1 heatmap
-    for (ax, key) in zip(axes, list(dc2.keys())):
-        print(f'{key}')
-        sns.heatmap(dc2[key],annot=annot,cmap=cmap,ax=ax,linecolor=edgecol,linewidths=lw,cbar=cbar,square=sq,vmin=vmin,vmax=vmax, **kwargs)
-        if len(list(dc2.keys()))>1: ax.set_title(key,fontsize=title_size,fontweight=title_weight,fontfamily=title_font)  # Add title to subplot
-        else: ax.set_title(title,fontsize=title_size,fontweight=title_weight,fontfamily=title_font)
-        if x_axis=='': 
-            if space_capitalize: ax.set_xlabel(p.re_un_cap(x),fontsize=x_axis_size,fontweight=x_axis_weight,fontfamily=x_axis_font) # Add x axis label
-            else: ax.set_xlabel(x,fontsize=x_axis_size,fontweight=x_axis_weight,fontfamily=x_axis_font) # Add x axis label
+    # cbar kwargs
+    cbar_kws = dict()
+    if cbar_label is not None: cbar_kws['label'] = cbar_label
+    else: cbar_kws['label'] = f'log2({FC})'
+    if cbar_shrink is not None: cbar_kws['shrink'] = cbar_shrink
+    if cbar_aspect is not None: cbar_kws['aspect'] = cbar_aspect
+    if cbar_pad is not None: cbar_kws['pad'] = cbar_pad
+    if cbar_orientation is not None: cbar_kws['orientation'] = cbar_orientation
+    
+    # Isolate condition dataframe
+    df = df[df[cond_col]==cond]
+    
+    # Add label info: Before, Number, After, AA properties
+    df = add_label_info(df=df, label=label)
+    df.drop(columns=[f'{label}_info'], inplace=True)
+
+    # Determine if we are saving to HTML (for interactive behavior)
+    if file is not None:
+        is_html = file.endswith('.html')
+        
+        if is_html == True:
+            # Match title fontsize for html plots
+            x_axis_size=title_size
+            y_axis_size=title_size
+
+    else:
+        is_html = False
+
+    # Log transform data
+    df[f'log2({FC})'] = [np.log10(FC_val)/np.log10(2) for FC_val in df[FC]]
+
+    # Set DMS Before & After
+    before_ls = []
+    after_ls = []
+
+    for (before,after) in t.zip_cols(df=df, cols=['Before','After']):
+        if len(before)==1 & len(after)==1: # Substitution
+            before_ls.append(before)
+            after_ls.append(after)
+
+        elif len(before)==1 & len(after)>1: # Insertion
+            before_ls.append(before)
+            after_ls.append(f"ins{after[1:]}")
+
+        elif len(before)>1 & len(after)==1: # Deletion
+            before_ls.append(before[:-1])
+            if before_ls[-1]==before[0]:
+                after_ls.append("del")
+            else:
+                after_ls.append(f"{before[:-1]}del")
+
+        else: # Complex (multiple changes)
+            before_ls.append(before)
+            after_ls.append(after)
+    
+    df['DMS_Before'] = before_ls
+    df['DMS_After'] = after_ls
+
+    def dms_region(df_temp: pd.DataFrame, aa_: str) -> pd.DataFrame:
+        '''
+        dms_region(): Extracts DMS grid data for specified amino acid changes
+        '''
+        wt_nums = np.arange(wt_res,wt_res+len(wt_prot))
+
+        df_ls = []
+        for num in wt_nums: # Iterate through WT protein sequence
+            vals=dict() # Create dictionary with all amino acid changes for a given residue
+            
+            # Create all amino acid changes
+            if aa_=='aa_subs': # Substitutions
+                vals['DMS_Before']=[wt_prot[num-wt_res]]*len(list(aa_props.keys()))
+                vals['AA Number']=[num]*len(list(aa_props.keys()))
+                vals['DMS_After']=list(aa_props.keys())
+                vals['DMS_Before_Number']=[f"{wt_prot[num-wt_res]}{num}"]*len(list(aa_props.keys()))
+            
+            elif aa_=='aa_ins': # Insertions
+                vals['DMS_Before']=[wt_prot[num-wt_res]]*(len(list(aa_props.keys()))-1)
+                vals['AA Number']=[num]*(len(list(aa_props.keys()))-1)
+                vals['DMS_After']=[f"ins{aa}" for aa in list(aa_props.keys()) if aa!='*']
+                vals['DMS_Before_Number']=[f"{wt_prot[num-wt_res]}{num}"]*(len(list(aa_props.keys()))-1)
+            
+            elif aa_=='aa_dels': # Deletions
+                vals['DMS_Before']=[wt_prot[num-wt_res]]
+                vals['AA Number']=[num]
+                vals['DMS_After']=["del"]
+                vals['DMS_Before_Number']=[f"{wt_prot[num-wt_res]}{num}"]
+            
+            # Extract log2FC, label info, and comparison count mean for each amino acid change
+            log2FC_ls=[]
+            #label_ls=[]
+            comparison_count_mean_ls=[]
+            
+            # Filter to specific residue and WT amino acid
+            df_temp2 = df_temp[(df_temp['AA Number']==num) & (df_temp['DMS_Before']==wt_prot[num-wt_res])]
+
+            for DMS_after in vals['DMS_After']:
+
+                # Filter to specific amino acid change
+                df_temp3 = df_temp2[df_temp2['DMS_After'] == DMS_after]
+                if df_temp3.empty == False: # Present
+                    log2FC_ls.append(df_temp3[f'log2({FC})'].to_list()[0])
+                    #label_ls.append(df_temp3[label].to_list()[0])
+                    comparison_count_mean_ls.append(df_temp3['count_mean_compare'].to_list()[0])
+
+                    if df_temp3.shape[0]>1:
+                        print(f"Warning: Multiple entries found for {wt_prot[num-wt_res]}{num}{DMS_after} in condition {cond}. Using first entry.")
+
+                else: # Absent
+                    log2FC_ls.append(None)
+                    #label_ls.append('')
+                    comparison_count_mean_ls.append(-1)
+
+            vals[f'log2({FC})']=log2FC_ls
+            #vals[label]=label_ls
+            vals['count_mean_compare']=comparison_count_mean_ls
+            df_ls.append(pd.DataFrame(vals))
+
+        return pd.concat(df_ls, ignore_index=True)
+
+    # Restrict to specified aa mutations
+    df2 = pd.DataFrame()
+
+    if aa == 'aa_subs' or aa == 'aa': # Substitutions
+        df2 = pd.concat([df2, 
+                        dms_region(df_temp = df[(df['DMS_Before'].str.len()==1) & (df['DMS_After'].str.len()==1)],
+                                    aa_='aa_subs')], ignore_index=True)
+    
+    if aa == 'aa_ins' or aa == 'aa': # +1 Insertions
+        df2 = pd.concat([df2, 
+                        dms_region(df_temp = df[df['DMS_After'].str.startswith('ins')],
+                                    aa_='aa_ins')], ignore_index=True)
+    
+    if aa == 'aa_dels' or aa == 'aa': # -1 Deletions
+        df2 = pd.concat([df2, 
+                        dms_region(df_temp = df[df['DMS_After']=='del'],
+                                    aa_='aa_dels')], ignore_index=True)
+
+    # Make DMS grid
+    if aa == 'aa': index = list(aa_props.keys()) + ['del'] + [f"ins{key}" for key in aa_props.keys() if key != '*']
+    elif aa == 'aa_subs': index = list(aa_props.keys())
+    elif aa == 'aa_ins': index = [f"ins{key}" for key in aa_props.keys() if key != '*']
+    elif aa == 'aa_dels': index = ['del']
+
+    df2_log2FC = pd.pivot(df2, columns='AA Number', index='DMS_After', values=f'log2({FC})').astype(float).reindex(index)
+    #df2_label = pd.pivot(df2, columns='AA Number', index='DMS_After', values=label).astype(str).reindex(index)
+    df2_compare_count_mean = pd.pivot(df2, columns='AA Number', index='DMS_After', values='count_mean_compare').astype(float).reindex(index)
+
+    # Mask values below cutoff & WT
+    mask_not_WT = np.zeros(df2_log2FC.shape, dtype=bool)
+    mask_WT = np.zeros(df2_log2FC.shape, dtype=bool)
+
+    # Iterate through dataframe to set masks
+    nrows, ncols = df2_log2FC.shape
+    for i in range(nrows):
+        for j in range(ncols):
+            if df2_log2FC.index[i] == df2[(df2['AA Number'] == df2_log2FC.columns[j])].reset_index(drop=True).iloc[0,0]:
+                mask_WT[i, j] = True # WT
+            elif np.isnan(df2_log2FC.iat[i, j]) or df2_compare_count_mean.iat[i, j] < cutoff:
+                mask_not_WT[i, j] = True # NaN value or comparison count mean below cutoff
+
+    if vertical==True: # Vertical orientation
+
+        # Create figure
+        fig, ax = plt.subplots(figsize=(figsize[0],figsize[1]))
+        
+        sns.heatmap(df2_log2FC, mask=mask_not_WT | mask_WT, # Data heatmap
+                    cbar_kws=cbar_kws,
+                    cmap=cmap, center=center,
+                    ax=ax, linecolor=edgecol, linewidths=lw, 
+                    cbar=cbar, square=sq, 
+                    **kwargs)
+        
+        sns.heatmap(mask_not_WT, mask=~mask_not_WT, # Masked low-abundance values
+                    cmap=[cmap_not_WT], center=center,
+                    ax=ax, linecolor=edgecol, linewidths=lw, 
+                    cbar=False, square=sq, 
+                    **kwargs)
+
+        sns.heatmap(mask_WT, mask=~mask_WT, # Masked WT values
+                    cmap=[cmap_WT], center=center,
+                    ax=ax, linecolor=edgecol, linewidths=lw, 
+                    cbar=False, square=sq, 
+                    **kwargs)
+        
+        # Format x axis
+        if x_axis=='': ax.set_xlabel("AA",fontsize=x_axis_size,fontweight=x_axis_weight,fontfamily=x_axis_font)
         else: ax.set_xlabel(x_axis,fontsize=x_axis_size,fontweight=x_axis_weight,fontfamily=x_axis_font)
-        if y_axis=='': 
-            if space_capitalize: ax.set_ylabel(p.re_un_cap(y),fontsize=y_axis_size,fontweight=y_axis_weight,fontfamily=y_axis_font) # Add y axis label
-            else: ax.set_ylabel(y,fontsize=y_axis_size,fontweight=y_axis_weight,fontfamily=y_axis_font) # Add y axis label
+        
+        # Format y axis
+        if y_axis=='': ax.set_ylabel("Change",fontsize=y_axis_size,fontweight=y_axis_weight,fontfamily=y_axis_font) # Add y axis label
         else: ax.set_ylabel(y_axis,fontsize=y_axis_size,fontweight=y_axis_weight,fontfamily=y_axis_font)
-        ax.set_xticklabels(subscript(dc[key])['label'].to_list()) # Change x ticks to have subscript format
+        
         # Format x ticks
+        ax.set_xticks(np.arange(df2_log2FC.shape[1]) + 0.5)
+        ax.set_xticklabels(df2['DMS_Before_Number'].unique())
         if (x_ticks_rot==0)|(x_ticks_rot==90): plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, ha="center",rotation_mode="anchor",fontname=x_ticks_font) 
         else: plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, ha="right",rotation_mode="anchor",fontname=x_ticks_font) 
+        
         # Format y ticks
+        ax.set_yticks(np.arange(df2_log2FC.shape[0]) + 0.5)
+        ax.set_yticklabels(df2_log2FC.index)
         plt.setp(ax.get_yticklabels(), rotation=y_ticks_rot, va='center', ha="right",rotation_mode="anchor",fontname=y_ticks_font)
-        ax.set_facecolor('white')  # Set background to transparent
+    
+    else: # Horizontal orientation (Transpose)
 
-    # Save & show fig
-    if file is not None and dir is not None:
-        mkdir(dir) # Make output directory if it does not exist
-        plt.savefig(fname=os.path.join(dir, file), dpi=600, bbox_inches='tight', format=f'{file.split(".")[-1]}')
-    if show: plt.show()
+        # Create figure
+        fig, ax = plt.subplots(figsize=(figsize[0],figsize[1]))
+        
+        sns.heatmap(df2_log2FC.T, mask=mask_not_WT.T | mask_WT.T, # Data heatmap
+                    cbar_kws=cbar_kws,
+                    cmap=cmap, center=center,
+                    ax=ax, linecolor=edgecol, linewidths=lw, 
+                    cbar=cbar, square=sq, 
+                    **kwargs)
+        
+        sns.heatmap(mask_not_WT.T, mask=~mask_not_WT.T, # Masked low-abundance values
+                    cmap=[cmap_not_WT], center=center,
+                    ax=ax, linecolor=edgecol, linewidths=lw, 
+                    cbar=False, square=sq, 
+                    **kwargs)
+
+        sns.heatmap(mask_WT.T, mask=~mask_WT.T, # Masked WT values
+                    cmap=[cmap_WT], center=center,
+                    ax=ax, linecolor=edgecol, linewidths=lw, 
+                    cbar=False, square=sq, 
+                    **kwargs)
+
+        # Format y axis
+        if x_axis=='': ax.set_ylabel("AA",fontsize=x_axis_size,fontweight=x_axis_weight,fontfamily=x_axis_font)
+        else: ax.set_ylabel(x_axis,fontsize=x_axis_size,fontweight=x_axis_weight,fontfamily=x_axis_font)
+        
+        # Format x axis
+        if y_axis=='': ax.set_xlabel("Change",fontsize=y_axis_size,fontweight=y_axis_weight,fontfamily=y_axis_font) # Add y axis label
+        else: ax.set_xlabel(y_axis,fontsize=y_axis_size,fontweight=y_axis_weight,fontfamily=y_axis_font)
+        
+        # Format y ticks
+        ax.set_yticks(np.arange(df2_log2FC.shape[1]) + 0.5)
+        ax.set_yticklabels(df2['DMS_Before_Number'].unique())
+        plt.setp(ax.get_yticklabels(), rotation=y_ticks_rot, va="center", ha="right",rotation_mode="anchor",fontname=y_ticks_font) 
+        
+        # Format x ticks
+        ax.set_xticks(np.arange(df2_log2FC.shape[0]) + 0.5)
+        ax.set_xticklabels(df2_log2FC.index)
+        if (x_ticks_rot==0)|(x_ticks_rot==90): plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, ha="center",rotation_mode="anchor",fontname=x_ticks_font)
+        else: plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, ha="right",rotation_mode="anchor",fontname=x_ticks_font)
+
+    # Format title
+    ax.set_title(title,fontsize=title_size,fontweight=title_weight,fontfamily=title_font)
+
+    # Format cbar
+    cbar = ax.collections[0].colorbar
+    cbar.set_label(f"log2({FC})" if cbar_label is None else cbar_label, fontsize=cbar_label_size, fontweight=cbar_label_weight)
+    cbar.ax.tick_params(labelsize=cbar_tick_size)
+        
+    # Set background to transparent
+    ax.set_facecolor('white')
+
+    # Save & show fig; return dataframe
+    p.save_fig(file=file, dir=dir, fig=fig, dpi=dpi, icon='heat')
+    if show:
+        ext = file.split('.')[-1].lower() if file is not None else ''
+        if ext not in ('html', 'json'):
+            plt.show()
+        else:
+            mpld3.show(fig)

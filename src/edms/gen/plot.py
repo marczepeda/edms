@@ -285,6 +285,7 @@ def export_mpld3_molstar_html(
     file: str,
     pdb_id: str | None = None,
     pdb_url: str | None = None,
+    icon: str = 'python',
 ) -> Path:
     """
     export_mpld3_molstar_html(): Create a standalone HTML file that combines:
@@ -296,6 +297,7 @@ def export_mpld3_molstar_html(
     output_html (str or Path): Target HTML file path.
     pdb_id (str, optional): PDB ID to load from PDBe if pdb_url is not given.
     pdb_url (str, optional): Direct URL to a structure file. If given, overrides pdb_id.
+    icon (str, optional): html file icon (Default: python logo)
 
     Returns
     -------
@@ -391,21 +393,21 @@ document.addEventListener('DOMContentLoaded', function () {{
 <head>
 <meta charset="utf-8" />
 <title>{file[:-5]}</title>
-<link rel="icon" type="image/svg+xml" href="{file[:-5]}/Python-logo-notext.svg">
+<link rel="icon" type="image/svg+xml" href="{file[:-5]}/{icon}.svg">
 {molstar_head}
 </head>
 <body>
 {molstar_body}
 </body>
 </html>
-"""
+"""#here
 
     # 6) Write final file
     output_html.write_text(html, encoding="utf-8")
 
     return output_html
 
-def save_fig(file: str | None, dir: str | None, fig=None, dpi: int = 0, PDB_pt: str = None) -> None:
+def save_fig(file: str | None, dir: str | None, fig=None, dpi: int = 0, PDB_pt: str = None, icon: str = 'python') -> None:
     """
     save_fig(): save static image and optionally interactive HTML or JSON via mpld3.
 
@@ -415,6 +417,7 @@ def save_fig(file: str | None, dir: str | None, fig=None, dpi: int = 0, PDB_pt: 
     fig: matplotlib Figure object (if None, uses current figure)
     dpi (int, optional): resolution for static images and base resolution for interactive exports (default: 600)
     PDB_pt (str, optional): File path to PDB file for Mol* visualization (Default: None)
+    icon (str, optional): html file icon (Default: python logo)
     """
     if file is None or dir is None:
         return
@@ -454,8 +457,8 @@ def save_fig(file: str | None, dir: str | None, fig=None, dpi: int = 0, PDB_pt: 
                     shutil.copy(js_path, Path(sub_dir) / "molstar.js")
                 with pkg_resources.path(molstar_pkg, "molstar.css") as css_path:
                     shutil.copy(css_path, Path(sub_dir) / "molstar.css")
-                with pkg_resources.path(icon_pkg, "Python-logo-notext.svg") as svg_path:
-                    shutil.copy(svg_path, Path(sub_dir) / "Python-logo-notext.svg")
+                with pkg_resources.path(icon_pkg, f"{icon}.svg") as svg_path:
+                    shutil.copy(svg_path, Path(sub_dir) / f"{icon}.svg")
                 
                 # Build a combined HTML: mpld3 plot (left) + Mol* viewer (right)
                 if len(PDB_pt) == 4:
@@ -469,6 +472,7 @@ def save_fig(file: str | None, dir: str | None, fig=None, dpi: int = 0, PDB_pt: 
                     dir=dir,
                     file=file,
                     pdb_url=PDB_pt,
+                    icon=icon
                 )
                 
         elif ext == 'json':
@@ -590,7 +594,7 @@ def formatter(typ: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: s
               x_axis: str, x_axis_size: int, x_axis_weight: str, x_axis_font: str, x_axis_scale: str, x_axis_dims: tuple, x_ticks_rot: int, x_ticks_font: str, x_ticks: list,
               y_axis: str, y_axis_size: int, y_axis_weight: str, y_axis_font: str, y_axis_scale: str, y_axis_dims: tuple, y_ticks_rot: int, y_ticks_font: str, y_ticks: list,
               legend_title: str, legend_title_size: int, legend_size: int, legend_bbox_to_anchor: tuple, legend_loc: str, legend_items: tuple, legend_ncol: int,
-              dpi: int = 0, show: bool = True, space_capitalize: bool = True, PDB_pt: str = None) -> None:
+              dpi: int = 0, show: bool = True, space_capitalize: bool = True, PDB_pt: str = None, icon: str = 'python', cats_ord: list = None) -> None:
     ''' 
     formatter(): formats, displays, and saves plots
 
@@ -631,6 +635,8 @@ def formatter(typ: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: s
     show (bool, optional): show plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     PDB_pt (str, optional): Path to PDB file for mol* visualization; only intended for fastq plots (Default: None)
+    icon (str, optional): html file icon (Default: python logo)
+    cats_ord (list, optional): order of categories for categorical plots
 
     Dependencies: os, matplotlib, seaborn, io, re_un_cap(), & round_up_pow_10()
     '''
@@ -661,7 +667,7 @@ def formatter(typ: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: s
             else:
                 if file is not None:
                     if file.endswith('.html') == True: # put one tick per category, centered on each bar row
-                        ls = df[x].unique().tolist()
+                        ls = df[x].unique().tolist() if cats_ord is None else cats_ord
                         ax.set_xticks(np.arange(len(ls)))
                         ax.set_xticklabels(ls,
                                         rotation=x_ticks_rot,
@@ -688,7 +694,7 @@ def formatter(typ: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: s
             else:
                 if file is not None:
                     if file.endswith('.html') == True: # put one tick per category, centered on each bar row
-                        ls = df[y].unique().tolist()
+                        ls = df[y].unique().tolist() if cats_ord is None else cats_ord
                         ax.set_yticks(np.arange(len(ls)))
                         ax.set_yticklabels(ls,
                                         rotation=y_ticks_rot,
@@ -712,7 +718,7 @@ def formatter(typ: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: s
             else: move_dist_legend(ax,legend_loc,legend_title_size,legend_size,legend_bbox_to_anchor,legend_ncol)
 
     # Save & show fig
-    save_fig(file=file, dir=dir, fig=ax.figure, dpi=dpi, PDB_pt=PDB_pt)
+    save_fig(file=file, dir=dir, fig=ax.figure, dpi=dpi, PDB_pt=PDB_pt, icon=icon)
     if show:
         ext = file.split('.')[-1].lower() if file is not None else ''
         if ext not in ('html', 'json'):
@@ -897,7 +903,7 @@ def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, col
               x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
               y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
               legend_title=legend_title, legend_title_size=legend_title_size, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_items=legend_items, legend_ncol=legend_ncol,
-              dpi=dpi, show=show, space_capitalize=space_capitalize)
+              dpi=dpi, show=show, space_capitalize=space_capitalize, icon='scatter')
 
 def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: list = None, cats_exclude: list|str = None, cols: str = None, cols_ord: list = None, cols_exclude: list | str = None,
         file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
@@ -1099,7 +1105,7 @@ def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: li
               x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
               y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
               legend_title=legend_title, legend_title_size=legend_title_size, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_items=legend_items, legend_ncol=legend_ncol,
-              dpi=dpi, show=show, space_capitalize=space_capitalize, PDB_pt=PDB_pt)
+              dpi=dpi, show=show, space_capitalize=space_capitalize, PDB_pt=PDB_pt, icon='cat', cats_ord=cats_ord)
 
 def dist(typ: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord: list = None, cols_exclude: list | str = None, bins: int = 40, log10_low: int = 0,
          file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', edgecol: str = 'black', lw: int = 1, ht: float = 1.5, asp: int = 5, tp: float = .8, hs: int = 0, despine: bool = False,
@@ -1202,7 +1208,7 @@ def dist(typ: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord: l
                   x_axis, x_axis_size, x_axis_weight, x_axis_font, x_axis_scale, x_axis_dims, x_ticks_rot, x_ticks_font, x_ticks,
                   y_axis, y_axis_size, y_axis_weight, y_axis_font, y_axis_scale, y_axis_dims, y_ticks_rot, y_ticks_font, y_ticks,
                   legend_title, legend_title_size, legend_size, legend_bbox_to_anchor, legend_loc, legend_items, legend_ncol,
-                  dpi=dpi, show=show, space_capitalize=space_capitalize)
+                  dpi=dpi, show=show, space_capitalize=space_capitalize, icon='histogram')
     elif typ=='kde': 
         fig, ax = plt.subplots(figsize=figsize)
         if x_axis_scale=='log':
@@ -1218,7 +1224,7 @@ def dist(typ: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord: l
                   x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
                   y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
                   legend_title=legend_title, legend_title_size=legend_title_size, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_items=legend_items, legend_ncol=legend_ncol,
-                  dpi=dpi, show=show, space_capitalize=space_capitalize)
+                  dpi=dpi, show=show, space_capitalize=space_capitalize, icon='histogram')
     elif typ=='hist_kde':
         fig, ax = plt.subplots(figsize=figsize)
         if x_axis_scale=='log':
@@ -1238,7 +1244,7 @@ def dist(typ: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord: l
                   x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
                   y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
                   legend_title=legend_title, legend_title_size=legend_title_size, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_items=legend_items, legend_ncol=legend_ncol,
-                  dpi=dpi, show=show, space_capitalize=space_capitalize)
+                  dpi=dpi, show=show, space_capitalize=space_capitalize, icon='histogram')
     elif typ=='rid':
         # Set color scheme
         color_palettes = ["deep", "muted", "bright", "pastel", "dark", "colorblind", "husl", "hsv", "Paired", "Set1", "Set2", "Set3", "tab10", "tab20"] # List of common Seaborn palettes
@@ -1271,7 +1277,7 @@ def dist(typ: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord: l
         if legend_title=='': legend_title=cols
         g.figure.legend(title=legend_title,title_fontsize=legend_title_size,fontsize=legend_size,
                         loc=legend_loc,bbox_to_anchor=legend_bbox_to_anchor)
-        save_fig(file=file, dir=dir, fig=g.figure, dpi=dpi)
+        save_fig(file=file, dir=dir, fig=g.figure, dpi=dpi, icon='histogram')
         if show:
             ext = file.split('.')[-1].lower()  if file is not None else ''
             if ext not in ('html', 'json'):
@@ -1385,7 +1391,7 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vars: str = None,
         ax.set_facecolor('white')  # Set background to transparent
     
     # Save & show fig
-    save_fig(file=file, dir=dir, fig=fig, dpi=dpi)
+    save_fig(file=file, dir=dir, fig=fig, dpi=dpi, icon='heat')
     if show:
         ext = file.split('.')[-1].lower()  if file is not None else ''
         if ext not in ('html', 'json'):
@@ -1537,7 +1543,7 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
                bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol)
 
     # Save & show fig; return dataframe
-    save_fig(file=file, dir=dir, fig=fig, dpi=dpi, PDB_pt=PDB_pt)
+    save_fig(file=file, dir=dir, fig=fig, dpi=dpi, PDB_pt=PDB_pt, icon='bar')
     if show:
         ext = file.split('.')[-1].lower() if file is not None else ''
         if ext not in ('html', 'json'):
@@ -1558,7 +1564,7 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str 
     vol(): creates volcano plot
     
     Parameters:
-    df (dataframe | str): pandas dataframe (or file path)
+    df (dataframe | str): pandas dataframe (or file path) from st.compare()
     FC (str): fold change column name (x-axis)
     pval (str): p-value column name (y-axis)
     stys (str, optional): style column name
@@ -1896,7 +1902,7 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str 
     plt.title(title, fontsize=title_size, fontweight=title_weight, family=title_font)
 
     # Save & show fig; return dataframe
-    save_fig(file=file, dir=dir, fig=fig, dpi=dpi, PDB_pt=PDB_pt)
+    save_fig(file=file, dir=dir, fig=fig, dpi=dpi, PDB_pt=PDB_pt, icon='volcano')
     if show:
         ext = file.split('.')[-1].lower() if file is not None else ''
         if ext not in ('html', 'json'):

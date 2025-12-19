@@ -286,7 +286,7 @@ def add_common_plot_dist_args(subparser):
     subparser.add_argument("--show", action="store_true", help="Show the plot in an interactive window", default=False)
     subparser.add_argument("--space_capitalize", action="store_true", help="Capitalize and space legend/label values", default=False)
 
-def add_common_plot_heat_args(subparser):
+def add_common_plot_heat_args(subparser, fastq_parser=False):
     '''
     add_common_plot_heat_args(subparser): Add common arguments for heatmap graphs
     '''
@@ -294,21 +294,46 @@ def add_common_plot_heat_args(subparser):
     subparser.add_argument("--df", help="Input dataframe file path", type=str, required=True)
 
     # Optional arguments
-    subparser.add_argument("--x", type=str, help="X-axis column name to pivot tidy-formatted dataframe into matrix format")
-    subparser.add_argument("--y", type=str, help="Y-axis column name to pivot tidy-formatted dataframe into matrix format")
-    subparser.add_argument("--vars", type=str, help="Variable column name to split tidy-formatted dataframe into a dictionary of pivoted dataframes")
-    subparser.add_argument("--vals", type=str, help="Value column name to populate pivoted dataframes")
-    subparser.add_argument("--vals_dims", type=parse_tuple_float, help="Value column limits formatted as 'vmin,vmax'")
+    if fastq_parser == False:
+        subparser.add_argument("--x", type=str, help="X-axis column name to pivot tidy-formatted dataframe into matrix format")
+        subparser.add_argument("--y", type=str, help="Y-axis column name to pivot tidy-formatted dataframe into matrix format")
+        subparser.add_argument("--vars", type=str, help="Variable column name to split tidy-formatted dataframe into a dictionary of pivoted dataframes")
+        subparser.add_argument("--vals", type=str, help="Value column name to populate pivoted dataframes")
+        subparser.add_argument("--vals_dims", type=parse_tuple_float, help="Value column limits formatted as 'vmin,vmax'")
+    elif fastq_parser == True:
+        subparser.add_argument("--cond_col", type=str, help="Condition column name", required=True)
+        subparser.add_argument("--cond", type=str, help="Condition value for filtering", required=True)
+        subparser.add_argument("--FC", type=str, help="Fold change column name (values within heatmap after log2 transformation)", required=True)
+        subparser.add_argument("--wt_prot", type=str, help="WT protein sequence", required=True)
+        subparser.add_argument("--wt_res", type=int, help="WT protein sequence residue start number", required=True)
+        subparser.add_argument("--cutoff", type=float, help="Comparison count mean cutoff for masking low-abundance values", default=argparse.SUPPRESS)
+        subparser.add_argument("--aa", type=str, help="AA saturation mutagenesis. The 'aa' option [default] makes all amino acid substitutions ('aa_subs'), +1 amino acid insertions ('aa_ins'), and -1 amino acid deletions ('aa_dels').", choices=['aa', 'aa_subs', 'aa_ins', 'aa_dels'], default='aa')
+        subparser.add_argument("--label", type=str, help="Label column name (Default: 'Edit'). Can't be None.", default='Edit')
 
     subparser.add_argument("--dir", type=str, help="Output directory path", default='./out')
     subparser.add_argument("--file", type=str, help="Output filename", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_heat.png')
     subparser.add_argument("--edgecol", type=str, default="black", help="Color of cell edges")
     subparser.add_argument("--lw", type=int, default=1, help="Line width for cell borders")
 
-    subparser.add_argument("--annot", action="store_true", help="Display cell values as annotations", default=False)
+    if fastq_parser == False:
+        subparser.add_argument("--annot", action="store_true", help="Display cell values as annotations", default=False)
+    elif fastq_parser == True:
+        subparser.add_argument("--center", type=float, default=0, help="Center value for colormap (Default: 0)")
     subparser.add_argument("--cmap", type=str, default="Reds", help="Matplotlib colormap to use for heatmap")
+    if fastq_parser == True:
+        subparser.add_argument("--cmap_WT", type=str, default="forestgreen", help="Color for WT values in colorbar (Default: forestgreen)")
+        subparser.add_argument("--cmap_not_WT", type=str, default="lightgray", help="Color for non-WT values in colorbar (Default: lightgray)")
     subparser.add_argument("--sq", action="store_true", help="Use square aspect ratio for cells", default=False)
     subparser.add_argument("--cbar", action="store_true", help="Display colorbar", default=False)
+    if fastq_parser == True:
+        subparser.add_argument("--cbar_label", type=str, default=argparse.SUPPRESS, help="Colorbar label")
+        subparser.add_argument("--cbar_label_size", type=int, default=argparse.SUPPRESS, help="Font size for colorbar label")
+        subparser.add_argument("--cbar_label_weight", type=str, default="bold", help="Font weight for colorbar label (Default: bold)", choices=['bold', 'normal', 'heavy'])
+        subparser.add_argument("--cbar_tick_size", type=int, default=argparse.SUPPRESS, help="Font size for colorbar ticks")
+        subparser.add_argument("--cbar_shrink", type=float, default=argparse.SUPPRESS, help="Shrink factor for colorbar")
+        subparser.add_argument("--cbar_aspect", type=int, default=argparse.SUPPRESS, help="Aspect ratio for colorbar")
+        subparser.add_argument("--cbar_pad", type=float, default=argparse.SUPPRESS, help="Padding for colorbar")
+        subparser.add_argument("--cbar_orientation", type=str, default=argparse.SUPPRESS, help="Orientation of colorbar (Default: 'vertical')", choices=['vertical', 'horizontal'])
 
     # Title and size
     subparser.add_argument("--title", type=str, default="", help="Plot title")
@@ -336,7 +361,8 @@ def add_common_plot_heat_args(subparser):
     # Final display
     subparser.add_argument("--dpi", type=int, help="Figure dpi (Default: 600 for non-HTML, 150 for HTML)", default=0)
     subparser.add_argument("--show", action="store_true", help="Show the plot in an interactive window", default=False)
-    subparser.add_argument("--space_capitalize", action="store_true", help="Capitalize and space labels/legend values", default=False)
+    if fastq_parser == False:
+        subparser.add_argument("--space_capitalize", action="store_true", help="Capitalize and space labels/legend values", default=False)
 
 def add_common_plot_stack_args(subparser, fastq_parser=False):
     '''
@@ -405,9 +431,9 @@ def add_common_plot_vol_args(subparser, fastq_parser=False):
     add_common_plot_vol_args(subparser): Add common arguments for volcano plot
     '''
     # Required arguments
-    subparser.add_argument("--df", type=str, help="Input dataframe file path")
-    subparser.add_argument("--FC", type=str, help="Fold change column name (X-axis)")
-    subparser.add_argument("--pval", type=str, help="P-value column name (Y-axis)")
+    subparser.add_argument("--df", type=str, help="Input dataframe file path from edms stat compare", required=True)
+    subparser.add_argument("--FC", type=str, help="Fold change column name (X-axis)", required=True)
+    subparser.add_argument("--pval", type=str, help="P-value column name (Y-axis)", required=True)
 
     # Optional data columns
     subparser.add_argument("--stys", type=str, help="Style column name for custom markers")
