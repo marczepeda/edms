@@ -591,8 +591,8 @@ def extract_pivots(df: pd.DataFrame, x: str, y: str, vars: str='variable', vals:
 
 def formatter(typ: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: str, dir: str,
               title: str, title_size: int, title_weight: str, title_font: str,
-              x_axis: str, x_axis_size: int, x_axis_weight: str, x_axis_font: str, x_axis_scale: str, x_axis_dims: tuple, x_ticks_rot: int, x_ticks_font: str, x_ticks: list,
-              y_axis: str, y_axis_size: int, y_axis_weight: str, y_axis_font: str, y_axis_scale: str, y_axis_dims: tuple, y_ticks_rot: int, y_ticks_font: str, y_ticks: list,
+              x_axis: str, x_axis_size: int, x_axis_weight: str, x_axis_font: str, x_axis_scale: str, x_axis_dims: tuple, x_axis_pad: int, x_ticks_size: int, x_ticks_rot: int, x_ticks_font: str, x_ticks: list,
+              y_axis: str, y_axis_size: int, y_axis_weight: str, y_axis_font: str, y_axis_scale: str, y_axis_dims: tuple, y_axis_pad: int, y_ticks_size: int, y_ticks_rot: int, y_ticks_font: str, y_ticks: list,
               legend_title: str, legend_title_size: int, legend_size: int, legend_bbox_to_anchor: tuple, legend_loc: str, legend_items: tuple, legend_ncol: int,
               legend_columnspacing: int=-4, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, 
               dpi: int = 0, show: bool = True, space_capitalize: bool = True, PDB_pt: str = None, icon: str = 'python', cats_ord: list = None) -> None:
@@ -616,14 +616,20 @@ def formatter(typ: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: s
     x_axis_weight (str, optional): x-axis name bold, italics, etc.
     x_axis_scale (str, optional): x-axis scale linear, log, etc.
     x_axis_dims (tuple, optional): x-axis dimensions (start, end)
+    x_axis_pad (int, optional): x-axis padding
+    x_ticks_size (int, optional): x-axis ticks font size
     x_ticks_rot (int, optional): x-axis ticks rotation
+    x_ticks_font (str, optional): x-axis ticks font family
     x_ticks (list, optional): x-axis tick values
     y_axis (str, optional): y-axis name
     y_axis_size (int, optional): y-axis name font size
     y_axis_weight (str, optional): y-axis name bold, italics, etc.
     y_axis_scale (str, optional): y-axis scale linear, log, etc.
     y_axis_dims (tuple, optional): y-axis dimensions (start, end)
+    y_axis_pad (int, optional): y-axis padding
+    y_ticks_size (int, optional): y-axis ticks font size
     y_ticks_rot (int, optional): y-axis ticks rotation
+    y_ticks_font (str, optional): y-axis ticks font family
     y_ticks (list, optional): y-axis tick values
     legend_title (str, optional): legend title
     legend_title_size (str, optional): legend title font size
@@ -670,7 +676,7 @@ def formatter(typ: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: s
         if x_axis=='': 
             if space_capitalize: x_axis=re_un_cap(x)
             else: x_axis=x
-        plt.xlabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight,fontfamily=x_axis_font)
+        plt.xlabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight,fontfamily=x_axis_font, labelpad=x_axis_pad)
         if x!='':
             if df[x].apply(lambda row: isinstance(row, (int, float))).all()==True: # Check that x column is numeric
                 plt.xscale(x_axis_scale)
@@ -683,20 +689,21 @@ def formatter(typ: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: s
                     ax.set_xticks(np.arange(len(ls)))
                     ax.set_xticklabels(ls,
                                     rotation=x_ticks_rot,
-                                    fontfamily=x_ticks_font)
+                                    fontfamily=x_ticks_font,
+                                    fontsize=x_ticks_size)
                     ax.set_xlim(-0.5, len(ls) - 0.5)  # avoid extra half-step ticks'''
         if x_ticks==[]: 
-            if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(rotation=x_ticks_rot,ha='center',fontfamily=x_ticks_font)
-            else: plt.xticks(rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font)
+            if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(rotation=x_ticks_rot,ha='center',fontfamily=x_ticks_font, fontsize=x_ticks_size)
+            else: plt.xticks(rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font, fontsize=x_ticks_size)
         else: 
-            if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot, ha='center',fontfamily=x_ticks_font)
-            else: plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font)
+            if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot, ha='center',fontfamily=x_ticks_font, fontsize=x_ticks_size)
+            else: plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font, fontsize=x_ticks_size)
 
         # Set y axis
         if y_axis=='': 
             if space_capitalize: y_axis=re_un_cap(y)
             else: y_axis=y
-        plt.ylabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight,fontfamily=y_axis_font)
+        plt.ylabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight,fontfamily=y_axis_font, labelpad=y_axis_pad)
         if y!='':
             if df[y].apply(lambda row: isinstance(row, (int, float))).all()==True: # Check that y column is numeric
                 plt.yscale(y_axis_scale)
@@ -709,10 +716,11 @@ def formatter(typ: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: s
                     ax.set_yticks(np.arange(len(ls)))
                     ax.set_yticklabels(ls,
                                     rotation=y_ticks_rot,
-                                    fontfamily=y_ticks_font)
+                                    fontfamily=y_ticks_font,
+                                    fontsize=y_ticks_size)
                     ax.set_ylim(-0.5, len(ls) - 0.5)  # avoid extra half-step ticks
-        if y_ticks==[]: plt.yticks(rotation=y_ticks_rot,fontfamily=y_ticks_font)
-        else: plt.yticks(ticks=y_ticks,labels=y_ticks,rotation=y_ticks_rot,fontfamily=y_ticks_font)
+        if y_ticks==[]: plt.yticks(rotation=y_ticks_rot,fontfamily=y_ticks_font, fontsize=y_ticks_size)
+        else: plt.yticks(ticks=y_ticks,labels=y_ticks,rotation=y_ticks_rot,fontfamily=y_ticks_font, fontsize=y_ticks_size)
 
         # Set legend
         if cols is None: print('No legend because cols was not specified.')
@@ -759,7 +767,6 @@ def formatter(typ: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: s
             plt.show()
         else: 
             mpld3.show()
-        
 
 def repeat_palette_cmap(palette_or_cmap: str, repeats: int):
     '''
@@ -788,8 +795,8 @@ def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, col
          stys: str = None, stys_order: list = [], mark_order: list = [], label: str | None = None,
          file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', edgecol: str = 'black',
          figsize: tuple = (5, 5), title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial',
-         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
-         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
+         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 9, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
+         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 9, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
          legend_title: str = '', legend_title_size: int = 12, legend_size: int = 9, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_items: tuple = (0, 0), legend_ncol: int = 1,
          legend_columnspacing: int=0, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=1, legend_size_html_multiplier: float=1.0,
          dpi: int = 0, show: bool = True, space_capitalize: bool = True, **kwargs):
@@ -823,6 +830,8 @@ def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, col
     x_axis_font (str, optional): x-axis font
     x_axis_scale (str, optional): x-axis scale linear, log, etc.
     x_axis_dims (tuple, optional): x-axis dimensions (start, end)
+    x_axis_pad (int, optional): x-axis padding
+    x_ticks_size (int, optional): x-axis tick font size
     x_ticks_rot (int, optional): x-axis ticks rotation
     x_ticks_font (str, optional): x-ticks font
     x_ticks (list, optional): x-axis tick values
@@ -832,6 +841,8 @@ def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, col
     y_axis_font (str, optional): y-axis font
     y_axis_scale (str, optional): y-axis scale linear, log, etc.
     y_axis_dims (tuple, optional): y-axis dimensions (start, end)
+    y_axis_pad (int, optional): y-axis padding
+    y_ticks_size (int, optional): y-axis tick font size
     y_ticks_rot (int, optional): y-axis ticks rotation
     y_ticks_font (str, optional): y_ticks font
     y_ticks (list, optional): y-axis tick values
@@ -925,6 +936,8 @@ def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, col
     if is_html:
         x_axis_size=title_size
         y_axis_size=title_size
+        x_ticks_size=title_size
+        y_ticks_size=title_size
         legend_title_size=title_size
         legend_size=title_size*legend_size_html_multiplier
 
@@ -954,8 +967,8 @@ def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, col
 
     formatter(typ=typ, ax=ax, df=df, x=x, y=y, cols=cols, file=file, dir=dir, 
               title=title, title_size=title_size, title_weight=title_weight, title_font=title_font,
-              x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
-              y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
+              x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad, x_ticks_size=x_ticks_size, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
+              y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_axis_pad=y_axis_pad, y_ticks_size=y_ticks_size, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
               legend_title=legend_title, legend_title_size=legend_title_size, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_items=legend_items, legend_ncol=legend_ncol,
               legend_columnspacing=legend_columnspacing, legend_handletextpad=legend_handletextpad, legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad, legend_handlelength=legend_handlelength,
               dpi=dpi, show=show, space_capitalize=space_capitalize, icon='scatter')
@@ -963,8 +976,8 @@ def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, col
 def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: list = None, cats_exclude: list|str = None, cols: str = None, cols_ord: list = None, cols_exclude: list | str = None,
         file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
         figsize: tuple = (5, 5), title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial',
-        x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
-        y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
+        x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 9, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
+        y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 9, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
         legend_title: str = '', legend_title_size: int = 12, legend_size: int = 9, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_items: tuple = (0, 0), legend_ncol: int = 1,
         legend_columnspacing: int=0, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=1, legend_size_html_multiplier: float=1.0,
         dpi: int = 0, show: bool = True, space_capitalize: bool = True, PDB_pt: str = None, **kwargs):
@@ -1000,6 +1013,8 @@ def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: li
     x_axis_font (str, optional): x-axis font
     x_axis_scale (str, optional): x-axis scale linear, log, etc.
     x_axis_dims (tuple, optional): x-axis dimensions (start, end)
+    x_axis_pad (int, optional): x-axis padding
+    x_ticks_size (int, optional): x-axis ticks font size
     x_ticks_rot (int, optional): x-axis ticks rotation
     x_ticks_font (str, optional): x-ticks font
     x_ticks (list, optional): x-axis tick values
@@ -1009,6 +1024,8 @@ def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: li
     y_axis_font (str, optional): y-axis font
     y_axis_scale (str, optional): y-axis scale linear, log, etc.
     y_axis_dims (tuple, optional): y-axis dimensions (start, end)
+    y_axis_pad (int, optional): y-axis padding
+    y_ticks_size (int, optional): y-axis ticks font size
     y_ticks_font (str, optional): y_ticks font
     y_ticks_rot (int, optional): y-axis ticks rotation
     y_ticks (list, optional): y-axis tick values
@@ -1041,6 +1058,8 @@ def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: li
         if file.endswith('.html')==True:
             x_axis_size=title_size
             y_axis_size=title_size
+            x_ticks_size=title_size
+            y_ticks_size=title_size
             legend_title_size=title_size
             legend_size=title_size*legend_size_html_multiplier
 
@@ -1166,8 +1185,8 @@ def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: li
 
     formatter(typ=typ, ax=ax, df=df, x=x, y=y, cols=cols, file=file, dir=dir, 
               title=title, title_size=title_size, title_weight=title_weight, title_font=title_font,
-              x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
-              y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
+              x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad, x_ticks_size=x_ticks_size, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
+              y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_axis_pad=y_axis_pad, y_ticks_size=y_ticks_size, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
               legend_title=legend_title, legend_title_size=legend_title_size, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_items=legend_items, legend_ncol=legend_ncol,
               legend_columnspacing=legend_columnspacing, legend_handletextpad=legend_handletextpad, legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad, legend_handlelength=legend_handlelength,
               dpi=dpi, show=show, space_capitalize=space_capitalize, PDB_pt=PDB_pt, icon='cat', cats_ord=cats_ord)
@@ -1175,8 +1194,8 @@ def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: li
 def dist(typ: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord: list = None, cols_exclude: list | str = None, bins: int = 40, log10_low: int = 0,
          file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', edgecol: str = 'black', lw: int = 1, ht: float = 1.5, asp: int = 5, tp: float = .8, hs: int = 0, despine: bool = False,
          figsize: tuple = (5, 5), title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial',
-         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
-         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
+         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 9, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
+         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 9, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
          legend_title: str = '', legend_title_size: int = 12, legend_size: int = 9, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_items: tuple = (0, 0), legend_ncol: int = 1,
          dpi: int = 0, show: bool = True, space_capitalize: bool = True, **kwargs):
     ''' 
@@ -1212,6 +1231,8 @@ def dist(typ: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord: l
     x_axis_font (str, optional): x-axis font
     x_axis_scale (str, optional): x-axis scale linear, log, etc.
     x_axis_dims (tuple, optional): x-axis dimensions (start, end)
+    x_axis_pad (int, optional): x-axis label padding
+    x_ticks_size (int, optional): x-axis ticks font size
     x_ticks_rot (int, optional): x-axis ticks rotation
     x_ticks_font (str, optional): x-ticks font
     x_ticks (list, optional): x-axis tick values
@@ -1221,6 +1242,8 @@ def dist(typ: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord: l
     y_axis_font (str, optional): y-axis font
     y_axis_scale (str, optional): y-axis scale linear, log, etc.
     y_axis_dims (tuple, optional): y-axis dimensions (start, end)
+    y_axis_pad (int, optional): y-axis label padding
+    y_ticks_size (int, optional): y-axis ticks font size
     y_ticks_rot (int, optional): y-axis ticks rotation
     y_ticks_font (str, optional): y_ticks font
     y_ticks (list, optional): y-axis tick values
@@ -1268,11 +1291,11 @@ def dist(typ: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord: l
         y=''
         if y_axis=='': y_axis='Count'
         ax.yaxis.set_major_locator(MaxNLocator(integer=True))
-        formatter(typ, ax, df, x, y, cols, file, dir, palette_or_cmap,
-                  title, title_size, title_weight, title_font,
-                  x_axis, x_axis_size, x_axis_weight, x_axis_font, x_axis_scale, x_axis_dims, x_ticks_rot, x_ticks_font, x_ticks,
-                  y_axis, y_axis_size, y_axis_weight, y_axis_font, y_axis_scale, y_axis_dims, y_ticks_rot, y_ticks_font, y_ticks,
-                  legend_title, legend_title_size, legend_size, legend_bbox_to_anchor, legend_loc, legend_items, legend_ncol,
+        formatter(typ=typ, ax=ax, df=df, x=x, y=y, cols=cols, file=file, dir=dir, palette_or_cmap=palette_or_cmap,
+                  title=title, title_size=title_size, title_weight=title_weight, title_font=title_font,
+                  x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad, x_ticks_size=x_ticks_size, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
+                  y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_axis_pad=y_axis_pad, y_ticks_size=y_ticks_size, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
+                  legend_title=legend_title, legend_title_size=legend_title_size, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_items=legend_items, legend_ncol=legend_ncol,
                   dpi=dpi, show=show, space_capitalize=space_capitalize, icon='histogram')
     elif typ=='kde': 
         fig, ax = plt.subplots(figsize=figsize)
@@ -1286,8 +1309,8 @@ def dist(typ: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord: l
         if y_axis=='': y_axis='Density'
         formatter(typ=typ, ax=ax, df=df, x=x, y=y, cols=cols, file=file, dir=dir, 
                   title=title, title_size=title_size, title_weight=title_weight, title_font=title_font,
-                  x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
-                  y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
+                  x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad, x_ticks_size=x_ticks_size, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
+                  y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_axis_pad=y_axis_pad, y_ticks_size=y_ticks_size, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
                   legend_title=legend_title, legend_title_size=legend_title_size, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_items=legend_items, legend_ncol=legend_ncol,
                   dpi=dpi, show=show, space_capitalize=space_capitalize, icon='histogram')
     elif typ=='hist_kde':
@@ -1306,8 +1329,8 @@ def dist(typ: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord: l
         ax.yaxis.set_major_locator(MaxNLocator(integer=True))
         formatter(typ=typ, ax=ax, df=df, x=x, y=y, cols=cols, file=file, dir=dir, 
                   title=title, title_size=title_size, title_weight=title_weight, title_font=title_font,
-                  x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
-                  y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
+                  x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad, x_ticks_size=x_ticks_size, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
+                  y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_axis_pad=y_axis_pad, y_ticks_size=y_ticks_size, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
                   legend_title=legend_title, legend_title_size=legend_title_size, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_items=legend_items, legend_ncol=legend_ncol,
                   dpi=dpi, show=show, space_capitalize=space_capitalize, icon='histogram')
     elif typ=='rid':
@@ -1354,10 +1377,11 @@ def dist(typ: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord: l
         return
 
 def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vars: str = None, vals: str = None, vals_dims: tuple = None,
-         file: str = None, dir: str = None, edgecol: str = 'black', lw: int = 1, annot: bool = False, cmap: str = "Reds", sq: bool = True, cbar: bool = True,
+         file: str = None, dir: str = None, edgecol: str = 'black', lw: int = 1, annot: bool = False, center: float = None, cmap: str = "Reds", sq: bool = True,
+         cbar: bool=True, cbar_label: str=None, cbar_label_size: int=None, cbar_label_weight: str='bold', cbar_tick_size: int=None, cbar_shrink: float=None, cbar_aspect: int=None, cbar_pad: float=None, cbar_orientation: str=None,
          title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial', figsize: tuple = (5, 5),
-         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_ticks_rot: int = 0, x_ticks_font: str = 'Arial',
-         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_ticks_rot: int = 0, y_ticks_font: str = 'Arial',
+         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_pad: int = None, x_ticks_size: int = 9, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial',
+         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_pad: int = None, y_ticks_size: int = 9, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial',
          dpi: int = 0, show: bool = True, space_capitalize: bool = True, **kwargs):
     '''
     heat(): creates heat plot related graphs
@@ -1374,9 +1398,18 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vars: str = None,
     edgecol (str, optional): point edge color
     lw (int, optional): line width
     annot (bool, optional): annotate values
+    center (float, optional): center value for colormap
     cmap (str, optional): matplotlib color map
     sq (bool, optional): square dimensions (Default: True)
     cbar (bool, optional): show colorbar (Default: True)
+    cbar_label (str, optional): colorbar label
+    cbar_label_size (int, optional): colorbar label font size
+    cbar_label_weight (str, optional): colorbar label bold, normal, & heavy
+    cbar_tick_size (int, optional): colorbar tick font size
+    cbar_shrink (float, optional): colorbar shrink factor
+    cbar_aspect (int, optional): colorbar aspect ratio
+    cbar_pad (float, optional): colorbar padding
+    cbar_orientation (str, optional): colorbar orientation ('vertical' | 'horizontal')
     title (str, optional): plot title
     title_size (int, optional): plot title font size
     title_weight (str, optional): plot title bold, italics, etc.
@@ -1386,12 +1419,16 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vars: str = None,
     x_axis_size (int, optional): x-axis name font size
     x_axis_weight (str, optional): x-axis name bold, italics, etc.
     x_axis_font (str, optional): x-axis font
+    x_axis_pad (int, optional): x-axis label padding
+    x_ticks_size (int, optional): x-axis ticks font size
     x_ticks_rot (int, optional): x-axis ticks rotation
     x_ticks_font (str, optional): x-ticks font
     y_axis (str, optional): y-axis name
     y_axis_size (int, optional): y-axis name font size
     y_axis_weight (str, optional): y-axis name bold, italics, etc.
     y_axis_font (str, optional): y-axis font
+    y_axis_pad (int, optional): y-axis label padding
+    y_ticks_size (int, optional): y-axis ticks font size
     y_ticks_rot (int, optional): y-axis ticks rotation
     y_ticks_font (str, optional): y-ticks font
     dpi (int, optional): figure dpi (Default: 600 for non-HTML, 150 for HTML)
@@ -1403,6 +1440,15 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vars: str = None,
     # Get dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
+    
+    # cbar kwargs
+    cbar_kws = dict()
+    if cbar_label is not None: cbar_kws['label'] = cbar_label
+    else: cbar_kws['label'] = f'log2({FC})'
+    if cbar_shrink is not None: cbar_kws['shrink'] = cbar_shrink
+    if cbar_aspect is not None: cbar_kws['aspect'] = cbar_aspect
+    if cbar_pad is not None: cbar_kws['pad'] = cbar_pad
+    if cbar_orientation is not None: cbar_kws['orientation'] = cbar_orientation
 
     # Determine dataframe type
     if x is None or y is None or vars is None or vals is None: # Pivot-formatted
@@ -1438,22 +1484,40 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vars: str = None,
     if isinstance(axes, np.ndarray)==False: axes = np.array([axes]) # Make axes iterable if there is only 1 heatmap
     for (ax, key) in zip(axes, list(dc.keys())):
         sns.heatmap(dc[key],annot=annot,cmap=cmap,ax=ax,linecolor=edgecol,linewidths=lw,cbar=cbar,square=sq,vmin=vmin,vmax=vmax, **kwargs)
+        
+        # Title
         if len(list(dc.keys()))>1: ax.set_title(key,fontsize=title_size,fontweight=title_weight,fontfamily=title_font)  # Add title to subplot
         else: ax.set_title(title,fontsize=title_size,fontweight=title_weight,fontfamily=title_font)
+        
+        # X-axis
         if x_axis=='': 
-            if space_capitalize: ax.set_xlabel(re_un_cap(x),fontsize=x_axis_size,fontweight=x_axis_weight,fontfamily=x_axis_font) # Add x axis label
-            else: ax.set_xlabel(x,fontsize=x_axis_size,fontweight=x_axis_weight,fontfamily=x_axis_font) # Add x axis label
-        else: ax.set_xlabel(x_axis,fontsize=x_axis_size,fontweight=x_axis_weight,fontfamily=x_axis_font)
+            if space_capitalize: ax.set_xlabel(re_un_cap(x),fontsize=x_axis_size,fontweight=x_axis_weight,fontfamily=x_axis_font,labelpad=x_axis_pad) # Add x axis label
+            else: ax.set_xlabel(x,fontsize=x_axis_size,fontweight=x_axis_weight,fontfamily=x_axis_font,labelpad=x_axis_pad) # Add x axis label
+        else: ax.set_xlabel(x_axis,fontsize=x_axis_size,fontweight=x_axis_weight,fontfamily=x_axis_font,labelpad=x_axis_pad)
+        
+        # Y-axis
         if y_axis=='': 
-            if space_capitalize: ax.set_ylabel(re_un_cap(y),fontsize=y_axis_size,fontweight=y_axis_weight,fontfamily=y_axis_font) # Add y axis label
-            else: ax.set_ylabel(y,fontsize=y_axis_size,fontweight=y_axis_weight,fontfamily=y_axis_font) # Add y axis label
-        else: ax.set_ylabel(y_axis,fontsize=y_axis_size,fontweight=y_axis_weight,fontfamily=y_axis_font)
+            if space_capitalize: ax.set_ylabel(re_un_cap(y),fontsize=y_axis_size,fontweight=y_axis_weight,fontfamily=y_axis_font,labelpad=y_axis_pad) # Add y axis label
+            else: ax.set_ylabel(y,fontsize=y_axis_size,fontweight=y_axis_weight,fontfamily=y_axis_font,labelpad=y_axis_pad) # Add y axis label
+        else: ax.set_ylabel(y_axis,fontsize=y_axis_size,fontweight=y_axis_weight,fontfamily=y_axis_font,labelpad=y_axis_pad)
+        
         # Format x ticks
-        if (x_ticks_rot==0)|(x_ticks_rot==90): plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, ha="center", va='top', rotation_mode="anchor",fontname=x_ticks_font) 
-        else: plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, ha="right", va='top', rotation_mode="anchor",fontname=x_ticks_font) 
+        if (x_ticks_rot==0)|(x_ticks_rot==90): plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, ha="center", va='top', rotation_mode="anchor",fontname=x_ticks_font,fontsize=x_ticks_size) 
+        else: plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, ha="right", va='top', rotation_mode="anchor",fontname=x_ticks_font,fontsize=x_ticks_size) 
+        
         # Format y ticks
-        plt.setp(ax.get_yticklabels(), rotation=y_ticks_rot, va='center', ha="right",rotation_mode="anchor",fontname=y_ticks_font)
-        ax.set_facecolor('white')  # Set background to transparent
+        plt.setp(ax.get_yticklabels(), rotation=y_ticks_rot, va='center', ha="right",rotation_mode="anchor",fontname=y_ticks_font,fontsize=y_ticks_size)
+        
+        # Format cbar
+        cbar = ax.collections[0].colorbar
+        vmin, vmax = cbar.vmin, cbar.vmax
+        if center is None: center = (vmin + vmax) / 2
+        cbar.set_label(f"log2({FC})" if cbar_label is None else cbar_label, fontsize=cbar_label_size, fontweight=cbar_label_weight)
+        cbar.set_ticks([vmin, center, vmax])
+        cbar.ax.tick_params(labelsize=cbar_tick_size)
+
+        # Set white background
+        ax.set_facecolor('white')
     
     # Save & show fig
     save_fig(file=file, dir=dir, fig=fig, dpi=dpi, icon='heat')
@@ -1467,8 +1531,8 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vars: str = None,
 def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str = '', cutoff_value: float = 0, cutoff_keep: bool = True, cols_ord: list = [], x_ord: list = [],
           file: str = None, dir: str = None, palette_or_cmap: str = 'tab20', repeats: int = 1, errcap: int = 4, vertical: bool = True,
           figsize: tuple = (5, 5), title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial',
-          x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_ticks_rot: int = 0, x_ticks_font: str = 'Arial',
-          y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_dims: tuple = (0, 0), y_ticks_rot: int = 0, y_ticks_font: str = 'Arial',
+          x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_pad: int = None, x_ticks_size: int = 9, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial',
+          y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_dims: tuple = (0, 0),  y_axis_pad: int = None, y_ticks_size: int = 9, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial',
           legend_title: str = '', legend_title_size: int = 12, legend_size: int = 12, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_ncol: int = 1, 
           legend_columnspacing: int=0, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=1, legend_size_html_multiplier: float=1,
           dpi: int = 0, show: bool = True, space_capitalize: bool = True, PDB_pt: str = None, **kwargs):
@@ -1500,13 +1564,17 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
     x_axis_size (int, optional): x-axis name font size
     x_axis_weight (str, optional): x-axis name bold, italics, etc.
     x_axis_font (str, optional): x-axis font
+    x_axis_pad (int, optional): x-axis label padding
+    x_ticks_size (int, optional): x-axis ticks font size
     x_ticks_rot (int, optional): x-axis ticks rotation
-    x_ticks_font (str, optional): x-ticks font
+    x_ticks_font (str, optional): x-axis ticks font
     y_axis (str, optional): y-axis name
     y_axis_size (int, optional): y-axis name font size
     y_axis_weight (str, optional): y-axis name bold, italics, etc.
     y_axis_font (str, optional): y-axis font
     y_axis_dims (tuple, optional): y-axis dimensions (start, end)
+    y_axis_pad (int, optional): y-axis label padding
+    y_ticks_size (int, optional): y-axis ticks font size
     y_ticks_rot (int, optional): y-axis ticks rotation
     y_ticks_font (str, optional): y-ticks font
     legend_title (str, optional): legend title
@@ -1543,6 +1611,8 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
         if file.endswith('.html')==True:
             x_axis_size=title_size
             y_axis_size=title_size
+            x_ticks_size=title_size
+            y_ticks_size=title_size
             legend_title_size=title_size
             legend_size=title_size*legend_size_html_multiplier
 
@@ -1574,16 +1644,16 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
         if x_axis=='': 
             if space_capitalize: x_axis=re_un_cap(x)
             else: x_axis=x
-        plt.xlabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight,fontfamily=x_axis_font)
-        if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(rotation=x_ticks_rot,ha='center',fontfamily=x_ticks_font)
-        else: plt.xticks(rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font)
+        plt.xlabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight,fontfamily=x_axis_font,labelpad=x_axis_pad)
+        if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(rotation=x_ticks_rot,ha='center',fontfamily=x_ticks_font, fontsize=x_ticks_size)
+        else: plt.xticks(rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font, fontsize=x_ticks_size)
         
         # Set y axis
         if y_axis=='': 
             if space_capitalize: y_axis=re_un_cap(y)
             else: y_axis=y
-        plt.ylabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight,fontfamily=y_axis_font)
-        plt.yticks(rotation=y_ticks_rot,fontfamily=y_ticks_font)
+        plt.ylabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight,fontfamily=y_axis_font,labelpad=y_axis_pad)
+        plt.yticks(rotation=y_ticks_rot,fontfamily=y_ticks_font, fontsize=y_ticks_size)
 
         if y_axis_dims==(0,0): print('Default y axis dimensions.')
         else: plt.ylim(y_axis_dims[0],y_axis_dims[1])
@@ -1596,16 +1666,16 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
         if x_axis=='': 
             if space_capitalize: x_axis=re_un_cap(x)
             else: x_axis=x
-        plt.ylabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight,fontfamily=x_axis_font)
-        plt.yticks(rotation=x_ticks_rot,fontfamily=x_ticks_font)
+        plt.ylabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight,fontfamily=x_axis_font,labelpad=x_axis_pad)
+        plt.yticks(rotation=x_ticks_rot,fontfamily=x_ticks_font, fontsize=x_ticks_size)
         
         # Set x axis
         if y_axis=='': 
             if space_capitalize: y_axis=re_un_cap(y)
             else: y_axis=y
-        plt.xlabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight,fontfamily=y_axis_font)
-        if (y_ticks_rot==0)|(y_ticks_rot==90): plt.xticks(rotation=y_ticks_rot,ha='center',fontfamily=y_ticks_font)
-        else: plt.xticks(rotation=y_ticks_rot,ha='right',fontfamily=y_ticks_font)
+        plt.xlabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight,fontfamily=y_axis_font,labelpad=y_axis_pad)
+        if (y_ticks_rot==0)|(y_ticks_rot==90): plt.xticks(rotation=y_ticks_rot,ha='center',fontfamily=y_ticks_font, fontsize=y_ticks_size)
+        else: plt.xticks(rotation=y_ticks_rot,ha='right',fontfamily=y_ticks_font, fontsize=y_ticks_size)
 
         if y_axis_dims==(0,0): print('Default x axis dimensions.')
         else: plt.xlim(y_axis_dims[0],y_axis_dims[1])
@@ -1644,8 +1714,8 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
 def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str | bool = None, size_dims: tuple = None, label: str = None, stys_order: list = [], mark_order: list = [],
         FC_threshold: float = 1, pval_threshold: float = 1, file: str = None, dir: str = None, color: str = 'lightgray', alpha: float = 0.5, edgecol: str = 'black', vertical: bool = True,
         figsize: tuple = (5, 5), title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial',
-        x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_dims: tuple = (0, 0), x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
-        y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_dims: tuple = (0, 0), y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
+        x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 9, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
+        y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 9, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
         legend_title: str = '', legend_title_size: int = 12, legend_size: int = 9, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_ncol: int = 1, 
         legend_columnspacing: int=-4, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, legend_size_html_multiplier: float=0.75,
         display_legend: bool = True, display_labels: str = 'FC & p-value', display_lines: bool = False, display_axis: bool = True, return_df: bool = True, dpi: int = 0, show: bool = True, space_capitalize: bool = True,
@@ -1682,16 +1752,20 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str 
     x_axis_weight (str, optional): x-axis name bold, italics, etc.
     x_axis_font (str, optional): x-axis font
     x_axis_dims (tuple, optional): x-axis dimensions (start, end)
+    x_axis_pad (int, optional): x-axis label padding
+    x_ticks_size (int, optional): x-axis ticks font size
     x_ticks_rot (int, optional): x-axis ticks rotation
-    x_axis_font (str, optional): x-axis font
+    x_ticks_font (str, optional): x-axis ticks font
     x_ticks (list, optional): x-axis tick values
     y_axis (str, optional): y-axis name
     y_axis_size (int, optional): y-axis name font size
     y_axis_weight (str, optional): y-axis name bold, italics, etc.
     y_axis_font (str, optional): y-axis font
     y_axis_dims (tuple, optional): y-axis dimensions (start, end)
+    y_axis_pad (int, optional): y-axis label padding
+    y_ticks_size (int, optional): y-axis ticks font size
     y_ticks_rot (int, optional): y-axis ticks rotation
-    y_ticks_font (str, optional): y_ticks font
+    y_ticks_font (str, optional): y-axis ticks font
     y_ticks (list, optional): y-axis tick values
     legend_title (str, optional): legend title
     legend_title_size (str, optional): legend title font size
@@ -1731,6 +1805,8 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str 
     if is_html==True:
         x_axis_size=title_size
         y_axis_size=title_size
+        x_ticks_size=title_size
+        y_ticks_size=title_size
         legend_title_size=title_size
         legend_size=title_size*legend_size_html_multiplier
     
@@ -1882,20 +1958,20 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str 
         
         # Set x axis
         if x_axis=='': x_axis=f'log2({FC})'
-        plt.xlabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight,fontfamily=x_axis_font)
+        plt.xlabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight,fontfamily=x_axis_font, labelpad=x_axis_pad)
         if x_ticks==[]: 
-            if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(rotation=x_ticks_rot,ha='center',fontfamily=x_ticks_font)
-            else: plt.xticks(rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font)
+            if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(rotation=x_ticks_rot,ha='center',fontfamily=x_ticks_font, fontsize=x_ticks_size)
+            else: plt.xticks(rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font, fontsize=x_ticks_size)
         else: 
-            if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot, ha='center',fontfamily=x_ticks_font)
-            else: plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font)
-
+            if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot, ha='center',fontfamily=x_ticks_font, fontsize=x_ticks_size)
+            else: plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font, fontsize=x_ticks_size)
+        
         # Set y axis
         if y_axis=='': y_axis=f'-log10({pval})'
-        plt.ylabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight,fontfamily=y_axis_font)
+        plt.ylabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight,fontfamily=y_axis_font,labelpad=y_axis_pad)
 
-        if y_ticks==[]: plt.yticks(rotation=y_ticks_rot,fontfamily=y_ticks_font)
-        else: plt.yticks(ticks=y_ticks,labels=y_ticks,rotation=y_ticks_rot,fontfamily=y_ticks_font)
+        if y_ticks==[]: plt.yticks(rotation=y_ticks_rot,fontfamily=y_ticks_font, fontsize=y_ticks_size)
+        else: plt.yticks(ticks=y_ticks,labels=y_ticks,rotation=y_ticks_rot,fontfamily=y_ticks_font, fontsize=y_ticks_size)
 
     else: # Horizontal orientation
         # with significance boundraries
@@ -2000,20 +2076,20 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str 
         
         # Set x axis
         if y_axis=='': y_axis=f'-log10({pval})'
-        plt.xlabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight,fontfamily=y_axis_font)
+        plt.xlabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight,fontfamily=y_axis_font,labelpad=y_axis_pad)
         if y_ticks==[]: 
-            if (y_ticks_rot==0)|(y_ticks_rot==90): plt.xticks(rotation=y_ticks_rot,ha='center',fontfamily=y_ticks_font)
-            else: plt.xticks(rotation=y_ticks_rot,ha='right',fontfamily=y_ticks_font)
+            if (y_ticks_rot==0)|(y_ticks_rot==90): plt.xticks(rotation=y_ticks_rot,ha='center',fontfamily=y_ticks_font, fontsize=y_ticks_size)
+            else: plt.xticks(rotation=y_ticks_rot,ha='right',fontfamily=y_ticks_font, fontsize=y_ticks_size)
         else: 
-            if (y_ticks_rot==0)|(y_ticks_rot==90): plt.xticks(ticks=y_ticks,labels=y_ticks,rotation=y_ticks_rot, ha='center',fontfamily=y_ticks_font)
-            else: plt.xticks(ticks=y_ticks,labels=y_ticks,rotation=y_ticks_rot,ha='right',fontfamily=y_ticks_font)
-
+            if (y_ticks_rot==0)|(y_ticks_rot==90): plt.xticks(ticks=y_ticks,labels=y_ticks,rotation=y_ticks_rot, ha='center',fontfamily=y_ticks_font, fontsize=y_ticks_size)
+            else: plt.xticks(ticks=y_ticks,labels=y_ticks,rotation=y_ticks_rot,ha='right',fontfamily=y_ticks_font, fontsize=y_ticks_size)
+        
         # Set y axis
         if x_axis=='': x_axis=f'log2({FC})'
-        plt.ylabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight,fontfamily=x_axis_font)
+        plt.ylabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight,fontfamily=x_axis_font,labelpad=x_axis_pad)
 
-        if x_ticks==[]: plt.yticks(rotation=x_ticks_rot,fontfamily=x_ticks_font)
-        else: plt.yticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot,fontfamily=x_ticks_font)
+        if x_ticks==[]: plt.yticks(rotation=x_ticks_rot,fontfamily=x_ticks_font, fontsize=x_ticks_size)
+        else: plt.yticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot,fontfamily=x_ticks_font, fontsize=x_ticks_size)
 
     # Set title
     if title=='' and file is not None: 
