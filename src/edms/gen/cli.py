@@ -129,6 +129,12 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
     subparser.add_argument("--legend_loc", type=str, default="upper left", help="Location of the legend in the plot")
     subparser.add_argument("--legend_items", type=parse_tuple_int, default=(0,0), help="Legend item count as a tuple (used for layout)")
     subparser.add_argument("--legend_ncol", type=int, default=1, help="Number of columns in legend")
+    subparser.add_argument('--legend_columnspacing', type=int, default=argparse.SUPPRESS, help='space between columns in legend; only for html plots')
+    subparser.add_argument('--legend_handletextpad', type=float, default=argparse.SUPPRESS, help='space between marker and text in legend; only for html plots')
+    subparser.add_argument('--legend_labelspacing', type=float, default=argparse.SUPPRESS, help='vertical space between entries in legend; only for html plots')
+    subparser.add_argument('--legend_borderpad', type=float, default=argparse.SUPPRESS, help='padding inside legend box; only for html plots')
+    subparser.add_argument('--legend_handlelength', type=float, default=argparse.SUPPRESS, help='marker length in legend; only for html plots')
+    subparser.add_argument('--legend_size_html_multiplier', type=float, default=argparse.SUPPRESS, help='legend size multiplier for html plots')
 
     # Display and formatting
     subparser.add_argument("--dpi", type=int, help="Figure dpi (Default: 600 for non-HTML, 150 for HTML)", default=0)
@@ -208,6 +214,12 @@ def add_common_plot_cat_args(subparser, fastq_parser=False):
     subparser.add_argument("--legend_loc", type=str, default="upper left", help="Location of the legend on the plot")
     subparser.add_argument("--legend_items", type=parse_tuple_int, default=(0, 0), help="Tuple for legend item layout")
     subparser.add_argument("--legend_ncol", type=int, default=1, help="Number of columns in the legend")
+    subparser.add_argument('--legend_columnspacing', type=int, default=argparse.SUPPRESS, help='space between columns in legend; only for html plots')
+    subparser.add_argument('--legend_handletextpad', type=float, default=argparse.SUPPRESS, help='space between marker and text in legend; only for html plots')
+    subparser.add_argument('--legend_labelspacing', type=float, default=argparse.SUPPRESS, help='vertical space between entries in legend; only for html plots')
+    subparser.add_argument('--legend_borderpad', type=float, default=argparse.SUPPRESS, help='padding inside legend box; only for html plots')
+    subparser.add_argument('--legend_handlelength', type=float, default=argparse.SUPPRESS, help='marker length in legend; only for html plots')
+    subparser.add_argument('--legend_size_html_multiplier', type=float, default=argparse.SUPPRESS, help='legend size multiplier for html plots')
 
     # Display and formatting
     subparser.add_argument("--dpi", type=int, help="Figure dpi (Default: 600 for non-HTML, 150 for HTML)", default=0)
@@ -420,6 +432,12 @@ def add_common_plot_stack_args(subparser, fastq_parser=False):
     subparser.add_argument("--legend_bbox_to_anchor", type=parse_tuple_float, default=(1, 1), help="Anchor position for the legend bounding box")
     subparser.add_argument("--legend_loc", type=str, default="upper left", help="Legend location on the plot")
     subparser.add_argument("--legend_ncol", type=int, default=1, help="Number of columns in the legend")
+    subparser.add_argument('--legend_columnspacing', type=int, default=argparse.SUPPRESS, help='space between columns in legend; only for html plots')
+    subparser.add_argument('--legend_handletextpad', type=float, default=argparse.SUPPRESS, help='space between marker and text in legend; only for html plots')
+    subparser.add_argument('--legend_labelspacing', type=float, default=argparse.SUPPRESS, help='vertical space between entries in legend; only for html plots')
+    subparser.add_argument('--legend_borderpad', type=float, default=argparse.SUPPRESS, help='padding inside legend box; only for html plots')
+    subparser.add_argument('--legend_handlelength', type=float, default=argparse.SUPPRESS, help='marker length in legend; only for html plots')
+    subparser.add_argument('--legend_size_html_multiplier', type=float, default=argparse.SUPPRESS, help='legend size multiplier for html plots')
 
     # Display and formatting
     subparser.add_argument("--dpi", type=int, help="Figure dpi (Default: 600 for non-HTML, 150 for HTML)", default=0)
@@ -496,6 +514,12 @@ def add_common_plot_vol_args(subparser, fastq_parser=False):
     subparser.add_argument("--legend_bbox_to_anchor", type=parse_tuple_float, default=(1, 1), help="Bounding box anchor for legend")
     subparser.add_argument("--legend_loc", type=str, default="upper left", help="Legend location on the plot")
     subparser.add_argument("--legend_ncol", type=int, default=1, help="Number of columns in the legend")
+    subparser.add_argument('--legend_columnspacing', type=int, default=argparse.SUPPRESS, help='space between columns in legend; only for html plots')
+    subparser.add_argument('--legend_handletextpad', type=float, default=argparse.SUPPRESS, help='space between marker and text in legend; only for html plots')
+    subparser.add_argument('--legend_labelspacing', type=float, default=argparse.SUPPRESS, help='vertical space between entries in legend; only for html plots')
+    subparser.add_argument('--legend_borderpad', type=float, default=argparse.SUPPRESS, help='padding inside legend box; only for html plots')
+    subparser.add_argument('--legend_handlelength', type=float, default=argparse.SUPPRESS, help='marker length in legend; only for html plots')
+    subparser.add_argument('--legend_size_html_multiplier', type=float, default=argparse.SUPPRESS, help='legend size multiplier for html plots')
 
     # Boolean switches
     subparser.add_argument("--dont_display_legend", action="store_false", help="Don't display legend on plot", default=True)
