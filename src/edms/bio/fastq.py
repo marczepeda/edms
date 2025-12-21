@@ -4304,10 +4304,12 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
     if x_axis=='': x_axis='AA Number'
     plt.xlabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight,fontfamily=x_axis_font, labelpad=x_axis_pad)
     if x_ticks==[]: 
-        if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(rotation=x_ticks_rot,ha='center',fontfamily=x_ticks_font,fontsize=x_ticks_size)
+        if x_ticks_rot==0: plt.xticks(rotation=x_ticks_rot,ha='center',va='top',fontfamily=x_ticks_font,fontsize=x_ticks_size)
+        elif x_ticks_rot == 90: plt.xticks(rotation=x_ticks_rot,ha='right',va='center',fontfamily=x_ticks_font,fontsize=x_ticks_size)
         else: plt.xticks(rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font,fontsize=x_ticks_size)
     else: 
-        if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot, ha='center',fontfamily=x_ticks_font,fontsize=x_ticks_size)
+        if x_ticks_rot==0: plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot, ha='center',va='top',fontfamily=x_ticks_font,fontsize=x_ticks_size)
+        elif x_ticks_rot == 90: plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot,ha='right',va='center',fontfamily=x_ticks_font,fontsize=x_ticks_size)
         else: plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font,fontsize=x_ticks_size)
     
     # Set y axis
@@ -4667,10 +4669,12 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
     if x_axis=='': x_axis=f'log2({FC})_{cond_vals[0]}'
     plt.xlabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight,fontfamily=x_axis_font, labelpad=x_axis_pad)
     if x_ticks==[]: 
-        if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(rotation=x_ticks_rot,ha='center',fontfamily=x_ticks_font,fontsize=x_ticks_size)
+        if x_ticks_rot==0: plt.xticks(rotation=x_ticks_rot,ha='center',va='top',fontfamily=x_ticks_font,fontsize=x_ticks_size)
+        elif x_ticks_rot == 90: plt.xticks(rotation=x_ticks_rot,ha='right',va='center',fontfamily=x_ticks_font,fontsize=x_ticks_size)
         else: plt.xticks(rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font,fontsize=x_ticks_size)
     else: 
-        if (x_ticks_rot==0)|(x_ticks_rot==90): plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot, ha='center',fontfamily=x_ticks_font,fontsize=x_ticks_size)
+        if x_ticks_rot==0: plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot, ha='center',va='top',fontfamily=x_ticks_font,fontsize=x_ticks_size)
+        elif x_ticks_rot == 90: plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot,ha='right',va='center',fontfamily=x_ticks_font,fontsize=x_ticks_size)
         else: plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font,fontsize=x_ticks_size)
 
     # Set y axis
@@ -4965,7 +4969,8 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str
         ax.set_xticks(np.arange(df2_log2FC.shape[1]) + 0.5)
         ax.set_xticklabels(df2['DMS_Before_Number'].unique())
         if x_ticks_rot is None: x_ticks_rot=45
-        if (x_ticks_rot==0)|(x_ticks_rot==90): plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, ha="center",rotation_mode="anchor",fontname=x_ticks_font,fontsize=x_ticks_size) 
+        if x_ticks_rot==0: plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, ha="center", va="top", rotation_mode="anchor",fontname=x_ticks_font,fontsize=x_ticks_size) 
+        elif x_ticks_rot == 90: plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, ha="right", va="center", rotation_mode="anchor",fontname=x_ticks_font,fontsize=x_ticks_size)
         else: plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, ha="right",rotation_mode="anchor",fontname=x_ticks_font,fontsize=x_ticks_size) 
         
         # Format y ticks
@@ -5016,7 +5021,8 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str
         ax.set_xticks(np.arange(df2_log2FC.shape[0]) + 0.5)
         ax.set_xticklabels(df2_log2FC.index)
         if y_ticks_rot is None: y_ticks_rot=45
-        if (y_ticks_rot==0)|(y_ticks_rot==90): plt.setp(ax.get_xticklabels(), rotation=y_ticks_rot, ha="center",rotation_mode="anchor",fontname=y_ticks_font,fontsize=y_ticks_size)
+        if y_ticks_rot==0: plt.setp(ax.get_xticklabels(), rotation=y_ticks_rot, ha="center", va="top", rotation_mode="anchor",fontname=y_ticks_font,fontsize=y_ticks_size)
+        elif y_ticks_rot == 90: plt.setp(ax.get_xticklabels(), rotation=y_ticks_rot, ha="right", va="center", rotation_mode="anchor",fontname=y_ticks_font,fontsize=y_ticks_size)
         else: plt.setp(ax.get_xticklabels(), rotation=y_ticks_rot, ha="right",rotation_mode="anchor",fontname=y_ticks_font,fontsize=y_ticks_size)
 
     # Format title
