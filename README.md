@@ -7,6 +7,7 @@ edms -h # or edms <TAB>
 - gen: input/output, data wrangling, generating plots, and statistics.
     ```shell
     import edms.gen.com as com
+    import edms.gen.html as ht
     import edms.gen.image as im
     import edms.gen.io as io
     import edms.gen.plot as p

@@ -1,6 +1,7 @@
 ''' 
 src/edms/gen/cli.py             Command Line Interface for EDMS General module
 ├── __init__.py                 Initializer
+├── html.py                     HTML module
 ├── io.py                       Input/Output module
 ├── plot.py                     Plot module
 ├── stat.py                     Statistical Analysis module
@@ -28,7 +29,7 @@ import datetime
 import sys # might use later
 from rich import print as rprint # might use later
 
-from . import com, io, plot as p, stat as st
+from . import com, io, plot as p, stat as st, html as ht
 from ..utils import parse_tuple_int, parse_tuple_float # might use later
 
 # fastq helper methods
@@ -782,3 +783,26 @@ def add_subparser(subparsers, formatter_class=None):
     parser_com_smaller_fastq.set_defaults(func=com.smaller_fastq)
     parser_com_create_export_var.set_defaults(func=com.create_export_var)
     parser_com_view_export_vars.set_defaults(func=com.view_export_vars)
+
+    '''
+    edms.gen.html:
+    - make_html_index(): Create an index HTML that links to other HTML files in `dir`.
+        - Uses <title> from each HTML file if available; falls back to stem/filename.
+        - Makes titles into buttons.
+        - Optionally embeds a preview iframe that updates when you click a button.
+        - Displays plot links in a responsive grid; `grid_cols` controls the default column count.
+    '''
+    parser_html = subparsers.add_parser("html", help="HTML Index Creation", description="HTML Index Creation", formatter_class=formatter_class)
+    
+    parser_html.add_argument("--dir", type=str, help="Directory containing HTML files to index", required=True)
+    parser_html.add_argument("--file", type=str, help="Output HTML index file name", default="index.html")
+    parser_html.add_argument("--recursive", action="store_true", help="Recursively search subdirectories for HTML files", default=False)
+    parser_html.add_argument("--exclude", type=str, nargs="+", help="List of filenames to exclude (case insensitive)", default=[])
+    parser_html.add_argument("--sort", type=str, choices=["title", "name", "mtime"], help="Sort HTML files by 'title', 'name', or 'mtime' (modification time)", default="title")
+    parser_html.add_argument("--no_preview", dest="preview", action="store_false", help="Don't include an iframe preview panel in the index", default=True)
+    parser_html.add_argument("--grid_cols", type=int, help="Number of columns in the responsive grid layout", default=3)
+    parser_html.add_argument("--no_pdf", dest="pdf", action="store_false", help="Don't include PDF files in the index", default=True)
+    parser_html.add_argument("--preview_height_px", type=int, help="Height of the preview iframe in pixels", default=900)
+    parser_html.add_argument("--icon", type=str, help="Name of the SVG icon file (without .svg) to use as favicon", default="python")
+    
+    parser_html.set_defaults(func=ht.make_html_index)
