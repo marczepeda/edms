@@ -1293,7 +1293,7 @@ def dist(typ: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord: l
         y=''
         if y_axis=='': y_axis='Count'
         ax.yaxis.set_major_locator(MaxNLocator(integer=True))
-        formatter(typ=typ, ax=ax, df=df, x=x, y=y, cols=cols, file=file, dir=dir, palette_or_cmap=palette_or_cmap,
+        formatter(typ=typ, ax=ax, df=df, x=x, y=y, cols=cols, file=file, dir=dir,
                   title=title, title_size=title_size, title_weight=title_weight, title_font=title_font,
                   x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad, x_ticks_size=x_ticks_size, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
                   y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_axis_pad=y_axis_pad, y_ticks_size=y_ticks_size, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,

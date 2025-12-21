@@ -696,7 +696,7 @@ def plot_alignments(fastq_alignments: dict | str, align_col: str, id_col: str,
     '''
     # Get dictionary from directory path if needed
     if type(fastq_alignments)==str: 
-        fastq_alignments = io.get_dir(fastq_alignments)
+        fastq_alignments = io.get_dir(fastq_alignments, literal_eval=True)
     
     for fastq_name,df_fastq in fastq_alignments.items(): # Iterate through dictionary
         
@@ -1125,7 +1125,7 @@ def plot_paired(df: pd.DataFrame | str, title: str, out_dir: str,
     '''
     # Get dataframe from file path if needed
     if type(df)==str: 
-        df = io.get(df)
+        df = io.get(df, literal_eval=True)
 
     # Create, save & plot alignment status
     paired_regions_alignment_status_df = df[[desired_col,'alignment_status']].value_counts().reset_index()
