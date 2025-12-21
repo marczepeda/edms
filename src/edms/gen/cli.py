@@ -798,14 +798,14 @@ def add_subparser(subparsers, formatter_class=None):
     '''
     parser_html = subparsers.add_parser("html", help="HTML Index Creation", description="HTML Index Creation", formatter_class=formatter_class)
     
-    parser_html.add_argument("--dir", type=str, help="Directory containing HTML files to index", required=True)
+    parser_html.add_argument("--dir", type=str, help="Directory containing HTML files to index", default=".")
     parser_html.add_argument("--file", type=str, help="Output HTML index file name", default="index.html")
     parser_html.add_argument("--recursive", action="store_true", help="Recursively search subdirectories for HTML files", default=False)
     parser_html.add_argument("--exclude", type=str, nargs="+", help="List of filenames to exclude (case insensitive)", default=[])
     parser_html.add_argument("--sort", type=str, choices=["title", "name", "mtime"], help="Sort HTML files by 'title', 'name', or 'mtime' (modification time)", default="title")
     parser_html.add_argument("--no_preview", dest="preview", action="store_false", help="Don't include an iframe preview panel in the index", default=True)
     parser_html.add_argument("--grid_cols", type=int, help="Number of columns in the responsive grid layout", default=3)
-    parser_html.add_argument("--no_pdf", dest="pdf", action="store_false", help="Don't include PDF files in the index", default=True)
+    parser_html.add_argument("--image_types", type=str, nargs="+", help="List of image file extensions to include (e.g. .png .jpg .gif). If not specified, only .html files are included.", default=None)
     parser_html.add_argument("--preview_height_px", type=int, help="Height of the preview iframe in pixels", default=900)
     parser_html.add_argument("--icon", type=str, help="Name of the SVG icon file (without .svg) to use as favicon", default="python")
     

@@ -8,6 +8,7 @@ from typing import Iterable, Optional
 import shutil
 import importlib.resources as pkg_resources
 import edms.resources.icon as icon_pkg
+from edms.gen.tidy import natural_key
 
 _TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
 
@@ -32,7 +33,7 @@ def make_html_index(
     sort: str = "title",  # "title" | "name" | "mtime"
     preview: bool = True,
     grid_cols: int = 3,
-    pdf: bool = True,
+    image_types: list[str] | None = None,
     preview_height_px: int = 900,
     icon: str = "python",
 ) -> Path:
@@ -52,6 +53,7 @@ def make_html_index(
     sort (str): Sort by "title", "name", or "mtime" (modification time).
     preview (bool, optional): Whether to include an iframe preview panel.
     grid_cols (int, optional): Number of grid columns (default 3).
+    image_types (list[str] | None, optional): List of image file extensions to include (e.g. ['.png','.jpg','.gif']). If None, only .html files are included.
     preview_height_px (int, optional): Height of the preview iframe in pixels.
     icon (str, optional): Name of the SVG icon file (without .svg) to use as favicon.
     """
@@ -62,8 +64,8 @@ def make_html_index(
         shutil.copy(svg_path, Path(dir) / f"{icon}.svg")
 
     exts = {".html"}
-    if pdf:
-        exts.add(".pdf")
+    if image_types:
+        exts |= {ext.lower() if ext.startswith('.') else f'.{ext.lower()}' for ext in image_types}
 
     pattern = "**/*" if recursive else "*"
     files = [p for p in dir.glob(pattern) if p.is_file() and p.suffix.lower() in exts]
@@ -75,7 +77,7 @@ def make_html_index(
     for p in files:
         if p.suffix.lower() == ".html":
             title = _extract_html_title(p) or p.stem
-        else:  # .pdf
+        else:  # image file
             title = p.stem
 
         # grouping key: subdirectory if recursive; unused otherwise
@@ -103,9 +105,9 @@ def make_html_index(
     if sort == "mtime":
         items.sort(key=lambda d: d["mtime"], reverse=True)
     elif sort == "name":
-        items.sort(key=lambda d: d["name"].lower())
-    else:  # title
-        items.sort(key=lambda d: d["title"].lower())
+        items.sort(key=lambda d: natural_key(d["name"]))
+    else:  # title (default)
+        items.sort(key=lambda d: natural_key(d["title"]))
 
     if not items:
         raise FileNotFoundError(f"No .html files found in: {dir}")
@@ -132,7 +134,7 @@ def make_html_index(
 
     if recursive:
         # group items by subdirectory
-        items_by_group = sorted(items, key=lambda d: (d["group"].lower(), d["title"].lower()))
+        items_by_group = sorted(items, key=lambda d: (natural_key(d["group"]), natural_key(d["title"])))
         for group_name, grp in groupby(items_by_group, key=lambda d: d["group"]):
             cards = "\n".join(_card_html(it) for it in grp)
             groups_html.append(
