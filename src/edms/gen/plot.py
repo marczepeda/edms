@@ -1444,7 +1444,6 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vars: str = None,
     # cbar kwargs
     cbar_kws = dict()
     if cbar_label is not None: cbar_kws['label'] = cbar_label
-    else: cbar_kws['label'] = f'log2({FC})'
     if cbar_shrink is not None: cbar_kws['shrink'] = cbar_shrink
     if cbar_aspect is not None: cbar_kws['aspect'] = cbar_aspect
     if cbar_pad is not None: cbar_kws['pad'] = cbar_pad
@@ -1483,7 +1482,7 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vars: str = None,
     fig, axes = plt.subplots(nrows=len(list(dc.keys())),ncols=1,figsize=(figsize[0],figsize[1]*len(list(dc.keys()))),sharex=False,sharey=True)
     if isinstance(axes, np.ndarray)==False: axes = np.array([axes]) # Make axes iterable if there is only 1 heatmap
     for (ax, key) in zip(axes, list(dc.keys())):
-        sns.heatmap(dc[key],annot=annot,cmap=cmap,ax=ax,linecolor=edgecol,linewidths=lw,cbar=cbar,square=sq,vmin=vmin,vmax=vmax, **kwargs)
+        sns.heatmap(dc[key],annot=annot,cmap=cmap,ax=ax,linecolor=edgecol,linewidths=lw,cbar=cbar,square=sq,vmin=vmin,vmax=vmax,cbar_kws=cbar_kws, **kwargs)
         
         # Title
         if len(list(dc.keys()))>1: ax.set_title(key,fontsize=title_size,fontweight=title_weight,fontfamily=title_font)  # Add title to subplot
@@ -1512,7 +1511,7 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vars: str = None,
         cbar = ax.collections[0].colorbar
         vmin, vmax = cbar.vmin, cbar.vmax
         if center is None: center = (vmin + vmax) / 2
-        cbar.set_label(f"log2({FC})" if cbar_label is None else cbar_label, fontsize=cbar_label_size, fontweight=cbar_label_weight)
+        cbar.set_label(cbar_label, fontsize=cbar_label_size, fontweight=cbar_label_weight)
         cbar.set_ticks([vmin, center, vmax])
         cbar.ax.tick_params(labelsize=cbar_tick_size)
 

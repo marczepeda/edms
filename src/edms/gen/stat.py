@@ -27,8 +27,7 @@ from scipy.stats import skew, kurtosis, ttest_ind, ttest_rel, f_oneway, ttest_in
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
 from statsmodels.stats.anova import AnovaRM
 from statsmodels.stats.multitest import multipletests
-from . import io
-from . import tidy as t
+from . import io, tidy as t, plot as p
 
 # Statistics
 def describe(df: pd.DataFrame | str, cols:list=[], group:str='', dir:str=None, file:str=None) -> pd.DataFrame:
@@ -248,9 +247,9 @@ def difference(df: pd.DataFrame | str, data_col: str, compare_col: str, compare:
     return inference
 
 def correlation(df: pd.DataFrame | str, var_cols: list=[], value_cols: list=[], method: str='pearson', numeric_only: bool=True,
-                dir:str=None, file:str=None) -> pd.DataFrame:
+                plot: bool=True, dir:str=None, file_data:str=None, file_plot:str=None, **kwargs_plot) -> pd.DataFrame:
     ''' 
-    correlation(): returns a correlation matrix
+    correlation(): returns a correlation matrix & plot
     
     Parameters:
     df (dataframe | str): pandas dataframe (or file path)
@@ -258,8 +257,11 @@ def correlation(df: pd.DataFrame | str, var_cols: list=[], value_cols: list=[], 
     value_cols (list, optional): list of numerical column names to compute statistics; single column name for tidy dataframe (optional)
     method (str, optional): pearson, spearman, or kendall (Default: pearson)
     numeric_only (bool, optional): only calculates correlations for numeric columns (Default: True)
+    plot (bool, optional): generate correlation matrix plot (Default: True)
     dir (str, optional): save directory
-    file (str, optional): save file
+    file_data (str, optional): save data file (e.g., csv)
+    file_plot (str, optional): save plot file (e.g., pdf)
+    kwargs_plot (dict, optional): plotting keyword arguments
     
     Depedencies: pandas, io
     '''
@@ -271,9 +273,11 @@ def correlation(df: pd.DataFrame | str, var_cols: list=[], value_cols: list=[], 
     elif len(value_cols)>=1: df = df[value_cols] # Isolate specified columns for non-tidy dataframe
     df_corr = df.corr(method=method,numeric_only=numeric_only) # Correlation matrix with specified method
 
-    # Save & return correlation matrix
-    if dir is not None and file is not None:
-        io.save(dir=dir,file=file,obj=df_corr,id=True) 
+    # Plot, save & return correlation matrix
+    if plot == True:
+        p.heat(df=df_corr, cbar_label=method, dir=dir, file=file_plot, **kwargs_plot)
+    if dir is not None and file_data is not None:
+        io.save(dir=dir,file=file_data,obj=df_corr,id=True)
     return df_corr
 
 def weighted_correlation(df: pd.DataFrame | str, x: str, y: str, weight: str=None,

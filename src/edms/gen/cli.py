@@ -311,21 +311,23 @@ def add_common_plot_dist_args(subparser):
     subparser.add_argument("--show", action="store_true", help="Show the plot in an interactive window", default=False)
     subparser.add_argument("--space_capitalize", action="store_true", help="Capitalize and space legend/label values", default=False)
 
-def add_common_plot_heat_args(subparser, fastq_parser=False):
+def add_common_plot_heat_args(subparser, fastq_parser=False, stat_parser=False):
     '''
     add_common_plot_heat_args(subparser): Add common arguments for heatmap graphs
     '''
     # Required arguments
-    subparser.add_argument("--df", help="Input dataframe file path", type=str, required=True)
+    if stat_parser == False:
+        subparser.add_argument("--df", help="Input dataframe file path", type=str, required=True)
 
     # Optional arguments
-    if fastq_parser == False:
+    if fastq_parser == False and stat_parser == False:
         subparser.add_argument("--x", type=str, help="X-axis column name to pivot tidy-formatted dataframe into matrix format")
         subparser.add_argument("--y", type=str, help="Y-axis column name to pivot tidy-formatted dataframe into matrix format")
         subparser.add_argument("--vars", type=str, help="Variable column name to split tidy-formatted dataframe into a dictionary of pivoted dataframes")
         subparser.add_argument("--vals", type=str, help="Value column name to populate pivoted dataframes")
+    if fastq_parser == False:    
         subparser.add_argument("--vals_dims", type=parse_tuple_float, help="Value column limits formatted as 'vmin,vmax'")
-    elif fastq_parser == True:
+    if fastq_parser == True:
         subparser.add_argument("--cond_col", type=str, help="Condition column name", required=True)
         subparser.add_argument("--cond", type=str, help="Condition value for filtering", required=True)
         subparser.add_argument("--FC", type=str, help="Fold change column name (values within heatmap after log2 transformation)", required=True)
@@ -334,9 +336,10 @@ def add_common_plot_heat_args(subparser, fastq_parser=False):
         subparser.add_argument("--cutoff", type=float, help="Comparison count mean cutoff for masking low-abundance values", default=argparse.SUPPRESS)
         subparser.add_argument("--aa", type=str, help="AA saturation mutagenesis. The 'aa' option [default] makes all amino acid substitutions ('aa_subs'), +1 amino acid insertions ('aa_ins'), and -1 amino acid deletions ('aa_dels').", choices=['aa', 'aa_subs', 'aa_ins', 'aa_dels'], default='aa')
         subparser.add_argument("--label", type=str, help="Label column name (Default: 'Edit'). Can't be None.", default='Edit')
-
-    subparser.add_argument("--dir", type=str, help="Output directory path", default='./out')
-    subparser.add_argument("--file", type=str, help="Output filename", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_heat.png')
+    
+    if stat_parser == False:
+        subparser.add_argument("--dir", type=str, help="Output directory path", default='./out')
+        subparser.add_argument("--file", type=str, help="Output filename", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_heat.png')
     subparser.add_argument("--edgecol", type=str, default="black", help="Color of cell edges")
     subparser.add_argument("--lw", type=int, default=1, help="Line width for cell borders")
 
@@ -349,15 +352,15 @@ def add_common_plot_heat_args(subparser, fastq_parser=False):
         subparser.add_argument("--cmap_not_WT", type=str, default="lightgray", help="Color for non-WT values in colorbar (Default: lightgray)")
     subparser.add_argument("--sq", action="store_true", help="Use square aspect ratio for cells", default=False)
     subparser.add_argument("--cbar", action="store_true", help="Display colorbar", default=False)
-    if fastq_parser == True:
+    if stat_parser == False:
         subparser.add_argument("--cbar_label", type=str, default=argparse.SUPPRESS, help="Colorbar label")
-        subparser.add_argument("--cbar_label_size", type=int, default=argparse.SUPPRESS, help="Font size for colorbar label")
-        subparser.add_argument("--cbar_label_weight", type=str, default="bold", help="Font weight for colorbar label (Default: bold)", choices=['bold', 'normal', 'heavy'])
-        subparser.add_argument("--cbar_tick_size", type=int, default=argparse.SUPPRESS, help="Font size for colorbar ticks")
-        subparser.add_argument("--cbar_shrink", type=float, default=argparse.SUPPRESS, help="Shrink factor for colorbar")
-        subparser.add_argument("--cbar_aspect", type=int, default=argparse.SUPPRESS, help="Aspect ratio for colorbar")
-        subparser.add_argument("--cbar_pad", type=float, default=argparse.SUPPRESS, help="Padding for colorbar")
-        subparser.add_argument("--cbar_orientation", type=str, default=argparse.SUPPRESS, help="Orientation of colorbar (Default: 'vertical')", choices=['vertical', 'horizontal'])
+    subparser.add_argument("--cbar_label_size", type=int, default=argparse.SUPPRESS, help="Font size for colorbar label")
+    subparser.add_argument("--cbar_label_weight", type=str, default="bold", help="Font weight for colorbar label (Default: bold)", choices=['bold', 'normal', 'heavy'])
+    subparser.add_argument("--cbar_tick_size", type=int, default=argparse.SUPPRESS, help="Font size for colorbar ticks")
+    subparser.add_argument("--cbar_shrink", type=float, default=argparse.SUPPRESS, help="Shrink factor for colorbar")
+    subparser.add_argument("--cbar_aspect", type=int, default=argparse.SUPPRESS, help="Aspect ratio for colorbar")
+    subparser.add_argument("--cbar_pad", type=float, default=argparse.SUPPRESS, help="Padding for colorbar")
+    subparser.add_argument("--cbar_orientation", type=str, default=argparse.SUPPRESS, help="Orientation of colorbar (Default: 'vertical')", choices=['vertical', 'horizontal'])
 
     # Title and size
     subparser.add_argument("--title", type=str, default="", help="Plot title")
@@ -671,15 +674,16 @@ def add_subparser(subparsers, formatter_class=None):
     parser_stat_correlation = subparsers_stat.add_parser("correlation", help="Compute correlation matrix", description="Compute correlation matrix", formatter_class=formatter_class)
 
     parser_stat_correlation.add_argument("--df", type=str, help="Input file path",required=True)
-
-    parser_stat_correlation.add_argument("--dir", type=str, help="Output directory",default='../out')
-    parser_stat_correlation.add_argument("--file", type=str, help="Output file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_correlation.csv')
-
     parser_stat_correlation.add_argument("--var_cols", nargs="+", help="List of 2 variable columns for tidy format")
     parser_stat_correlation.add_argument("--value_cols", nargs="+", help="List of numerical columns to correlate")
     parser_stat_correlation.add_argument("--method", type=str, default="pearson", choices=["pearson", "spearman", "kendall"],
                                          help="Correlation method to use (Default: pearson)")
     parser_stat_correlation.add_argument("--numeric_only", action="store_true", help="Only use numeric columns (Default: True)")
+    parser_stat_correlation.add_argument("--no_plot", dest="plot", action="store_false", help="Don't generate correlation matrix plot", default=True)
+    parser_stat_correlation.add_argument("--dir", type=str, help="Output directory",default='../out')
+    parser_stat_correlation.add_argument("--file_data", type=str, help="Output data file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_correlation.csv')
+    parser_stat_correlation.add_argument("--file_plot", type=str, help="Output plot file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_correlation.pdf')
+    add_common_plot_heat_args(parser_stat_correlation, stat_parser=True)
 
     parser_stat_correlation.set_defaults(func=st.correlation)
 
