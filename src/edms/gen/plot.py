@@ -1382,7 +1382,7 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vars: str = None,
          file: str = None, dir: str = None, edgecol: str = 'black', lw: int = 1, annot: bool = False, center: float = None, cmap: str = "Reds", sq: bool = True,
          cbar: bool=True, cbar_label: str=None, cbar_label_size: int=None, cbar_label_weight: str='bold', cbar_tick_size: int=None, cbar_shrink: float=None, cbar_aspect: int=None, cbar_pad: float=None, cbar_orientation: str=None,
          title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial', figsize: tuple = (5, 5),
-         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_pad: int = None, x_ticks_size: int = 9, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial',
+         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_pad: int = None, x_ticks_size: int = 9, x_ticks_rot: int = 45, x_ticks_font: str = 'Arial',
          y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_pad: int = None, y_ticks_size: int = 9, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial',
          dpi: int = 0, show: bool = True, space_capitalize: bool = True, **kwargs):
     '''
