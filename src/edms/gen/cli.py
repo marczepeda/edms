@@ -262,7 +262,7 @@ def add_common_plot_dist_args(subparser):
     subparser.add_argument("--asp", type=int, default=5, help="Aspect ratio of the plot")
     subparser.add_argument("--tp", type=float, default=0.8, help="Top padding space")
     subparser.add_argument("--hs", type=int, default=0, help="Horizontal spacing between plots (if faceted)")
-    subparser.add_argument("--des", action="store_true", help="Remove plot spines (despine)", default=False)
+    subparser.add_argument("--despine", action="store_true", help="Remove plot spines (despine)", default=False)
 
     # Figure appearance
     subparser.add_argument("--figsize", type=parse_tuple_int, default=(5,5), help="Figure size formatted as 'width,height'")
@@ -611,7 +611,7 @@ def add_subparser(subparsers, formatter_class=None):
 
     for parser_plot_dist in [parser_plot_type_hist, parser_plot_type_kde, parser_plot_type_hist_kde, parser_plot_type_rid]:
         add_common_plot_dist_args(parser_plot_dist)
-        parser_plot_cat.set_defaults(func=p.dist)
+        parser_plot_dist.set_defaults(func=p.dist)
 
     # heat(): Creates heatmap graphs
     parser_plot_type_heat = subparsers_plot.add_parser("heat", help="Create heatmap plot", description="Create heatmap plot", formatter_class=formatter_class)

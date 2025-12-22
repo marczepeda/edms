@@ -9,6 +9,7 @@ import shutil
 import importlib.resources as pkg_resources
 import edms.resources.icon as icon_pkg
 from edms.gen.tidy import natural_key
+from edms.gen.plot import re_un_cap
 
 _TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
 
@@ -196,7 +197,7 @@ def make_html_index(
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>EDMS Plot Index</title>
+  <title>EDMS {re_un_cap('.'.join(file.split('.')[:-1]))}</title>
   <link rel="icon" type="image/svg+xml" href="{dir}/{icon}.svg">
   <style>
     :root {{
@@ -292,7 +293,7 @@ def make_html_index(
   </style>
 </head>
 <body>
-  <h1>EDMS Plot Index</h1>
+  <h1>EDMS {re_un_cap('.'.join(file.split('.')[:-1]))}</h1>
   <div class="wrap">
     <div class="topbar">
       {"".join(groups_html)}

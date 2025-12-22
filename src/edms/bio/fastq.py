@@ -624,34 +624,37 @@ def perform_alignments(align_col: str, out_dir: str, fastq_name: str, fastq_df_r
         if seq is None: # Missing region or empty read
             continue
 
-        seq_alignments_scores = []
-        seq_alignments_aligned = []
         found_exact = False 
-        for ref in fastq_df_ref[align_col]: # Iterate though reference sequences (exact matches)
+        for i,ref in enumerate(fastq_df_ref[align_col]): # Iterate though reference sequences (exact matches)
             if str(ref) == str(seq[0:len(ref)]): # Exact match
-                seq_alignment = aligner.align(ref, seq[0:len(ref)]) # trim ngs sequence to reference sequence & align
-                seq_alignments_scores.append(seq_alignment[0].score) # Save highest alignment score
-                seq_alignments_aligned.append(seq_alignment[0].aligned[0]) # Save alignment matches
+                aligned_i = aligner.align(ref, seq[0:len(ref)])[0].aligned[0] # trim ngs sequence to reference sequence & align
+                ref_i = fastq_df_ref.iloc[i][align_col]
+                dc_alignments[ref_i] = dc_alignments[ref_i]+1
+                dc_aligned_reads[ref_i].append(s)
+
                 found_exact = True
                 break
-        
+
         if not exact: # Allow non-exact matches
             if not found_exact: # No exact match found; perform alignments
+                seq_alignments_scores = []
+                seq_alignments_aligned = []
+
                 for ref in fastq_df_ref[align_col]: # Iterate though reference sequences
                     seq_alignment = aligner.align(ref, seq[0:len(ref)]) # trim ngs sequence to reference sequence & align
                     seq_alignments_scores.append(seq_alignment[0].score) # Save highest alignment score
                     seq_alignments_aligned.append(seq_alignment[0].aligned[0]) # Save alignment matches
+
+                # Isolate maximum score alignment
+                i = seq_alignments_scores.index(max(seq_alignments_scores))
+                ref_i = fastq_df_ref.iloc[i][align_col]
+                aligned_i = seq_alignments_aligned[i]
+                dc_alignments[ref_i] = dc_alignments[ref_i]+1
+                dc_aligned_reads[ref_i].append(s)
         
         else: # Exact matches only
             if not found_exact: # No exact match found; skip
                 continue
-
-        # Isolate maximum score alignment
-        i = seq_alignments_scores.index(max(seq_alignments_scores))
-        ref_i = fastq_df_ref.iloc[i][align_col]
-        aligned_i = seq_alignments_aligned[i]
-        dc_alignments[fastq_df_ref.iloc[i][align_col]] = dc_alignments[ref_i]+1
-        dc_aligned_reads[fastq_df_ref.iloc[i][align_col]].append(s)
 
         # Find & quantify mismatches (Change zero-indexed to one-indexed)
         mismatch_pos = []
