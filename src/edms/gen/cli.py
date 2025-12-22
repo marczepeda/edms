@@ -162,7 +162,6 @@ def add_common_plot_cat_args(subparser, fastq_parser=False):
     # Optional core arguments
     subparser.add_argument("--x", help="X-axis column name", type=str, default="")
     subparser.add_argument("--y", help="Y-axis column name", type=str, default="")
-    subparser.add_argument("--cats", type=str, help="Category column name (x- or y-axis)")
     subparser.add_argument("--cats_ord", nargs="+", help="Category column values order (x- or y-axis)")
     subparser.add_argument("--cats_exclude", nargs="+", help="Category column values exclude (x- or y-axis)")
     subparser.add_argument("--cols", type=str, help="Color column name for grouping")
@@ -171,8 +170,8 @@ def add_common_plot_cat_args(subparser, fastq_parser=False):
     if fastq_parser == True:
         subparser.add_argument("--PDB_pt", type=str, help="PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information", default=argparse.SUPPRESS)
 
-    subparser.add_argument("--file", type=str, help="Output filename", default='./out')
-    subparser.add_argument("--dir", type=str, help="Output directory", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_cat.png')
+    subparser.add_argument("--dir", type=str, help="Output directory", default='./out')
+    subparser.add_argument("--file", type=str, help="Output filename", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_cat.png')
     subparser.add_argument("--palette_or_cmap", type=str, default="colorblind", help="Seaborn color palette or matplotlib colormap")
     subparser.add_argument("--edgecol", type=str, default="black", help="Edge color for markers")
 

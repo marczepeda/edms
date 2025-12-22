@@ -3776,10 +3776,10 @@ def cat(typ: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list =
         cats = ''
         if x!='': # Check that x column is numeric
             if df[x].apply(lambda row: isinstance(row, (int, float))).all()==True: 
-                cats = x
+                cats = y
         if y!='' and cats=='': # Check that y column is numeric
             if df[y].apply(lambda row: isinstance(row, (int, float))).all()==True: 
-                cats = y 
+                cats = x
         if cats=='': pass # No numeric column found
         genotypes = list(df[cats].value_counts().keys())
         positions = list()
