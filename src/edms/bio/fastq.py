@@ -713,7 +713,7 @@ def plot_alignments(fastq_alignments: dict | str, align_col: str, id_col: str,
                                                 id_col:[id]*len(mismatch_pos_per_alignment),
                                                 'mismatch_pos':list(mismatch_pos_per_alignment.keys()),
                                                 'mismatch_pos_per_alignment':list(mismatch_pos_per_alignment.values())})
-            
+
             p.scat(typ='line',df=df_fastq_plot_align,x='mismatch_pos',y='mismatch_pos_per_alignment', # Plot mismatches for each alignment
                    title=f'{fastq_name} {id}',x_axis='Alignment Position',y_axis='Mismatches/Alignment',y_axis_dims=(0,1),
                    dir=out_dir_fastq_name,file=f'{id.replace(".","_")}{plot_suf}',
@@ -723,7 +723,7 @@ def plot_alignments(fastq_alignments: dict | str, align_col: str, id_col: str,
 
         p.scat(typ='line',df=df_fastq_plot,x='mismatch_pos',y='mismatch_pos_per_alignment',cols=id_col, # Plot mismatches for each alignment
                title=f'{fastq_name}',x_axis='Alignment Position',y_axis='Mismatches/Alignment',y_axis_dims=(0,1),
-               dir=out_dir_fastq_name,file=f'alignment_mismatches{plot_suf}',legend_ncol=int(round(len(df_fastq_plot[id_col].value_counts())/20)),
+               dir=out_dir_fastq_name,file=f'alignment_mismatches{plot_suf}',legend_ncol=int(math.ceil(len(df_fastq_plot[id_col].value_counts())/20)),
                show=show,**plot_kwargs)
 
         p.dist(typ='hist',df=df_fastq,x='alignments',x_axis_dims=(0,max(df_fastq['alignments'])),
