@@ -475,7 +475,7 @@ def add_subparser(subparsers, formatter_class=None):
     # Add specific arguments: genotyping()
     parser_fastq_genotyping.add_argument("--out_file_prefix", type=str, help="Name of output file prefix", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
     
-    parser_fastq_genotyping.add_argument("--config_key", type=str, help="Configuration file key for sequence [flank5(genotype region)flank3 or genotype region only] & res (first amino acid in genotype region)", default=argparse.SUPPRESS)
+    parser_fastq_genotyping.add_argument("--config_key", type=str, help="Config file key (FWD primer-REV primer) for sequence [flank5(genotype region)flank3 or genotype region only] & res (first amino acid in genotype region)", default=argparse.SUPPRESS)
     parser_fastq_genotyping.add_argument("--sequence", type=str, help="Formatted sequence: flank5(genotype region)flank3 or genotype region only", default=argparse.SUPPRESS)
     parser_fastq_genotyping.add_argument("--res", type=int, help="First amino acid number in genotype region", default=argparse.SUPPRESS)
     
@@ -605,8 +605,9 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_count_signatures.add_argument("--fastq_dir", help="Directory containing FASTQ files", required=True)
     
     parser_fastq_count_signatures_group = parser_fastq_count_signatures.add_mutually_exclusive_group(required=True)
-    parser_fastq_count_signatures_group.add_argument("--target_sequence", help="[Required (Option 1)] Target sequence; retrieved from input file if not provided")
-    parser_fastq_count_signatures_group.add_argument("--in_file", help="[Required (Option 2)] Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence,index (column names required)")
+    parser_fastq_count_signatures_group.add_argument("--config_key", type=str, help="[Required (Option 1)] Config file key (FWD primer_REV primer) with 'motif5' and 'motif3'", default=argparse.SUPPRESS)
+    parser_fastq_count_signatures_group.add_argument("--in_file", help="[Required (Option 2)] Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence,index (column names required)", default=argparse.SUPPRESS)
+    parser_fastq_count_signatures_group.add_argument("--sequence", help="[Required (Option 3)] Target sequence; retrieved from config_key or in_file if not provided")
     
     parser_fastq_count_signatures.add_argument("--n_extra_nt", type=int, help="Number of extra nucleotide differences allowed for Signature match (Default: 0)", default=0)
     parser_fastq_count_signatures.add_argument("--df_motif5", help="5' motif file path", default=argparse.SUPPRESS)
@@ -650,9 +651,10 @@ def add_subparser(subparsers, formatter_class=None):
 
     parser_fastq_trim_motifs.add_argument("--out_dir", help="Output directory (Default: ./trim_motifs)", default=f'./trim_motifs')
 
-    parser_fastq_trim_motifs.add_argument("--in_file", help="[Required option 1] Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)", default=argparse.SUPPRESS)
-    parser_fastq_trim_motifs.add_argument("--motif5", help="[Required option 2] 5' motif sequence to trim", default=argparse.SUPPRESS)
-    parser_fastq_trim_motifs.add_argument("--motif3", help="[Required option 2] 3' motif sequence to trim", default=argparse.SUPPRESS)
+    parser_fastq_trim_motifs.add_argument("--config_key", type=str, help="[Required (Option 1)] Config file key (FWD primer_REV primer) with 'motif5' and 'motif3'", default=argparse.SUPPRESS)
+    parser_fastq_trim_motifs.add_argument("--in_file", help="[Required (Option 2)] Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)", default=argparse.SUPPRESS)
+    parser_fastq_trim_motifs.add_argument("--motif5", help="[Required (Option 3 and/or)] 5' motif sequence to trim", default=argparse.SUPPRESS)
+    parser_fastq_trim_motifs.add_argument("--motif3", help="[Required (Option 3 and/or)] 3' motif sequence to trim", default=argparse.SUPPRESS)
 
     parser_fastq_trim_motifs.add_argument("--motif_length", type=int, help="Trim 'in_file' motifs to this length (Default: 21)", default=21)
     parser_fastq_trim_motifs.add_argument("--error_rate", type=float, help="Maximum error rate allowed in each motif (Default: 0.1 = 10%%)", default=0.1)
@@ -929,8 +931,9 @@ Examples:[/red]
     # pegRNA_signature():
     parser_pe_pegRNA_signature.add_argument("--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
 
-    parser_pe_pegRNA_signature.add_argument("--flank5", type=str, dest='flank5_sequence', help=f"Flank 5' sequence")
-    parser_pe_pegRNA_signature.add_argument("--flank3", type=str, dest='flank3_sequence', help=f"Flank 3' sequence")
+    parser_pe_pegRNA_signature.add_argument("--config_key", type=str, help="Config file key (FWD primer_REV primer) with 'motif5' (flank5) & 'motif3' (flank3)", default=argparse.SUPPRESS)
+    parser_pe_pegRNA_signature.add_argument("--flank5", type=str, dest='flank5_sequence', help=f"Flank 5' sequence", default=argparse.SUPPRESS)
+    parser_pe_pegRNA_signature.add_argument("--flank3", type=str, dest='flank3_sequence', help=f"Flank 3' sequence", default=argparse.SUPPRESS)
     parser_pe_pegRNA_signature.add_argument("--flank5_length", type=int, help="Length of flank5 sequence to include in alignment if provided (Default: 0)", default=0)
     parser_pe_pegRNA_signature.add_argument("--flank3_length", type=int, help="Length of flank3 sequence to include in alignment if provided (Default: 0)", default=0)
     parser_pe_pegRNA_signature.add_argument("--reference_sequence", type=str, help="Column name for reference sequences (Default: 'Reference_sequence')", default='Reference_sequence')

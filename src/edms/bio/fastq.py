@@ -1289,7 +1289,7 @@ def paired_regions(meta_dir: str, region1_dir: str, region2_dir: str, out_dir: s
 
 ### Signature 
 def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str, edit_col: str, fastq_dir: str, 
-                     out_dir: str, out_file: str, target_sequence: str=None, in_file: pd.DataFrame | str=None, n_extra_nt: int=0,
+                     out_dir: str, out_file: str, config_key: str = None, in_file: pd.DataFrame | str=None, sequence: str=None, n_extra_nt: int=0,
                      df_motif5: pd.DataFrame | str=None, df_motif3: pd.DataFrame | str=None, fastq_col: str=None,  meta: pd.DataFrame | str=None, 
                      match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, extend_gap_score: float = -0.1, 
                      align_dims: tuple=(0,0), align_ckpt: int=10000, save_alignments: bool=False, return_df: bool=False, 
@@ -1306,9 +1306,10 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
     out_dir (str): directory for output files
     out_file (str): output filename
 
-    target_sequence (str, option 1): Target sequence; retrieved from input file if not provided
-    in_file (dataframe | str, option 2): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence,aa_index (column names required)
-    
+    config_key (str, option 1): Configuration key (FWD primer_REV primer) with 'sequence'
+    sequence (str, option 2): Target sequence; retrieved from 'config_key' or 'in_file' if not provided
+    in_file (dataframe | str, option 3): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence,aa_index (column names required)
+
     n_extra_nt (int, optional): number of extra nucleotide differences allowed for Signature match (Default: 0)
     df_motif5 (dataframe | str, optional): 5' motif dataframe (or file path)
     df_motif3 (dataframe | str, optional): 3' motif dataframe (or file path)
@@ -1327,10 +1328,6 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
     show (bool, optional): show plots (Default: False)
     **plot_kwargs (optional): plot keyword arguments
     '''
-    # Check target_sequence or in_file was provided
-    if target_sequence is None and in_file is None:
-        raise(ValueError("'target_sequence' or 'in_file' are required. If both are provided, 'target_sequence' will be used."))
-
     # Initialize timer
     memory_timer(reset=True)
 
@@ -1357,14 +1354,20 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
         if fastq_col not in df_ref.columns.tolist():
             raise Exception(f'Missing fastq column: {fastq_col}')
 
-    # Get ref_seq from target_sequence or in_file
-    if target_sequence is None: 
-        if type(in_file)==str:
-            in_file = io.get(in_file)
-        target_sequence = in_file.iloc[0]['target_sequence']
-        ref_seq = target_sequence.split('(')[1].split(')')[0] # Get wt reference sequence
-    else:
-        ref_seq = target_sequence
+    # Get ref_seq from config_key, in_file, or sequence
+    if sequence is None: 
+        if in_file is not None: # Use in_file to get sequence
+            if type(in_file)==str: # Get dataframe from file path if needed
+                in_file = io.get(in_file)
+            sequence = in_file.iloc[0]['target_sequence'].split('(')[1].split(')')[0]
+        
+        elif config_key is not None: # Use config_key to get sequence
+            sequence = config.get_info(id=config_key)['sequence']
+        
+        else: # No sequence provided
+            raise(ValueError("'config_key', 'sequence' or 'in_file' are required. If multiple are provided, 'sequence' (1st) or 'config_key' (2nd) will be used."))
+    
+    ref_seq = sequence
     
     # Get & check motif dataframes from file path if needed
     if df_motif5 is not None:
@@ -2425,7 +2428,7 @@ def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=N
     
     Parameters:
     in_dir (str): directory with fastq files
-    config_key (str, optional 1): config file key (FWD primer-REV primer) with 'sequence' & 'res' parameters
+    config_key (str, optional 1): config file key (FWD primer-REV primer) with 'sequence' & 'res'
     sequence (str, optional 2): sequence formatted flank5(genotype region)flank3 or genotype region only
     res (int, optional 2): first AA number in genotype region
     out_dir (str, optional): output directory (Default: None)
@@ -2711,7 +2714,7 @@ def extract_umis(fastq_dir: str, out_dir: str='./extract_umis',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))     
     
 def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs', 
-                in_file: pd.DataFrame | str = None, motif5: str=None, motif3: str=None, 
+                config_key: str = None, in_file: pd.DataFrame | str = None, motif5: str=None, motif3: str=None, 
                 motif_length: int=21, error_rate: float=0.1,
                 env: str='umi_tools'):
     ''' 
@@ -2721,9 +2724,10 @@ def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs',
     fastq_dir (str): directory with FASTQ files (with UMIs extracted)
     out_dir (str): output directory (Default: ./trim_motifs)
 
-    in_file (dataframe | str, option 1): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)
-    motif5 (str, option 2): 5' motif pattern (Default: None)
-    motif3 (str, option 2): 3' motif pattern (Default: None)
+    config_key (str, option 1): config file key (FWD primer_REV primer) with 'motif5' & 'motif3'
+    in_file (dataframe | str, option 2): Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (column names required)
+    motif5 (str, option 3): 5' motif pattern (Default: None)
+    motif3 (str, option 3): 3' motif pattern (Default: None)
 
     motif_length (int, optional): trim 'in_file' motifs to this length (Default: 21)
     error_rate (float, optional): maximum error rate allowed in each motif (Default: 0.1)
@@ -2739,16 +2743,24 @@ def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs',
     
     # Get motifs from in_file if needed
     if motif5 is None and motif3 is None:
-        if in_file is None:
-            raise(ValueError("Error: Either 'in_file' or 'motif5' & 'motif3' must be provided."))
+        if in_file is not None: # Use in_file to get motifs
+            if type(in_file)==str: # Get PrimeDesign input DataFrame from file path if needed
+                in_file = io.get(pt=in_file)
+            if 'target_sequence' not in in_file.columns:
+                raise(ValueError(f"Error: 'target_sequence' column not found in {in_file}. Please check the file."))
+            target_sequence = in_file.iloc[0]['target_sequence']
+            motif5 = target_sequence.split('(')[0][-motif_length:]
+            motif3 = target_sequence.split(')')[1][:motif_length]
         
-        if type(in_file)==str: # Get PrimeDesign input DataFrame from file path if needed
-            in_file = io.get(pt=in_file)
-        if 'target_sequence' not in in_file.columns:
-            raise(ValueError(f"Error: 'target_sequence' column not found in {in_file}. Please check the file."))
-        target_sequence = in_file.iloc[0]['target_sequence']
-        motif5 = target_sequence.split('(')[0][-motif_length:]
-        motif3 = target_sequence.split(')')[1][:motif_length]
+        elif config_key is not None: # Use config file to get motifs
+            config_key = config.get_info(id=config_key)
+            if 'motif5' in config_key:
+                motif5 = config_key['motif5']
+            if 'motif3' in config_key:
+                motif3 = config_key['motif3']
+        
+        else: # No motifs provided
+            raise(ValueError("Error: Either 'in_file', 'config_key', or 'motif5' and/or 'motif3' must be provided."))
         
     # Iterate through fastq files in the directory
     for file in os.listdir(path=fastq_dir):

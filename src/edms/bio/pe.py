@@ -1513,8 +1513,8 @@ def pegRNA_outcome(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str = No
         io.save(dir=out_dir,file=out_file,obj=pegRNAs)
     if return_df==True: return pegRNAs
 
-def pegRNA_signature(pegRNAs: pd.DataFrame | str, 
-                    flank5_sequence: str | Seq = None, flank3_sequence: str | Seq = None, 
+def pegRNA_signature(pegRNAs: pd.DataFrame | str, config_key: str=None,
+                    flank5_sequence: str = None, flank3_sequence: str = None, 
                     flank5_length: int=0, flank3_length: int=0,
                     reference_sequence: str='Reference_sequence', edit_sequence: str='Edit_sequence',
                     match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, extend_gap_score: float = -0.1,
@@ -1524,8 +1524,9 @@ def pegRNA_signature(pegRNAs: pd.DataFrame | str,
     
     Parameters:
     pegRNAs (dataframe | str): pegRNAs DataFrame (or file path)
-    flank5_sequence (str | Seq, optional): flank5 sequence
-    flank3_sequence (str | Seq, optional): flank3 sequence
+    config_key (str, optional): config file key (FWD primer_REV primer) with 'motif5' (flank5_sequence) & 'motif3' (flank3_sequence)
+    flank5_sequence (str, optional): flank5 sequence
+    flank3_sequence (str, optional): flank3 sequence
     flank5_length (int, optional): length of flank5 sequence to include in alignment if provided (Default: 0)
     flank3_length (int, optional): length of flank3 sequence to include in alignment if provided (Default: 0)
     reference_sequence (str, optional): column name for reference sequences (Default: 'Reference_sequence')
@@ -1556,10 +1557,11 @@ def pegRNA_signature(pegRNAs: pd.DataFrame | str,
     aligner.open_gap_score = open_gap_score  # Penalty for opening a gap; applied to both strands
     aligner.extend_gap_score = extend_gap_score  # Penalty for extending a gap; applied to both strands
 
-    # Convert Seq objects to strings if provided
-    if flank5_sequence is not None and flank3_sequence is not None:
-        flank5_sequence = str(flank5_sequence)
-        flank3_sequence = str(flank3_sequence)
+    # Use config_key to get flank5_sequence and flank3_sequence if provided
+    if flank5_sequence is None and flank3_sequence is None:
+        config_key = config.get_info(id=config_key)
+        flank5_sequence = config_key['motif5']
+        flank3_sequence = config_key['motif3']
 
     # Get alignments and signatures
     aligments_list = []
