@@ -651,8 +651,7 @@ def odds_ratio(df: pd.DataFrame | str, cond: str, cond_comp: str,
         df_cond[f'compare_{cond}'] = [cond_comp] * df_cond.shape[0]
         df_cond[f'compare_{var}'] = [var_comp] * df_cond.shape[0]
 
-        # Iterate through variables within condition; compute odds ratio
-        or_ls = []
+        # Iterate through variables within condition; compute odds ratio & pval from fisher exact test
         fe_or_ls = []
         pval_ls = []
 
@@ -665,14 +664,12 @@ def odds_ratio(df: pd.DataFrame | str, cond: str, cond_comp: str,
                 raise ValueError(f'No data found for condition "{cond_comp}" and variable "{v}". Cannot compute odds ratio.')
             
             # Compute odds ratio & fisher exact test
-            or_ls.append((cond_var_count_pc / cond_var_comp_count_pc) / (cond_comp_var_count_pc / cond_comp_var_comp_count_pc))
             fe_or, pval = fisher_exact(table=[[cond_var_count_pc, cond_var_comp_count_pc], [cond_comp_var_count_pc, cond_comp_var_comp_count_pc]],
                                         alternative=alternative)
             fe_or_ls.append(fe_or)
             pval_ls.append(pval)
         
         # Add results to condition dataframe
-        df_cond['odds_ratio'] = or_ls
         df_cond['fisher_exact_odds_ratio'] = fe_or_ls
         df_cond['fisher_exact_pval'] = pval_ls
         
