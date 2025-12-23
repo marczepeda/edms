@@ -696,11 +696,31 @@ def add_subparser(subparsers, formatter_class=None):
     parser_stat_compare.add_argument("--var", type=str, help="Variable column name",required=True)
     parser_stat_compare.add_argument("--count", type=str, help="Count column name",required=True)
 
-    parser_stat_compare.add_argument("--psuedocount", type=int, default=1, help="Pseudocount to avoid log(0) or divide-by-zero errors")
+    parser_stat_compare.add_argument("--pseudocount", type=int, default=1, help="Pseudocount to avoid log(0) or divide-by-zero errors")
+    parser_stat_compare.add_argument("--alternative", type=str, default="two-sided", choices=["two-sided", "less", "greater"], help="Alternative hypothesis for Fisher's exact test (Default: two-sided)")
     parser_stat_compare.add_argument("--dir", type=str, help="Output directory",default='../out')
     parser_stat_compare.add_argument("--file", type=str, help="Output file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_compare.csv')
+    parser_stat_compare.add_argument("--verbose", action="store_true", help="Print progress to console", default=False)
 
     parser_stat_compare.set_defaults(func=st.compare)
+
+    # odds_ratio(): computes odds ratio relative to a specified condition (OR = (A/B)/(C/D))
+    parser_stat_odds_ratio = subparsers_stat.add_parser("odds_ratio", help="Computes odds ratios relative to a specified condition & variable (e.g., unedited & WT)", description="Compute odds ratio between conditions", formatter_class=formatter_class)
+
+    parser_stat_odds_ratio.add_argument("--df", type=str, help="Input file path",required=True)
+    parser_stat_odds_ratio.add_argument("--cond", type=str, help="Condition column name",required=True)
+    parser_stat_odds_ratio.add_argument("--cond_comp", type=str, help="Condition for comparison group",required=True)
+    parser_stat_odds_ratio.add_argument("--var", type=str, help="Variable column name",required=True)
+    parser_stat_odds_ratio.add_argument("--var_comp", type=str, help="Variable name for comparison (e.g., WT)",required=True)
+    parser_stat_odds_ratio.add_argument("--count", type=str, help="Count column name",required=True)
+    
+    parser_stat_odds_ratio.add_argument("--pseudocount", type=int, default=1, help="Pseudocount to avoid /0 (Default: 1)")
+    parser_stat_odds_ratio.add_argument("--alternative", type=str, default="two-sided", choices=["two-sided", "less", "greater"], help="Alternative hypothesis for Fisher's exact test (Default: two-sided)")
+    parser_stat_odds_ratio.add_argument("--dir", type=str, help="Output directory",default='../out')
+    parser_stat_odds_ratio.add_argument("--file", type=str, help="Output file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_odds_ratio.csv')
+    parser_stat_odds_ratio.add_argument("--verbose", action="store_true", help="Print progress to console", default=False)
+
+    parser_stat_odds_ratio.set_defaults(func=st.odds_ratio)
 
     '''
     edms.gen.io:

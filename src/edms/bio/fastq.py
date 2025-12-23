@@ -30,7 +30,6 @@ Usage:
     - paired_regions(): quantify, plot, & return (un)paired regions that aligned to the annotated library
 - [Signature]
     - count_signatures(): generate signatures from fastq read region alignments to WT sequence; count signatures, plot and return fastq signatures dataframe
-    - ### WIP ### odds_ratios(): compute odds ratios for signatures between two conditions
 
 [Quantify edit outcomes]
 - trim_filter(): trim and filter fastq sequence based on quality scores
