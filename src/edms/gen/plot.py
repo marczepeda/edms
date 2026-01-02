@@ -929,7 +929,7 @@ def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, col
             return
     
     # Determine if file is html
-    if file is None:
+    if file is not None:
         is_html = file.endswith('.html')
     else:
         is_html = False

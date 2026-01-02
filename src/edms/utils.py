@@ -186,7 +186,7 @@ def recursive_parse(data):
     return data  # Return the data as-is if it doesn't match any known structure
 
 # Make directories
-def mkdir(dir: str, sep='/'):
+def mkdir(dir: str, sep: str='/'):
     '''
     mkdir(): make directory if it does not exist (including parent directories)
 
@@ -196,7 +196,7 @@ def mkdir(dir: str, sep='/'):
 
     Dependencies: os
     '''
-    dirs = dir.split(sep)
+    dirs = str(dir).split(sep)
     for i in range(len(dirs)):
         check_dir = sep.join(dirs[:i+1])
         if (os.path.exists(check_dir)==False)&(i!=0):

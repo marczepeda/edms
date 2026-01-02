@@ -497,11 +497,8 @@ def add_subparser(subparsers, formatter_class=None):
     # abundances():
     parser_fastq_abundances.add_argument("--df", help="Input file with sample, edit, count, & fraction information", required=True)
     parser_fastq_abundances.add_argument("--desired_edits", nargs="+", help="List of desired edits to isolate (space-separated)",required=True)
-
-    parser_fastq_abundances.add_argument("--sample_col", default="sample", help="Column for sample ID (Default: 'sample')")
-    parser_fastq_abundances.add_argument("--edit_col", default="edit", help="Column for edit identifier (Default: 'edit')")
-    parser_fastq_abundances.add_argument("--count_col", default="count", help="Column for edit count (Default: 'count')")
-    parser_fastq_abundances.add_argument("--fraction_col", default="fraction", help="Column for edit fraction (Default: 'fraction')")
+    
+    parser_fastq_abundances.add_argument("--edit_col", default="Edit", help="Column for edit identifier (Default: 'Edit')")
     parser_fastq_abundances.add_argument("--combinations", default=1, help="Maximum # of desired edit combinations to search for (Default: 1 => single edits)")
 
     # count_motif():

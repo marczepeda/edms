@@ -95,6 +95,7 @@ import Levenshtein
 from typing import Literal
 import math
 import subprocess
+import itertools
 
 from ..bio.signature import parse_signature_literal, signature_from_alignment, expand_signature_units, is_reference_match_with_n_extra_nt_or_less
 from ..gen import io, tidy as t, plot as p, stat as st
@@ -2523,33 +2524,21 @@ def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=N
         return {'Edit': df_edits,
                 'Category': df_categories}
 
-def abundances(df: pd.DataFrame | str, desired_edits: list, sample_col: str='fastq_file',
-               edit_col: str='Edit', count_col: str='count', fraction_col: str='fraction',
-               combinations: int=1, return_memories: bool=False) -> pd.DataFrame | tuple[pd.DataFrame, list]:
+def abundances(df: pd.DataFrame | str, desired_edits: list, edit_col: str='Edit', combinations: int=1) -> pd.DataFrame:
     ''' 
-    abundances(): quantify desired edits count & fraction per sample
+    abundances(): isolate desired edits count & fraction per sample
 
     Parameters:
     df (DataFrame | str): dataframe with edit count & fraction per sample (tidy format)
     desired_edits (list): list of desired edits to isolate
-    sample_col (str, optional): sample column name (Default: sample)
-    edit_col (str, optional): edit column name (Default: edit)
-    count_col (str, optional): count column name (Default: count)
-    fraction_col (str, optional): fraction column name (Default: fraction)
-    combinations (int, optional): maximum # of desired edit combinations to search for (Default: 1 => single edits)
-    return_memories (bool, optional): return memories (Default: False)
+    edit_col (str, optional): edit column name (Default: Edit)
+    combinations (int, optional): Maximum # of desired edit combinations to search for (Default: 1 => single edits, 2 => paired edits, etc.)
 
     Dependencies: pandas
     '''
     # Get dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
-
-    # Memory reporting
-    memories = []
-
-    # Split data to increase performance
-    dc = t.split(df=df, key=sample_col)
     
     # Search for multple edits
     if combinations > 1:
@@ -2557,42 +2546,15 @@ def abundances(df: pd.DataFrame | str, desired_edits: list, sample_col: str='fas
         desired_edits_combos = []
 
         for r in range(1, combinations + 1):
-            for combo in combinations(desired_edits, r):
+            for combo in itertools.combinations(desired_edits, r):
 
                 sorted_combo = sorted(combo, key=lambda x: float(''.join(filter(str.isdigit, x)))) # Sort each combination numerically
                 combo_str = ", ".join(sorted_combo) # Join as a string with ", "
                 desired_edits_combos.append(combo_str)
 
-        desired_edits = desired_edits_combos
+        desired_edits.extend(desired_edits_combos)
 
-    # Store desired edits abundances for each sample
-    df_desired = pd.DataFrame(columns=df.columns) # Initialize empty DataFrame with same columns as df
-    
-    for key,df_sample in dc.items(): # Iterate through samples
-        for desired_edit in desired_edits: # Iterate through desired edits
-        
-            i_desired = [] # Store desired edit & corresponding counts & fractions
-            count_desired = []
-            fraction_desired = []
-
-            for i,(edit,count,fraction) in enumerate(t.zip_cols(df=df_sample,cols=[edit_col,count_col,fraction_col])):
-                if edit == desired_edit: # Check if edit matches desired edit
-
-                    i_desired.append(i)
-                    count_desired.append(count)
-                    fraction_desired.append(fraction)
-
-            other_cols = [col for col in df_sample.columns if col not in [edit_col,count_col,fraction_col]]
-            df_sample_desired = df_sample.iloc[0][other_cols].to_frame().T.reset_index(drop=True)
-            df_sample_desired[edit_col] = [desired_edit]
-            df_sample_desired[count_col] = [sum(count_desired)]
-            df_sample_desired[fraction_col] = [sum(fraction_desired)]
-            df_desired = pd.concat(objs=[df_desired,df_sample_desired]).reset_index(drop=True)
-
-        memories.append(memory_timer(task=key))
-
-    if return_memories: return df_desired,memories
-    else: return df_desired
+    return df[df[edit_col].isin(desired_edits)].reset_index(drop=True)
 
 def editing_per_library(edit_dc: dict | str, paired_regions_dc: dict | str, fastq_ids: pd.DataFrame | str, 
                         out_dir: str=None, count: str='count', psuedocount: int=1, return_df: bool=True) -> pd.DataFrame:
