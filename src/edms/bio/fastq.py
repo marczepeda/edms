@@ -830,7 +830,6 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
         missing3 = 0
         overlap53 = 0
         seqs = [] # Store region sequences from reads with motifs
-        empty_reads = 0 # Keep track of # of empty reads
         if fastq_file.endswith(".fastq.gz"): # Compressed fastq
             fastq_name = fastq_file[:-len(".fastq.gz")] # Get fastq name
             fastq_motif5 = df_motif5[df_motif5['fastq_file']==fastq_file].reset_index(drop=True) # Isolate fastq motif5 info
@@ -920,7 +919,9 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
         # Update memories & stats: # of reads with(out) the region
         processed_reads = len(seqs)
         print(f'{fastq_name}:\t{len(seqs)} reads\t=>\t{regions} reads;\t{missing5} missing motif5;\t{missing3} missing motif3;\t{overlap53} motif overlaps')
-        stats.append((fastq_name,reads,processed_reads,regions,missing5,missing3,overlap53,regions/processed_reads if processed_reads>0 else 0))
+        stats.append((fastq_name, reads, processed_reads,
+                    regions, missing5, missing3, overlap53,
+                    processed_reads/reads, regions/processed_reads))
         memories.append(memory_timer(task=f"{fastq_file} (region)"))
 
         # Append # of reads & alignment range to fastq_df_ref
@@ -946,7 +947,9 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
     memories.append(memory_timer(task='count_region()'))
     io.save(dir=os.path.join(out_dir,'.count_region'),
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_stats.csv',
-            obj=pd.DataFrame(stats, columns=['file','reads_total','reads_processed','reads_w_region','reads_wo_motif5','reads_wo_motif3','reads_w_motif_overlap','reads_w_region_fraction']))
+            obj=pd.DataFrame(stats, columns=['file', 'reads_total', 'reads_processed',
+                                            'reads_w_region', 'reads_wo_motif5', 'reads_wo_motif3', 'reads_w_motif_overlap',
+                                            'reads_processed_fraction', 'reads_w_region_fraction']))
     io.save(dir=os.path.join(out_dir,'.count_region'),
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
@@ -1071,11 +1074,10 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
             print("Not a fastq file")
             continue
         
-        # Update memories & stats file with # of reads
+        # Update memories & print reads stats
         processed_reads = len(seqs)
         nonempty_reads = processed_reads - empty_reads
-        print(f'{fastq_name}:\t{reads} reads;\t processed {processed_reads};\t {nonempty_reads} nonempty reads;\t{empty_reads} empty reads')
-        stats.append((fastq_name,reads,processed_reads,nonempty_reads,empty_reads,(nonempty_reads)/reads if reads > 0 else 0,(empty_reads)/reads if reads > 0 else 0))
+        print(f'{fastq_name}:\t{reads} reads;\t {processed_reads} processed reads;\t {nonempty_reads} nonempty reads;\t{empty_reads} empty reads')
         memories.append(memory_timer(task=f"{fastq_file} (reads)"))
         
         # Append # of reads & alignment range to fastq_df_ref
@@ -1092,6 +1094,13 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
         if return_dc: fastqs[fastq_name]=df_fastq
         memories.append(memory_timer(task=f"{fastq_name} (aligned)"))
 
+        # Update memories & stats file with # of reads
+        aligned_reads = df_fastq['alignments'].sum()
+        print(f'{fastq_name}:\t{reads} reads;\t {processed_reads} processed reads;\t {aligned_reads} aligned reads')
+        stats.append((fastq_name, reads, 
+                    processed_reads, empty_reads, nonempty_reads, aligned_reads, 
+                    processed_reads/reads, empty_reads/processed_reads, nonempty_reads/processed_reads, aligned_reads/processed_reads))
+
         # Plot mismatch position per alignment
         if plot_suf is not None: 
             plot_alignments(fastq_alignments={fastq_name:df_fastq}, align_col=align_col, id_col=id_col,
@@ -1101,7 +1110,9 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
     memories.append(memory_timer(task='count_alignments()'))
     io.save(dir=os.path.join(out_dir,'.count_alignments'),
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_stats.csv',
-            obj=pd.DataFrame(stats, columns=['file','total_reads','processed_reads','reads_nonempty','reads_empty','reads_nonempty_fraction','reads_empty_fraction']))
+            obj=pd.DataFrame(stats, columns=['file', 'reads_total', 
+                                            'reads_processed', 'reads_empty', 'reads_nonempty', 'reads_aligned',
+                                            'reads_processed_fraction', 'reads_empty_fraction', 'reads_nonempty_fraction', 'reads_aligned_fraction']))
     io.save(dir=os.path.join(out_dir,'.count_alignments'),
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
