@@ -113,8 +113,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         "-d",
         "--dpi",
         type=int,
-        default=200,
-        help="DPI for saved figure (default: 200).",
+        default=600,
+        help="DPI for saved figure (default: 600).",
     )
 
     args = p.parse_args(argv)
@@ -178,10 +178,10 @@ def make_plot(
     )
 
     cbar = plt.colorbar(im, ax=ax)
-    cbar.set_label("|Observed log2FC|")
+    cbar.set_label("|Observed log2FC| = |log2(1 + e*(FC_edit - 1))|")
 
     ax.set_xlabel("Editing fraction (e)")
-    ax.set_ylabel("Edited-only |log2FC|")
+    ax.set_ylabel("|Edited-only log2FC|")
     ax.set_title(title)
 
     # Vertical dashed lines at specified editing fractions

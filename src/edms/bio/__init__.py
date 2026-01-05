@@ -9,6 +9,7 @@ src/edms/bio/                   EDMS Biology module
 ├── ngs.py                      Next-generation Sequencing module
 ├── pe.py                       Prime Editing module
 ├── pegLIT.py                   pegRNA Linker module
+├── plate.py                    Plate  module
 ├── primedesign.py              PrimeDesign module
 ├── qPCR.py                     qPCR module
 ├── sanger.py                   Sanger Sequencing module
