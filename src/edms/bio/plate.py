@@ -16,6 +16,9 @@ Usage:
 [CSV Parser]
 - parse_csv_to_tidy(): parse a CSV that contains one or more plate blocks into tidy format
 
+[Plate Maker]
+- make(): make a plate DataFrame from a CSV file path or existing DataFrame
+
 '''
 # Imports
 import csv
@@ -24,6 +27,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Optional, Tuple, Dict, Any
 from ..utils import mkdir
+from ..gen import io, tidy as t
 
 import pandas as pd
 
@@ -72,19 +76,20 @@ class PlateBlock:
     rows: List[Tuple[str, List[str]]]  # (row_label, values aligned to positions 1..N)
 
 def parse_csv_to_tidy(
-    csv_path: str | Path,
+    csv_pt: str | Path,
     default_plate_name: str = "{wells}-well {index}",
     skip_empty_cells: bool = True,
     replicate_requires_value: bool = True,
-    out_path: str = None,
+    dir: str = None,
+    file: str = None,
 ) -> pd.DataFrame:
     """
     parse_csv_to_tidy(): parse a CSV that contains one or more plate blocks into tidy format.
     """
-    csv_path = Path(csv_path)
+    csv_pt = Path(csv_pt)
 
     # Read raw CSV into a rectangular-ish list of lists
-    with csv_path.open(newline="", encoding="utf-8-sig") as f:
+    with csv_pt.open(newline="", encoding="utf-8-sig") as f:
         reader = csv.reader(f)
         grid = [list(r) for r in reader]
 
@@ -185,7 +190,7 @@ def parse_csv_to_tidy(
         return pd.DataFrame(columns=["plate", "col", "row", "well", "replicate", "value"])
 
     # Optional: stable ordering before replicate assignment
-    df = df.sort_values(["plate", "row", "col"], kind="stable").reset_index(drop=True)
+    df = df.sort_values(by=["plate", "row", "col"], kind="stable", key=lambda x: x.map(lambda y: tuple(t.natural_key(y)))).reset_index(drop=True)
 
     # Replicate counting ONLY based on repeated values across whole file
     if replicate_requires_value:
@@ -195,8 +200,56 @@ def parse_csv_to_tidy(
     else:
         df["replicate"] = df.groupby("value").cumcount() + 1
 
-    if out_path is not None:
-        mkdir('/'.join(out_path.split('/')[:-1]))
-        df.to_csv(out_path, index=False)
+    if dir is not None and file is not None:
+        io.save(dir, file, df)
 
     return df
+
+# Plate Maker
+def make(
+    df: pd.DataFrame | str,
+    values: str | list,
+    index: Optional[list[str]] = ['plate', 'row'],
+    columns: Optional[str] = 'col',
+    dir: Optional[str] = None,
+    file: Optional[str] = None,
+    return_df: bool = True,
+) -> pd.DataFrame:
+    """
+    make_plate(): make a plate DataFrame from a CSV file path or existing DataFrame.
+
+    Parameters:
+    - df: pd.DataFrame | str
+        Input DataFrame or path to CSV file containing tidy plate data.
+    - values: str | list
+        Column name(s) in df to use as values in the plate. If multple, values in columns will be joined with '_'.
+    - index: Optional[list[str]]
+        Columns to use as index (default: ['plate', 'row']).
+    - columns: Optional[str]
+        Column to use as columns (default: 'col').
+    - dir: Optional[str]
+        Directory to save the resulting plate DataFrame (default: None).
+    - file: Optional[str]
+        Filename to save the resulting plate DataFrame (default: None).
+    - return_df: bool
+        Whether to return the resulting DataFrame (default: True).
+    """
+    # Load DataFrame if a path is given
+    if isinstance(df, str):
+        df = io.get(df, literal_eval=True)
+
+    # Combine multiple value columns if needed
+    if isinstance(values, list):
+        df['__combined_value__'] = df[values].astype(str).agg('_'.join, axis=1)
+        values = '__combined_value__'
+    
+    # Pivot the DataFrame to create the plate format
+    plate_df = pd.pivot(df, index=index, columns=columns, values=values)
+    
+    # Save to file if directory and filename are provided
+    if dir is not None and file is not None:
+        io.save(dir, file, plate_df)
+
+    # Return the resulting DataFrame if requested
+    if return_df:
+        return plate_df

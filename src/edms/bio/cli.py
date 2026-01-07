@@ -972,15 +972,30 @@ Examples:[/red]
     '''
     edms.bio.plate:
     - parse_csv_to_tidy(): parse a CSV that contains one or more plate blocks into tidy format
+    - make_plate(): make a plate DataFrame from a CSV file path or existing DataFrame.
     '''
     parser_plate = subparsers.add_parser("plate", help="Plates for biological experiments", formatter_class=formatter_class)
     subparsers_plate = parser_plate.add_subparsers()
 
     parser_plate_parse_csv_to_tidy = subparsers_plate.add_parser("parse", help="Parse a CSV that contains one or more plate blocks into tidy format", description="Parse a CSV that contains one or more plate blocks into tidy format", formatter_class=formatter_class)
+    parser_plate_make = subparsers_plate.add_parser("make", help="Make a plate DataFrame from a CSV file path or existing DataFrame", description="Make a plate DataFrame from a CSV file path or existing DataFrame", formatter_class=formatter_class)
 
     # parse_csv_to_tidy():
-    parser_plate_parse_csv_to_tidy.add_argument("-i","--in", dest="csv_path", type=str, help="Path to input CSV file", required=True)
-    parser_plate_parse_csv_to_tidy.add_argument("-o","--out", dest="out_path", type=str, help="Path to output tidy CSV file", required=True)
+    parser_plate_parse_csv_to_tidy.add_argument("-i","--csv_pt", type=str, help="Path to input CSV file", required=True)
+
+    parser_plate_parse_csv_to_tidy.add_argument("-o","--dir", type=str, help="Path to output directory", default=f'../out')
+    parser_plate_parse_csv_to_tidy.add_argument("-f","--file", type=str, help="Output filename", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_make_plate.csv')
+    parser_plate_parse_csv_to_tidy.add_argument("-p","--default_plate_name", type=str, help="Default plate name formatting (Default: '{well}-well {index}')", default=argparse.SUPPRESS)
     
+    # make_plate():
+    parser_plate_make.add_argument("-i","--df", type=str, help="Path to input CSV file (tidy format; e.g., output from edms plate parse)", required=True)
+    parser_plate_make.add_argument("-v","--values", type=str, nargs="+", help="Column name(s) in df to use as values in the plate. If multple, values in columns will be joined with '_'.", required=True)
+
+    parser_plate_make.add_argument("-I","--index", type=str, nargs="+", help="Columns to use as index (default: 'plate' 'row').", default=['plate', 'row'])
+    parser_plate_make.add_argument("-c","--columns", type=str, help=" Column to use as columns (default: 'col').", default='col')
+    parser_plate_make.add_argument("-o","--dir", type=str, help="Path to output directory", default=f'../out')
+    parser_plate_make.add_argument("-f","--file", type=str, help="Output filename", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_make_plate.csv')
+
     # Set defaults
     parser_plate_parse_csv_to_tidy.set_defaults(func=pt.parse_csv_to_tidy)
+    parser_plate_make.set_defaults(func=pt.make)
