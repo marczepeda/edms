@@ -14,7 +14,7 @@ Usage:
 - comb_fastqs(): Combines one or more (un)compressed fastqs files into a single (un)compressed fastq file
 
 [Nanopore]
-- savemoney_samples(): create savemoney samples.csv for nanopore mixed WPS
+- savemoney(): create savemoney samples.csv for nanopore mixed WPS
 
 [Quantify epeg/ngRNA or Signature abundance]
 - [Motif search: mU6, ..., & target sequence flanks]
@@ -140,15 +140,15 @@ def fuzzy_substring_search(text: str, pattern: str, max_distance: int):
                          'end_i': ends_i})
 
 # Nanopore
-def savemoney(fastq_dir: str='./fastq', fasta_dir: str='./fasta', pt: str='.', 
+def savemoney(pt: str, fastq_dir: str='./fastq', fasta_dir: str='./fasta', 
               out_dir: str=None, out_file: str='samples.csv', return_df: bool=False) -> pd.DataFrame:
     '''
     savemoney(): create savemoney samples.csv for nanopore mixed WPS
 
     Parameters:
+    pt (str): working directory when running savemoney (full path required)
     fastq_dir (str, optional): path to fastq directory (contains .fastq files, not .fastq.gz files; Default: './fastq')
     fasta_dir (str, optional): path to fasta directory (contains .fasta files; Default: './fasta')
-    pt (str, optional): working directory when running savemoney (Default: "." = current directory)
     out_dir (str, optional): path to output directory (Default: None)
     out_file (str, optional): name of output file (Default: 'samples.csv')
     return_df (bool, optional): return dataframe (Default: False)
@@ -156,6 +156,11 @@ def savemoney(fastq_dir: str='./fastq', fasta_dir: str='./fasta', pt: str='.',
     Dependencies: pandas, os
     '''
     mkdir(out_dir) # Ensure the output directory exists
+
+    # Make unzip fastq if needed
+    if any(fastq_file.endswith('.fastq.gz') for fastq_file in os.listdir(fastq_dir)):
+        unzip_fastqs(in_dir=fastq_dir, out_dir=os.path.join(pt,'fastq_unzipped'))
+        fastq_dir = os.path.join(pt,'fastq_unzipped')
 
     # Get fastq & fasta files
     fastq_files = [fastq_file for fastq_file in os.listdir(fastq_dir) if fastq_file.endswith(".fastq")]
@@ -174,11 +179,11 @@ def savemoney(fastq_dir: str='./fastq', fasta_dir: str='./fasta', pt: str='.',
     fastq_fname_ls = []
     group_name_ls = []
     for i,n in enumerate(n_ls):
-        fastq_fname_ls += [f'{os.path.join(pt, fastq_files[i])}']*n
+        fastq_fname_ls += [f'{os.path.join(fastq_dir, fastq_files[i])}']*n
         group_name_ls += [fastq_files[i]]*n
     
     # Create ref filename list
-    ref_fname_ls = [f'{os.path.join(pt, fasta_file)}' for fasta_file in fasta_files ]
+    ref_fname_ls = [f'{os.path.join(fasta_dir, fasta_file)}' for fasta_file in fasta_files ]
 
     # Create, save and return samples dataframe
     df = pd.DataFrame({'group_name':group_name_ls,

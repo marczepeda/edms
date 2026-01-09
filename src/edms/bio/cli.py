@@ -460,9 +460,9 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_heat = subparsers_fastq.add_parser("heat", help="Create heatmap plot", description="Create heatmap plot", formatter_class=formatter_class)
 
     # savemoney():
+    parser_fastq_savemoney.add_argument("-p","--pt", type=str, help="Working directory when running savemoney (full path required)", required=True)
     parser_fastq_savemoney.add_argument("-q","--fastq_dir", type=str, help="Path to fastq directory (contains .fastq files, not .fastq.gz files; Default: './fastq')", default='./fastq')
     parser_fastq_savemoney.add_argument("-a","--fasta_dir", type=str, help="Path to fasta directory (contains .fasta files; Default: './fasta')", default='./fasta')
-    parser_fastq_savemoney.add_argument("-p","--pt", type=str, help="Working directory when running savemoney (Default: '.' = current directory)", default=".")
     parser_fastq_savemoney.add_argument("-o","--out_dir", type=str, help="Path to output directory (Default: '.' = current directory)", default='.')
     parser_fastq_savemoney.add_argument("-f","--out_file", type=str, help="Name of output file (Default: 'samples.csv')", default='samples.csv')
     
