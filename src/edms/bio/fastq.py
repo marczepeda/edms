@@ -5,8 +5,10 @@ Created: 2024-08-05
 Description: Fastq processing and analysis 
 
 Usage:
-[Supporting methods for sequences]
+[Supporting methods]
 - fuzzy_substring_search: retuns a dataframe containing all substrings in 'text' that resemble 'pattern' within the Levenshtein 'max_distance'.
+- _iter_fastq_files: Yield paths to .fastq and .fastq.gz files under `root` (recursive).
+- _natural_sorted_paths: Natural-sort file paths using t.natural_key on a stable, readable key.
 
 [Input/Output]
 - revcom_fastqs(): write reverse complement of fastqs to a new directory
@@ -92,7 +94,7 @@ from matplotlib.ticker import MaxNLocator
 import mpld3
 from scipy.stats import ttest_ind
 import Levenshtein
-from typing import Literal
+from typing import Literal, Iterable
 import math
 import subprocess
 import itertools
@@ -103,7 +105,7 @@ from ..data import uniprot, pdb
 from ..utils import memory_timer, mkdir, load_resource_csv
 from .. import config
 
-# Supporting methods for sequences
+# Supporting methods
 def fuzzy_substring_search(text: str, pattern: str, max_distance: int):
     """
     fuzzy_substring_search: retuns a dataframe containing all substrings in 'text' that resemble 'pattern' within the Levenshtein 'max_distance'.
@@ -138,6 +140,32 @@ def fuzzy_substring_search(text: str, pattern: str, max_distance: int):
                          'distance': distances,
                          'start_i': starts_i,
                          'end_i': ends_i})
+
+def _iter_fastq_files(root: str) -> Iterable[str]:
+    """
+    _iter_fastq_files: Yield paths to .fastq and .fastq.gz files under `root` (recursive).
+    
+    Parameters:
+    root (str): root directory to search for fastq files
+    """
+    for dirpath, _, filenames in os.walk(root):
+        for fn in filenames:
+            if fn.endswith(".fastq") or fn.endswith(".fastq.gz"):
+                yield os.path.join(dirpath, fn)
+
+def _natural_sorted_paths(paths: list[str], key_root: str | None = None) -> list[str]:
+    """
+    _natural_sorted_paths: Natural-sort file paths using t.natural_key on a stable, readable key.
+        - if key_root is provided, sort by relpath from that root (good for recursive subdirs)
+        - else, sort by basename
+    
+    Parameters:
+    paths (list[str]): list of file paths
+    key_root (str | None, optional): root directory to use for relative paths (Default: None)
+    """
+    if key_root is not None:
+        return sorted(paths, key=lambda p: t.natural_key(os.path.relpath(p, start=key_root)))
+    return sorted(paths, key=lambda p: t.natural_key(os.path.basename(p)))
 
 # Nanopore
 def savemoney(pt: str, fastq_dir: str='./fastq', fasta_dir: str='./fasta', 
@@ -251,7 +279,103 @@ def unzip_fastqs(in_dir: str, out_dir: str):
                     for line in handle:
                         out.write(line)
 
-def comb_fastqs(in_dir: str, out_dir: str, out_file: str):
+def comb_fastqs(in_dir: str, out_dir: str, out_file: str | None = None,
+                recursive: bool = False, recursive_zip: bool = True):
+    ''' 
+    comb_fastqs(): Combines one or more (un)compressed fastq files into a single (un)compressed fastq file.
+
+    Parameters:
+    in_dir (str): Directory with fastq files (or directory containing subdirectories when recursive=True).
+    out_dir (str): Directory to write combined fastq file(s).
+    out_file (str | None): Name of output fastq file (needs .fastq or .fastq.gz). Required when recursive=False.
+        Ignored when recursive=True.
+    recursive (bool): Recursively combine fastqs in immediate subdirectories (Default: False).
+        If False, combine files directly under in_dir -> out_dir/out_file.
+        If True, for each *immediate* subdirectory of in_dir, combine all fastqs found under it (recursively) and write one output named "<subdir>.fastq[.gz]" into out_dir.
+    recursive_zip (bool): Gzip out files when 'recursive' is True (Default: True).
+    '''
+    mkdir(out_dir)  # Ensure the output directory exists
+
+    # -------------------------
+    # Non-recursive: one output
+    # -------------------------
+    if not recursive:
+        if out_file is None:
+            print("Warning: out_file not provided; defaulting to '$date$_$time$_comb.fastq'")
+            out_file = f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_comb.fastq'
+
+        out_path = os.path.join(out_dir, out_file)
+
+        if out_file.endswith(".fastq.gz"):
+            open_out = lambda p: gzip.open(p, "wt")
+        elif out_file.endswith(".fastq"):
+            open_out = lambda p: open(p, "wt")
+        else:
+            raise ValueError("out_file needs .fastq or .fastq.gz suffix")
+
+        # Only files directly under in_dir
+        in_paths = []
+        for name in os.listdir(in_dir):
+            pth = os.path.join(in_dir, name)
+            if os.path.isfile(pth) and (name.endswith(".fastq") or name.endswith(".fastq.gz")):
+                in_paths.append(pth)
+
+        in_paths = _natural_sorted_paths(in_paths)  # natural sort by basename
+
+        with open_out(out_path) as out:
+            for in_path in in_paths:
+                in_name = os.path.basename(in_path)
+                print(f"Processing {in_name}...")
+                if in_name.endswith(".fastq.gz"):
+                    with gzip.open(in_path, "rt") as handle:
+                        for line in handle:
+                            out.write(line)
+                else:  # .fastq
+                    with open(in_path, "r") as handle:
+                        for line in handle:
+                            out.write(line)
+        return
+
+    # --------------------------------------------
+    # Recursive: one output per immediate subfolder
+    # --------------------------------------------
+    for entry in sorted(os.listdir(in_dir), key=t.natural_key):
+        subdir_path = os.path.join(in_dir, entry)
+        if not os.path.isdir(subdir_path):
+            continue
+
+        out_fname = f"{entry}.fastq.gz" if recursive_zip else f"{entry}.fastq"
+        out_path = os.path.join(out_dir, out_fname)
+
+        print(f"Creating combined file for subdirectory '{entry}' -> {out_fname}")
+
+        fastq_paths = list(_iter_fastq_files(subdir_path))
+        if not fastq_paths:
+            print(f"  no fastq files found under {subdir_path}; skipping.")
+            continue
+
+        # natural sort by relpath within the subdir for stable, intuitive ordering
+        fastq_paths = _natural_sorted_paths(fastq_paths, key_root=subdir_path)
+
+        if recursive_zip:
+            open_out = lambda p: gzip.open(p, "wt")
+        else:
+            open_out = lambda p: open(p, "wt")
+
+        with open_out(out_path) as out:
+            for in_path in fastq_paths:
+                rel = os.path.relpath(in_path, start=subdir_path)
+                print(f"  adding {rel} ...")
+                if in_path.endswith(".fastq.gz"):
+                    with gzip.open(in_path, "rt") as handle:
+                        for line in handle:
+                            out.write(line)
+                else:  # .fastq
+                    with open(in_path, "r") as handle:
+                        for line in handle:
+                            out.write(line)
+
+"""def comb_fastqs(in_dir: str, out_dir: str, out_file: str):
     ''' 
     comb_fastqs(): Combines one or more (un)compressed fastqs files into a single (un)compressed fastq file
 
@@ -293,7 +417,7 @@ def comb_fastqs(in_dir: str, out_dir: str, out_file: str):
                             out.write(line)
 
     else: print('out_file needs .fastq or .fastq.gz suffix')
-
+"""
 # Quantify epeg/ngRNA abundance
 ### Motif search: mU6,...
 def count_motif(fastq_dir: str, pattern: str, out_dir: str, motif: str="motif", 

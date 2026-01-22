@@ -386,9 +386,9 @@ def add_subparser(subparsers, formatter_class=None):
     edms.bio.fastq:
     - savemoney(): create savemoney samples.csv for nanopore mixed WPS
     
-    - revcom_fastqs(): write reverse complement of fastqs to a new directory
-    - unzip_fastqs(): Unzip gzipped fastqs and write to a new directory
-    - comb_fastqs(): Combines one or more (un)compressed fastqs files into a single (un)compressed fastq file
+    - revcom_fastqs() [revcom]: write reverse complement of fastqs to a new directory
+    - unzip_fastqs() [unzip]: Unzip gzipped fastqs and write to a new directory
+    - comb_fastqs() [comb]: Combines one or more (un)compressed fastqs files into a single (un)compressed fastq file
     
     - genotyping(): quantify edit outcomes workflow
     - abundances(): quantify desired edits count & fraction per sample
@@ -466,13 +466,15 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_savemoney.add_argument("-o","--out_dir", type=str, help="Path to output directory (Default: '.' = current directory)", default='.')
     parser_fastq_savemoney.add_argument("-f","--out_file", type=str, help="Name of output file (Default: 'samples.csv')", default='samples.csv')
     
-    # Add common arguments: revcom_fastqs(), unzip_fastqs(), comb_fastqs(), and genotyping()
+    # Add common arguments: revcom_fastqs() [revcom], unzip_fastqs() [unzip], comb_fastqs() [comb], and genotyping()
     for parser_fastq_common in [parser_fastq_revcom,parser_fastq_unzip,parser_fastq_comb,parser_fastq_genotyping]:
         parser_fastq_common.add_argument("-i","--in_dir", type=str, help="Input directory containing FASTQ files",default='.')
         parser_fastq_common.add_argument("-o","--out_dir", type=str, help="Output directory",default = f'../out')
 
-    # Add specific arguments: comb_fastqs()
-    parser_fastq_comb.add_argument("-f","--out_file", type=str, help="Name of output FASTQ file (.fastq or .fastq.gz)", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_comb.fastq.gz')
+    # Add specific arguments: comb_fastqs() [comb]
+    parser_fastq_comb.add_argument("-f","--out_file", type=str, help="Name of output FASTQ file (.fastq or .fastq.gz). Disregard if --recursive is set.", default=argparse.SUPPRESS)
+    parser_fastq_comb.add_argument("-r","--recursive", action="store_true", help="Recursively combine fastqs in immediate subdirectories (Default: False).", default=False)
+    parser_fastq_comb.add_argument("-u","--recursive_unzip", dest="recursive_zip", action="store_false", help="Recursively combine unzipped fastqs in immediate subdirectories.", default=True)
 
     # Add specific arguments: genotyping()
     parser_fastq_genotyping.add_argument("-fp","--out_file_prefix", type=str, help="Name of output file prefix", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')

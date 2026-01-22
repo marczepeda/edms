@@ -39,6 +39,7 @@ import csv
 import shutil
 import datetime
 import json
+from typing import Literal
 
 from ..utils import try_parse, mkdir
 from ..config import get_info
@@ -244,32 +245,54 @@ def dc_txt_to_df(dc_txt: str, transpose: bool=True) -> str:
     if transpose==True: return pd.DataFrame(ast.literal_eval(dc_txt)).T
     else: return pd.DataFrame(ast.literal_eval(dc_txt))
 
-def in_subs(dir: str, suf: str): 
+def in_subs(dir: str, suf: str, 
+            group_by: Literal["basename", "prefix"] = "basename",
+            prefix_sep: str | None = "_",
+            prefix_len: int | None = None,): 
     '''
     in_subs: moves all files with a given suffix into subdirectory named after the files (excluding the suffix).
 
     Parameters:
     dir (str): Path to the directory containing the files.
     suf (str): File suffix (e.g., '.txt', '.csv') to filter files.
+    group_by (Literal, optional): How to group files into subdirectories (Options: "basename" [Default] or "prefix").
+        - "basename": Use the full filename without the suffix as the subdirectory name.
+        - "prefix": Use a prefix of the filename (before a specified separator or of a specified length) as the subdirectory name.
+    prefix_sep (str, optional): Delimiter used to extract prefix (Default: "_"; e.g., sample_001.txt → sample). Ignored if prefix_len is provided.
+    prefix_len (int, optional): Number of characters to use as prefix. Overrides prefix_sep if provided.
 
     Dependences: os, shutil
     '''
     if not os.path.isdir(dir):
         raise ValueError(f"{dir} is not a valid directory.")
 
+    if group_by == "prefix" and prefix_sep is None and prefix_len is None:
+        raise ValueError("When group_by='prefix', either prefix_sep or prefix_len must be provided.")
+
     for filename in os.listdir(dir):
         file_path = os.path.join(dir, filename)
-        
-        if os.path.isfile(file_path) and filename.endswith(suf):
-            base_name = filename[:-len(suf)]
-            subdir = os.path.join(dir, base_name)
 
-            # Create subfolder if it doesn't exist
-            os.makedirs(subdir, exist_ok=True) 
+        if not (os.path.isfile(file_path) and filename.endswith(suf)):
+            continue
 
-            # Move the file into the subfolder
-            new_path = os.path.join(subdir, filename)
-            shutil.move(file_path, new_path)
+        stem = filename[:-len(suf)]
+
+        if group_by == "basename":
+            subdir_name = stem
+
+        elif group_by == "prefix":
+            if prefix_len is not None:
+                subdir_name = stem[:prefix_len]
+            else:
+                subdir_name = stem.split(prefix_sep, 1)[0]
+
+        else:
+            raise ValueError(f"Unknown group_by mode: {group_by}")
+
+        subdir = os.path.join(dir, subdir_name)
+        os.makedirs(subdir, exist_ok=True)
+
+        shutil.move(file_path, os.path.join(subdir, filename))
 
 def out_subs(dir: str):
     """

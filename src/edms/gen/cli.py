@@ -716,9 +716,9 @@ def add_subparser(subparsers, formatter_class=None):
 
     '''
     edms.gen.io:
-    - in_subs(): moves all files with a given suffix into subfolders named after the files (excluding the suffix).
-    - out_subs(): recursively moves all files from subdirectories into the parent directory and delete the emptied subdirectories.
-    - create_sh(): creates a shell script with SLURM job submission parameters for Harvard FASRC cluster.
+    - in_subs() [in]: moves all files with a given suffix into subfolders named after the files (excluding the suffix).
+    - out_subs() [out]: recursively moves all files from subdirectories into the parent directory and delete the emptied subdirectories.
+    - create_sh() [sh]: creates a shell script with SLURM job submission parameters for Harvard FASRC cluster.
     - split_R1_R2(): split paired reads into new R1 and R2 subdirectories at the parent directory
     - excel_csvs(): exports excel file to .csv files in specified directory  
     '''
@@ -726,9 +726,9 @@ def add_subparser(subparsers, formatter_class=None):
     subparsers_io = parser_io.add_subparsers()
     
     # Create subparsers for commands
-    parser_io_in_subs = subparsers_io.add_parser("in_subs", help="*No FASRC* Moves all files with a given suffix into subfolders named after the files (excluding the suffix)", description="*No FASRC* Moves all files with a given suffix into subfolders named after the files (excluding the suffix)", formatter_class=formatter_class)
-    parser_io_out_subs = subparsers_io.add_parser("out_subs", help="*No FASRC* Delete subdirectories and move their files to the parent directory", description="*No FASRC* Delete subdirectories and move their files to the parent directory", formatter_class=formatter_class)
-    parser_io_create_sh = subparsers_io.add_parser("create_sh", help='Generate SLURM shell script for Harvard FASRC cluster.', description='Generate SLURM shell script for Harvard FASRC cluster.', formatter_class=formatter_class)
+    parser_io_in_subs = subparsers_io.add_parser("in", help="*No FASRC* Moves all files with a given suffix into subfolders named after the files (excluding the suffix)", description="*No FASRC* Moves all files with a given suffix into subfolders named after the files (excluding the suffix)", formatter_class=formatter_class)
+    parser_io_out_subs = subparsers_io.add_parser("out", help="*No FASRC* Delete subdirectories and move their files to the parent directory", description="*No FASRC* Delete subdirectories and move their files to the parent directory", formatter_class=formatter_class)
+    parser_io_create_sh = subparsers_io.add_parser("sh", help='Generate SLURM shell script for Harvard FASRC cluster.', description='Generate SLURM shell script for Harvard FASRC cluster.', formatter_class=formatter_class)
     parser_io_split_R1_R2 = subparsers_io.add_parser("split_R1_R2", help='*No FASRC* Split paired reads into new R1 and R2 subdirectories at the parent directory.', description='*No FASRC* Split paired reads into new R1 and R2 subdirectories at the parent directory.', formatter_class=formatter_class)
     parser_io_excel_csvs = subparsers_io.add_parser("excel_csvs", help='Exports excel file to .csv files in specified directory.', description='Exports excel file to .csv files in specified directory.', formatter_class=formatter_class)
 
@@ -736,10 +736,13 @@ def add_subparser(subparsers, formatter_class=None):
     for parser_io_common in [parser_io_in_subs,parser_io_out_subs,parser_io_split_R1_R2]:
         parser_io_common.add_argument("-o", "--dir", help="Path to parent directory", type=str, default='.')
     
-    # in_subs() arguments
-    parser_io_in_subs.add_argument("--suf", help="File suffix (e.g., '.txt', '.csv') to filter files.", type=str, required=True) 
+    # in_subs() [in] arguments
+    parser_io_in_subs.add_argument("-s", "--suf", help="File suffix (e.g., '.txt', '.csv') to filter files.", type=str, required=True)
+    parser_io_in_subs.add_argument("-g", "--group_by", help="How to group files into subdirectories (Options: 'basename' [Default] or 'prefix')", type=str, choices=['basename', 'prefix'], default='basename')
+    parser_io_in_subs.add_argument("-p", "--prefix_sep", help="Delimiter to use when grouping by prefix", type=str, default=argparse.SUPPRESS)
+    parser_io_in_subs.add_argument("-l", "--prefix_len", help="Number of characters to use as prefix.", type=int, default=argparse.SUPPRESS)
     
-    # create_sh(): creates a shell script with SLURM job submission parameters for Harvard FASRC cluster.
+    # create_sh() [sh]: creates a shell script with SLURM job submission parameters for Harvard FASRC cluster.
     parser_io_create_sh.add_argument('-o', '--dir', type=str, help='Directory to save the shell script.', default='.')
     parser_io_create_sh.add_argument('-f', '--file', type=str, help='Name of the shell script file to create.',default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.sh')
     parser_io_create_sh.add_argument('-c', '--cores', type=int, default=1, help='Number of CPU cores to request.')
