@@ -719,6 +719,7 @@ def add_subparser(subparsers, formatter_class=None):
     - in_subs() [in]: moves all files with a given suffix into subfolders named after the files (excluding the suffix).
     - out_subs() [out]: recursively moves all files from subdirectories into the parent directory and delete the emptied subdirectories.
     - create_sh() [sh]: creates a shell script with SLURM job submission parameters for Harvard FASRC cluster.
+    - combine(): Combine text files matching provided suffixes into a single output file, inserting a header with the original filename before each file's content.
     - split_R1_R2(): split paired reads into new R1 and R2 subdirectories at the parent directory
     - excel_csvs(): exports excel file to .csv files in specified directory  
     '''
@@ -729,6 +730,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_io_in_subs = subparsers_io.add_parser("in", help="*No FASRC* Moves all files with a given suffix into subfolders named after the files (excluding the suffix)", description="*No FASRC* Moves all files with a given suffix into subfolders named after the files (excluding the suffix)", formatter_class=formatter_class)
     parser_io_out_subs = subparsers_io.add_parser("out", help="*No FASRC* Delete subdirectories and move their files to the parent directory", description="*No FASRC* Delete subdirectories and move their files to the parent directory", formatter_class=formatter_class)
     parser_io_create_sh = subparsers_io.add_parser("sh", help='Generate SLURM shell script for Harvard FASRC cluster.', description='Generate SLURM shell script for Harvard FASRC cluster.', formatter_class=formatter_class)
+    parser_io_combine = subparsers_io.add_parser("combine", help='Combine text files matching provided suffixes into a single output file, inserting a header with the original filename before each file\'s content.', description='Combine text files matching provided suffixes into a single output file, inserting a header with the original filename before each file\'s content.', formatter_class=formatter_class)
     parser_io_split_R1_R2 = subparsers_io.add_parser("split_R1_R2", help='*No FASRC* Split paired reads into new R1 and R2 subdirectories at the parent directory.', description='*No FASRC* Split paired reads into new R1 and R2 subdirectories at the parent directory.', formatter_class=formatter_class)
     parser_io_excel_csvs = subparsers_io.add_parser("excel_csvs", help='Exports excel file to .csv files in specified directory.', description='Exports excel file to .csv files in specified directory.', formatter_class=formatter_class)
 
@@ -753,6 +755,16 @@ def add_subparser(subparsers, formatter_class=None):
     parser_io_create_sh.add_argument('-y', '--python', type=str, default='python/3.12.5-fasrc01', help='Python module to load.')
     parser_io_create_sh.add_argument('-n', '--env', type=str, default='edms', help='Conda environment to activate.')
 
+    # combine() arguments
+    parser_io_combine.add_argument('-i', '--in_dir', type=str, help='Directory to search for input files.', required=True)
+    
+    parser_io_combine.add_argument('-o', '--out_dir', type=str, help='Directory to write the combined file (Default: working directory).', default='.')
+    parser_io_combine.add_argument('-f', '--out_file', type=str, help='Output filename (Default: $date_time$_combined.txt file).', default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_combined.txt')
+    parser_io_combine.add_argument('-s', '--suffixes', type=str, nargs='+', help='Iterable of suffixes to match (e.g. .txt .log .out .err).', default=['.txt', '.log', '.out', '.err'])
+    parser_io_combine.add_argument('-r', '--recursive', action='store_true', help='If set, search subdirectories recursively.', default=False)
+    parser_io_combine.add_argument('-l', '--full_path', action='store_true', help='If set, include full path in header; otherwise only filename.', default=False)
+    parser_io_combine.add_argument('-e', '--encoding', type=str, help='Text encoding to use when reading/writing files.', default='utf-8')
+    
     # excel_csvs(): exports excel file to .csv files in specified directory 
     parser_io_excel_csvs.add_argument('-p', '--pt', type=str, help='Excel file path', required=True)
     parser_io_excel_csvs.add_argument('-o', '--dir', type=str, help='Output directory path (Default: same directory as excel file name).',default='')
@@ -761,6 +773,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_io_in_subs.set_defaults(func=io.in_subs)
     parser_io_out_subs.set_defaults(func=io.out_subs)
     parser_io_create_sh.set_defaults(func=io.create_sh)
+    parser_io_combine.set_defaults(func=io.combine)
     parser_io_split_R1_R2.set_defaults(func=io.split_R1_R2)
     parser_io_excel_csvs.set_defaults(func=io.excel_csvs)
 

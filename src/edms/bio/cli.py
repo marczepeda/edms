@@ -405,7 +405,7 @@ def add_subparser(subparsers, formatter_class=None):
     - editing_per_library(): Determine editing relative library abundance
     
     - extract_umis(): extract UMIs using umi_tools
-    - trim_motifs(): trimming motifs with cutadapt
+    - trim_motifs() [trim]: trimming motifs with cutadapt
     - make_sams(): generates alignments saved as a SAM files using bowtie2
     - make_bams(): converts SAM files to BAM files using samtools
     - bam_umi_tags(): copy UMI in read ID to RX tag in BAM files using fgbio
@@ -444,7 +444,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_editing_per_library = subparsers_fastq.add_parser("editing_per_library", help="Determine editing relative library abundance", description="Determine editing relative library abundance", formatter_class=formatter_class)
     
     parser_fastq_extract_umis = subparsers_fastq.add_parser("extract_umis", help="Extract UMIs using umi_tools", description="Extract UMIs using umi_tools", formatter_class=formatter_class)
-    parser_fastq_trim_motifs = subparsers_fastq.add_parser("trim_motifs", help="Trim motifs with cutadapt", description="Trim motifs with cutadapt", formatter_class=formatter_class)
+    parser_fastq_trim_motifs = subparsers_fastq.add_parser("trim", help="Trim motifs with cutadapt", description="Trim motifs with cutadapt", formatter_class=formatter_class)
     parser_fastq_make_sams = subparsers_fastq.add_parser("make_sams", help="Generate alignments saved as SAM files using bowtie2", description="Generate alignments saved as SAM files using bowtie2", formatter_class=formatter_class)
     parser_fastq_make_bams = subparsers_fastq.add_parser("make_bams", help="Convert SAM files to BAM files using samtools", description="Convert SAM files to BAM files using samtools", formatter_class=formatter_class)
     parser_fastq_bam_umi_tags = subparsers_fastq.add_parser("bam_umi_tags", help="Copy UMI in read ID to RX tag in BAM files using fgbio", description="Copy UMI in read ID to RX tag in BAM files using fgbio", formatter_class=formatter_class)
@@ -497,6 +497,8 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_genotyping.add_argument("-mms","--mismatch_score", type=float, help="Mismatch score for pairwise alignment", default=argparse.SUPPRESS)
     parser_fastq_genotyping.add_argument("-ogs","--open_gap_score", type=float, help="Open gap score for pairwise alignment", default=argparse.SUPPRESS)
     parser_fastq_genotyping.add_argument("-egs","--extend_gap_score", type=float, help="Extend gap score for pairwise alignment", default=argparse.SUPPRESS)
+
+    parser_fastq_genotyping.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
     
     # abundances():
     parser_fastq_abundances.add_argument("-i", "--df", help="Input file with sample, edit, count, & fraction information", required=True)
@@ -514,6 +516,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_count_motif.add_argument("-md","--max_distance", type=int, default=0, help="Maximum Levenshtein distance allowed (i.e., # of mismatches, Default: 0)")
     parser_fastq_count_motif.add_argument("-mr","--max_reads", type=int, default=0, help="Maximum # of reads to process per file")
     parser_fastq_count_motif.add_argument("-mt","--meta", type=str, help="Optional path to metadata CSV/TSV file with 'fastq_file' column")
+    parser_fastq_count_motif.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
 
     # plot_motif():
     parser_fastq_plot_motif.add_argument("-i", "--df", help="Path to count_motif() output file", required=True)
@@ -535,7 +538,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_plot_alignments.add_argument("-o","--out_dir", help="Output directory for plots", default=f'../out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
     parser_fastq_plot_alignments.add_argument("-p","--plot_suf", default=".pdf", help="Plot file suffix (Default: .pdf)")
     parser_fastq_plot_alignments.add_argument("-s","--show", action="store_true", help="Display plots interactively",default=False)
-    
+
     # count_region():
     parser_fastq_count_region.add_argument("-i","--df_ref", help="Annotated reference library file path", required=True)
     parser_fastq_count_region.add_argument("-a","--align_col", help="Align column name in the annotated reference library", required=True)
@@ -555,7 +558,8 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_count_region.add_argument("-p","--plot_suf", type=str, help="Plot suffix type (e.g. '.pdf')")
     parser_fastq_count_region.add_argument("-s","--show", action="store_true", help="Display plots interactively", default=False)
     parser_fastq_count_region.add_argument("-e","--exact", action="store_true", help="Perform exact matching only", default=False)
-    
+    parser_fastq_count_region.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
+
     # count_alignments():
     parser_fastq_count_alignments.add_argument("-i","--df_ref", help="Annotated reference library file path", required=True)
     parser_fastq_count_alignments.add_argument("-a","--align_col", help="Align column name in the annotated reference library", required=True)
@@ -573,7 +577,8 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_count_alignments.add_argument("-p","--plot_suf", type=str, help="Plot file suffix (e.g. .pdf, .png)")
     parser_fastq_count_alignments.add_argument("-s","--show", action="store_true", help="Show plots interactively")
     parser_fastq_count_alignments.add_argument("-e","--exact", action="store_true", help="Perform exact matching only", default=False)
-    
+    parser_fastq_count_alignments.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
+
     # plot_paired():
     parser_fastq_plot_paired.add_argument("-i", "--df", help="Paired region file path", required=True)
     parser_fastq_plot_paired.add_argument("-t", "--title", help="Plot title and output filename (without extension)", required=True)
@@ -599,6 +604,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_paired_regions.add_argument("-p", "--reads_processed_col", default="reads_processed", help="Column name for processed reads (Default: 'reads_processed')")
     parser_fastq_paired_regions.add_argument("-P", "--plot_suf", default=".pdf", help="Plot file suffix (e.g., .pdf, .png)")
     parser_fastq_paired_regions.add_argument("-s", "--show", action="store_true", help="Display plots interactively")
+    parser_fastq_paired_regions.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
 
     # count_signatures():
     parser_fastq_count_signatures.add_argument("-i", "--df_ref", help="Annotated reference library file path", required=True)
@@ -629,7 +635,8 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_count_signatures.add_argument("-nl", "--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
     parser_fastq_count_signatures.add_argument("-p", "--plot_suf", type=str, help="Plot suffix type (Default: 'pdf')", default='.pdf')
     parser_fastq_count_signatures.add_argument("-s", "--show", action="store_true", help="Display plots interactively", default=False)
-    
+    parser_fastq_count_signatures.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
+
     # editing_per_library():
     parser_fastq_editing_per_library.add_argument("-e", "--edit_dc", help="Path to directory with edit outcomes files", required=True)
     parser_fastq_editing_per_library.add_argument("-p", "--paired_regions_dc", help="Path to directory with paired regions files", required=True)
@@ -645,8 +652,9 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_extract_umis.add_argument("-o", "--out_dir", help="Output directory (Default: ./extract_umis)", default=f'./extract_umis')
     parser_fastq_extract_umis.add_argument("-b", "--bc_pattern", help="UMI barcode pattern (Default: NNNNNNNNNNNNNNNN)", default="NNNNNNNNNNNNNNNN")
     parser_fastq_extract_umis.add_argument("-e", "--env", help="Conda environment with umi_tools installed (Default: umi_tools)", default="umi_tools")
+    parser_fastq_extract_umis.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
 
-    # trim_motifs():
+    # trim_motifs() [trim]:
     parser_fastq_trim_motifs.add_argument("-q", "--fastq_dir", help="Directory containing FASTQ files (with UMIs extracted)", required=True)
 
     parser_fastq_trim_motifs.add_argument("-o", "--out_dir", help="Output directory (Default: ./trim_motifs)", default=f'./trim_motifs')
@@ -659,6 +667,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_trim_motifs.add_argument("-l", "--motif_length", type=int, help="Trim 'in_file' motifs to this length (Default: 21)", default=21)
     parser_fastq_trim_motifs.add_argument("-r", "--error_rate", type=float, help="Maximum error rate allowed in each motif (Default: 0.1 = 10%%)", default=0.1)
     parser_fastq_trim_motifs.add_argument("-e", "--env", help="Conda environment with cutadapt installed (Default: umi_tools)", default="umi_tools")
+    parser_fastq_trim_motifs.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
 
     # make_sams():
     parser_fastq_make_sams.add_argument("-q", "--fastq_dir", help="Directory containing FASTQ files", required=True)
@@ -668,21 +677,25 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_make_sams_group = parser_fastq_make_sams.add_mutually_exclusive_group(required=True)
     parser_fastq_make_sams_group.add_argument("-i", "--in_file", help="Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence,index (column names required)", default=argparse.SUPPRESS)
     parser_fastq_make_sams_group.add_argument("-f", "--fasta", help="Reference FASTA file for alignment", default=argparse.SUPPRESS)
+
     parser_fastq_make_sams.add_argument("-s", "--sensitivity", choices=["very-sensitive", "sensitive", "fast", "very-fast", "very-sensitive-local", "sensitive-local", "fast-local", "very-fast-local"], 
                                         default="very-sensitive", help="Bowtie2 sensitivity setting (Default: very-sensitive)")
     parser_fastq_make_sams.add_argument("-e", "--env", help="Conda environment with bowtie2 installed (Default: umi_tools)", default="umi_tools")
+    parser_fastq_make_sams.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
 
     # make_bams():
     parser_fastq_make_bams.add_argument("-s", "--sam_dir", help="Directory containing SAM files", required=True)
 
     parser_fastq_make_bams.add_argument("-o", "--out_dir", help="Output directory (Default: ./make_bams)", default=f'./make_bams')
     parser_fastq_make_bams.add_argument("-e", "--env", help="Conda environment with samtools installed (Default: umi_tools)", default="umi_tools")
+    parser_fastq_make_bams.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
 
     # bam_umi_tags():
     parser_fastq_bam_umi_tags.add_argument("-b", "--bam_dir", help="Directory containing bam files", required=True)
 
     parser_fastq_bam_umi_tags.add_argument("-o", "--out_dir", help="Output directory (Default: ./bam_umi_tags)", default=f'./bam_umi_tags')
     parser_fastq_bam_umi_tags.add_argument("-e", "--env", help="Conda environment with fgbio installed (Default: umi_tools)", default="umi_tools")
+    parser_fastq_bam_umi_tags.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
 
     # group_umis():
     parser_fastq_group_umis.add_argument("-b", "--bam_dir", help="Directory containing BAM files", required=True)
@@ -691,6 +704,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_group_umis.add_argument("-s", "--strategy", choices=["Identical","Edit","Adjacency", "Paired"], help="umi grouping strategy (Default: Adjacency)", default="Adjacency")
     parser_fastq_group_umis.add_argument("-E", "--edits", type=int, help="Maximum edit distance to group UMIs (Default: 1)", default=1)
     parser_fastq_group_umis.add_argument("-e", "--env", help="Conda environment with fgbio installed (Default: umi_tools)", default="umi_tools")
+    parser_fastq_group_umis.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
 
     # consensus_umis():
     parser_fastq_consensus_umis.add_argument("-b", "--bam_dir", help="Directory containing grouped BAM files", required=True)
@@ -698,12 +712,15 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_consensus_umis.add_argument("-o", "--out_dir", help="Output directory (Default: ./consensus_umis)", default=f'./consensus_umis')
     parser_fastq_consensus_umis.add_argument("-m", "--min_reads", type=int, help="Minimum reads per UMI to call consensus (Default: 1)", default=1)
     parser_fastq_consensus_umis.add_argument("-e", "--env", help="Conda environment with fgbio installed (Default: umi_tools)", default="umi_tools")
+    parser_fastq_consensus_umis.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
 
     # bam_to_fastq():
     parser_fastq_bam_to_fastq.add_argument("-b", "--bam_dir", help="Directory containing BAM files", required=True)
+
     parser_fastq_bam_to_fastq.add_argument("-o", "--out_dir", help="Output directory (Default: ./bam_to_fastq)", default=f'./bam_to_fastq')
     parser_fastq_bam_to_fastq.add_argument("-e", "--env", help="Conda environment with samtools installed (Default: umi_tools)", default="umi_tools")
-    
+    parser_fastq_bam_to_fastq.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
+
     # cat():
     add_common_plot_cat_args(parser_fastq_cat, fastq_parser=True)
 

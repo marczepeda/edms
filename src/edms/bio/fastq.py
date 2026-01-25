@@ -375,54 +375,11 @@ def comb_fastqs(in_dir: str, out_dir: str, out_file: str | None = None,
                         for line in handle:
                             out.write(line)
 
-"""def comb_fastqs(in_dir: str, out_dir: str, out_file: str):
-    ''' 
-    comb_fastqs(): Combines one or more (un)compressed fastqs files into a single (un)compressed fastq file
-
-    Parameters:
-    in_dir (str): directory with fastq files
-    out_dir (str): new directory with combined fastq file
-    out_file (str): Name of output fastq file (Needs .fastq or .fastq.gz suffix)
-    
-    Dependencies: gzip & os
-    '''
-    mkdir(out_dir) # Ensure the output directory exists
-
-    if out_file.endswith(".fastq.gz"):
-        with gzip.open(os.path.join(out_dir,out_file), 'wt') as out:
-            for in_file in os.listdir(in_dir): # Find all .fastq.gz & .fastq files in the input directory
-                print(f"Processing {in_file}...")
-                if in_file.endswith(".fastq.gz"):
-                    with gzip.open(os.path.join(in_dir,in_file), 'rt') as handle:
-                        for line in handle:
-                            out.write(line)
-                
-                elif in_file.endswith(".fastq"):
-                    with open(os.path.join(in_dir,in_file), 'r') as handle:
-                        for line in handle:
-                            out.write(line)
-    
-    elif out_file.endswith(".fastq"):
-        with open(os.path.join(out_dir,out_file), 'wt') as out:
-            for in_file in os.listdir(in_dir): # Find all .fastq.gz & .fastq files in the input directory
-                print(f"Processing {in_file}...")
-                if in_file.endswith(".fastq.gz"):
-                    with gzip.open(os.path.join(in_dir,in_file), 'rt') as handle:
-                        for line in handle:
-                            out.write(line)
-                
-                elif in_file.endswith(".fastq"):
-                    with open(os.path.join(in_dir,in_file), 'r') as handle:
-                        for line in handle:
-                            out.write(line)
-
-    else: print('out_file needs .fastq or .fastq.gz suffix')
-"""
 # Quantify epeg/ngRNA abundance
 ### Motif search: mU6,...
 def count_motif(fastq_dir: str, pattern: str, out_dir: str, motif: str="motif", 
                 max_distance:int=0, max_reads:int=0, meta: pd.DataFrame | str=None,
-                return_df:bool=False) -> pd.DataFrame:
+                return_df:bool=False, sh: bool=False) -> pd.DataFrame:
     ''' 
     count_motif(): returns a dataframe with the sequence motif location with mismatches per read for every fastq file in a directory
 
@@ -434,6 +391,7 @@ def count_motif(fastq_dir: str, pattern: str, out_dir: str, motif: str="motif",
     max_distance (int, optional): max Levenstein distance for seq in fastq read (Default: 0)
     meta (DataFrame | str, optional): meta dataframe (or file path) must have 'fastq_file' column (Default: None)
     return_df (bool, optional): return dataframe (Default: False)
+    sh (bool, optional): combine output log files into a single file in working directory (Default: False)
 
     Dependencies: pandas, gzip, os, Bio, fuzzy_substring_search() & memory_timer()
     '''
@@ -542,6 +500,7 @@ def count_motif(fastq_dir: str, pattern: str, out_dir: str, motif: str="motif",
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
     io.save(dir=out_dir,file=f'{motif}.csv',obj=df)
+    if sh == True: io.combine(in_dir=os.path.join(out_dir,f'.count_{motif}'), out_dir=f'./count_{motif}', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
     if return_df: return df # Return dataframe (optional)
 
 def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.pdf',numeric: str='count',
@@ -810,7 +769,7 @@ def perform_alignments(align_col: str, out_dir: str, fastq_name: str, fastq_df_r
                                return_df=True)
     
 def plot_alignments(fastq_alignments: dict | str, align_col: str, id_col: str,
-                    out_dir: str, plot_suf:str='.pdf', show:bool=False, **plot_kwargs):
+                    out_dir: str, plot_suf: str='.pdf', show:bool=False, **plot_kwargs):
     ''' 
     plot_alignments(): generate line & distribution plots from fastq alignments dictionary
     
@@ -863,7 +822,7 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
                  fastq_dir: str, df_motif5: pd.DataFrame | str, df_motif3: pd.DataFrame | str,
                  out_dir: str, fastq_col: str=None, match_score: float = 2, mismatch_score: float = -1, 
                  open_gap_score: float = -10, extend_gap_score: float = -0.1, align_dims: tuple=(0,0),
-                 align_ckpt: int=10000, plot_suf: str=None, show: bool=False, return_dc: bool=False, exact: bool=False,
+                 align_ckpt: int=10000, plot_suf: str=None, show: bool=False, return_dc: bool=False, exact: bool=False, sh: bool=False,
                  **plot_kwargs) -> dict[pd.DataFrame]:
     ''' 
     count_region(): align read region from fastq directory to the annotated library with mismatches; plot and return fastq alignments dictionary
@@ -887,6 +846,7 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
     show (bool, optional): show plots (Default: False)
     return_dc (bool, optional): return fastqs dictionary (Default: False)
     exact (bool, optional): perform exact matching only (Default: False)
+    sh (bool, optional): combine output log files into a single file in working directory (Default: False)
     **plot_kwargs (optional): plot key word arguments
 
     Dependencies: Bio.SeqIO, gzip, os, pandas, Bio.Seq.Seq, Bio.PairwiseAligner, mismatch_alignments(), perform_alignments(), plot_alignments(), memory_timer(), io, tidy
@@ -1082,12 +1042,13 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
     io.save(dir=os.path.join(out_dir,'.count_region'),
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+    if sh == True: io.combine(in_dir=os.path.join(out_dir,'.count_region'), out_dir='./count_region', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
     if return_dc: return fastqs
 
 def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
                      fastq_dir: str, out_dir: str, fastq_col: str=None, match_score: float = 2, mismatch_score: float = -1, 
                      open_gap_score: float = -10, extend_gap_score: float = -0.1, align_dims: tuple=(0,0),
-                     align_ckpt: int=10000, plot_suf: str=None, show: bool=False, return_dc: bool=False, exact: bool=False,
+                     align_ckpt: int=10000, plot_suf: str=None, show: bool=False, return_dc: bool=False, exact: bool=False, sh: bool=False,
                      **plot_kwargs) -> dict[pd.DataFrame]:
     ''' 
     count_alignments(): align reads from fastq directory to annotated library with mismatches; plot and return fastq alignments dictionary
@@ -1109,6 +1070,7 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
     show (bool, optional): show plots (Default: False)
     return_dc (bool, optional): return fastqs dictionary (Default: False)
     exact (bool, optional): perform exact matching only (Default: False)
+    sh (bool, optional): combine output log files into a single file in working directory (Default: False)
     **plot_kwargs (optional): plot key word arguments
 
     Dependencies: Bio.SeqIO, gzip, os, pandas, Bio.Seq.Seq, Bio.PairwiseAligner, mismatch_alignments(), perform_alignments(), plot_alignments(), memory_timer(), io, tidy
@@ -1245,6 +1207,7 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
     io.save(dir=os.path.join(out_dir,'.count_alignments'),
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+    if sh == True: io.combine(in_dir=os.path.join(out_dir,'.count_alignments'), out_dir='./count_alignments', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
     if return_dc: return fastqs
 
 def plot_paired(df: pd.DataFrame | str, title: str, out_dir: str,  
@@ -1307,7 +1270,7 @@ def paired_regions(meta_dir: str, region1_dir: str, region2_dir: str, out_dir: s
                    id_col: str='ID', desired_col: str='desired', 
                    region1_alignment_col: str='r1_alignment', region2_alignment_col: str='r2_alignment', 
                    reads_aligned_col: str='reads_aligned', reads_processed_col: str='reads_processed',
-                   y: Literal['count','fraction']='count', plot_suf: str='.pdf', show: bool=False, return_dc: bool=False,
+                   y: Literal['count','fraction']='count', plot_suf: str='.pdf', show: bool=False, return_dc: bool=False, sh: bool=False,
                    **plot_kwargs) -> dict[pd.DataFrame]:
     '''
     paired_regions(): quantify, plot, & return (un)paired regions that aligned to the annotated library
@@ -1327,6 +1290,7 @@ def paired_regions(meta_dir: str, region1_dir: str, region2_dir: str, out_dir: s
     plot_suf (str, optional): plot type suffix with '.' (Default: '.pdf')
     show (bool, optional): show plots (Default: False)
     return_dc (bool, optional): return (un)paired regions dataframe (Default: False)
+    sh (bool, optional): combine output log files into a single file in working directory (Default: False)
     **plot_kwargs (optional): plot key word arguments
 
     Dependencies: os, pandas, io, plot, & plot_paired()
@@ -1425,6 +1389,7 @@ def paired_regions(meta_dir: str, region1_dir: str, region2_dir: str, out_dir: s
     io.save(dir=os.path.join(out_dir,'.paired_regions'),
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+    if sh == True: io.combine(in_dir=os.path.join(out_dir,'.paired_regions'), out_dir='./paired_regions', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
     if return_dc: return paired_regions_dc  
 
 ### Signature 
@@ -1433,7 +1398,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                      df_motif5: pd.DataFrame | str=None, df_motif3: pd.DataFrame | str=None, fastq_col: str=None,  meta: pd.DataFrame | str=None, 
                      match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, extend_gap_score: float = -0.1, 
                      align_dims: tuple=(0,0), align_ckpt: int=10000, save_alignments: bool=False, return_df: bool=False, 
-                     literal_eval: bool=True, plot_suf: str='.pdf', show: bool=False, **plot_kwargs) -> pd.DataFrame:
+                     literal_eval: bool=True, plot_suf: str='.pdf', show: bool=False, sh: bool=False, **plot_kwargs) -> pd.DataFrame:
     ''' 
     count_signatures(): generate signatures from fastq read region alignments to WT sequence; count signatures, plot and return fastq signatures dataframe
 
@@ -1466,6 +1431,8 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
     literal_eval (bool, optional): convert string representations (Default: True)
     plot_suf (str, optional): plot type suffix with '.' (Default: '.pdf')
     show (bool, optional): show plots (Default: False)
+    sh (bool, optional): combine output log files into a single file in working directory (Default: False)
+    
     **plot_kwargs (optional): plot keyword arguments
     '''
     # Initialize timer
@@ -1946,6 +1913,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
     io.save(dir=os.path.join(out_dir,'.count_signature'),
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+    if sh == True: io.combine(in_dir=os.path.join(out_dir,'.count_signature'), out_dir='./count_signature', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
     
     io.save(dir=out_dir,file=out_file,obj=out_df)
     io.save(dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}_aggregate.{out_file.split('.')[-1]}",obj=out_df2)
@@ -2562,7 +2530,7 @@ def outcomes(fastqs: dict, col: str='Edit', return_memories: bool=False) -> tupl
     else: return df
 
 def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=None,
-               out_dir: str=None, out_file_prefix: str=None, return_dc:bool=False, **kwargs) -> dict[pd.DataFrame]:
+               out_dir: str=None, out_file_prefix: str=None, return_dc:bool=False, sh: bool=False, **kwargs) -> dict[pd.DataFrame]:
     ''' 
     genotying(): quantify edit outcomes workflow
     
@@ -2574,6 +2542,7 @@ def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=N
     out_dir (str, optional): output directory (Default: None)
     out_file (str, optional): output file (Default: None)
     return_dc (bool, optional): return dictionary containing edit & category outcomes dataframes (Default: False)
+    sh (bool, optional): combine output log files into a single file in working directory (Default: False)
 
     **kwargs:
     qall (int, optional): phred quality score threshold for all bases for a read to not be discarded (Q = -log(err))
@@ -2659,6 +2628,8 @@ def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=N
 
         io.save(dir=out_dir,file=f'{out_file_prefix}_edit_outcomes.csv',obj=df_edits) # Edit outcomes
         io.save(dir=out_dir,file=f'{out_file_prefix}_category_outcomes.csv',obj=df_categories) # Edit categoy outcomes
+
+        if sh == True: io.combine(in_dir=os.path.join(out_dir,'.genotyping'), out_dir='./genotyping', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
     
     if return_dc: 
         return {'Edit': df_edits,
@@ -2776,7 +2747,7 @@ def editing_per_library(edit_dc: dict | str, paired_regions_dc: dict | str, fast
 
 # UMI methods
 def extract_umis(fastq_dir: str, out_dir: str='./extract_umis', 
-                 bc_pattern: str='NNNNNNNNNNNNNNNN', env: str='umi_tools'):
+                 bc_pattern: str='NNNNNNNNNNNNNNNN', env: str='umi_tools', sh: bool=False):
     ''' 
     extract_umis(): extract UMIs using umi_tools
 
@@ -2785,13 +2756,14 @@ def extract_umis(fastq_dir: str, out_dir: str='./extract_umis',
     out_dir (str): output directory (Default: ./extract_umis)
     bc_pattern (str, optional): UMI barcode pattern (Default: NNNNNNNNNNNNNNNN)
     env (str, optional): conda environment with umi_tools installed (Default: umi_tools)
+    sh (bool, optional): combine output log files into a single file in working directory (Default: False)
     '''
     # Memory reporting
     memory_timer(reset=True)
     memories = []
 
-    # Create output directory and .extract_umi subdirectory for logs
-    mkdir(os.path.join(out_dir,'.extract_umi'))
+    # Create output directory and .extract_umis subdirectory for logs
+    mkdir(os.path.join(out_dir,'.extract_umis'))
 
     # Iterate through fastq files in the directory
     for file in os.listdir(path=fastq_dir):
@@ -2812,12 +2784,13 @@ def extract_umis(fastq_dir: str, out_dir: str='./extract_umis',
     memories.append(memory_timer(task='extract_umis()'))
     io.save(dir=os.path.join(out_dir,'.extract_umis'),
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
-            obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))     
+            obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+    if sh == True: io.combine(in_dir=os.path.join(out_dir,'.extract_umis'), out_dir='./extract_umis', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv', '.log']) 
     
 def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs', 
                 config_key: str = None, in_file: pd.DataFrame | str = None, motif5: str=None, motif3: str=None, 
                 motif_length: int=21, error_rate: float=0.1,
-                env: str='umi_tools'):
+                env: str='umi_tools', sh: bool=False):
     ''' 
     trim_motifs(): trimming motifs with cutadapt
 
@@ -2832,7 +2805,8 @@ def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs',
 
     motif_length (int, optional): trim 'in_file' motifs to this length (Default: 21)
     error_rate (float, optional): maximum error rate allowed in each motif (Default: 0.1)
-    cutadapt (str, optional): Conda environment with cutadapt installed (Default: umi_tools)
+    env (str, optional): Conda environment with cutadapt installed (Default: umi_tools)
+    sh (bool, optional): combine output log files into a single file in working directory (Default: False)
     '''
     # Memory reporting
     memory_timer(reset=True)
@@ -2888,10 +2862,12 @@ def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs',
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))  
 
+    if sh == True: io.combine(in_dir=os.path.join(out_dir,'.trim_motifs'), out_dir='./trim_motifs', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv', '.log']) 
+
 def make_sams(fastq_dir: str, out_dir: str='./make_sams', 
               in_file: pd.DataFrame | str = None, fasta: str=None,
               sensitivity: Literal['very-fast','fast','sensitive','very-sensitive','very-fast-local','fast-local','sensitive-local','very-sensitive-local']='very-sensitive', 
-              env: str='umi_tools'):
+              env: str='umi_tools', sh: bool=False):
     ''' 
     make_sams(): generates alignments saved as a SAM files using bowtie2
 
@@ -2915,6 +2891,7 @@ def make_sams(fastq_dir: str, out_dir: str='./make_sams',
         --sensitive-local      -D 15 -R 2 -N 0 -L 20 -i S,1,0.75 (default)
         --very-sensitive-local -D 20 -R 3 -N 0 -L 20 -i S,1,0.50
     env (str, optional): Conda environment with bowtie2 installed (Default: umi_tools)
+    sh (bool, optional): combine output log files into a single file in working directory (Default: False)
     '''
     # Memory reporting
     memory_timer(reset=True)
@@ -2973,12 +2950,12 @@ def make_sams(fastq_dir: str, out_dir: str='./make_sams',
 
     # Memory reporting
     memories.append(memory_timer(task='make_sams()'))
-
     io.save(dir=os.path.join(out_dir,'.make_sams'),
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+    if sh == True: io.combine(in_dir=os.path.join(out_dir,'.make_sams'), out_dir='./make_sams', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv', '.log'])
 
-def make_bams(sam_dir: str, out_dir: str='./make_bams', env: str='umi_tools'):
+def make_bams(sam_dir: str, out_dir: str='./make_bams', env: str='umi_tools', sh: bool=False):
     '''
     make_bams(): converts SAM files to BAM files using samtools
     
@@ -2986,6 +2963,7 @@ def make_bams(sam_dir: str, out_dir: str='./make_bams', env: str='umi_tools'):
     sam_dir (str): directory with SAM files
     out_dir (str): output directory (Default: ./make_bams)
     env (str, optional): Conda environment with samtools installed (Default: umi_tools)
+    sh (bool, optional): combine output log files into a single file in working directory (Default: False)
     '''
     # Memory reporting
     memory_timer(reset=True)
@@ -3029,9 +3007,10 @@ def make_bams(sam_dir: str, out_dir: str='./make_bams', env: str='umi_tools'):
     io.save(dir=os.path.join(out_dir,'.make_bams'),
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+    if sh == True: io.combine(in_dir=os.path.join(out_dir,'.make_bams'), out_dir='./make_bams', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv', '.log'])
 
 def bam_umi_tags(bam_dir: str, out_dir: str='./bam_umi_tags',
-                 env: str='umi_tools'):
+                 env: str='umi_tools', sh: bool=False):
     '''
     bam_umi_tags(): copy UMI in read ID to RX tag in BAM files using fgbio
     
@@ -3039,6 +3018,7 @@ def bam_umi_tags(bam_dir: str, out_dir: str='./bam_umi_tags',
     bam_dir (str): directory with BAM files
     out_dir (str): output directory (Default: ./bam_umi_tags)
     env (str, optional): Conda environment with umi_tools installed (Default: umi_tools)
+    sh (bool, optional): combine output log files into a single file in working directory (Default: False)
     '''
     # Memory reporting
     memory_timer(reset=True)
@@ -3067,11 +3047,11 @@ def bam_umi_tags(bam_dir: str, out_dir: str='./bam_umi_tags',
     io.save(dir=os.path.join(out_dir,'.bam_umi_tags'),
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+    if sh == True: io.combine(in_dir=os.path.join(out_dir,'.bam_umi_tags'), out_dir='./bam_umi_tags', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
 
 def group_umis(bam_dir: str, out_dir: str='./group_umis', 
                strategy: Literal['Identical','Edit','Adjacency','Paired']='Adjacency',
-               edits: int=1,
-               env: str='umi_tools'):
+               edits: int=1, env: str='umi_tools', sh: bool=False):
     '''
     group_umis(): group BAM files by UMI using fgbio
     
@@ -3093,6 +3073,7 @@ def group_umis(bam_dir: str, out_dir: str='./group_umis',
            have more structure than for single UMI strategies and are of the form '{base}/{A|B}'. E.g. two UMI pairs would be
            mapped as follows AAAA-GGGG -> 1/A, GGGG-AAAA -> 1/B.
     env (str, optional): Conda environment with fgbio installed (Default: umi_tools)
+    sh (bool, optional): combine output log files into a single file in working directory (Default: False)
     '''
     # Memory reporting
     memory_timer(reset=True)
@@ -3123,10 +3104,10 @@ def group_umis(bam_dir: str, out_dir: str='./group_umis',
     io.save(dir=os.path.join(out_dir,'.group_umis'),
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+    if sh == True: io.combine(in_dir=os.path.join(out_dir,'.group_umis'), out_dir='./group_umis', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
 
 def consensus_umis(bam_dir: str, out_dir: str='./consensus_umis', 
-                   min_reads: int=1,
-                   env: str='umi_tools'):
+                   min_reads: int=1, env: str='umi_tools', sh: bool=False):
     '''
     consensus_umis(): generate consensus reads from grouped BAM files using fgbio
     
@@ -3135,6 +3116,7 @@ def consensus_umis(bam_dir: str, out_dir: str='./consensus_umis',
     out_dir (str): output directory (Default: ./consensus_umis)
     min_reads (int, optional): minimum reads per UMI group to generate consensus (Default: 1)
     env (str, optional): Conda environment with fgbio installed (Default: umi_tools)
+    sh (bool, optional): combine output log files into a single file in working directory (Default: False)
     '''
     # Memory reporting
     memory_timer(reset=True)
@@ -3163,8 +3145,9 @@ def consensus_umis(bam_dir: str, out_dir: str='./consensus_umis',
     io.save(dir=os.path.join(out_dir,'.consensus_umis'),
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+    if sh == True: io.combine(in_dir=os.path.join(out_dir,'.consensus_umis'), out_dir='./consensus_umis', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
 
-def bam_to_fastq(bam_dir: str, out_dir: str='./bam_to_fastq', env: str='umi_tools'):
+def bam_to_fastq(bam_dir: str, out_dir: str='./bam_to_fastq', env: str='umi_tools', sh: bool=False):
     '''
     bam_to_fastq(): convert BAM files to FASTQ files using samtools
 
@@ -3172,6 +3155,7 @@ def bam_to_fastq(bam_dir: str, out_dir: str='./bam_to_fastq', env: str='umi_tool
     bam_dir (str): directory with BAM files
     out_dir (str): output directory (Default: ./bam_to_fastq)
     env (str, optional): Conda environment with samtools installed (Default: umi_tools)
+    sh (bool, optional): combine output log files into a single file in working directory (Default: False)
     '''
     # Memory reporting
     memory_timer(reset=True)
@@ -3200,6 +3184,7 @@ def bam_to_fastq(bam_dir: str, out_dir: str='./bam_to_fastq', env: str='umi_tool
     io.save(dir=os.path.join(out_dir,'.bam_to_fastq'),
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
             obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+    if sh == True: io.combine(in_dir=os.path.join(out_dir,'.bam_to_fastq'), out_dir='./bam_to_fastq', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
 
 # Supporting methods for plots
 ''' aa_props: dictionary of AA properties with citations (Generated by ChatGPT)

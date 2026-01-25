@@ -24,6 +24,7 @@ Usage:
 - in_subs(): moves all files with a given suffix into subfolders named after the files (excluding the suffix).
 - out_subs(): delete subdirectories and move their files to the parent directory
 - create_sh(): creates a shell script with SLURM job submission parameters for Harvard FASRC cluster.
+- combine(): Combine text files matching provided suffixes into a single output file, inserting a header with the original filename before each file's content.
 - split_R1_R2(): split paired reads into new R1 and R2 subdirectories at the parent directory
 
 [Directory Methods]
@@ -39,10 +40,13 @@ import csv
 import shutil
 import datetime
 import json
-from typing import Literal
+from typing import Literal, Iterable
+from pathlib import Path 
+
 
 from ..utils import try_parse, mkdir
 from ..config import get_info
+from ..gen import tidy as t
 
 # Parsing Python literals
 def df_try_parse(df: pd.DataFrame) -> pd.DataFrame:
@@ -381,6 +385,69 @@ python {".".join(file.split(".")[:-1])}.py \t# Run python script
 ''')
     except Exception as e:
         print(f"An error occurred while creating the shell script: {e}")
+
+def combine(
+    in_dir: str | Path,
+    out_dir: str | Path,
+    out_file: str,
+    suffixes: Iterable[str] = [".txt", ".log", ".out", ".err"],
+    recursive: bool = False,
+    full_path: bool = False,
+    encoding: str = "utf-8",
+) -> Path:
+    """
+    combine(): Combine text files matching provided suffixes into a single output file, inserting a header with the original filename before each file's content.
+
+    Parameters:
+    in_dir (str): Directory to search for input files.
+    out_dir (str): Directory to write the combined file.
+    out_file (str): Output filename (text file).
+    suffixes (Iterable[str]): Iterable of suffixes to match (e.g. [".txt", ".log", ".out", ".err"]).
+    recursive (bool): If True, search subdirectories recursively.
+    full_path (bool): If True, include full path in header; otherwise only filename.  
+    encoding (str): Text encoding to use when reading/writing files.
+
+    Returns: Path to the combined output file.
+    """
+    in_dir = Path(in_dir)
+    out_dir = Path(out_dir)
+    out_path = out_dir / out_file
+
+    mkdir(out_dir)
+
+    suffixes = tuple(suffixes)
+    if not suffixes:
+        raise ValueError("suffixes must contain at least one suffix")
+
+    # Collect matching files
+    iterator = in_dir.rglob("*") if recursive else in_dir.glob("*")
+    files = [
+        p for p in iterator
+        if p.is_file() and p.name.endswith(suffixes)
+    ]
+
+    if not files:
+        raise FileNotFoundError(
+            f"No files found in {in_dir} matching suffixes={list(suffixes)}"
+        )
+
+    # Natural sort (relative path keeps directory structure ordering sensible)
+    files.sort(key=lambda p: t.natural_key(str(p.relative_to(in_dir))))
+
+    # Write combined output
+    with open(out_path, "w", encoding=encoding, newline="") as out:
+        for src in files:
+            header_name = str(src) if full_path else src.name
+
+            out.write(f"### SOURCE_FILE: {header_name}\n")
+
+            with open(src, "r", encoding=encoding, errors="replace") as inp:
+                shutil.copyfileobj(inp, out)
+
+            # Ensure clean separation between files
+            out.write("\n")
+
+    return out_path
 
 def split_R1_R2(dir: str):
     '''

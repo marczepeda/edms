@@ -63,6 +63,7 @@ from ..data import cosmic as co
 from ..data import cvar
 from ..bio import fastq as fq
 from ..utils import memory_timer,load_resource_csv,mkdir
+import edms.config as config
 
 # Biological Dictionaries
 ''' dna_aa_codon_table: DNA to AA codon table'''
