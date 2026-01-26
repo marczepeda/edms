@@ -40,6 +40,7 @@ import stat
 import subprocess 
 import sys
 import tempfile
+from pathlib import Path
 
 # Computation
 process = psutil.Process(os.getpid())
@@ -186,7 +187,7 @@ def recursive_parse(data):
     return data  # Return the data as-is if it doesn't match any known structure
 
 # Make directories
-def mkdir(dir: str, sep: str='/'):
+def mkdir(dir: str | Path, sep: str='/'):
     '''
     mkdir(): make directory if it does not exist (including parent directories)
 

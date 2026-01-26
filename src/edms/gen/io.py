@@ -410,11 +410,9 @@ def combine(
     Returns: Path to the combined output file.
     """
     in_dir = Path(in_dir)
-    out_dir = Path(out_dir)
-    out_path = out_dir / out_file
-
-    mkdir(out_dir)
-
+    mkdir(out_dir) # Has to be before out_path definition
+    out_path = Path(out_dir) / out_file
+    
     suffixes = tuple(suffixes)
     if not suffixes:
         raise ValueError("suffixes must contain at least one suffix")
