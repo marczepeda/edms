@@ -73,6 +73,8 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
     else:
         subparser.add_argument("-si", "--size", type=str, help="Column name used to scale point sizes (Default: -log10('pval'); specify 'false' for no size)")
         subparser.add_argument("-sd", "--size_dims", type=parse_tuple_float, help="Size range for points formatted as min,max")
+        subparser.add_argument("-zc", "--z_col", type=str, help="Column name for Z-score normalization (Default: None)", default=argparse.SUPPRESS)
+        subparser.add_argument("-zv", "--z_var", type=str, help="Column value for Z-score normalization (Default: None)", default=argparse.SUPPRESS)
         if fastq_corr_parser == True:
             subparser.add_argument("-m", "--method", help="Correlation method (Default: 'pearson')", choices=['pearson', 'spearman', 'kendall'], type=str, default='pearson')
             subparser.add_argument("-nw", "--not_weighted", dest='weighted', action='store_false', help="Weighted correlation by size column (Default: True)", default=True)
@@ -330,6 +332,8 @@ def add_common_plot_heat_args(subparser, fastq_parser=False, stat_parser=False):
         subparser.add_argument("-wr", "--wt_res", type=int, help="WT protein sequence residue start number", required=True)
         subparser.add_argument("-co", "--cutoff", type=float, help="Comparison count mean cutoff for masking low-abundance values", default=argparse.SUPPRESS)
         subparser.add_argument("-aa", "--aa", type=str, help="AA saturation mutagenesis. The 'aa' option [default] makes all amino acid substitutions ('aa_subs'), +1 amino acid insertions ('aa_ins'), and -1 amino acid deletions ('aa_dels').", choices=['aa', 'aa_subs', 'aa_ins', 'aa_dels'], default='aa')
+        subparser.add_argument("-zc", "--z_col", type=str, help="Column name for Z-score normalization (Default: None)", default=argparse.SUPPRESS)
+        subparser.add_argument("-zv", "--z_var", type=str, help="Column value for Z-score normalization (Default: None)", default=argparse.SUPPRESS)
         subparser.add_argument("-l", "--label", type=str, help="Label column name (Default: 'Edit'). Can't be None.", default='Edit')
     
     if stat_parser == False:
@@ -475,6 +479,8 @@ def add_common_plot_vol_args(subparser, fastq_parser=False):
     subparser.add_argument("-stys", "--stys", type=str, help="Style column name for custom markers")
     subparser.add_argument("-size", "--size", type=str, help="Column name used to scale point sizes (Default: -log10('pval'); specify 'false' for no size)")
     subparser.add_argument("-sd", "--size_dims", type=parse_tuple_float, help="Size range for points formatted as min,max")
+    subparser.add_argument("-zc", "--z_col", type=str, help="Column name for Z-score normalization (Default: None)", default=argparse.SUPPRESS)
+    subparser.add_argument("-zv", "--z_var", type=str, help="Column value for Z-score normalization (Default: None)", default=argparse.SUPPRESS)    
     subparser.add_argument("-l", "--label", type=str, help="Column containing text labels for points")
     if fastq_parser==False:
         subparser.add_argument("-so","--stys_order", type=str, nargs="+", help="Style column values order")
@@ -627,6 +633,8 @@ def add_subparser(subparsers, formatter_class=None):
     - difference(): computes the appropriate statistical test(s) and returns the p-value(s)
     - correlation(): returns a correlation matrix
     - compare(): computes FC, pval, and log transformations relative to a specified condition
+    - odds_ratio() [or]: computes odds ratio relative to a specified condition (OR = (A/B)/(C/D))
+    - zscore(): Z-score `val` within each `cond_col` using stats computed from rows where `var_col == var`.
     '''
     parser_stat = subparsers.add_parser("stat", help="Statistics", description="Statistics", formatter_class=formatter_class)
     subparsers_stat = parser_stat.add_subparsers()
@@ -636,7 +644,7 @@ def add_subparser(subparsers, formatter_class=None):
 
     parser_stat_describe.add_argument("-i", "--df", type=str, help="Input file path", required=True)
 
-    parser_stat_describe.add_argument("-o", "--dir", type=str, help="Output directory",default='../out')
+    parser_stat_describe.add_argument("-o", "--dir", type=str, help="Output directory (Default: ../out)",default='../out')
     parser_stat_describe.add_argument("-f", "--file", type=str, help="Output file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_descriptive.csv')
     
     parser_stat_describe.add_argument("-c","--cols", nargs="+", help="List of numerical columns to describe")
@@ -652,7 +660,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_stat_difference.add_argument("-c","--compare_col", type=str, help="Name of column used for grouping/comparisons",required=True)
     parser_stat_difference.add_argument("-p","--compare", nargs="+", help="List of groups to compare (e.g. A B)",required=True)
 
-    parser_stat_difference.add_argument("-o", "--dir", type=str, help="Output directory",default='../out')
+    parser_stat_difference.add_argument("-o", "--dir", type=str, help="Output directory (Default: ../out)",default='../out')
     parser_stat_difference.add_argument("-f", "--file", type=str, help="Output file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_difference.csv')
 
     parser_stat_difference.add_argument("-s","--same", action="store_true", help="Same subjects (paired test)")
@@ -672,7 +680,7 @@ def add_subparser(subparsers, formatter_class=None):
                                          help="Correlation method to use (Default: pearson)")
     parser_stat_correlation.add_argument("-n","--numeric_only", action="store_true", help="Only use numeric columns (Default: True)")
     parser_stat_correlation.add_argument("-N","--no_plot", dest="plot", action="store_false", help="Don't generate correlation matrix plot", default=True)
-    parser_stat_correlation.add_argument("-o", "--dir", type=str, help="Output directory",default='../out')
+    parser_stat_correlation.add_argument("-o", "--dir", type=str, help="Output directory (Default: ../out)",default='../out')
     parser_stat_correlation.add_argument("-F", "--file_data", type=str, help="Output data file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_correlation.csv')
     parser_stat_correlation.add_argument("-P", "--file_plot", type=str, help="Output plot file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_correlation.pdf')
     add_common_plot_heat_args(parser_stat_correlation, stat_parser=True)
@@ -690,14 +698,14 @@ def add_subparser(subparsers, formatter_class=None):
     parser_stat_compare.add_argument("-n","--count", type=str, help="Count column name",required=True)
     parser_stat_compare.add_argument("-p","--pseudocount", type=int, default=1, help="Pseudocount to avoid log(0) or divide-by-zero errors")
     parser_stat_compare.add_argument("-a","--alternative", type=str, default="two-sided", choices=["two-sided", "less", "greater"], help="Alternative hypothesis for Fisher's exact test (Default: two-sided)")
-    parser_stat_compare.add_argument("-o", "--dir", type=str, help="Output directory",default='../out')
+    parser_stat_compare.add_argument("-o", "--dir", type=str, help="Output directory (Default: ../out)",default='../out')
     parser_stat_compare.add_argument("-f", "--file", type=str, help="Output file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_compare.csv')
     parser_stat_compare.add_argument("-v","--verbose", action="store_true", help="Print progress to console", default=False)
 
     parser_stat_compare.set_defaults(func=st.compare)
 
-    # odds_ratio(): computes odds ratio relative to a specified condition (OR = (A/B)/(C/D))
-    parser_stat_odds_ratio = subparsers_stat.add_parser("odds_ratio", help="Computes odds ratios relative to a specified condition & variable (e.g., unedited & WT)", description="Compute odds ratio between conditions", formatter_class=formatter_class)
+    # odds_ratio() [or]: computes odds ratio relative to a specified condition (OR = (A/B)/(C/D))
+    parser_stat_odds_ratio = subparsers_stat.add_parser("or", help="Computes odds ratios relative to a specified condition & variable (e.g., unedited & WT)", description="Compute odds ratio between conditions", formatter_class=formatter_class)
 
     parser_stat_odds_ratio.add_argument("-i", "--df", type=str, help="Input file path",required=True)
     parser_stat_odds_ratio.add_argument("-c","--cond", type=str, help="Condition column name",required=True)
@@ -708,11 +716,27 @@ def add_subparser(subparsers, formatter_class=None):
     
     parser_stat_odds_ratio.add_argument("-p","--pseudocount", type=int, default=1, help="Pseudocount to avoid /0 (Default: 1)")
     parser_stat_odds_ratio.add_argument("-a","--alternative", type=str, default="two-sided", choices=["two-sided", "less", "greater"], help="Alternative hypothesis for Fisher's exact test (Default: two-sided)")
-    parser_stat_odds_ratio.add_argument("-o", "--dir", type=str, help="Output directory",default='../out')
+    parser_stat_odds_ratio.add_argument("-o", "--dir", type=str, help="Output directory (Default: ../out)",default='../out')
     parser_stat_odds_ratio.add_argument("-f", "--file", type=str, help="Output file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_odds_ratio.csv')
     parser_stat_odds_ratio.add_argument("-v","--verbose", action="store_true", help="Print progress to console", default=False)
 
     parser_stat_odds_ratio.set_defaults(func=st.odds_ratio)
+
+    # zscore(): Z-score `val` within each `cond_col` using stats computed from rows where `var_col == var`.
+    parser_stat_zscore = subparsers_stat.add_parser("zscore", help="Compute Z-scores within conditions using stats from a reference variable", description="Compute Z-scores within conditions using stats from a reference variable", formatter_class=formatter_class)
+
+    parser_stat_zscore.add_argument("-i", "--df", type=str, help="Input file path",required=True)
+    parser_stat_zscore.add_argument("-c","--cond_col", type=str, help="Condition column name",required=True)
+    parser_stat_zscore.add_argument("-v","--var_col", type=str, help="Variable column name",required=True)
+    parser_stat_zscore.add_argument("-V","--var", type=str, help="Variable name for reference stats",required=True) 
+    parser_stat_zscore.add_argument("-vl","--val_col", type=str, help="Value column name to Z-score",required=True)
+
+    parser_stat_zscore.add_argument("-oc","--out_col", type=str, help="Name for output Z-score column", default=argparse.SUPPRESS)
+    parser_stat_zscore.add_argument("-d","--ddof", type=float, help="Delta degrees of freedom for std (0 = population, 1 = sample [default]).", default=1)
+    parser_stat_zscore.add_argument("-o", "--dir", type=str, help="Output directory (Default: ../out)",default='../out')
+    parser_stat_zscore.add_argument("-f", "--file", type=str, help="Output file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_zscore.csv')
+    
+    parser_stat_zscore.set_defaults(func=st.zscore)
 
     '''
     edms.gen.io:

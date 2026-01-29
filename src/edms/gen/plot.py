@@ -1715,7 +1715,7 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
         else:
             mpld3.show(fig)
 
-def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str | bool = None, size_dims: tuple = None, label: str = None, stys_order: list = [], mark_order: list = [],
+def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str | bool = None, size_dims: tuple = None, z_col: str = None, z_var: str = None, label: str = None, stys_order: list = [], mark_order: list = [],
         FC_threshold: float = 1, pval_threshold: float = 1, file: str = None, dir: str = None, color: str = 'lightgray', alpha: float = 0.5, edgecol: str = 'black', vertical: bool = True,
         figsize: tuple = (5, 5), title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial',
         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 9, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
@@ -1735,6 +1735,8 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str 
     stys (str, optional): style column name
     size (str | bool, optional): size column name (Default: -log10('pval'); specify False for no size)
     size_dims (tuple, optional): (minimum,maximum) values in size column (Default: None)
+    z_col (str, optional): find rows with 'z_var' in this column for log2(FC) z-score normalization (Default: None)
+    z_var (str, optional): use rows with 'z_var' for log2(FC) z-score normalization (Default: None)
     label (str, optional): label column name
     stys_order (list, optional): style column values order
     mark_order (list, optional): markers order for style column values order
@@ -1814,10 +1816,21 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str 
         legend_title_size=title_size
         legend_size=title_size*legend_size_html_multiplier
     
-    # Log transform data
-    df[f'log2({FC})'] = [np.log10(FC_val)/np.log10(2) for FC_val in df[FC]]
-    df[f'-log10({pval})'] = [-np.log10(pval_val) for pval_val in df[pval]]
-    
+    # Prevent overwriting edms.fastq.vol()
+    if f'log2({FC})_raw' not in df.columns:
+
+        # Log transform data
+        df[f'log2({FC})'] = [np.log10(FC_val)/np.log10(2) for FC_val in df[FC]]
+        df[f'-log10({pval})'] = [-np.log10(pval_val) for pval_val in df[pval]]
+        
+        # Z-score normalization if specified
+        if z_col is not None and z_var is not None:
+            z_df = df[df[z_col]==z_var]
+            mu = z_df[f'log2({FC})'].mean()
+            sigma = z_df[f'log2({FC})'].std()
+            df.rename(columns={f'log2({FC})': f'log2({FC})_raw'}, inplace=True)
+            df[f'log2({FC})'] = [(val - mu) / sigma for val in df[f'log2({FC})_raw']]
+
     # Organize data by significance
     signif = []
     for (log2FC,log10P) in zip(df[f'log2({FC})'],df[f'-log10({pval})']):

@@ -18,6 +18,7 @@ Usage:
 [Comparison]
 - compare(): computes FC, pval, and log transformations relative to a specified condition
 - odds_ratio(): computes odds ratio relative to a specified condition (OR = (A/B)/(C/D))
+- zscore(): Z-score `FC` within each `cond_col` using stats computed from rows where `var_col == var`.
 '''
 
 # Import packages
@@ -680,3 +681,70 @@ def odds_ratio(df: pd.DataFrame | str, cond: str, cond_comp: str,
     if dir is not None and file is not None:
         io.save(dir=dir,file=file,obj=df_stat) 
     return df_stat
+
+def zscore(
+    df: pd.DataFrame,
+    val: str,
+    cond_col: str,
+    var_col: str,
+    var: str,
+    out_col: str | None = None,
+    ddof: int = 1,
+    dir:str=None,
+    file:str=None,
+) -> pd.DataFrame:
+    """
+    zscore(): Z-score `val` within each `cond_col` using stats computed from rows where `var_col == var`.
+
+    For each condition:
+      - baseline = rows with df[var_col] == var
+      - mu, sigma computed from baseline[val]
+      - z = (val - mu) / sigma applied to *all* rows in that condition
+
+    Parameters:
+    df (pd.DataFrame): Input dataframe.
+    cond_col (str): Column name defining condition groups.
+    val (str): Column name of values to z-score.
+    var_col (str): Column name defining variable groups (used to pick baseline rows).
+    var (str): The value in `var_col` used as the baseline set for mean/std.
+    out_col (str, optional): Output column name (Default: f"{val}_z").
+    ddof (int): Delta degrees of freedom for std (0 = population, 1 = sample).
+    dir (str, optional): save directory
+    file (str, optional): save file
+    
+    Returns: Copy of df (pd.DataFrame) with added z-score column.
+
+    Notes:
+    - If a condition has no baseline rows, output z-scores are NaN for that condition.
+    - If baseline std is 0 or NaN, output z-scores are NaN for that condition.
+    """
+    if out_col is None:
+        out_col = f"{val}_z"
+
+    required = {val, cond_col, var_col}
+    missing = required - set(df.columns)
+    if missing:
+        raise KeyError(f"Missing required columns: {sorted(missing)}")
+
+    out = df.copy()
+
+    # Compute baseline mean/std per condition using only rows where var_col == var
+    baseline = out.loc[out[var_col].eq(var), [cond_col, val]].copy()
+
+    stats = (
+        baseline.groupby(cond_col, dropna=False)[val]
+        .agg(mu="mean", sigma=lambda s: s.std(ddof=ddof))
+    )
+
+    # Map per-condition mu/sigma back onto all rows
+    out["_mu__"] = out[cond_col].map(stats["mu"])
+    out["_sigma__"] = out[cond_col].map(stats["sigma"])
+
+    denom = out["_sigma__"].replace(0, np.nan)
+    out[out_col] = (out[val] - out["_mu__"]) / denom
+    out.drop(columns=["_mu__", "_sigma__"], inplace=True)
+    
+    # Save & return dataframe
+    if dir is not None and file is not None:
+        io.save(dir=dir,file=file,obj=out)  
+    return out

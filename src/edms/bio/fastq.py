@@ -4026,7 +4026,7 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
             legend_columnspacing=legend_columnspacing, legend_handletextpad=legend_handletextpad, legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad, legend_handlelength=legend_handlelength,legend_size_html_multiplier=legend_size_html_multiplier,
             show=show,space_capitalize=space_capitalize,PDB_pt=PDB_pt,**kwargs)
 
-def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: tuple=None, label: str='Edit', label_size: int=16,
+def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: tuple=None, z_col: str=None, z_var: str=None, label: str='Edit', label_size: int=16,
         label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None,
         FC_threshold: float=1, pval_threshold: float=1, file: str=None, dir: str=None, color: str='lightgray', alpha: float=0.5, edgecol: str='black', vertical: bool=True,
         figsize: tuple = (5, 5), title: str='', title_size: int=18, title_weight: str='bold', title_font: str='Arial',
@@ -4034,7 +4034,7 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: t
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int=9, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
         legend_title: str='',legend_title_size: int=12, legend_size: int=9, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1,
         legend_columnspacing: int=-4, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, legend_size_html_multiplier: float=0.75, 
-        display_legend: bool=True, display_labels: bool=True, display_lines: bool=False, display_axis: bool=True, return_df: bool=True, dpi: int = 0, show: bool=True, space_capitalize: bool=True,
+        display_legend: bool=True, display_labels: bool=True, display_lines: bool=False, display_axis: bool=True, return_df: bool=True, dpi: int = 0, show: bool=True, space_capitalize: bool=True, 
         **kwargs) -> pd.DataFrame:
     ''' 
     vol(): creates volcano plot
@@ -4046,6 +4046,8 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: t
     cols (str, optional): color column name
     size (str | bool, optional): size column name (Default: pval; specify False for no size)
     size_dims (tuple, optional): (minimum,maximum) values in size column (Default: None)
+    z_col (str, optional): find rows with 'z_var' in this column for log2(FC) z-score normalization (Default: None)
+    z_var (str, optional): use rows with 'z_var' for log2(FC) z-score normalization (Default: None)
     label (str, optional): label column name (Default: 'Edit'). Can't be None.
     label_size (int, optional): label font size (Default: 16)
     label_info (bool, optional): include additional info for labels if .html plot (Default: True)
@@ -4119,6 +4121,18 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: t
     stys_order = ['Conserved','Basic','Acidic','Polar','Nonpolar','Complex']
     mark_order = ['D','^','v','<','>','o']
 
+    # Log transform data
+    df[f'log2({FC})'] = [np.log10(FC_val)/np.log10(2) for FC_val in df[FC]]
+    df[f'-log10({pval})'] = [-np.log10(pval_val) for pval_val in df[pval]]
+    
+    # Z-score normalization if specified
+    if z_col is not None and z_var is not None:
+        z_df = df[df[z_col]==z_var]
+        mu = np.mean(z_df[f'log2({FC})'])
+        sigma = np.std(z_df[f'log2({FC})'])
+        df.rename(columns={f'log2({FC})':f'log2({FC})_raw'}, inplace=True)
+        df[f'log2({FC})'] = [(val - mu)/sigma for val in df[f'log2({FC})_raw']]
+
     # Add label info: AA properties for conservation (change to); plus additional info from cBioPortal, UniProt, PhosphoSitePlus, PDB if specified
     df = add_label_info(df=df, label=label, label_size=label_size, label_info=label_info,
                         aa_properties=aa_properties, cBioPortal=cBioPortal, UniProt=UniProt, 
@@ -4133,7 +4147,7 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: t
             if legend_ncol == 1: legend_ncol = 3
 
     # Volcano plot
-    p.vol(df=df, FC=FC, pval=pval, size=size, stys='Change', size_dims=size_dims, label=label, stys_order=stys_order, mark_order=mark_order,
+    p.vol(df=df, FC=FC, pval=pval, size=size, stys='Change', size_dims=size_dims, z_col=z_col, z_var=z_var, label=label, stys_order=stys_order, mark_order=mark_order,
           FC_threshold=FC_threshold, pval_threshold=pval_threshold, file=file, dir=dir, color=color, alpha=alpha, edgecol=edgecol, vertical=vertical,
           figsize=figsize, title=title, title_size=title_size, title_weight=title_weight, title_font=title_font, 
           x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad, x_ticks_size = x_ticks_size, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
@@ -4144,7 +4158,7 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: t
           PDB_pt=PDB_pt,
           **kwargs)
 
-def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size_dims: tuple=None, label: str='Edit', label_size: int=16,
+def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size_dims: tuple=None, z_col: str=None, z_var: str=None, label: str='Edit', label_size: int=16,
         label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None, ss_h: int=None, ss_y: int=None,
         file: str=None, dir: str=None, edgecol: str='black', figsize=(5,5), title: str='', title_size: int=18, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int=9, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
@@ -4162,6 +4176,8 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
     pval (str): p-value column name (size column if not specified)
     size (str | bool, optional): size column name (Default: pval; specify False for no size)
     size_dims (tuple, optional): (minimum,maximum) values in size column (Default: None)
+    z_col (str, optional): find rows with 'z_var' in this column for log2(FC) z-score normalization (Default: None)
+    z_var (str, optional): use rows with 'z_var' for log2(FC) z-score normalization (Default: None)
     label (str, optional): label column name (Default: 'Edit'). Can't be None.
     label_size (int, optional): label font size (Default: 16)
     label_info (bool, optional): include additional info for labels if .html plot (Default: True)
@@ -4231,6 +4247,18 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
     stys_order = ['Conserved','Basic','Acidic','Polar','Nonpolar','Complex']
     mark_order = ['D','^','v','<','>','o']
 
+    # Log transform data
+    df[f'log2({FC})'] = [np.log10(FC_val)/np.log10(2) for FC_val in df[FC]]
+    df[f'-log10({pval})'] = [-np.log10(pval_val) for pval_val in df[pval]]
+    
+    # Z-score normalization if specified
+    if z_col is not None and z_var is not None:
+        z_df = df[df[z_col]==z_var]
+        mu = np.mean(z_df[f'log2({FC})'])
+        sigma = np.std(z_df[f'log2({FC})'])
+        df.rename(columns={f'log2({FC})':f'log2({FC})_raw'}, inplace=True)
+        df[f'log2({FC})'] = [(val - mu)/sigma for val in df[f'log2({FC})_raw']]
+
     # Add label info: AA properties for conservation (change to); plus additional info from cBioPortal, UniProt, PhosphoSitePlus, PDB if specified
     df = add_label_info(df=df, label=label, label_size=label_size, label_info=label_info,
                         aa_properties=aa_properties, cBioPortal=cBioPortal, UniProt=UniProt, 
@@ -4259,10 +4287,6 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
     else:
         is_html = False
 
-    # Log transform data
-    df[f'log2({FC})'] = [np.log10(FC_val)/np.log10(2) for FC_val in df[FC]]
-    df[f'-log10({pval})'] = [-np.log10(pval_val) for pval_val in df[pval]]
-    
     # Organize data by 'pval' or specified 'size' column, typically input abundance
     sizes=(1,100)
     if size in [False,'False','false']: # No size
@@ -4437,7 +4461,7 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
     if return_df:
         return df
 
-def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: str, size: str | bool=None, size_dims: tuple=None, 
+def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: str, size: str | bool=None, size_dims: tuple=None, z_col: str=None, z_var: str=None,
         conservative: bool=True, method: str='pearson', weighted: bool=True, label: str='Edit', label_size: int=16,
         label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None,
         file: str=None, dir: str=None, edgecol: str='black', figsize=(5,5), title: str='', title_size: int=18, title_weight: str='bold', title_font: str='Arial',
@@ -4458,6 +4482,8 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
     pval (str): p-value column name (size column if not specified)
     size (str | bool, optional): size column name (Default: pval; specify False for no size)
     size_dims (tuple, optional): (minimum,maximum) values in size column (Default: None)
+    z_col (str, optional): find rows with 'z_var' in this column for log2(FC) z-score normalization (Default: None)
+    z_var (str, optional): use rows with 'z_var' for log2(FC) z-score normalization (Default: None)
     conservative (bool, optional): use conservative approach for p-value and size column (minimum value, default: True); alternatively, use combined evidence approach (sum values)
     method (str, optional): correlation method (Default: 'pearson'). Options: 'pearson', 'spearman', 'kendall'
     weighted (bool, optional): weighted correlation by size column (Default: True)
@@ -4531,6 +4557,14 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
     # Log transform data
     df[f'log2({FC})'] = [np.log10(FC_val)/np.log10(2) for FC_val in df[FC]]
     df[f'-log10({pval})'] = [-np.log10(pval_val) for pval_val in df[pval]]
+
+    # Z-score normalization if specified
+    if z_col is not None and z_var is not None:
+        z_df = df[df[z_col]==z_var]
+        mu = np.mean(z_df[f'log2({FC})'])
+        sigma = np.std(z_df[f'log2({FC})'])
+        df.rename(columns={f'log2({FC})':f'log2({FC})_raw'}, inplace=True)
+        df[f'log2({FC})'] = [(val - mu)/sigma for val in df[f'log2({FC})_raw']]
 
     # Split dataframe into two conditions for correlation plot
     df1 = df[df[cond_col]==cond_vals[0]].copy()
@@ -4804,7 +4838,7 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
     if return_df:
         return df
 
-def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str, wt_res: int, cutoff_col: str='count_mean_compare', cutoff: float=0, aa: str='aa', label: str='Edit',
+def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str, wt_res: int, cutoff_col: str='count_mean_compare', cutoff: float=0, aa: str='aa', z_col: str=None, z_var: str=None, label: str='Edit',
         file: str=None, dir: str=None, edgecol: str='black', lw: int=1, center: float=0, cmap: str="seismic", cmap_WT: str='forestgreen', cmap_not_WT: str='lightgray', sq: bool=False, 
         cbar: bool=True, cbar_label: str=None, cbar_label_size: int=None, cbar_label_weight: str='bold', cbar_tick_size: int=None, cbar_shrink: float=None, cbar_aspect: int=None, cbar_pad: float=None, cbar_orientation: str=None,
         title: str='', title_size: int=12, title_weight: str='bold', title_font: str='Arial', figsize: tuple = (5, 5), vertical: bool=True,
@@ -4824,6 +4858,8 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str
     cutoff_col (str, optional): comparison count mean column for masking low-abundance values
     cutoff (float, optional): comparison count mean cutoff for masking low-abundance values
     aa (str, optional): AA saturation mutagenesis (Options: 'aa' [default], 'aa_subs', 'aa_ins', 'aa_dels'). The 'aa' option makes all amino acid substitutions ('aa_subs'), +1 amino acid insertions ('aa_ins'), and -1 amino acid deletions ('aa_dels').
+    z_col (str, optional): find rows with 'z_var' in this column for log2(FC) z-score normalization (Default: None)
+    z_var (str, optional): use rows with 'z_var' for log2(FC) z-score normalization (Default: None)
     label (str, optional): label column name (Default: 'Edit'). Can't be None.
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
@@ -4885,6 +4921,17 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str
     
     # Isolate condition dataframe
     df = df[df[cond_col]==cond]
+
+    # Log transform data
+    df[f'log2({FC})'] = [np.log10(FC_val)/np.log10(2) for FC_val in df[FC]]
+
+    # Z-score normalization if specified
+    if z_col is not None and z_var is not None:
+        z_df = df[df[z_col]==z_var]
+        mu = np.mean(z_df[f'log2({FC})'])
+        sigma = np.std(z_df[f'log2({FC})'])
+        df.rename(columns={f'log2({FC})':f'log2({FC})_raw'}, inplace=True)
+        df[f'log2({FC})'] = [(val - mu)/sigma for val in df[f'log2({FC})_raw']]
     
     # Add label info: Before, Number, After, AA properties
     df = add_label_info(df=df, label=label)
@@ -4903,9 +4950,6 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str
 
     else:
         is_html = False
-
-    # Log transform data
-    df[f'log2({FC})'] = [np.log10(FC_val)/np.log10(2) for FC_val in df[FC]]
 
     # Set DMS Before & After
     before_ls = []
