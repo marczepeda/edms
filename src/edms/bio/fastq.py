@@ -4551,6 +4551,7 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
                     on=label, how='inner',
                     suffixes=(f'_{cond_vals[0]}', f'_{cond_vals[1]}'))
         del df1, df2
+    
     df[f'sum(-log10({pval}))'] = df[f'-log10({pval})_{cond_vals[0]}'] + df[f'-log10({pval})_{cond_vals[1]}']
     df[f'min(-log10({pval}))'] = df[[f'-log10({pval})_{cond_vals[0]}', f'-log10({pval})_{cond_vals[1]}']].min(axis=1)
     df[f'magnitude(log2({FC}))'] = [np.sqrt(log2fc_0**2 + log2fc_1**2) for log2fc_0, log2fc_1 in t.zip_cols(df=df, cols=[f'log2({FC})_{cond_vals[0]}',f'log2({FC})_{cond_vals[1]}'])]
@@ -4596,7 +4597,7 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
 
     else:
         if size is None: # default to pval
-            size = f'{min_or_sum}(-log10({pval}))'
+            size = f'-log10({pval})'
 
         if f'{size}_{cond_vals[0]}' in df.columns and f'{size}_{cond_vals[1]}' in df.columns:
             size = f'{min_or_sum}({size})'
@@ -4803,7 +4804,7 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
     if return_df:
         return df
 
-def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str, wt_res: int, cutoff: float=0, aa: str='aa', label: str='Edit',
+def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str, wt_res: int, cutoff_col: str='count_mean_compare', cutoff: float=0, aa: str='aa', label: str='Edit',
         file: str=None, dir: str=None, edgecol: str='black', lw: int=1, center: float=0, cmap: str="seismic", cmap_WT: str='forestgreen', cmap_not_WT: str='lightgray', sq: bool=False, 
         cbar: bool=True, cbar_label: str=None, cbar_label_size: int=None, cbar_label_weight: str='bold', cbar_tick_size: int=None, cbar_shrink: float=None, cbar_aspect: int=None, cbar_pad: float=None, cbar_orientation: str=None,
         title: str='', title_size: int=12, title_weight: str='bold', title_font: str='Arial', figsize: tuple = (5, 5), vertical: bool=True,
@@ -4820,6 +4821,7 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str
     FC (str): fold change column name (values within heatmap after log2 transformation)
     wt_prot (str): WT protein sequence
     wt_res (int): WT protein sequence residue start number
+    cutoff_col (str, optional): comparison count mean column for masking low-abundance values
     cutoff (float, optional): comparison count mean cutoff for masking low-abundance values
     aa (str, optional): AA saturation mutagenesis (Options: 'aa' [default], 'aa_subs', 'aa_ins', 'aa_dels'). The 'aa' option makes all amino acid substitutions ('aa_subs'), +1 amino acid insertions ('aa_ins'), and -1 amino acid deletions ('aa_dels').
     label (str, optional): label column name (Default: 'Edit'). Can't be None.
@@ -4909,16 +4911,17 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str
     before_ls = []
     after_ls = []
 
-    for (before,after) in t.zip_cols(df=df, cols=['Before','After']):
-        if len(before)==1 & len(after)==1: # Substitution
+    for (before,after,edit_type) in t.zip_cols(df=df, cols=['Before','After','Edit_type']):
+        
+        if len(before)==1 and len(after)==1: # Substitution
             before_ls.append(before)
             after_ls.append(after)
 
-        elif len(before)==1 & len(after)>1: # Insertion
+        elif len(before)==1 and len(after)>1: # Insertion
             before_ls.append(before)
             after_ls.append(f"ins{after[1:]}")
-
-        elif len(before)>1 & len(after)==1: # Deletion
+        
+        elif len(before)>1 and len(after)==1: # Deletion
             before_ls.append(before[:-1])
             if before_ls[-1]==before[0]:
                 after_ls.append("del")
@@ -4928,7 +4931,7 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str
         else: # Complex (multiple changes)
             before_ls.append(before)
             after_ls.append(after)
-    
+            
     df['DMS_Before'] = before_ls
     df['DMS_After'] = after_ls
 
@@ -4976,7 +4979,7 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str
                 if df_temp3.empty == False: # Present
                     log2FC_ls.append(df_temp3[f'log2({FC})'].to_list()[0])
                     #label_ls.append(df_temp3[label].to_list()[0])
-                    comparison_count_mean_ls.append(df_temp3['count_mean_compare'].to_list()[0])
+                    comparison_count_mean_ls.append(df_temp3[cutoff_col].to_list()[0])
 
                     if df_temp3.shape[0]>1:
                         print(f"Warning: Multiple entries found for {wt_prot[num-wt_res]}{num}{DMS_after} in condition {cond}. Using first entry.")
@@ -4988,7 +4991,7 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str
 
             vals[f'log2({FC})']=log2FC_ls
             #vals[label]=label_ls
-            vals['count_mean_compare']=comparison_count_mean_ls
+            vals[cutoff_col]=comparison_count_mean_ls
             df_ls.append(pd.DataFrame(vals))
 
         return pd.concat(df_ls, ignore_index=True)
@@ -5019,7 +5022,7 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str
 
     df2_log2FC = pd.pivot(df2, columns='AA Number', index='DMS_After', values=f'log2({FC})').astype(float).reindex(index)
     #df2_label = pd.pivot(df2, columns='AA Number', index='DMS_After', values=label).astype(str).reindex(index)
-    df2_compare_count_mean = pd.pivot(df2, columns='AA Number', index='DMS_After', values='count_mean_compare').astype(float).reindex(index)
+    df2_compare_count_mean = pd.pivot(df2, columns='AA Number', index='DMS_After', values=cutoff_col).astype(float).reindex(index)
 
     # Mask values below cutoff & WT
     mask_not_WT = np.zeros(df2_log2FC.shape, dtype=bool)

@@ -1928,7 +1928,7 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str 
                                 bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol)
         
         # with labels
-        if label is not None:
+        if label is not None and display_labels is not None:
             if display_labels in ['FC & p-value', 'FC', 'p-value', 'NS']:
                 df_signif = df[df['Significance'] == display_labels]
             elif display_labels == 'all':
