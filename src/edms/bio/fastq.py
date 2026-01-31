@@ -3789,7 +3789,7 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
 
 # Plot methods
 def cat(typ: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list = None, cats_exclude: list|str = None, cols: str=None, cols_ord: list=None, cols_exclude: list|str=None, PDB_pt: str=None,
-        file: str=None, dir: str=None, palette_or_cmap: str='colorblind', edgecol: str='black', lw: int=1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
+        file: str=None, dir: str=None, palette_or_cmap: str='colorblind', alpha: float=1.0, dodge: bool=True, jitter: bool=True, size: float=5, edgecol: str='black', lw: int=1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
         figsize: tuple = (5, 5), title: str='', title_size: int=18, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_scale: str='linear', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int=9, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_scale: str='linear', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int=9, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
@@ -3814,6 +3814,10 @@ def cat(typ: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list =
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     palette_or_cmap (str, optional): seaborn color palette or matplotlib color map
+    alpha (float, optional): Alpha (transparency) for scatter points (0 to 1)
+    dodge (bool, optional): whether to separate points by color category
+    jitter (bool, optional): whether to add jitter to points (for strip plots)
+    size (float, optional): Marker size for scatter points
     edgecol (str, optional): point edge color
     lw (int, optional): line width
     errorbar (str, optional): error bar type (sd)
@@ -3900,7 +3904,7 @@ def cat(typ: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list =
                     break
 
     p.cat(typ=typ,df=df,x=x,y=y,cats_ord=cats_ord,cats_exclude=cats_exclude,cols=cols,cols_ord=cols_ord,cols_exclude=cols_exclude,PDB_pt=PDB_pt,
-          file=file,dir=dir,palette_or_cmap=palette_or_cmap,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
+          file=file,dir=dir,palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
           figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
           x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_axis_pad=x_axis_pad,x_ticks_size=x_ticks_size,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,x_ticks=x_ticks,
           y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_scale=y_axis_scale,y_axis_dims=y_axis_dims,y_axis_pad=y_axis_pad,y_ticks_size=y_ticks_size,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,y_ticks=y_ticks,
@@ -4955,7 +4959,7 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str
     before_ls = []
     after_ls = []
 
-    for (before,after,edit_type) in t.zip_cols(df=df, cols=['Before','After','Edit_type']):
+    for (before,after) in t.zip_cols(df=df, cols=['Before','After']):
         
         if len(before)==1 and len(after)==1: # Substitution
             before_ls.append(before)

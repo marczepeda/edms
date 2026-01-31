@@ -92,6 +92,7 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
     subparser.add_argument("-f", "--file", help="Output file name", type=str, required=False, default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_scat.png')
     if fastq_torn_parser == False and fastq_corr_parser == False:
         subparser.add_argument("-pc", "--palette_or_cmap", type=str, default="colorblind", help="Seaborn palette or matplotlib colormap")
+        subparser.add_argument('-a', "--alpha", type=float, default=1, help="Alpha (transparency) for scatter points (0 to 1)")
     subparser.add_argument("-ec", "--edgecol", type=str, default="black", help="Edge color for scatter points")
 
     # Figure appearance
@@ -173,6 +174,10 @@ def add_common_plot_cat_args(subparser, fastq_parser=False):
     subparser.add_argument("-o", "--dir", type=str, help="Output directory", default='./out')
     subparser.add_argument("-f", "--file", type=str, help="Output filename", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_cat.png')
     subparser.add_argument("-pc", "--palette_or_cmap", type=str, default="colorblind", help="Seaborn color palette or matplotlib colormap")
+    subparser.add_argument('-a', "--alpha", type=float, default=1, help="Alpha (transparency) for scatter points (0 to 1)")
+    subparser.add_argument("-do", "--dodge", action='store_false', default=False, help="Separate points by color category")
+    subparser.add_argument("-nj", "--no_jitter", dest="jitter", action='store_false', default=True, help="Don't add jitter for points in strip plots")
+    subparser.add_argument("-ms", "--size", type=int, default=5, help="Marker size for scatter points")
     subparser.add_argument("-ec", "--edgecol", type=str, default="black", help="Edge color for markers")
 
     # Error bar and style options
@@ -697,6 +702,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_stat_compare.add_argument("-V","--var", type=str, help="Variable column name",required=True)
     parser_stat_compare.add_argument("-n","--count", type=str, help="Count column name",required=True)
     parser_stat_compare.add_argument("-p","--pseudocount", type=int, default=1, help="Pseudocount to avoid log(0) or divide-by-zero errors")
+    parser_stat_compare.add_argument("-r","--replicate", type=str, help="Replicate column name (use pairwise comparisons instead of aggregate)", default=argparse.SUPPRESS)
     parser_stat_compare.add_argument("-a","--alternative", type=str, default="two-sided", choices=["two-sided", "less", "greater"], help="Alternative hypothesis for Fisher's exact test (Default: two-sided)")
     parser_stat_compare.add_argument("-o", "--dir", type=str, help="Output directory (Default: ../out)",default='../out')
     parser_stat_compare.add_argument("-f", "--file", type=str, help="Output file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_compare.csv')

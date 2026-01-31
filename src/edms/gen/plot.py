@@ -795,7 +795,7 @@ def repeat_palette_cmap(palette_or_cmap: str, repeats: int):
 # Graph methods
 def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, cols_ord: list = None, cols_exclude: list | str = None, 
          stys: str = None, stys_order: list = [], mark_order: list = [], label: str | None = None,
-         file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', edgecol: str = 'black',
+         file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', alpha: float = 1.0, edgecol: str = 'black',
          figsize: tuple = (5, 5), title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial',
          x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 9, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
          y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 9, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
@@ -820,6 +820,7 @@ def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, col
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     palette_or_cmap (str, optional): seaborn color palette or matplotlib color map
+    alpha (float, optional): Alpha (transparency) for scatter points (0 to 1)
     edgecol (str, optional): point edge color
     figsize (tuple, optional): figure size
     title (str, optional): plot title
@@ -892,38 +893,38 @@ def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, col
     fig, ax = plt.subplots(figsize=figsize)
     
     if cols is not None and stys is not None:
-        if typ=='scat': sns.scatterplot(data=df, x=x, y=y, hue=cols, hue_order=cols_ord, style=stys, style_order=stys_order, markers=mark_order, edgecolor=edgecol, palette=palette, ax=ax, **kwargs)
+        if typ=='scat': sns.scatterplot(data=df, x=x, y=y, hue=cols, hue_order=cols_ord, style=stys, style_order=stys_order, markers=mark_order, edgecolor=edgecol, alpha=alpha, palette=palette, ax=ax, **kwargs)
         elif typ=='line': sns.lineplot(data=df, x=x, y=y, hue=cols, hue_order=cols_ord, style=stys, style_order=stys_order, markers=mark_order, palette=palette, ax=ax, **kwargs)
         elif typ=='line_scat':
             sns.lineplot(data=df, x=x, y=y, hue=cols, hue_order=cols_ord, style=stys, style_order=stys_order, markers=mark_order, palette=palette, ax=ax, **kwargs)  
-            sns.scatterplot(data=df, x=x, y=y, hue=cols, hue_order=cols_ord, style=stys, style_order=stys_order, markers=mark_order, edgecolor=edgecol, palette=palette, ax=ax, **kwargs)
+            sns.scatterplot(data=df, x=x, y=y, hue=cols, hue_order=cols_ord, style=stys, style_order=stys_order, markers=mark_order, edgecolor=edgecol, alpha=alpha, palette=palette, ax=ax, **kwargs)
         else:
             print("Invalid type! scat, line, or line_scat")
             return
     elif cols is not None:
-        if typ=='scat': sns.scatterplot(data=df, x=x, y=y, hue=cols, hue_order=cols_ord, edgecolor=edgecol, palette=palette, ax=ax, **kwargs)
+        if typ=='scat': sns.scatterplot(data=df, x=x, y=y, hue=cols, hue_order=cols_ord, edgecolor=edgecol, alpha=alpha, palette=palette, ax=ax, **kwargs)
         elif typ=='line': sns.lineplot(data=df, x=x, y=y, hue=cols, hue_order=cols_ord, ax=ax, palette=palette, **kwargs)
         elif typ=='line_scat':
             sns.lineplot(data=df, x=x, y=y, hue=cols, hue_order=cols_ord, palette=palette, ax=ax, **kwargs)  
-            sns.scatterplot(data=df, x=x, y=y, hue=cols, hue_order=cols_ord, edgecolor=edgecol, palette=palette, ax=ax, **kwargs)
+            sns.scatterplot(data=df, x=x, y=y, hue=cols, hue_order=cols_ord, edgecolor=edgecol, alpha=alpha, palette=palette, ax=ax, **kwargs)
         else:
             print("Invalid type! scat, line, or line_scat")
             return
     elif stys is not None:
-        if typ=='scat': sns.scatterplot(data=df, x=x, y=y, style=stys, style_order=stys_order, markers=mark_order,  edgecolor=edgecol, palette=palette, ax=ax, **kwargs)
+        if typ=='scat': sns.scatterplot(data=df, x=x, y=y, style=stys, style_order=stys_order, markers=mark_order,  edgecolor=edgecol, palette=palette, alpha=alpha, ax=ax, **kwargs)
         elif typ=='line': sns.lineplot(data=df, x=x, y=y, style=stys, style_order=stys_order, markers=mark_order, palette=palette, ax=ax, **kwargs)
         elif typ=='line_scat':
             sns.lineplot(data=df, x=x, y=y, style=stys, style_order=stys_order, markers=mark_order, palette=palette, ax=ax, **kwargs)  
-            sns.scatterplot(data=df, x=x, y=y, style=stys, style_order=stys_order, markers=mark_order, edgecolor=edgecol, palette=palette, ax=ax, **kwargs)
+            sns.scatterplot(data=df, x=x, y=y, style=stys, style_order=stys_order, markers=mark_order, edgecolor=edgecol, palette=palette, alpha=alpha, ax=ax, **kwargs)
         else:
             print("Invalid type! scat, line, or line_scat")
             return
     else:
-        if typ=='scat': sns.scatterplot(data=df, x=x, y=y, edgecolor=edgecol, palette=palette, ax=ax, **kwargs)
+        if typ=='scat': sns.scatterplot(data=df, x=x, y=y, edgecolor=edgecol, palette=palette, alpha=alpha, ax=ax, **kwargs)
         elif typ=='line': sns.lineplot(data=df, x=x, y=y, palette=palette, ax=ax, **kwargs)
         elif typ=='line_scat':
             sns.lineplot(data=df, x=x, y=y, palette=palette, ax=ax, **kwargs)  
-            sns.scatterplot(data=df, x=x, y=y, edgecolor=edgecol, palette=palette, ax=ax, **kwargs)
+            sns.scatterplot(data=df, x=x, y=y, edgecolor=edgecol, palette=palette, alpha=alpha, ax=ax, **kwargs)
         else:
             print("Invalid type! scat, line, or line_scat")
             return
@@ -976,7 +977,7 @@ def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, col
               dpi=dpi, show=show, space_capitalize=space_capitalize, icon='scatter')
 
 def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: list = None, cats_exclude: list|str = None, cols: str = None, cols_ord: list = None, cols_exclude: list | str = None,
-        file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
+        file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', alpha: float = 1.0, dodge: bool = False, jitter: bool = True, size: float = 5, edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
         figsize: tuple = (5, 5), title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial',
         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 9, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 9, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
@@ -999,6 +1000,10 @@ def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: li
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     palette_or_cmap (str, optional): seaborn color palette or matplotlib color map
+    alpha (float, optional): Alpha (transparency) for scatter points (0 to 1)
+    dodge (bool, optional): whether to separate points by color category
+    jitter (bool, optional): whether to add jitter to points (for strip plots)
+    size (float, optional): Marker size for scatter points
     edgecol (str, optional): point edge color
     lw (int, optional): line width
     errorbar (str, optional): error bar type (sd)
@@ -1112,8 +1117,8 @@ def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: li
         if typ=='bar': sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
         elif typ=='box': sns.boxplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, linewidth=lw, palette=palette, ax=ax, **kwargs)
         elif typ=='violin': sns.violinplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
-        elif typ=='swarm': sns.swarmplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, dodge=True, palette=palette, ax=ax, **kwargs)
-        elif typ=='strip': sns.stripplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, dodge=True, palette=palette, ax=ax, **kwargs)
+        elif typ=='swarm': sns.swarmplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, size=size, palette=palette, ax=ax, **kwargs)
+        elif typ=='strip': sns.stripplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, size=size, palette=palette, ax=ax, **kwargs)
         elif typ=='point': sns.pointplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, err_kws={'linewidth':errwid}, capsize=errcap, hue=cols, hue_order=cols_ord, palette=palette, ax=ax, **kwargs)
         elif typ=='count': 
             if (x!='')&(y!=''):
@@ -1126,22 +1131,22 @@ def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: li
                 return
         elif typ=='bar_strip':
             sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
-            sns.stripplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, dodge=True, palette=palette, ax=ax, **kwargs)
+            sns.stripplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, size=size, palette=palette, ax=ax, **kwargs)
         elif typ=='box_strip':
             sns.boxplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, linewidth=lw, palette=palette, ax=ax, **kwargs)
-            sns.stripplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, dodge=True, palette=palette, ax=ax, **kwargs)
+            sns.stripplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, size=size, palette=palette, ax=ax, **kwargs)
         elif typ=='violin_strip':
             sns.violinplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
-            sns.stripplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, dodge=True, palette=palette, ax=ax, **kwargs)
+            sns.stripplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, size=size, palette=palette, ax=ax, **kwargs)
         elif typ=='bar_swarm':
             sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
-            sns.swarmplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, dodge=True, palette=palette, ax=ax, **kwargs)
+            sns.swarmplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, size=size, palette=palette, ax=ax, **kwargs)
         elif typ=='box_swarm':
             sns.boxplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, linewidth=lw, palette=palette, ax=ax, **kwargs)
-            sns.swarmplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, dodge=True, palette=palette, ax=ax, **kwargs)
+            sns.swarmplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, size=size, palette=palette, ax=ax, **kwargs)
         elif typ=='violin_swarm':
             sns.violinplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
-            sns.swarmplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, dodge=True, palette=palette, ax=ax, **kwargs)
+            sns.swarmplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, size=size, palette=palette, ax=ax, **kwargs)
         else:
             print('Invalid type! bar, box, violin, swarm, strip, point, count, bar_strip, box_strip, violin_strip, bar_swarm, box_swarm, violin_swarm')
             return
@@ -1151,8 +1156,8 @@ def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: li
         if typ=='bar': sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
         elif typ=='box': sns.boxplot(data=df, x=x, y=y, order=cats_ord, linewidth=lw, ax=ax, palette=palette, **kwargs)
         elif typ=='violin': sns.violinplot(data=df, x=x, y=y, order=cats_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
-        elif typ=='swarm': sns.swarmplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, linewidth=lw, dodge=True, palette=palette, ax=ax, **kwargs)
-        elif typ=='strip': sns.stripplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
+        elif typ=='swarm': sns.swarmplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, size=size, palette=palette, ax=ax, **kwargs)
+        elif typ=='strip': sns.stripplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, size=size, palette=palette, ax=ax, **kwargs)
         elif typ=='point': sns.pointplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, err_kws={'linewidth':errwid}, capsize=errcap, palette=palette, ax=ax, **kwargs)
         elif typ=='count': 
             if (x!='')&(y!=''):
@@ -1165,22 +1170,22 @@ def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: li
                 return
         elif typ=='bar_strip':
             sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
-            sns.stripplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
+            sns.stripplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, size=size, palette=palette, ax=ax, **kwargs)
         elif typ=='box_strip':
             sns.boxplot(data=df, x=x, y=y, order=cats_ord, linewidth=lw, ax=ax, **kwargs)
-            sns.stripplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
+            sns.stripplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, size=size, palette=palette, ax=ax, **kwargs)
         elif typ=='violin_strip':
             sns.violinplot(data=df, x=x, y=y, order=cats_ord, edgecolor=edgecol, linewidth=lw, ax=ax, palette=palette, **kwargs)
-            sns.stripplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, linewidth=lw, ax=ax, palette=palette, **kwargs)
+            sns.stripplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, size=size, palette=palette, ax=ax, **kwargs)
         elif typ=='bar_swarm':
             sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
-            sns.swarmplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
+            sns.swarmplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, size=size, palette=palette, ax=ax, **kwargs)
         elif typ=='box_swarm':
             sns.boxplot(data=df, x=x, y=y, order=cats_ord, linewidth=lw, palette=palette, ax=ax, **kwargs)
-            sns.swarmplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
+            sns.swarmplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, size=size, palette=palette, ax=ax, **kwargs)
         elif typ=='violin_swarm':
             sns.violinplot(data=df, x=x, y=y, order=cats_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
-            sns.swarmplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
+            sns.swarmplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, size=size, palette=palette, ax=ax, **kwargs)
         else:
             print('Invalid type! bar, box, violin, swarm, strip, point, count, bar_strip, box_strip, violin_strip, bar_swarm, box_swarm, violin_swarm')
             return
