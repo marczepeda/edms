@@ -715,7 +715,7 @@ def perform_alignments(align_col: str, out_dir: str, fastq_name: str, fastq_df_r
         found_exact = False 
         for i,ref in enumerate(fastq_df_ref[align_col]): # Iterate though reference sequences (exact matches)
             if str(ref) == str(seq[0:len(ref)]): # Exact match
-                aligned_i = aligner.align(ref, seq[0:len(ref)])[0].aligned[0] # trim ngs sequence to reference sequence & align
+                aligned_i = aligner.align(ref.upper(), seq[0:len(ref)].upper())[0].aligned[0] # trim ngs sequence to reference sequence & align
                 ref_i = fastq_df_ref.iloc[i][align_col]
                 dc_alignments[ref_i] = dc_alignments[ref_i]+1
                 dc_aligned_reads[ref_i].append(s)
@@ -729,7 +729,7 @@ def perform_alignments(align_col: str, out_dir: str, fastq_name: str, fastq_df_r
                 seq_alignments_aligned = []
 
                 for ref in fastq_df_ref[align_col]: # Iterate though reference sequences
-                    seq_alignment = aligner.align(ref, seq[0:len(ref)]) # trim ngs sequence to reference sequence & align
+                    seq_alignment = aligner.align(ref.upper(), seq[0:len(ref)].upper()) # trim ngs sequence to reference sequence & align
                     seq_alignments_scores.append(seq_alignment[0].score) # Save highest alignment score
                     seq_alignments_aligned.append(seq_alignment[0].aligned[0]) # Save alignment matches
 
@@ -1771,7 +1771,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
 
             else: # Found region
                 # Alignment & Signature
-                alignment = aligner.align(Seq(ref_seq),Seq(read_seq))[0]
+                alignment = aligner.align(Seq(ref_seq.upper()),Seq(read_seq.upper()))[0]
                 signature = signature_from_alignment(ref_seq=ref_seq,
                                                      query_seq=read_seq,
                                                      alignment=alignment)
@@ -2291,7 +2291,7 @@ def find_indel(wt:str|Seq, mut:str|Seq, res: int, show:bool=False,
     aligner.extend_gap_score = extend_gap_score  # Penalty for extending a gap; applied to both strands
 
     # Get the best protein alignment
-    alignment = aligner.align(Seq(trim(wt)).translate(),Seq(trim(mut)).translate())[0]
+    alignment = aligner.align(Seq(trim(wt.upper())).translate(),Seq(trim(mut.upper())).translate())[0]
     mid = format_alignment(alignment[0], alignment[1], show=show, return_alignment=False) # Just get the middle alignment
 
     if len(mut)%3!=0: # Frameshift Indel

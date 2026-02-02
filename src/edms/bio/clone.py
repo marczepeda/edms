@@ -756,7 +756,7 @@ def off_targets(df: pd.DataFrame | str, col: str, match_score: float = 2, mismat
         seq_alignments_aligned = []
         for ref in seqs: # Iterate though reference sequences
             if ref != seq:
-                seq_alignment = aligner.align(seq,ref) # trim ngs sequence to reference sequence & align
+                seq_alignment = aligner.align(seq.upper(),ref.upper()) # trim ngs sequence to reference sequence & align
                 seq_alignments_scores.append(seq_alignment[0].score) # Save highest alignment score
                 seq_alignments_aligned.append(seq_alignment.sequences[1]) # Save alignment matches
             else: # Skip self-alignment

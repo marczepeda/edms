@@ -1585,7 +1585,7 @@ def pegRNA_signature(pegRNAs: pd.DataFrame | str, config_key: str=None,
             edit_seq = edit_seq[edit_seq.find(flank5_sequence)+len(flank5_sequence)-flank5_length : edit_seq.rfind(flank3_sequence)+flank3_length]
 
         # Create and append alignment
-        alignment = aligner.align(Seq(reference_seq), Seq(edit_seq))[0]
+        alignment = aligner.align(Seq(reference_seq.upper()), Seq(edit_seq.upper()))[0]
         aligments_list.append(alignment)
 
         # Create and append signature
@@ -1780,7 +1780,7 @@ def group_pe(df: pd.DataFrame, other_cols: list, epegRNA_id_col: str='epegRNA', 
                 RTT_alignments = []
                 RTT_alignments_mismatches = []
                 for other_epegRNA_RTT in df_others[epegRNA_RTT_col]:
-                    RTT_alignment = aligner.align(epegRNA_RTT,other_epegRNA_RTT)[0]
+                    RTT_alignment = aligner.align(epegRNA_RTT.upper(),other_epegRNA_RTT.upper())[0]
                     RTT_alignments.append(RTT_alignment)
                     RTT_alignments_mismatches.append(int(len(epegRNA_RTT)-RTT_alignment.score))
                 df_others['RTT_alignment'] = RTT_alignments
