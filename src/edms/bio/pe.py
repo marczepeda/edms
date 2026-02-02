@@ -1589,7 +1589,7 @@ def pegRNA_signature(pegRNAs: pd.DataFrame | str, config_key: str=None,
         aligments_list.append(alignment)
 
         # Create and append signature
-        signatures_list.append(signature_from_alignment(ref_seq=reference_seq, query_seq=edit_seq, alignment=alignment))
+        signatures_list.append(signature_from_alignment(ref_seq=reference_seq.upper(), query_seq=edit_seq.upper(), alignment=alignment))
 
     # Create Alignment and Signature columns
     pegRNAs['Alignment'] = aligments_list

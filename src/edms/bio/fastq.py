@@ -1772,8 +1772,8 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
             else: # Found region
                 # Alignment & Signature
                 alignment = aligner.align(Seq(ref_seq.upper()),Seq(read_seq.upper()))[0]
-                signature = signature_from_alignment(ref_seq=ref_seq,
-                                                     query_seq=read_seq,
+                signature = signature_from_alignment(ref_seq=ref_seq.upper(),
+                                                     query_seq=read_seq.upper(),
                                                      alignment=alignment)
                 if save_alignments==True: alignment_ls.append(alignment)
                 signature_ls.append(signature)
