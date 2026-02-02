@@ -60,7 +60,7 @@ def mutations(df: pd.DataFrame | str, dir:str=None, file:str=None) -> pd.DataFra
 
     # Save & return dataframe
     if dir is not None and file is not None:
-        io.save(dir=dir,file=file,obj=df) 
+        io.save(obj=df, dir=dir, file=file) 
     return df
 
 def prevalence(df: pd.DataFrame) -> list:
@@ -173,7 +173,7 @@ def priority_muts(pegRNAs_shared: pd.DataFrame, df_cosmic: str, dir:str=None, fi
 
     # Save & return shared sequences library dataframe
     if dir is not None and file is not None:
-        io.save(dir=dir,file=file,obj=pegRNAs_shared) 
+        io.save(obj=pegRNAs_shared, dir=dir, file=file) 
     return pegRNAs_shared
 
 def priority_edits(pegRNAs: pd.DataFrame | str, pegRNAs_shared: pd.DataFrame | str, df_cosmic: pd.DataFrame | str, 
@@ -211,7 +211,7 @@ def priority_edits(pegRNAs: pd.DataFrame | str, pegRNAs_shared: pd.DataFrame | s
     
     # Save & return pegRNAs priority dataframe
     if dir is not None and file is not None:
-        io.save(dir=dir,file=file,obj=pegRNAs_priority) 
+        io.save(obj=pegRNAs_priority, dir=dir, file=file) 
     return pegRNAs_priority
 
 # Base & prime editing accessible mutations
@@ -272,9 +272,9 @@ def editor_mutations(df_cosmic: pd.DataFrame | str, df_bescan: pd.DataFrame | st
     df_bescan2['CBE_COMSIC']= [cbe_cosmic_list]
     df_bescan2['BE_COMSIC']= [be_cosmic_list]
     if out_dir is not None:
-        io.save(dir=out_dir,
-                file=f"{df_bescan.iloc[0]['gene']}_BE_COSMIC.csv",
-                obj=df_bescan2)
+        io.save(obj=df_bescan2,
+                dir=out_dir,
+                file=f"{df_bescan.iloc[0]['gene']}_BE_COSMIC.csv")
 
 
     # Quantify BE and PE COSMIC mutations 
@@ -295,12 +295,12 @@ def editor_mutations(df_cosmic: pd.DataFrame | str, df_bescan: pd.DataFrame | st
     df_editor_cosmic['gene']=df_bescan.iloc[0]['gene']
     
     if out_dir is not None:
-        io.save(dir=out_dir,
-                file=f"{df_bescan.iloc[0]['gene']}_COSMIC_types.csv",
-                obj=cosmic_nodup_change_type.reset_index(drop=False))
-        io.save(dir=out_dir,
-                file=f"{df_bescan.iloc[0]['gene']}_editor_COSMIC.csv",
-                obj=df_editor_cosmic)
+        io.save(obj=cosmic_nodup_change_type.reset_index(drop=False),
+                dir=out_dir,
+                file=f"{df_bescan.iloc[0]['gene']}_COSMIC_types.csv")
+        io.save(obj=df_editor_cosmic,
+                dir=out_dir,
+                file=f"{df_bescan.iloc[0]['gene']}_editor_COSMIC.csv")
 
         p.stack(df=df_editor_cosmic,x='gene',y='fraction',cols='mutation',
                 cols_ord=['Substitution (ABE/CBE)','Substitution (PE)','Indel (PE)','Complex'],

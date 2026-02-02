@@ -73,7 +73,7 @@ def describe(df: pd.DataFrame | str, cols:list=[], group:str='', dir:str=None, f
 
     # Save & return descriptive statistics
     if dir is not None and file is not None:
-        io.save(dir=dir,file=file,obj=descriptive)  
+        io.save(obj=descriptive, dir=dir, file=file)  
     return descriptive
 
 def difference(df: pd.DataFrame | str, data_col: str, compare_col: str, compare: list,
@@ -245,7 +245,7 @@ def difference(df: pd.DataFrame | str, data_col: str, compare_col: str, compare:
     
     # Save & return descriptive statistics
     if dir is not None and file is not None:
-        io.save(dir=dir,file=file,obj=inference)  
+        io.save(obj=inference, dir=dir, file=file)  
     return inference
 
 def correlation(df: pd.DataFrame | str, var_cols: list=[], value_cols: list=[], method: str='pearson', numeric_only: bool=True,
@@ -279,7 +279,7 @@ def correlation(df: pd.DataFrame | str, var_cols: list=[], value_cols: list=[], 
     if plot == True:
         p.heat(df=df_corr, cbar_label=method, dir=dir, file=file_plot, **kwargs_plot)
     if dir is not None and file_data is not None:
-        io.save(dir=dir,file=file_data,obj=df_corr,id=True)
+        io.save(obj=df_corr, dir=dir, file=file_data, id=True)
     return df_corr
 
 def weighted_correlation(df: pd.DataFrame | str, x: str, y: str, weight: str=None,
@@ -612,7 +612,7 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str,
         
     # Save & return statistics dataframe
     if dir is not None and file is not None:
-        io.save(dir=dir,file=file,obj=df_stat) 
+        io.save(obj=df_stat, dir=dir, file=file) 
     return df_stat
 
 def odds_ratio(df: pd.DataFrame | str, cond: str, cond_comp: str, 
@@ -732,7 +732,7 @@ def odds_ratio(df: pd.DataFrame | str, cond: str, cond_comp: str,
     
     # Save & return statistics dataframe
     if dir is not None and file is not None:
-        io.save(dir=dir,file=file,obj=df_stat) 
+        io.save(obj=df_stat, dir=dir, file=file) 
     return df_stat
 
 def zscore(
@@ -803,5 +803,5 @@ def zscore(
     
     # Save & return dataframe
     if dir is not None and file is not None:
-        io.save(dir=dir,file=file,obj=out)  
+        io.save(obj=out, dir=dir, file=file)  
     return out

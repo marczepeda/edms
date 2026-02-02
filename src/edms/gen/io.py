@@ -100,20 +100,27 @@ def get(pt: str, literal_eval:bool=False, **kwargs) -> pd.DataFrame | dict[pd.Da
     '''
     suf = pt.split('.')[-1]
     if suf=='csv': 
-        if literal_eval: return df_try_parse(pd.read_csv(filepath_or_buffer=pt,sep=',',**kwargs))
-        else: return pd.read_csv(filepath_or_buffer=pt,sep=',',**kwargs)
+        if literal_eval: df = df_try_parse(pd.read_csv(filepath_or_buffer=pt,sep=',',**kwargs))
+        else: df = pd.read_csv(filepath_or_buffer=pt,sep=',',**kwargs)
+        print(f"CSV file: {pt}\nColumns: {', '.join([col for col in df.columns])}")
+        return df
+
     elif suf=='tsv': 
-        if literal_eval: return df_try_parse(pd.read_csv(filepath_or_buffer=pt,sep='\t',**kwargs))
-        else: return pd.read_csv(filepath_or_buffer=pt,sep='\t',**kwargs)
+        if literal_eval: df = df_try_parse(pd.read_csv(filepath_or_buffer=pt,sep='\t',**kwargs))
+        else: df = pd.read_csv(filepath_or_buffer=pt,sep='\t',**kwargs)
+        print(f"TSV file: {pt}\nColumns: {', '.join([col for col in df.columns])}")
+        return df
+
     elif suf=='xlsx': 
-        if literal_eval: 
-            dc = {sheet_name:df_try_parse(pd.read_excel(pt,sheet_name,**kwargs))
-                                 for sheet_name in pd.ExcelFile(pt).sheet_names}
-        else: 
-            dc = {sheet_name:pd.read_excel(pt,sheet_name,**kwargs)
-                                 for sheet_name in pd.ExcelFile(pt).sheet_names}
+        if literal_eval: dc = {sheet_name: df_try_parse(pd.read_excel(pt,sheet_name,**kwargs))
+                                for sheet_name in pd.ExcelFile(pt).sheet_names}
+        else: dc = {sheet_name: pd.read_excel(pt,sheet_name,**kwargs)
+                                for sheet_name in pd.ExcelFile(pt).sheet_names}
         print(f"Excel file: {pt}\nKeys: {', '.join([key for key in dc.keys()])}")
+        for key,df in dc.items():
+            print(f"Key: {key}\nColumns: {', '.join([col for col in df.columns])}")
         return dc
+
     elif suf=='html': 
         if literal_eval: return df_try_parse(pd.read_html(pt,**kwargs))
         else: return pd.read_html(pt,**kwargs)
@@ -138,23 +145,33 @@ def get_dir(dir: str, suf: str='.csv', literal_eval: bool=False, **kwargs) -> di
     files = [file for file in os.listdir(dir) if file[-len(suf):]==suf]
     dc = {file[:-len(suf)]:get(os.path.join(dir,file),literal_eval,**kwargs) for file in files}
     print(f"Directory: {dir}\nKeys: {', '.join([key for key in dc.keys()])}")
+    for key,df in dc.items():
+        print(f"Key: {key}\nColumns: {', '.join([col for col in df.columns])}")
     return dc
 
 # Output
-def save(dir: str, file: str, obj, cols: list=[], id: bool=False, sort: bool=True, **kwargs):
+def save(obj, dir: str, file: str=None, cols: list=[], id: bool=False, sort: bool=True, **kwargs):
     ''' 
     save(): save .csv file to a specified output directory from obj
     
     Parameters:
-    dir (str): output directory path
-    file (str): file name
     obj: dataframe, series, set, or list
+    dir (str): output directory or full path including file name if file is None
+    file (str, optional): file name
     cols (str, list, optional): isolate dataframe column(s)
     id (bool, optional): include dataframe index (False)
     sort (bool, optional): sort set, list, or series before saving (True)
     
     Dependencies: pandas, os, csv & utils.mkdir()
     '''
+    if file is None: # dir is full file path
+        if '/' in dir: # Get directory and file name
+            file = dir.split('/')[-1]
+            dir = '/'.join(dir.split('/')[:-1])
+        else: # Current directory
+            file = dir
+            dir = '.'
+
     mkdir(dir) # Make output directory if it does not exist
 
     if type(obj)==pd.DataFrame:
@@ -195,7 +212,7 @@ def save_dir(dir: str, dc: dict, suf: str='.csv', **kwargs):
 
     Dependencies: pandas, os, csv, & save()
     '''
-    for key,val in dc.items(): save(dir=dir,file=str(key)+suf,obj=val,**kwargs)
+    for key,val in dc.items(): save(obj=val, dir=dir, file=f"{key}{suf}",**kwargs)
 
 # Input/Output
 def excel_csvs(pt: str, dir: str='', **kwargs):

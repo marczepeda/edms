@@ -217,7 +217,7 @@ def savemoney(pt: str, fastq_dir: str='./fastq', fasta_dir: str='./fasta',
     df = pd.DataFrame({'group_name':group_name_ls,
                        'fastq_fname':fastq_fname_ls,
                        'ref_fname':ref_fname_ls})
-    if out_dir is not None and out_file is not None: io.save(dir=out_dir, file=out_file, obj=df)
+    if out_dir is not None and out_file is not None: io.save(obj=df, dir=out_dir, file=out_file)
     if return_df: return df
 
 # Input/Output
@@ -488,18 +488,18 @@ def count_motif(fastq_dir: str, pattern: str, out_dir: str, motif: str="motif",
 
         # Save & append fastq dataframe to final dataframe
         print('Save & append fastq dataframe to final dataframe')
-        io.save(dir=os.path.join(out_dir,motif),file=f'{fastq_name}.csv',obj=reads) # Save checkpoint
+        io.save(obj=reads, dir=os.path.join(out_dir,motif), file=f'{fastq_name}.csv') # Save checkpoint
         df = pd.concat([df,reads]).reset_index(drop=True) # save to final dataframe
     
     # Save & return
     memories.append(memory_timer(task='count_motif()'))
-    io.save(dir=os.path.join(out_dir,f'.count_{motif}'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_stats.csv',
-            obj=pd.DataFrame(stats, columns=['file','reads','reads_w_motif','reads_wo_motif']))
-    io.save(dir=os.path.join(out_dir,f'.count_{motif}'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
-            obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
-    io.save(dir=out_dir,file=f'{motif}.csv',obj=df)
+    io.save(obj=pd.DataFrame(stats, columns=['file','reads','reads_w_motif','reads_wo_motif']),
+            dir=os.path.join(out_dir,f'.count_{motif}'),
+            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_stats.csv')
+    io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
+            dir=os.path.join(out_dir,f'.count_{motif}'),
+            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
+    io.save(obj=df, dir=out_dir, file=f'{motif}.csv')
     if sh == True: io.combine(in_dir=os.path.join(out_dir,f'.count_{motif}'), out_dir=f'./count_{motif}', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
     if return_df: return df # Return dataframe (optional)
 
@@ -545,9 +545,9 @@ def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.pdf',numeri
     
     # ...save (optional)
     if out_dir is not None:
-        io.save(dir=out_dir,file=f"mismatches.csv",obj=df_mismatches)
-        io.save(dir=out_dir,file=f"locations.csv",obj=df_locations)
-        io.save(dir=out_dir,file=f"windows.csv",obj=df_windows)
+        io.save(obj=df_mismatches, dir=out_dir, file=f"mismatches.csv")
+        io.save(obj=df_locations, dir=out_dir, file=f"locations.csv")
+        io.save(obj=df_windows, dir=out_dir, file=f"windows.csv")
 
     # ...define cut() based on cutoff_frac
     def cut(df_vc: pd.DataFrame, col: str, off: bool=True):
@@ -672,7 +672,7 @@ def mismatch_alignments(align_col: str, out_dir: str, fastq_name: str,
     
     # Save & return fastq dataframe
     print('Save & return fastq dataframe')
-    io.save(dir=out_dir,file=f'{fastq_name}.csv',obj=df_fastq)
+    io.save(obj=df_fastq, dir=out_dir, file=f'{fastq_name}.csv')
     if return_df: return df_fastq
 
 def perform_alignments(align_col: str, out_dir: str, fastq_name: str, fastq_df_ref: pd.DataFrame,
@@ -1034,14 +1034,14 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
         
     # Save and return
     memories.append(memory_timer(task='count_region()'))
-    io.save(dir=os.path.join(out_dir,'.count_region'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_stats.csv',
-            obj=pd.DataFrame(stats, columns=['file', 'reads_total', 'reads_processed',
+    io.save(obj=pd.DataFrame(stats, columns=['file', 'reads_total', 'reads_processed',
                                             'reads_w_region', 'reads_wo_motif5', 'reads_wo_motif3', 'reads_w_motif_overlap',
-                                            'reads_processed_fraction', 'reads_w_region_fraction']))
-    io.save(dir=os.path.join(out_dir,'.count_region'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
-            obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+                                            'reads_processed_fraction', 'reads_w_region_fraction']),
+            dir=os.path.join(out_dir,'.count_region'),
+            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_stats.csv')
+    io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
+            dir=os.path.join(out_dir,'.count_region'),
+            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
     if sh == True: io.combine(in_dir=os.path.join(out_dir,'.count_region'), out_dir='./count_region', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
     if return_dc: return fastqs
 
@@ -1199,14 +1199,14 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
 
     # Save and return
     memories.append(memory_timer(task='count_alignments()'))
-    io.save(dir=os.path.join(out_dir,'.count_alignments'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_stats.csv',
-            obj=pd.DataFrame(stats, columns=['file', 'reads_total', 
+    io.save(obj=pd.DataFrame(stats, columns=['file', 'reads_total', 
                                             'reads_processed', 'reads_empty', 'reads_nonempty', 'reads_aligned',
-                                            'reads_processed_fraction', 'reads_empty_fraction', 'reads_nonempty_fraction', 'reads_aligned_fraction']))
-    io.save(dir=os.path.join(out_dir,'.count_alignments'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
-            obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+                                            'reads_processed_fraction', 'reads_empty_fraction', 'reads_nonempty_fraction', 'reads_aligned_fraction']),
+            dir=os.path.join(out_dir,'.count_alignments'),
+            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_stats.csv')
+    io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
+            dir=os.path.join(out_dir,'.count_alignments'),
+            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
     if sh == True: io.combine(in_dir=os.path.join(out_dir,'.count_alignments'), out_dir='./count_alignments', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
     if return_dc: return fastqs
 
@@ -1238,7 +1238,7 @@ def plot_paired(df: pd.DataFrame | str, title: str, out_dir: str,
     paired_regions_alignment_status_df_sum = sum(paired_regions_alignment_status_df['count'])
     paired_regions_alignment_status_df['fraction'] = [count/paired_regions_alignment_status_df_sum for count in paired_regions_alignment_status_df['count']]
     
-    io.save(dir=os.path.join(out_dir, title),file='alignment_status.csv',obj=paired_regions_alignment_status_df)
+    io.save(obj=paired_regions_alignment_status_df, dir=os.path.join(out_dir, title), file='alignment_status.csv')
     
     p.stack(df=paired_regions_alignment_status_df,x='alignment_status',y=y,
             cols=desired_col,cols_ord=[True,False],vertical=False,figsize=(6,2),
@@ -1252,13 +1252,13 @@ def plot_paired(df: pd.DataFrame | str, title: str, out_dir: str,
         else: desired_ID.append('not chimera')
     paired_regions_alignment_distribution_df[id_col] = desired_ID
 
-    io.save(dir=os.path.join(out_dir, title),file='alignment_distribution_per_read.csv',obj=paired_regions_alignment_distribution_df)
+    io.save(obj=paired_regions_alignment_distribution_df, dir=os.path.join(out_dir, title), file='alignment_distribution_per_read.csv')
 
     paired_regions_alignment_distribution_df = paired_regions_alignment_distribution_df[[id_col,desired_col]].value_counts().reset_index()
     paired_regions_alignment_distribution_df_sum = sum(paired_regions_alignment_distribution_df['count'])
     paired_regions_alignment_distribution_df['fraction'] = [count/paired_regions_alignment_distribution_df_sum for count in paired_regions_alignment_distribution_df['count']]
     
-    io.save(dir=os.path.join(out_dir, title),file='alignment_distribution.csv',obj=paired_regions_alignment_distribution_df)
+    io.save(obj=paired_regions_alignment_distribution_df, dir=os.path.join(out_dir, title), file='alignment_distribution.csv')
 
     p.stack(df=paired_regions_alignment_distribution_df,
             x=desired_col,y=y,cols=id_col,palette_or_cmap='Spectral',x_ord=[True,False],vertical=False,
@@ -1379,16 +1379,16 @@ def paired_regions(meta_dir: str, region1_dir: str, region2_dir: str, out_dir: s
 
         # Memory reporting, save, & plot
         memories.append(memory_timer(task=meta_file_name[0:file_name_mismatch_ls[i]]))
-        io.save(dir=out_dir,file=meta_file_name,obj=paired_regions_file_df)
+        io.save(obj=paired_regions_file_df, dir=out_dir, file=meta_file_name)
         plot_paired(df=paired_regions_file_df, title=meta_file_name[0:file_name_mismatch_ls[i]], out_dir=out_dir,
                     id_col=id_col, desired_col=desired_col, y=y, plot_suf=plot_suf, show=show, **plot_kwargs)
         if return_dc: paired_regions_dc[meta_file_name] = paired_regions_file_df
     
     # Save & return
     memories.append(memory_timer(task='paired_regions()'))
-    io.save(dir=os.path.join(out_dir,'.paired_regions'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
-            obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+    io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
+            dir=os.path.join(out_dir,'.paired_regions'),
+            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
     if sh == True: io.combine(in_dir=os.path.join(out_dir,'.paired_regions'), out_dir='./paired_regions', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
     if return_dc: return paired_regions_dc  
 
@@ -1745,20 +1745,20 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
             elif s%align_ckpt==0: # Save checkpoint
                 print(f'{s+1} out of {len(seqs)}')
                 if save_alignments==True:
-                    io.save(dir=os.path.join(out_dir,'Signature'), 
-                            file=f'{fastq_name}.csv',
-                            obj=pd.DataFrame({'Read_i': np.arange(0+align_dims[0],s+align_dims[0]),
+                    io.save(obj=pd.DataFrame({'Read_i': np.arange(0+align_dims[0],s+align_dims[0]),
                                               'Alignment': alignment_ls,
                                               'Signature': signature_ls,
                                               id_col: id_ls,
-                                              edit_col: edit_ls}))
+                                              edit_col: edit_ls}),
+                            dir=os.path.join(out_dir,'Signature'), 
+                            file=f'{fastq_name}.csv')
                 else:
-                    io.save(dir=os.path.join(out_dir,'Signature'), 
-                            file=f'{fastq_name}.csv',
-                            obj=pd.DataFrame({'Read_i': np.arange(0+align_dims[0],s+align_dims[0]),
+                    io.save(obj=pd.DataFrame({'Read_i': np.arange(0+align_dims[0],s+align_dims[0]),
                                               'Signature': signature_ls,
                                               id_col: id_ls,
-                                              edit_col: edit_ls}))
+                                              edit_col: edit_ls}),
+                            dir=os.path.join(out_dir,'Signature'), 
+                            file=f'{fastq_name}.csv')
                 memories.append(memory_timer(task=f"{fastq_name} (alignment/signature {s+1} out of {len(seqs)})"))
 
             # Alignment -> Signature -> Genotype ID
@@ -1831,9 +1831,9 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                                      edit_col: edit_ls,
                                      'Exact_match': exact_ls}) 
         
-        io.save(dir=os.path.join(out_dir,'Signature'), 
-                file=f'{fastq_name}.csv', 
-                obj=df_fastq)
+        io.save(obj=df_fastq,
+                dir=os.path.join(out_dir,'Signature'), 
+                file=f'{fastq_name}.csv')
         memories.append(memory_timer(task=f"{fastq_name} (alignment/signature)"))
 
         # Remove None
@@ -1907,16 +1907,16 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
 
     # Save, plot, and return
     memories.append(memory_timer(task='count_signature()'))
-    io.save(dir=os.path.join(out_dir,'.count_signature'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_stats.csv',
-            obj=pd.DataFrame(stats, columns=['file','reads_total','reads_processed','reads_w_region','reads_wo_motif5','reads_wo_motif3','reads_w_motif_overlap']))
-    io.save(dir=os.path.join(out_dir,'.count_signature'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
-            obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+    io.save(obj=pd.DataFrame(stats, columns=['file','reads_total','reads_processed','reads_w_region','reads_wo_motif5','reads_wo_motif3','reads_w_motif_overlap']),
+            dir=os.path.join(out_dir,'.count_signature'),
+            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_stats.csv')
+    io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
+            dir=os.path.join(out_dir,'.count_signature'),
+            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
     if sh == True: io.combine(in_dir=os.path.join(out_dir,'.count_signature'), out_dir='./count_signature', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
     
-    io.save(dir=out_dir,file=out_file,obj=out_df)
-    io.save(dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}_aggregate.{out_file.split('.')[-1]}",obj=out_df2)
+    io.save(obj=out_df, dir=out_dir, file=out_file)
+    io.save(obj=out_df2, dir=out_dir, file=f"{'.'.join(out_file.split('.')[:-1])}_aggregate.{out_file.split('.')[-1]}")
     stack(df=out_df,x='fastq_file',y='fraction',cols=edit_col,vertical=False,
           palette_or_cmap='tab20',repeats=math.ceil(len(out_df[edit_col].unique())/20),cutoff_group='fastq_file',cutoff_value=0,legend_bbox_to_anchor=(0,-.1),legend_ncol=8,
           figsize=(15,10), title='Edit Outcomes', dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}{plot_suf}", show=show, **plot_kwargs)
@@ -1925,8 +1925,8 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
           figsize=(15,10), title='Edit Outcomes', dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}_aggregate{plot_suf}", show=show, **plot_kwargs)
     
     if n_extra_nt>0:
-        io.save(dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}_wo_{n_extra_nt}_extra_nt.{out_file.split('.')[-1]}",obj=out_df3)
-        io.save(dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}_wo_{n_extra_nt}_extra_nt_aggregate.{out_file.split('.')[-1]}",obj=out_df4)
+        io.save(obj=out_df3, dir=out_dir, file=f"{'.'.join(out_file.split('.')[:-1])}_wo_{n_extra_nt}_extra_nt.{out_file.split('.')[-1]}")
+        io.save(obj=out_df4, dir=out_dir, file=f"{'.'.join(out_file.split('.')[:-1])}_wo_{n_extra_nt}_extra_nt_aggregate.{out_file.split('.')[-1]}")
         stack(df=out_df3,x='fastq_file',y='fraction',cols=edit_col,vertical=False,
             palette_or_cmap='tab20',repeats=math.ceil(len(out_df3[edit_col].unique())/20),cutoff_group='fastq_file',cutoff_value=0,legend_bbox_to_anchor=(0,-.1),legend_ncol=8,
             figsize=(15,10), title='Edit Outcomes', dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}_wo_{n_extra_nt}_extra_nt{plot_suf}", show=show, **plot_kwargs)
@@ -2068,7 +2068,7 @@ def get_fastqs(in_dir: str, qall:int=10, qavg:int=30, qtrim:int=0, qmask:int=0, 
 
     if save==True: 
         if out_dir is None: out_dir = '.'
-        io.save(dir=os.path.join(out_dir,'.genotyping'),file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_get_fastqs.csv',obj=out)
+        io.save(obj=out, dir=os.path.join(out_dir,'.genotyping'), file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_get_fastqs.csv')
     
     if return_memories: return fastqs,memories
     else: return fastqs
@@ -2199,7 +2199,7 @@ def region(fastqs: dict, flank5: str='', flank3: str='', save: bool=True, masks:
     
     if save==True: 
         if out_dir is None: out_dir = '.'
-        io.save(dir=os.path.join(out_dir,'.genotyping'),file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_region.csv',obj=out)
+        io.save(obj=out, dir=os.path.join(out_dir,'.genotyping'), file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_region.csv')
     
     if return_memories: return fastqs_1,memories
     else: return fastqs_1
@@ -2498,7 +2498,7 @@ def genotype(fastqs: dict, res: int, wt: str, save: bool=False, masks: bool=Fals
     
     if save==True: 
         if out_dir is None: out_dir = '.'
-        io.save(dir=os.path.join(out_dir,'.genotyping'),file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_genotype.csv',obj=t.reorder_cols(df=t.join(dc=fastqs,col='fastq_file'),cols=['fastq_file']))
+        io.save(obj=t.reorder_cols(df=t.join(dc=fastqs,col='fastq_file'),cols=['fastq_file']), dir=os.path.join(out_dir,'.genotyping'), file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_genotype.csv')
     
     if return_memories: return fastqs,memories
     else: return fastqs
@@ -2622,12 +2622,12 @@ def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=N
     # Save and return edit outcomes dataframe
     memories.append(memory_timer(task='genotyping()'))
     if out_dir is not None and out_file_prefix is not None: # Save dataframes (optional)
-        io.save(dir=os.path.join(out_dir,'.genotyping'), # memory reporting
-                file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
-                obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+        io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
+                dir=os.path.join(out_dir,'.genotyping'),
+                file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
 
-        io.save(dir=out_dir,file=f'{out_file_prefix}_edit_outcomes.csv',obj=df_edits) # Edit outcomes
-        io.save(dir=out_dir,file=f'{out_file_prefix}_category_outcomes.csv',obj=df_categories) # Edit categoy outcomes
+        io.save(obj=df_edits, dir=out_dir, file=f'{out_file_prefix}_edit_outcomes.csv') # Edit outcomes
+        io.save(obj=df_categories, dir=out_dir, file=f'{out_file_prefix}_category_outcomes.csv') # Edit categoy outcomes
 
         if sh == True: io.combine(in_dir=os.path.join(out_dir,'.genotyping'), out_dir='./genotyping', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
     
@@ -2736,12 +2736,12 @@ def editing_per_library(edit_dc: dict | str, paired_regions_dc: dict | str, fast
         # Save the edited dataframe to the output dictionary
         out_dc[edit_fq] = edit_df
         if out_dir is not None:
-            io.save(dir=os.path.join(out_dir,'split'), file=f"{edit_fq}.csv", obj=edit_df)
+            io.save(obj=edit_df, dir=os.path.join(out_dir,'split'), file=f"{edit_fq}.csv")
 
     # Save the output dictionary as a single dataframe
     out_df = t.join(dc=out_dc, col='fastq_file')
     if out_dir is not None:
-        io.save(dir=out_dir, file='editing_per_library.csv', obj=out_df)
+        io.save(obj=out_df, dir=out_dir, file='editing_per_library.csv')
     if return_df:
         return out_df
 
@@ -2782,9 +2782,9 @@ def extract_umis(fastq_dir: str, out_dir: str='./extract_umis',
 
     # Memory reporting
     memories.append(memory_timer(task='extract_umis()'))
-    io.save(dir=os.path.join(out_dir,'.extract_umis'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
-            obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+    io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
+            dir=os.path.join(out_dir,'.extract_umis'),
+            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
     if sh == True: io.combine(in_dir=os.path.join(out_dir,'.extract_umis'), out_dir='./extract_umis', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv', '.log']) 
     
 def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs', 
@@ -2858,9 +2858,9 @@ def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs',
 
     # Memory reporting
     memories.append(memory_timer(task='trim_motifs()'))
-    io.save(dir=os.path.join(out_dir,'.trim_motifs'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
-            obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))  
+    io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
+            dir=os.path.join(out_dir,'.trim_motifs'),
+            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
 
     if sh == True: io.combine(in_dir=os.path.join(out_dir,'.trim_motifs'), out_dir='./trim_motifs', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv', '.log']) 
 
@@ -2950,9 +2950,9 @@ def make_sams(fastq_dir: str, out_dir: str='./make_sams',
 
     # Memory reporting
     memories.append(memory_timer(task='make_sams()'))
-    io.save(dir=os.path.join(out_dir,'.make_sams'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
-            obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+    io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
+            dir=os.path.join(out_dir,'.make_sams'),
+            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
     if sh == True: io.combine(in_dir=os.path.join(out_dir,'.make_sams'), out_dir='./make_sams', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv', '.log'])
 
 def make_bams(sam_dir: str, out_dir: str='./make_bams', env: str='umi_tools', sh: bool=False):
@@ -3004,9 +3004,9 @@ def make_bams(sam_dir: str, out_dir: str='./make_bams', env: str='umi_tools', sh
 
     # Memory reporting
     memories.append(memory_timer(task='make_bams()'))
-    io.save(dir=os.path.join(out_dir,'.make_bams'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
-            obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+    io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
+            dir=os.path.join(out_dir,'.make_bams'),
+            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
     if sh == True: io.combine(in_dir=os.path.join(out_dir,'.make_bams'), out_dir='./make_bams', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv', '.log'])
 
 def bam_umi_tags(bam_dir: str, out_dir: str='./bam_umi_tags',
@@ -3044,9 +3044,9 @@ def bam_umi_tags(bam_dir: str, out_dir: str='./bam_umi_tags',
     
     # Memory reporting
     memories.append(memory_timer(task='bam_umi_tags()'))
-    io.save(dir=os.path.join(out_dir,'.bam_umi_tags'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
-            obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+    io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
+            dir=os.path.join(out_dir,'.bam_umi_tags'),
+            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
     if sh == True: io.combine(in_dir=os.path.join(out_dir,'.bam_umi_tags'), out_dir='./bam_umi_tags', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
 
 def group_umis(bam_dir: str, out_dir: str='./group_umis', 
@@ -3101,9 +3101,9 @@ def group_umis(bam_dir: str, out_dir: str='./group_umis',
     
     # Memory reporting
     memories.append(memory_timer(task='group_umis()'))
-    io.save(dir=os.path.join(out_dir,'.group_umis'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
-            obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+    io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
+            dir=os.path.join(out_dir,'.group_umis'),
+            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
     if sh == True: io.combine(in_dir=os.path.join(out_dir,'.group_umis'), out_dir='./group_umis', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
 
 def consensus_umis(bam_dir: str, out_dir: str='./consensus_umis', 
@@ -3142,9 +3142,9 @@ def consensus_umis(bam_dir: str, out_dir: str='./consensus_umis',
 
     # Memory reporting
     memories.append(memory_timer(task='consensus_umis()'))
-    io.save(dir=os.path.join(out_dir,'.consensus_umis'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
-            obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+    io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
+            dir=os.path.join(out_dir,'.consensus_umis'),
+            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
     if sh == True: io.combine(in_dir=os.path.join(out_dir,'.consensus_umis'), out_dir='./consensus_umis', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
 
 def bam_to_fastq(bam_dir: str, out_dir: str='./bam_to_fastq', env: str='umi_tools', sh: bool=False):
@@ -3181,9 +3181,9 @@ def bam_to_fastq(bam_dir: str, out_dir: str='./bam_to_fastq', env: str='umi_tool
     
     # Memory reporting
     memories.append(memory_timer(task='bam_to_fastq()'))
-    io.save(dir=os.path.join(out_dir,'.bam_to_fastq'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
-            obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
+    io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
+            dir=os.path.join(out_dir,'.bam_to_fastq'),
+            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
     if sh == True: io.combine(in_dir=os.path.join(out_dir,'.bam_to_fastq'), out_dir='./bam_to_fastq', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
 
 # Supporting methods for plots

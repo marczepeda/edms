@@ -478,10 +478,10 @@ def enzyme_codon_swap(pegRNAs: pd.DataFrame | str, enzyme: str,
     # Save & Return
     memories.append(memory_timer(task=f"enzyme_codon_swap()"))
     if out_dir is not None and out_file is not None:
-        io.save(dir=os.path.join(out_dir,f'.{enzyme}_codon_swap'),
-                file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
-                obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
-        io.save(dir=out_dir,file=out_file,obj=pegRNAs)
+        io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
+                dir=os.path.join(out_dir,f'.{enzyme}_codon_swap'),
+                file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
+        io.save(obj=pegRNAs, dir=out_dir, file=out_file)
     if return_df==True: return pegRNAs
 
 # PrimeDesign
@@ -513,11 +513,11 @@ def prime_design_input(target_name: str, flank5_sequence: str,
         if len(flank3_sequence)%3 != 0: raise(ValueError(f"Length of flank3_sequence ({len(flank3_sequence)}) must divisible by 3."))
 
     # Create PrimeDesign saturation mutagenesis input file
-    io.save(dir=dir,
-            file=file,
-            obj=pd.DataFrame({'target_name': [target_name],
+    io.save(obj=pd.DataFrame({'target_name': [target_name],
                               'target_sequence': [f"{flank5_sequence}({target_sequence}){flank3_sequence}"],
-                              'index': [index]}))
+                              'index': [index]}),
+            dir=dir,
+            file=file)
 
 def prime_design(file: str, pe_format: str = 'NNNNNNNNNNNNNNNNN/NNN[NGG]', pbs_length_list: list = [], rtt_length_list: list = [], 
                 nicking_distance_minimum: int = 0, nicking_distance_maximum: int = 100, filter_c1_extension: bool = False, silent_mutation: bool = False,
@@ -742,15 +742,15 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
     
             # Store pegRNAs with recognition sites for enzymes
             pegRNAs_enzyme = pegRNAs[pegRNAs[enzyme]!=0]
-            io.save(dir=f'../pegRNAs/{enzyme}/codon_swap_before',
-                    file=f'{int(pegRNAs_enzyme.iloc[0]['PBS_length'])}.csv',
-                    obj=pegRNAs_enzyme)
+            io.save(obj=pegRNAs_enzyme,
+                    dir=f'../pegRNAs/{enzyme}/codon_swap_before',
+                    file=f'{int(pegRNAs_enzyme.iloc[0]['PBS_length'])}.csv')
             
             # Codon swap pegRNAs with enzyme recognition site
             pegRNAs_enzyme = enzyme_codon_swap(pegRNAs=pegRNAs_enzyme,enzyme=enzyme,comments=True)
-            io.save(dir=f'../pegRNAs/{enzyme}/codon_swap_after',
-                    file=f'{int(pegRNAs_enzyme.iloc[0]['PBS_length'])}.csv',
-                    obj=pegRNAs_enzyme)
+            io.save(obj=pegRNAs_enzyme,
+                    dir=f'../pegRNAs/{enzyme}/codon_swap_after',
+                    file=f'{int(pegRNAs_enzyme.iloc[0]['PBS_length'])}.csv')
             pegRNAs = pd.concat([pegRNAs,pegRNAs_enzyme],ignore_index=True)
             print(f"pegRNAs edits recovered by modifying {enzyme} recognition site: {list(pegRNAs_enzyme['Edit'].unique())}")
 
@@ -766,9 +766,9 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
             lost_pegRNAs_edits = [remove_edit for remove_edit in remove_pegRNAs_edits if remove_edit not in pegRNAs_edits]
             if len(lost_pegRNAs_edits) > 0:
                 print(f"pegRNA edits lost due to {enzyme} recognition site: {lost_pegRNAs_edits}")
-                io.save(dir=f'../pegRNAs/{enzyme}/lost',
-                            file=f'{int(pegRNAs_enzyme.iloc[0]['PBS_length'])}.csv',
-                            obj=pegRNAs_enzyme[pegRNAs_enzyme['Edit'].isin(lost_pegRNAs_edits)])
+                io.save(obj=pegRNAs_enzyme[pegRNAs_enzyme['Edit'].isin(lost_pegRNAs_edits)],
+                        dir=f'../pegRNAs/{enzyme}/lost',
+                        file=f'{int(pegRNAs_enzyme.iloc[0]['PBS_length'])}.csv')
 
             # Drop enzyme column
             pegRNAs.drop(columns=[enzyme,f'{enzyme}_fwd_i',f'{enzyme}_rc_i'],inplace=True)
@@ -780,9 +780,9 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
             
             # Store ngRNAs with recognition sites for enzymes
             ngRNAs_enzyme = ngRNAs[ngRNAs[enzyme]!=0]
-            io.save(dir=f'../ngRNAs/{enzyme}/codon_swap_before',
-                    file=f'{int(pegRNAs.iloc[0]['PBS_length'])}.csv',
-                    obj=ngRNAs_enzyme)
+            io.save(obj=ngRNAs_enzyme,
+                    dir=f'../ngRNAs/{enzyme}/codon_swap_before',
+                    file=f'{int(pegRNAs.iloc[0]['PBS_length'])}.csv')
 
             # Drop ngRNAs with RE recognition sites
             ngRNAs = ngRNAs[ngRNAs[enzyme]==0].reset_index(drop=True)
@@ -795,9 +795,9 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
             lost_ngRNAs_edits = [remove_edit for remove_edit in remove_ngRNAs_edits if remove_edit not in ngRNAs['Edit'].unique()]
             if len(lost_ngRNAs_edits) > 0:
                 print(f"ngRNA edits lost due to {enzyme} recognition site: {lost_ngRNAs_edits}")
-                io.save(dir=f'../ngRNAs/{enzyme}/lost',
-                        file=f'{int(pegRNAs.iloc[0]['PBS_length'])}.csv',
-                        obj=ngRNAs_enzyme[ngRNAs_enzyme['Edit'].isin(lost_ngRNAs_edits)])
+                io.save(obj=ngRNAs_enzyme[ngRNAs_enzyme['Edit'].isin(lost_ngRNAs_edits)],
+                        dir=f'../ngRNAs/{enzyme}/lost',
+                        file=f'{int(pegRNAs.iloc[0]['PBS_length'])}.csv')
 
             # Drop enzyme column
             ngRNAs.drop(columns=[enzyme,f'{enzyme}_fwd_i',f'{enzyme}_rc_i'],inplace=True)
@@ -1011,7 +1011,7 @@ def merge(epegRNAs: str | dict | pd.DataFrame, ngRNAs: str | dict | pd.DataFrame
     
     # Save epeg_ngRNAs if dir and file are provided
     if dir is not None and file is not None:
-        io.save(dir=dir, file=file, obj=epeg_ngRNAs)
+        io.save(obj=epeg_ngRNAs, dir=dir, file=file)
 
     return epeg_ngRNAs
 
@@ -1066,7 +1066,7 @@ def epegRNA_linkers(pegRNAs: str | pd.DataFrame, epegRNA_motif_sequence: str='CG
                                          seq_motif=epegRNA_motif_sequence,linker_pattern=linker_pattern,excluded_motifs=excluded_motifs))
             if ckpt_dir is not None and ckpt_file is not None: # Save ckpts
                 ckpt = pd.concat([ckpt,pd.DataFrame({'pegRNA_number': [i], 'Linker_sequence': [linkers[i]]})])
-                io.save(dir=ckpt_dir,file=ckpt_file,obj=ckpt)
+                io.save(obj=ckpt, dir=ckpt_dir, file=ckpt_file)
             print(f'Status: {i} out of {len(pegRNAs)}')
     
     # Generate epegRNAs
@@ -1078,7 +1078,7 @@ def epegRNA_linkers(pegRNAs: str | pd.DataFrame, epegRNA_motif_sequence: str='CG
     
     # Save epeg_ngRNAs if dir and file are provided
     if out_dir is not None and out_file is not None:
-        io.save(dir=out_dir, file=out_file, obj=epegRNAs)
+        io.save(obj=epegRNAs, dir=out_dir, file=out_file)
     
     return epegRNAs
 
@@ -1292,10 +1292,10 @@ def sensor_designer(pegRNAs: pd.DataFrame | str, sensor_length: int=60, before_s
     # Save & Return
     memories.append(memory_timer(task=f"sensors()"))
     if out_dir is not None and out_file is not None:
-        io.save(dir=os.path.join(out_dir,f'.sensors'),
-                file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
-                obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
-        io.save(dir=out_dir,file=out_file,obj=pegRNAs)
+        io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
+                dir=os.path.join(out_dir,f'.sensors'),
+                file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
+        io.save(obj=pegRNAs, dir=out_dir, file=out_file)
     if return_df==True: return pegRNAs
 
 def pegRNA_outcome(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str = None,
@@ -1508,10 +1508,10 @@ def pegRNA_outcome(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str = No
     # Save & Return
     memories.append(memory_timer(task=f"pegRNA_outcome(): {len(pegRNAs)} out of {len(pegRNAs)}"))
     if out_dir is not None and out_file is not None:
-        io.save(dir=os.path.join(out_dir,f'.pegRNA_outcome'),
-                file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
-                obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
-        io.save(dir=out_dir,file=out_file,obj=pegRNAs)
+        io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
+                dir=os.path.join(out_dir,f'.pegRNA_outcome'),
+                file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
+        io.save(obj=pegRNAs, dir=out_dir, file=out_file)
     if return_df==True: return pegRNAs
 
 def pegRNA_signature(pegRNAs: pd.DataFrame | str, config_key: str=None,
@@ -1619,10 +1619,10 @@ def pegRNA_signature(pegRNAs: pd.DataFrame | str, config_key: str=None,
     # Save & Return
     memories.append(memory_timer(task=f"pegRNA_signature(): {len(pegRNAs)} out of {len(pegRNAs)}"))
     if out_dir is not None and out_file is not None:
-        io.save(dir=os.path.join(out_dir,f'.pegRNA_signature'),
-                file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv',
-                obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']))
-        io.save(dir=out_dir,file=out_file,obj=pegRNAs)
+        io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
+                dir=os.path.join(out_dir,f'.pegRNA_signature'),
+                file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
+        io.save(obj=pegRNAs, dir=out_dir, file=out_file)
     if return_df==True: return pegRNAs
 
 def epegRNA_fasta(df: pd.DataFrame | str, linearized_vector: str, out_dir: str, 

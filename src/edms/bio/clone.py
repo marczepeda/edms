@@ -140,7 +140,7 @@ def sgRNAs(df:pd.DataFrame | str,id:str, spacer: str='Spacer_sequence',
     
     # Save & return dataframe
     if dir is not None and file is not None:
-        io.save(dir=dir,file=file,obj=df)  
+        io.save(obj=df, dir=dir, file=file)  
     return df
 
 def epegRNAs(df: pd.DataFrame | str, id: str, tG: str=True, order: bool=True, make_extension: bool=True,
@@ -211,7 +211,7 @@ def epegRNAs(df: pd.DataFrame | str, id: str, tG: str=True, order: bool=True, ma
 
     # Save & return dataframe
     if dir is not None and file is not None:
-        io.save(dir=dir,file=file,obj=df)  
+        io.save(obj=df, dir=dir, file=file)  
     return df
 
 def ngRNAs(df: pd.DataFrame | str, id: str, tG: bool=True, order: bool=True,
@@ -260,7 +260,7 @@ def ngRNAs(df: pd.DataFrame | str, id: str, tG: bool=True, order: bool=True,
 
     # Save & return dataframe
     if dir is not None and file is not None:
-        io.save(dir=dir,file=file,obj=df)  
+        io.save(obj=df, dir=dir, file=file)  
     return df
 
 # Library GG cloning
@@ -435,7 +435,7 @@ def epegRNA_pool(df: pd.DataFrame | str, tG:bool=True, make_extension:bool=True,
     
     # Save & return dataframe
     if dir is not None and file is not None:
-        io.save(dir=dir,file=file,obj=df)
+        io.save(obj=df, dir=dir, file=file)
     if return_df:
         return df
 
@@ -550,9 +550,9 @@ def umi(length: int = 15, GC_fract: tuple = (0.4, 0.6), hamming: int = 4,
         print(f'Generated {len(filtered_sequences)} sequences of length {length} with GC content between {GC_fract[0]} and {GC_fract[1]}.')
 
         filtered_sequences = shuffle(ls=filtered_sequences)
-        io.save(dir=dir, 
-                file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{length}.csv', 
-                obj=pd.DataFrame({'UMI_sequence': filtered_sequences}))
+        io.save(obj=pd.DataFrame({'UMI_sequence': filtered_sequences}),
+                dir=dir, 
+                file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{length}.csv')
         
         stop = len(filtered_sequences)
 
@@ -568,9 +568,9 @@ def umi(length: int = 15, GC_fract: tuple = (0.4, 0.6), hamming: int = 4,
 
         # Save the filtered sequences after each iteration
         print(f'Kept {len(filtered_sequences_save)} sequences so far...')
-        io.save(dir=dir, 
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{length}_hamming_{hamming}_yield_{len(filtered_sequences_save)}.csv', 
-            obj=pd.DataFrame({'UMI_sequence': filtered_sequences_save}))
+        io.save(obj=pd.DataFrame({'UMI_sequence': filtered_sequences_save}),
+                dir=dir, 
+                file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{length}_hamming_{hamming}_yield_{len(filtered_sequences_save)}.csv')
 
 # Master Mix
 def pcr_mm(primers: pd.Series, template_uL: int, template: str='1-2 ng/uL template',
@@ -698,7 +698,7 @@ def pcr_sim(df: pd.DataFrame | str,template_col: str, fwd_bind_col: str, rev_bin
 
     # Save & return dataframe
     if dir is not None and file is not None:
-        io.save(dir=dir,file=file,obj=df) 
+        io.save(obj=df, dir=dir, file=file) 
     return df
 
 def off_targets(df: pd.DataFrame | str, col: str, match_score: float = 2, mismatch_score: float = -1, 
@@ -742,12 +742,12 @@ def off_targets(df: pd.DataFrame | str, col: str, match_score: float = 2, mismat
         elif s%(ckpt)==0: # Alignment status; save checkpoint
             print(f'{s+1} out of {len(seqs)}')
             if dir is not None:
-                io.save(dir=os.path.join(dir,'ckpt'),
-                        file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_seqs_{s+1}.csv',
-                        obj=pd.DataFrame({'Target Sequence': seqs[:s],
+                io.save(obj=pd.DataFrame({'Target Sequence': seqs[:s],
                                             'Off Target Sequence': off_target_seqs,
                                             'Best Alignment Score': off_target_seqs_scores,
-                                            'Best Alignment Formatted': off_target_seqs_alignments}))
+                                            'Best Alignment Formatted': off_target_seqs_alignments}),
+                        dir=os.path.join(dir,'ckpt'),
+                        file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_seqs_{s+1}.csv')
             
         if seq is None: # Missing region (not applicable to count_alignments())
             continue
@@ -769,12 +769,12 @@ def off_targets(df: pd.DataFrame | str, col: str, match_score: float = 2, mismat
         off_target_seqs_alignments.append(fq.format_alignment(a=seq, b=off_target_seqs[s], show=False, return_alignment=True))
 
     if dir is not None:  # Save final results
-        io.save(dir=dir,
-                file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_seqs_{s+1}.csv',
-                obj=pd.DataFrame({'Target Sequence': seqs[:s],
+        io.save(obj=pd.DataFrame({'Target Sequence': seqs[:s],
                                   'Off Target Sequence': off_target_seqs,
                                   'Best Alignment Score': off_target_seqs_scores,
-                                  'Best Alignment Formatted': off_target_seqs_alignments}))
+                                  'Best Alignment Formatted': off_target_seqs_alignments}),
+                dir=dir,
+                file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_seqs_{s+1}.csv')
     
     if return_df:  # Return results as a DataFrame
         return pd.DataFrame({'Target Sequence': seqs,

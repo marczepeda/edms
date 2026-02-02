@@ -112,5 +112,5 @@ def ddCq(data: pd.DataFrame | str, sample_col:str='Sample', target_col:str='Targ
 
     # Save & return analyzed qPCR data
     if dir is not None and file is not None:
-        io.save(dir=dir,file=file,obj=data4) 
+        io.save(obj=data4, dir=dir, file=file) 
     return data4

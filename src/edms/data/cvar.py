@@ -54,7 +54,7 @@ def mutations(df: pd.DataFrame | str, gene_name:str, dir:str=None, file:str=None
 
     # Save & return dataframe
     if dir is not None and file is not None:
-        io.save(dir=dir,file=file,obj=df) 
+        io.save(obj=df, dir=dir, file=file) 
     return df
 
 def prevalence(df: pd.DataFrame) -> list:
@@ -128,7 +128,7 @@ def priority_muts(pegRNAs_shared: pd.DataFrame, df_clinvar: pd.DataFrame | str,
 
     # Save & return shared sequences library dataframe
     if dir is not None and file is not None:
-        io.save(dir=dir,file=file,obj=pegRNAs_shared) 
+        io.save(obj=pegRNAs_shared, dir=dir, file=file) 
     return pegRNAs_shared
 
 def priority_edits(pegRNAs: pd.DataFrame | str, pegRNAs_shared: pd.DataFrame | str, df_clinvar: pd.DataFrame | str, 
@@ -166,5 +166,5 @@ def priority_edits(pegRNAs: pd.DataFrame | str, pegRNAs_shared: pd.DataFrame | s
 
     # Save & return pegRNAs priority dataframe
     if dir is not None and file is not None:
-        io.save(dir=dir,file=file,obj=pegRNAs_priority) 
+        io.save(obj=pegRNAs_priority, dir=dir, file=file) 
     return pegRNAs_priority

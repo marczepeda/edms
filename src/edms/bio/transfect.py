@@ -227,5 +227,5 @@ def virus(plasmids: pd.DataFrame | str, plasmid_col: str='Plasmid', description_
                                         'Tube': ['B','B'],
                                         'Order': [3,3]})]).reset_index(drop=True)
     if dir is not None and file is not None:
-        io.save(dir=dir,file=file,obj=df_virus,id=True) 
+        io.save(obj=df_virus, dir=dir, file=file, id=True) 
     return df_virus
