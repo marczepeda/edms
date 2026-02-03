@@ -862,7 +862,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_html.add_argument("-s", "--sort", type=str, choices=["title", "name", "mtime"], help="Sort HTML files by 'title', 'name', or 'mtime' (modification time)", default="title")
     parser_html.add_argument("-l", "--label", type=str, choices=["title", "stem", "name"], help="Card label source: 'title' (HTML <title>), 'stem' (filename without suffix), or 'name' (full filename)", default="title")
     parser_html.add_argument("-n", "--no_preview", dest="preview", action="store_false", help="Don't include an iframe preview panel in the index", default=True)
-    parser_html.add_argument("-g", "--grid_cols", type=int, help="Number of columns in the responsive grid layout", default=3)
+    parser_html.add_argument("-g", "--grid_cols", type=int, help="Number of columns in the responsive grid layout", default=5)
     parser_html.add_argument("-i", "--image_types", type=str, nargs="+", help="List of image file extensions to include (e.g. .png .jpg .gif). If not specified, only .html files are included.", default=None)
     parser_html.add_argument("-H", "--preview_height_px", type=int, help="Height of the preview iframe in pixels", default=900)
     parser_html.add_argument("-I", "--icon", type=str, help="Name of the SVG icon file (without .svg) to use as favicon", default="python")
