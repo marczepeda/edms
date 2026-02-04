@@ -4004,9 +4004,10 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
         for geno in genotypes:
             numbers = re.findall(r'\d+\.?\d*', geno)
             if geno==f'<{cutoff_value}':positions.append(1000000) # Places <cutoff near the end
-            elif 'Indel' == geno: positions.append(1000001) # Places Indel near the end
-            elif 'Not WT' == geno: positions.append(1000002) # Places Not WT near the end
-            elif 'WT' == geno: positions.append(1000003) # Places WT at the end
+            elif 'Edit' == geno: positions.append(1000001) # Places Edit near the end
+            elif 'Indel' == geno: positions.append(1000002) # Places Indel near the end
+            elif 'Not WT' == geno: positions.append(1000003) # Places Not WT near the end
+            elif 'WT' == geno: positions.append(1000004) # Places WT at the end
             else: positions.append(sum([int(n) for n in numbers])/len(numbers))
         assign = pd.DataFrame({'positions':positions,
                                'genotypes':genotypes})
