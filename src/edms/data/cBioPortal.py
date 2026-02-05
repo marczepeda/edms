@@ -12,7 +12,7 @@ import pandas as pd
 import re
 import os
 
-from ..gen import io
+from ..gen import io, tidy as t
 
 def mutations(df: pd.DataFrame | str, wt: str, config: bool=True, dir: str=None, file: str=None) -> pd.DataFrame:
     ''' 
