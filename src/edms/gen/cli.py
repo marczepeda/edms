@@ -41,6 +41,7 @@ def add_common_fastq_label_args(subparser):
     subparser.add_argument("-N", "--no_label_info", dest='label_info', action="store_false", help="Don't include additional info for labels if .html plot (Default: True)", default=True)
     subparser.add_argument("-aa", "--aa_properties", nargs="+", help="Use aa_properties to format labels (Options: hydrophobicity, polarity, charge, vdw_volume, pKa_C_term, pKa_N_term, pKa_side_chain)", default=argparse.SUPPRESS)
     subparser.add_argument("-cBP", "--cBioPortal", type=str, help="Gene name (if saved to ~/.config/edms/cBioPortal_mutations) or file path for cBioPortal mutation data processed through edms.dat.cBioPortal.mutations()", default=argparse.SUPPRESS)
+    subparser.add_argument("-oc", "--only_clinical", action="store_true", help="Only show clinical mutations from cBioPortal (Default: False)", default=argparse.SUPPRESS)
     subparser.add_argument("-UP", "--UniProt", type=str, help="UniProt accession (if saved to ~/.config/edms/UniProt) or file path for UniProt flat file. See edms.dat.uniprot.retrieve_flat_file() or edms uniprot retrieve -h for more information.", default=argparse.SUPPRESS)
     subparser.add_argument("-PSP", "--PhosphoSitePlus", type=str, help="UniProt accession", default=argparse.SUPPRESS)
     subparser.add_argument("-PDBc", "--PDB_contacts", type=str, help="PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.", default=argparse.SUPPRESS)

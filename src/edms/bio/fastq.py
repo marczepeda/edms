@@ -3552,7 +3552,7 @@ def make_label_info(label: str, before_aa_dict: dict, after_aa_dict: dict,
     return text
 
 def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, label_info: bool=True, 
-                   aa_properties: bool | list=True, cBioPortal: str=None, UniProt: str=None, 
+                   aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, 
                    PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None) -> pd.DataFrame:
     ''' 
     add_label_info(): AA properties for conservation (change to); plus additional info from cBioPortal, UniProt, PhosphoSitePlus, PDB if specified
@@ -3564,6 +3564,7 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
     label_info (bool, optional): include additional info for labels if .html plot (Default: True)
     aa_properties (bool |list, optional): use aa_properties to format labels (Default: True). Options: True | False; ['hydrophobicity', 'polarity', 'charge', 'vdw_volume', 'pKa_C_term', 'pKa_N_term', 'pKa_side_chain']
     cBioPortal (str, optional): gene name (if saved to ~/.config/edms/cBioPortal_mutations) or file path for cBioPortal mutation data processed through edms.dat.cBioPortal.mutations()
+    only_clinical (bool, optional): only include clinical mutations from cBioPortal (Default: False)
     UniProt (str, optional): UniProt accession (if saved to ~/.config/edms/UniProt) or file path for UniProt flat file. See edms.dat.uniprot.retrieve() or edms uniprot retrieve -h for more information.
     PhosphoSitePlus (str, optional): UniProt accession
     PDB_contacts (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
@@ -3600,6 +3601,8 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
         cBioPortal_df.rename(columns={'counts':'Patients'}, inplace=True)
         df = pd.merge(df, cBioPortal_df[['Edit Change','Patients','Cancer Types']], how='left', left_on=label, right_on='Edit Change')
         df.fillna({'Patients':0, 'Cancer Types':'None'}, inplace=True)
+        if only_clinical:
+            df = df[df['Patients']!=0].reset_index(drop=True)
 
     # Assign UniProt secondary structure & PTMs
     if UniProt is not None:
@@ -4032,7 +4035,7 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
             show=show,space_capitalize=space_capitalize,PDB_pt=PDB_pt,**kwargs)
 
 def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: tuple=None, z_col: str=None, z_var: str=None, label: str='Edit', label_size: int=16,
-        label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None,
+        label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None,
         FC_threshold: float=1, pval_threshold: float=1, file: str=None, dir: str=None, color: str='lightgray', alpha: float=0.5, edgecol: str='black', vertical: bool=True,
         figsize: tuple = (5, 5), title: str='', title_size: int=18, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int=9, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
@@ -4058,6 +4061,7 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: t
     label_info (bool, optional): include additional info for labels if .html plot (Default: True)
     aa_properties (bool |list, optional): use aa_properties to format labels (Default: True). Options: True | False; ['hydrophobicity', 'polarity', 'charge', 'vdw_volume', 'pKa_C_term', 'pKa_N_term', 'pKa_side_chain']
     cBioPortal (str, optional): gene name (if saved to ~/.config/edms/cBioPortal_mutations) or file path for cBioPortal mutation data processed through edms.dat.cBioPortal.mutations()
+    only_clinical (bool, optional): only show clinical mutations from cBioPortal (Default: False)
     UniProt (str, optional): UniProt accession (if saved to ~/.config/edms/UniProt) or file path for UniProt flat file. See edms.dat.uniprot.retrieve() or edms uniprot retrieve -h for more information.
     PhosphoSitePlus (str, optional): UniProt accession
     PDB_contacts (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
@@ -4140,7 +4144,7 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: t
 
     # Add label info: AA properties for conservation (change to); plus additional info from cBioPortal, UniProt, PhosphoSitePlus, PDB if specified
     df = add_label_info(df=df, label=label, label_size=label_size, label_info=label_info,
-                        aa_properties=aa_properties, cBioPortal=cBioPortal, UniProt=UniProt, 
+                        aa_properties=aa_properties, cBioPortal=cBioPortal, only_clinical=only_clinical, UniProt=UniProt, 
                         PhosphoSitePlus=PhosphoSitePlus, PDB_contacts=PDB_contacts, PDB_neighbors=PDB_neighbors)
 
     PDB_pt = None if PDB_contacts is None else PDB_contacts
@@ -4164,7 +4168,7 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: t
           **kwargs)
 
 def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size_dims: tuple=None, z_col: str=None, z_var: str=None, label: str='Edit', label_size: int=16,
-        label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None, ss_h: int=None, ss_y: int=None,
+        label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None, ss_h: int=None, ss_y: int=None,
         file: str=None, dir: str=None, edgecol: str='black', figsize=(5,5), title: str='', title_size: int=18, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int=9, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int=9, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
@@ -4188,6 +4192,7 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
     label_info (bool, optional): include additional info for labels if .html plot (Default: True)
     aa_properties (bool |list, optional): use aa_properties to format labels (Default: True). Options: True | False; ['hydrophobicity', 'polarity', 'charge', 'vdw_volume', 'pKa_C_term', 'pKa_N_term', 'pKa_side_chain']
     cBioPortal (str, optional): gene name (if saved to ~/.config/edms/cBioPortal_mutations) or file path for cBioPortal mutation data processed through edms.dat.cBioPortal.mutations()
+    only_clinical (bool, optional): only show clinical mutations from cBioPortal (Default: False)
     UniProt (str, optional): UniProt accession (if saved to ~/.config/edms/UniProt) or file path for UniProt flat file. See edms.dat.uniprot.retrieve() or edms uniprot retrieve -h for more information.
     PhosphoSitePlus (str, optional): UniProt accession
     PDB_contacts (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
@@ -4266,7 +4271,7 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
 
     # Add label info: AA properties for conservation (change to); plus additional info from cBioPortal, UniProt, PhosphoSitePlus, PDB if specified
     df = add_label_info(df=df, label=label, label_size=label_size, label_info=label_info,
-                        aa_properties=aa_properties, cBioPortal=cBioPortal, UniProt=UniProt, 
+                        aa_properties=aa_properties, cBioPortal=cBioPortal, only_clinical=only_clinical, UniProt=UniProt, 
                         PhosphoSitePlus=PhosphoSitePlus, PDB_contacts=PDB_contacts, PDB_neighbors=PDB_neighbors)
     
     PDB_pt = None if PDB_contacts is None else PDB_contacts
@@ -4468,7 +4473,7 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
 
 def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: str, size: str | bool=None, size_dims: tuple=None, z_col: str=None, z_var: str=None,
         conservative: bool=True, method: str='pearson', weighted: bool=True, label: str='Edit', label_size: int=16,
-        label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None,
+        label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None,
         file: str=None, dir: str=None, edgecol: str='black', figsize=(5,5), title: str='', title_size: int=18, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int=9, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int=9, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
@@ -4497,6 +4502,7 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
     label_info (bool, optional): include additional info for labels if .html plot (Default: True)
     aa_properties (bool |list, optional): use aa_properties to format labels (Default: True). Options: True | False; ['hydrophobicity', 'polarity', 'charge', 'vdw_volume', 'pKa_C_term', 'pKa_N_term', 'pKa_side_chain']
     cBioPortal (str, optional): gene name (if saved to ~/.config/edms/cBioPortal_mutations) or file path for cBioPortal mutation data processed through edms.dat.cBioPortal.mutations()
+    only_clinical (bool, optional): only show clinical mutations from cBioPortal (Default: False)
     UniProt (str, optional): UniProt accession (if saved to ~/.config/edms/UniProt) or file path for UniProt flat file. See edms.dat.uniprot.retrieve() or edms uniprot retrieve -h for more information.
     PhosphoSitePlus (str, optional): UniProt accession
     PDB_contacts (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
@@ -4603,7 +4609,7 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
 
     # Add label info: AA properties for conservation (change to); plus additional info from cBioPortal, UniProt, PhosphoSitePlus, PDB if specified
     df = add_label_info(df=df, label=label, label_size=label_size, label_info=label_info,
-                        aa_properties=aa_properties, cBioPortal=cBioPortal, UniProt=UniProt, 
+                        aa_properties=aa_properties, cBioPortal=cBioPortal, only_clinical=only_clinical, UniProt=UniProt, 
                         PhosphoSitePlus=PhosphoSitePlus, PDB_contacts=PDB_contacts, PDB_neighbors=PDB_neighbors)
     
     PDB_pt = None if PDB_contacts is None else PDB_contacts
