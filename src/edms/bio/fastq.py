@@ -3890,9 +3890,12 @@ def cat(typ: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list =
         positions = list()
         for geno in genotypes:
             numbers = re.findall(r'\d+\.?\d*', geno)
-            if 'Indel' == geno: positions.append(1000001) # Places Indel near the end
-            elif 'Not WT' == geno: positions.append(1000002) # Places Not WT near the end
-            elif 'WT' == geno: positions.append(1000003) # Places WT at the end
+            if len(numbers)==0: positions.append(1000000) # If no numbers found, place near the end
+            elif geno==f'<{cutoff_value}':positions.append(1000001) # Places <cutoff near the end
+            elif 'Edit' == geno: positions.append(1000002) # Places Edit near the end
+            elif 'Indel' == geno: positions.append(1000003) # Places Indel near the end
+            elif 'Not WT' == geno: positions.append(1000004) # Places Not WT near the end
+            elif 'WT' == geno: positions.append(1000005) # Places WT at the end
             else: positions.append(sum([int(n) for n in numbers])/len(numbers))
         assign = pd.DataFrame({'positions':positions,
                                'genotypes':genotypes})
