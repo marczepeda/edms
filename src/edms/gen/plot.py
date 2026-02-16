@@ -53,7 +53,7 @@ import shutil
 import importlib.resources as pkg_resources
 
 from ..utils import mkdir
-from . import io
+from . import io, stat as st
 import edms.resources.molstar as molstar_pkg
 import edms.resources.icon as icon_pkg
 
@@ -589,7 +589,7 @@ def extract_pivots(df: pd.DataFrame, x: str, y: str, vars: str='variable', vals:
         pivots[key]=pd.pivot(df[df[vars]==key],index=y,columns=x,values=vals)
     return pivots
 
-def formatter(typ: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: str, dir: str,
+def formatter(graph: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: str, dir: str,
               title: str, title_size: int, title_weight: str, title_font: str,
               x_axis: str, x_axis_size: int, x_axis_weight: str, x_axis_font: str, x_axis_scale: str, x_axis_dims: tuple, x_axis_pad: int, x_ticks_size: int, x_ticks_rot: int, x_ticks_font: str, x_ticks: list,
               y_axis: str, y_axis_size: int, y_axis_weight: str, y_axis_font: str, y_axis_scale: str, y_axis_dims: tuple, y_axis_pad: int, y_ticks_size: int, y_ticks_rot: int, y_ticks_font: str, y_ticks: list,
@@ -600,7 +600,7 @@ def formatter(typ: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: s
     formatter(): formats, displays, and saves plots
 
     Parameters:
-    typ (str): plot type
+    graph (str): graph type
     ax: matplotlib axis
     df (dataframe): pandas dataframe
     x (str): x-axis column name
@@ -653,7 +653,7 @@ def formatter(typ: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: s
 
     Dependencies: os, matplotlib, seaborn, io, re_un_cap(), & round_up_pow_10()
     '''
-    # Define plot types
+    # Define graph types
     scats = ['scat', 'line', 'line_scat']
     cats = ['bar', 'box', 'violin', 'swarm', 'strip', 'point', 'count', 'bar_strip', 'box_strip', 'violin_strip','bar_swarm', 'box_swarm', 'violin_swarm']
     dists = ['hist', 'kde', 'hist_kde','rid']
@@ -665,7 +665,7 @@ def formatter(typ: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: s
     else:
         is_html = False
         
-    if typ not in heats:
+    if graph not in heats:
         # Set title
         if title=='' and file is not None: 
             if space_capitalize: title=re_un_cap(".".join(file.split(".")[:-1]))
@@ -728,7 +728,7 @@ def formatter(typ: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: s
         if cols is None: print('No legend because cols was not specified.')
         else:
             if legend_title=='': legend_title=cols
-            if legend_items==(0,0) and typ not in dists:
+            if legend_items==(0,0) and graph not in dists:
                 if is_html:
                     if legend_bbox_to_anchor == (1,1): legend_bbox_to_anchor = (-0.1,-0.15)
                     ax.legend(title=legend_title, 
@@ -742,7 +742,7 @@ def formatter(typ: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: s
                 else:
                     ax.legend(title=legend_title,title_fontsize=legend_title_size,fontsize=legend_size,
                             bbox_to_anchor=legend_bbox_to_anchor,loc=legend_loc,ncol=legend_ncol) # Move legend to the right of the graph
-            elif typ not in dists:
+            elif graph not in dists:
                 handles, labels = ax.get_legend_handles_labels()
                 if is_html:
                     if legend_bbox_to_anchor == (1,1): legend_bbox_to_anchor = (-0.1,-0.15)
@@ -793,7 +793,7 @@ def repeat_palette_cmap(palette_or_cmap: str, repeats: int):
         return cmap
 
 # Graph methods
-def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, cols_ord: list = None, cols_exclude: list | str = None, 
+def scat(graph: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, cols_ord: list = None, cols_exclude: list | str = None, 
          stys: str = None, stys_order: list = [], mark_order: list = [], label: str | None = None,
          file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', alpha: float = 1.0, edgecol: str = 'black',
          figsize: tuple = (5, 5), title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial',
@@ -801,12 +801,12 @@ def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, col
          y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 9, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
          legend_title: str = '', legend_title_size: int = 12, legend_size: int = 9, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_items: tuple = (0, 0), legend_ncol: int = 1,
          legend_columnspacing: int=0, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=1, legend_size_html_multiplier: float=1.0,
-         dpi: int = 0, show: bool = True, space_capitalize: bool = True, **kwargs):
+         dpi: int = 0, show: bool = True, space_capitalize: bool = True, corr_method: str = None, corr_weight: str = None, **kwargs):
     ''' 
     scat(): creates scatter plot related graphs
 
     Parameters:
-    typ (str): plot type (scat, line, line_scat)
+    graph (str): graph type (scat, line, line_scat)
     df (dataframe | str): pandas dataframe (or file path)
     x (str): x-axis column name
     y (str): y-axis column name
@@ -864,6 +864,9 @@ def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, col
     dpi (int, optional): figure dpi (Default: 600 for non-HTML, 150 for HTML)
     show (bool, optional): show plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
+    corr_method (str, optional): add a correlation line of best fit with (Default: None; 
+        Options: 'pearson', 'spearman', 'kendall')
+    corr_weight (str, optional): weights column name for correlation line (Default: None; not weighted correlation)
     
     Dependencies: os, matplotlib, seaborn, formatter(), re_un_cap(), & round_up_pow_10()
     '''
@@ -893,48 +896,48 @@ def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, col
     fig, ax = plt.subplots(figsize=figsize)
     
     if cols is not None and stys is not None:
-        if typ=='scat': 
+        if graph=='scat': 
             sns.scatterplot(data=df, x=x, y=y, hue=cols, hue_order=cols_ord, style=stys, style_order=stys_order, markers=mark_order, edgecolor=edgecol, alpha=alpha, palette=palette, ax=ax, **kwargs)
-        elif typ=='line': 
+        elif graph=='line': 
             sns.lineplot(data=df, x=x, y=y, hue=cols, hue_order=cols_ord, style=stys, style_order=stys_order, markers=mark_order, palette=palette, ax=ax, **kwargs)
-        elif typ=='line_scat':
+        elif graph=='line_scat':
             sns.lineplot(data=df, x=x, y=y, hue=cols, hue_order=cols_ord, style=stys, style_order=stys_order, markers=mark_order, palette=palette, ax=ax, **kwargs)  
             sns.scatterplot(data=df, x=x, y=y, hue=cols, hue_order=cols_ord, style=stys, style_order=stys_order, markers=mark_order, edgecolor=edgecol, alpha=alpha, palette=palette, ax=ax, **kwargs)
         else:
-            print("Invalid type! scat, line, or line_scat")
+            print("Invalid graph! scat, line, or line_scat")
             return
     elif cols is not None:
-        if typ=='scat': 
+        if graph=='scat': 
             sns.scatterplot(data=df, x=x, y=y, hue=cols, hue_order=cols_ord, edgecolor=edgecol, alpha=alpha, palette=palette, ax=ax, **kwargs)
-        elif typ=='line': 
+        elif graph=='line': 
             sns.lineplot(data=df, x=x, y=y, hue=cols, hue_order=cols_ord, ax=ax, palette=palette, **kwargs)
-        elif typ=='line_scat':
+        elif graph=='line_scat':
             sns.lineplot(data=df, x=x, y=y, hue=cols, hue_order=cols_ord, palette=palette, ax=ax, **kwargs)  
             sns.scatterplot(data=df, x=x, y=y, hue=cols, hue_order=cols_ord, edgecolor=edgecol, alpha=alpha, palette=palette, ax=ax, **kwargs)
         else:
-            print("Invalid type! scat, line, or line_scat")
+            print("Invalid graph! scat, line, or line_scat")
             return
     elif stys is not None:
-        if typ=='scat': 
+        if graph=='scat': 
             sns.scatterplot(data=df, x=x, y=y, style=stys, style_order=stys_order, markers=mark_order,  edgecolor=edgecol, palette=palette, alpha=alpha, ax=ax, **kwargs)
-        elif typ=='line': 
+        elif graph=='line': 
             sns.lineplot(data=df, x=x, y=y, style=stys, style_order=stys_order, markers=mark_order, palette=palette, ax=ax, **kwargs)
-        elif typ=='line_scat':
+        elif graph=='line_scat':
             sns.lineplot(data=df, x=x, y=y, style=stys, style_order=stys_order, markers=mark_order, palette=palette, ax=ax, **kwargs)  
             sns.scatterplot(data=df, x=x, y=y, style=stys, style_order=stys_order, markers=mark_order, edgecolor=edgecol, palette=palette, alpha=alpha, ax=ax, **kwargs)
         else:
-            print("Invalid type! scat, line, or line_scat")
+            print("Invalid graph! scat, line, or line_scat")
             return
     else:
-        if typ=='scat': 
+        if graph=='scat': 
             sns.scatterplot(data=df, x=x, y=y, edgecolor=edgecol, palette=palette, alpha=alpha, ax=ax, **kwargs)
-        elif typ=='line': 
+        elif graph=='line': 
             sns.lineplot(data=df, x=x, y=y, palette=palette, ax=ax, **kwargs)
-        elif typ=='line_scat':
+        elif graph=='line_scat':
             sns.lineplot(data=df, x=x, y=y, palette=palette, ax=ax, **kwargs)  
             sns.scatterplot(data=df, x=x, y=y, edgecolor=edgecol, palette=palette, alpha=alpha, ax=ax, **kwargs)
         else:
-            print("Invalid type! scat, line, or line_scat")
+            print("Invalid graph! scat, line, or line_scat")
             return
     
     # Determine if file is html
@@ -976,7 +979,51 @@ def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, col
                     txt
                 )
 
-    formatter(typ=typ, ax=ax, df=df, x=x, y=y, cols=cols, file=file, dir=dir, 
+    # Add correlation line of best fit if specified
+    if graph == 'scat' and corr_method is not None:
+        if corr_weight is not None and corr_weight in df.columns: # Weighted correlation
+            
+            coeff = st.weighted_correlation(
+                df=df,
+                x=x,
+                y=y,
+                weight=corr_weight,
+                method=corr_method)
+            
+            a,b = st.weighted_corr_line(df=df, ax=ax,
+                                        x=x, 
+                                        y=y, 
+                                        weight=corr_weight)
+        else: # Unweighted correlation
+            coeff = st.weighted_correlation(df=df, x=x, y=y, method=corr_method)
+            a,b = st.corr_line(df=df, ax=ax, x=x, y=y)
+
+        # correlation equation string
+        m = "?"
+        if corr_method == 'pearson': m = "R"
+        if corr_method == 'spearman': m = "ρ"
+        if corr_method == 'kendall': m = "τ"
+
+        if is_html:
+            if np.isfinite(a) and np.isfinite(b):
+                if a >= 0:
+                    corr_eq = f" (y = {b:.2f}·x + {a:.2f}; {m}² = {coeff**2:.1g})"
+                else:
+                    corr_eq = f" (y = {b:.2f}·x - {abs(a):.2f}; {m}² = {coeff**2:.1g})"
+            else:
+                corr_eq = f" (undefined; {m}² = {coeff**2:.1g})"
+        else:
+            if np.isfinite(a) and np.isfinite(b):
+                if a >= 0:
+                    corr_eq = f"\n(y = {b:.2f}·x + {a:.2f}; {m}² = {coeff**2:.1g})"
+                else:
+                    corr_eq = f"\n(y = {b:.2f}·x - {abs(a):.2f}; {m}² = {coeff**2:.1g})"
+            else:
+                corr_eq = f"\n(undefined; {m}² = {coeff**2:.1g})"
+        
+        title += corr_eq
+
+    formatter(graph=graph, ax=ax, df=df, x=x, y=y, cols=cols, file=file, dir=dir, 
               title=title, title_size=title_size, title_weight=title_weight, title_font=title_font,
               x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad, x_ticks_size=x_ticks_size, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
               y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_axis_pad=y_axis_pad, y_ticks_size=y_ticks_size, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
@@ -984,7 +1031,7 @@ def scat(typ: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, col
               legend_columnspacing=legend_columnspacing, legend_handletextpad=legend_handletextpad, legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad, legend_handlelength=legend_handlelength,
               dpi=dpi, show=show, space_capitalize=space_capitalize, icon='scatter')
 
-def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: list = None, cats_exclude: list|str = None, cols: str = None, cols_ord: list = None, cols_exclude: list | str = None, line: float = None,
+def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: list = None, cats_exclude: list|str = None, cols: str = None, cols_ord: list = None, cols_exclude: list | str = None, line: float = None,
         file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', alpha: float = 1.0, dodge: bool = False, jitter: bool = True, size: float = 5, edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
         figsize: tuple = (5, 5), title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial',
         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 9, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
@@ -996,7 +1043,7 @@ def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: li
     cat(): creates categorical graphs
 
     Parameters:
-    typ (str): plot type (bar, box, violin, swarm, strip, point, count, bar_strip, box_strip, violin_strip, bar_swarm, box_swarm, violin_swarm)
+    graph (str): graph type (bar, box, violin, swarm, strip, point, count, bar_strip, box_strip, violin_strip, bar_swarm, box_swarm, violin_swarm)
     df (dataframe | str): pandas dataframe (or file path)
     x (str, optional): x-axis column name
     y (str, optional): y-axis column name
@@ -1123,19 +1170,19 @@ def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: li
 
     if cols is not None:
 
-        if typ=='bar': 
+        if graph=='bar': 
             sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
-        elif typ=='box': 
+        elif graph=='box': 
             sns.boxplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, linewidth=lw, palette=palette, ax=ax, **kwargs)
-        elif typ=='violin': 
+        elif graph=='violin': 
             sns.violinplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
-        elif typ=='swarm': 
+        elif graph=='swarm': 
             sns.swarmplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, size=size, palette=palette, ax=ax, **kwargs)
-        elif typ=='strip': 
+        elif graph=='strip': 
             sns.stripplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, size=size, palette=palette, ax=ax, **kwargs)
-        elif typ=='point': 
+        elif graph=='point': 
             sns.pointplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, err_kws={'linewidth':errwid}, capsize=errcap, hue=cols, hue_order=cols_ord, palette=palette, ax=ax, **kwargs)
-        elif typ=='count': 
+        elif graph=='count': 
             if (x!='')&(y!=''):
                 print('Cannot make countplot with both x and y specified.')
                 return
@@ -1146,43 +1193,43 @@ def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: li
             else:
                 print('Cannot make countplot without x or y specified.')
                 return
-        elif typ=='bar_strip':
+        elif graph=='bar_strip':
             sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
             sns.stripplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, size=size, palette=palette, ax=ax, **kwargs)
-        elif typ=='box_strip':
+        elif graph=='box_strip':
             sns.boxplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, linewidth=lw, palette=palette, ax=ax, **kwargs)
             sns.stripplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, size=size, palette=palette, ax=ax, **kwargs)
-        elif typ=='violin_strip':
+        elif graph=='violin_strip':
             sns.violinplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
             sns.stripplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, size=size, palette=palette, ax=ax, **kwargs)
-        elif typ=='bar_swarm':
+        elif graph=='bar_swarm':
             sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
             sns.swarmplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, size=size, palette=palette, ax=ax, **kwargs)
-        elif typ=='box_swarm':
+        elif graph=='box_swarm':
             sns.boxplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, linewidth=lw, palette=palette, ax=ax, **kwargs)
             sns.swarmplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, size=size, palette=palette, ax=ax, **kwargs)
-        elif typ=='violin_swarm':
+        elif graph=='violin_swarm':
             sns.violinplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
             sns.swarmplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, size=size, palette=palette, ax=ax, **kwargs)
         else:
-            print('Invalid type! bar, box, violin, swarm, strip, point, count, bar_strip, box_strip, violin_strip, bar_swarm, box_swarm, violin_swarm')
+            print('Invalid graph! bar, box, violin, swarm, strip, point, count, bar_strip, box_strip, violin_strip, bar_swarm, box_swarm, violin_swarm')
             return
 
     else: # Cols was not specified
         
-        if typ=='bar': 
+        if graph=='bar': 
             sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
-        elif typ=='box': 
+        elif graph=='box': 
             sns.boxplot(data=df, x=x, y=y, order=cats_ord, linewidth=lw, ax=ax, palette=palette, **kwargs)
-        elif typ=='violin': 
+        elif graph=='violin': 
             sns.violinplot(data=df, x=x, y=y, order=cats_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
-        elif typ=='swarm': 
+        elif graph=='swarm': 
             sns.swarmplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, size=size, palette=palette, ax=ax, **kwargs)
-        elif typ=='strip': 
+        elif graph=='strip': 
             sns.stripplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, size=size, palette=palette, ax=ax, **kwargs)
-        elif typ=='point': 
+        elif graph=='point': 
             sns.pointplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, err_kws={'linewidth':errwid}, capsize=errcap, palette=palette, ax=ax, **kwargs)
-        elif typ=='count': 
+        elif graph=='count': 
             if (x!='')&(y!=''):
                 print('Cannot make countplot with both x and y specified.')
                 return
@@ -1191,26 +1238,26 @@ def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: li
             else:
                 print('Cannot make countplot without x or y specified.')
                 return
-        elif typ=='bar_strip':
+        elif graph=='bar_strip':
             sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
             sns.stripplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, size=size, palette=palette, ax=ax, **kwargs)
-        elif typ=='box_strip':
+        elif graph=='box_strip':
             sns.boxplot(data=df, x=x, y=y, order=cats_ord, linewidth=lw, ax=ax, **kwargs)
             sns.stripplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, size=size, palette=palette, ax=ax, **kwargs)
-        elif typ=='violin_strip':
+        elif graph=='violin_strip':
             sns.violinplot(data=df, x=x, y=y, order=cats_ord, edgecolor=edgecol, linewidth=lw, ax=ax, palette=palette, **kwargs)
             sns.stripplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, size=size, palette=palette, ax=ax, **kwargs)
-        elif typ=='bar_swarm':
+        elif graph=='bar_swarm':
             sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
             sns.swarmplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, size=size, palette=palette, ax=ax, **kwargs)
-        elif typ=='box_swarm':
+        elif graph=='box_swarm':
             sns.boxplot(data=df, x=x, y=y, order=cats_ord, linewidth=lw, palette=palette, ax=ax, **kwargs)
             sns.swarmplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, size=size, palette=palette, ax=ax, **kwargs)
-        elif typ=='violin_swarm':
+        elif graph=='violin_swarm':
             sns.violinplot(data=df, x=x, y=y, order=cats_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
             sns.swarmplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, size=size, palette=palette, ax=ax, **kwargs)
         else:
-            print('Invalid type! bar, box, violin, swarm, strip, point, count, bar_strip, box_strip, violin_strip, bar_swarm, box_swarm, violin_swarm')
+            print('Invalid graph! bar, box, violin, swarm, strip, point, count, bar_strip, box_strip, violin_strip, bar_swarm, box_swarm, violin_swarm')
             return
     
     # Add line if specified
@@ -1223,7 +1270,7 @@ def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: li
             print('Cannot add line: both x and y are numeric.')
 
 
-    formatter(typ=typ, ax=ax, df=df, x=x, y=y, cols=cols, file=file, dir=dir, 
+    formatter(graph=graph, ax=ax, df=df, x=x, y=y, cols=cols, file=file, dir=dir, 
               title=title, title_size=title_size, title_weight=title_weight, title_font=title_font,
               x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad, x_ticks_size=x_ticks_size, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
               y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_axis_pad=y_axis_pad, y_ticks_size=y_ticks_size, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
@@ -1231,7 +1278,7 @@ def cat(typ: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: li
               legend_columnspacing=legend_columnspacing, legend_handletextpad=legend_handletextpad, legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad, legend_handlelength=legend_handlelength,
               dpi=dpi, show=show, space_capitalize=space_capitalize, PDB_pt=PDB_pt, icon='cat', cats_ord=cats_ord)
 
-def dist(typ: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord: list = None, cols_exclude: list | str = None, bins: int = 40, log10_low: int = 0,
+def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord: list = None, cols_exclude: list | str = None, bins: int = 40, log10_low: int = 0,
          file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', edgecol: str = 'black', lw: int = 1, ht: float = 1.5, asp: int = 5, tp: float = .8, hs: int = 0, despine: bool = False,
          figsize: tuple = (5, 5), title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial',
          x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 9, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
@@ -1242,7 +1289,7 @@ def dist(typ: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord: l
     dist(): creates distribution graphs
 
     Parameters:
-    typ (str): plot type (hist, kde, hist_kde, rid)
+    graph (str): graph type (hist, kde, hist_kde, rid)
     df (dataframe | str): pandas dataframe (or file path)
     x (str): x-axis column name
     cols (str, optional): color column name
@@ -1322,7 +1369,7 @@ def dist(typ: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord: l
         print('Seaborn color palette or matplotlib color map not specified. Used seaborn colorblind.')
         palette = 'colorblind'
 
-    if typ=='hist':
+    if graph=='hist':
         fig, ax = plt.subplots(figsize=figsize)
         if isinstance(bins, int):
             if x_axis_scale=='log': bins = np.logspace(log10(df[x]).min(), log10(df[x]).max(), bins + 1)
@@ -1331,13 +1378,13 @@ def dist(typ: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord: l
         y=''
         if y_axis=='': y_axis='Count'
         ax.yaxis.set_major_locator(MaxNLocator(integer=True))
-        formatter(typ=typ, ax=ax, df=df, x=x, y=y, cols=cols, file=file, dir=dir,
+        formatter(graph=graph, ax=ax, df=df, x=x, y=y, cols=cols, file=file, dir=dir,
                   title=title, title_size=title_size, title_weight=title_weight, title_font=title_font,
                   x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad, x_ticks_size=x_ticks_size, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
                   y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_axis_pad=y_axis_pad, y_ticks_size=y_ticks_size, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
                   legend_title=legend_title, legend_title_size=legend_title_size, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_items=legend_items, legend_ncol=legend_ncol,
                   dpi=dpi, show=show, space_capitalize=space_capitalize, icon='histogram')
-    elif typ=='kde': 
+    elif graph=='kde': 
         fig, ax = plt.subplots(figsize=figsize)
         if x_axis_scale=='log':
             df[f'log10({x})']=np.maximum(np.log10(df[x]),log10_low)
@@ -1347,13 +1394,13 @@ def dist(typ: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord: l
         else: sns.kdeplot(data=df, x=x, hue=cols, hue_order=cols_ord, linewidth=lw, ax=ax, **kwargs)
         y=''
         if y_axis=='': y_axis='Density'
-        formatter(typ=typ, ax=ax, df=df, x=x, y=y, cols=cols, file=file, dir=dir, 
+        formatter(graph=graph, ax=ax, df=df, x=x, y=y, cols=cols, file=file, dir=dir, 
                   title=title, title_size=title_size, title_weight=title_weight, title_font=title_font,
                   x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad, x_ticks_size=x_ticks_size, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
                   y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_axis_pad=y_axis_pad, y_ticks_size=y_ticks_size, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
                   legend_title=legend_title, legend_title_size=legend_title_size, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_items=legend_items, legend_ncol=legend_ncol,
                   dpi=dpi, show=show, space_capitalize=space_capitalize, icon='histogram')
-    elif typ=='hist_kde':
+    elif graph=='hist_kde':
         fig, ax = plt.subplots(figsize=figsize)
         if x_axis_scale=='log':
             df[f'log10({x})']=np.maximum(np.log10(df[x]),log10_low)
@@ -1367,13 +1414,13 @@ def dist(typ: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord: l
         y=''
         if y_axis=='': y_axis='Count'
         ax.yaxis.set_major_locator(MaxNLocator(integer=True))
-        formatter(typ=typ, ax=ax, df=df, x=x, y=y, cols=cols, file=file, dir=dir, 
+        formatter(graph=graph, ax=ax, df=df, x=x, y=y, cols=cols, file=file, dir=dir, 
                   title=title, title_size=title_size, title_weight=title_weight, title_font=title_font,
                   x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad, x_ticks_size=x_ticks_size, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
                   y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_axis_pad=y_axis_pad, y_ticks_size=y_ticks_size, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
                   legend_title=legend_title, legend_title_size=legend_title_size, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_items=legend_items, legend_ncol=legend_ncol,
                   dpi=dpi, show=show, space_capitalize=space_capitalize, icon='histogram')
-    elif typ=='rid':
+    elif graph=='rid':
         # Set color scheme
         color_palettes = ["deep", "muted", "bright", "pastel", "dark", "colorblind", "husl", "hsv", "Paired", "Set1", "Set2", "Set3", "tab10", "tab20"] # List of common Seaborn palettes
         if (palette_or_cmap in set(color_palettes))|(palette_or_cmap in set(plt.colormaps())): sns.color_palette(palette_or_cmap)
@@ -1413,7 +1460,7 @@ def dist(typ: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord: l
             else: 
                 mpld3.show()
     else:
-        print('Invalid type! hist, kde, hist_kde, rid')
+        print('Invalid graph! hist, kde, hist_kde, rid')
         return
 
 def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vars: str = None, vals: str = None, vals_dims: tuple = None,

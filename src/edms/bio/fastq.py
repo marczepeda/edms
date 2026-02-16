@@ -808,19 +808,19 @@ def plot_alignments(fastq_alignments: dict | str, align_col: str, id_col: str,
                                                 'mismatch_pos':list(mismatch_pos_per_alignment.keys()),
                                                 'mismatch_pos_per_alignment':list(mismatch_pos_per_alignment.values())})
 
-            p.scat(typ='line',df=df_fastq_plot_align,x='mismatch_pos',y='mismatch_pos_per_alignment', # Plot mismatches for each alignment
+            p.scat(graph='line',df=df_fastq_plot_align,x='mismatch_pos',y='mismatch_pos_per_alignment', # Plot mismatches for each alignment
                    title=f'{fastq_name} {id}',x_axis='Alignment Position',y_axis='Mismatches/Alignment',y_axis_dims=(0,1),
                    dir=out_dir_fastq_name,file=f'{id.replace(".","_")}{plot_suf}',
                    show=show,**plot_kwargs)
             
             df_fastq_plot = pd.concat(objs=[df_fastq_plot,df_fastq_plot_align]).reset_index(drop=True) # Group alignment mismatches
 
-        p.scat(typ='line',df=df_fastq_plot,x='mismatch_pos',y='mismatch_pos_per_alignment',cols=id_col, # Plot mismatches for each alignment
+        p.scat(graph='line',df=df_fastq_plot,x='mismatch_pos',y='mismatch_pos_per_alignment',cols=id_col, # Plot mismatches for each alignment
                title=f'{fastq_name}',x_axis='Alignment Position',y_axis='Mismatches/Alignment',y_axis_dims=(0,1),
                dir=out_dir_fastq_name,file=f'alignment_mismatches{plot_suf}',legend_ncol=int(math.ceil(len(df_fastq_plot[id_col].value_counts())/20)),
                show=show,**plot_kwargs)
 
-        p.dist(typ='hist',df=df_fastq,x='alignments',x_axis_dims=(0,max(df_fastq['alignments'])),
+        p.dist(graph='hist',df=df_fastq,x='alignments',x_axis_dims=(0,max(df_fastq['alignments'])),
                title=f'{fastq_name}',dir=out_dir_fastq_name,file=f'alignments{plot_suf}',
                show=show,**plot_kwargs)
 
@@ -3797,7 +3797,7 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
     return df
 
 # Plot methods
-def cat(typ: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list = None, cats_exclude: list|str = None, cols: str=None, cols_ord: list=None, cols_exclude: list|str=None, PDB_pt: str=None,
+def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list = None, cats_exclude: list|str = None, cols: str=None, cols_ord: list=None, cols_exclude: list|str=None, PDB_pt: str=None,
         file: str=None, dir: str=None, palette_or_cmap: str='colorblind', alpha: float=1.0, dodge: bool=True, jitter: bool=True, size: float=5, edgecol: str='black', lw: int=1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
         figsize: tuple = (5, 5), title: str='', title_size: int=18, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_scale: str='linear', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int=9, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
@@ -3810,7 +3810,7 @@ def cat(typ: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list =
     cat: creates categorical graphs
     
     Parameters:
-    typ (str): plot type (bar, box, violin, swarm, strip, point, count, bar_strip, box_strip, violin_strip, bar_swarm, box_swarm, violin_swarm)
+    graph (str): graph type (bar, box, violin, swarm, strip, point, count, bar_strip, box_strip, violin_strip, bar_swarm, box_swarm, violin_swarm)
     df (dataframe | str): pandas dataframe (or file path)
     x (str, optional): x-axis column name
     y (str, optional): y-axis column name
@@ -3916,7 +3916,7 @@ def cat(typ: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list =
                     PDB_pt = f'{os.path.expanduser("~/.config/edms/PDB")}/{PDB_file}'
                     break
 
-    p.cat(typ=typ,df=df,x=x,y=y,cats_ord=cats_ord,cats_exclude=cats_exclude,cols=cols,cols_ord=cols_ord,cols_exclude=cols_exclude,PDB_pt=PDB_pt,
+    p.cat(graph=graph,df=df,x=x,y=y,cats_ord=cats_ord,cats_exclude=cats_exclude,cols=cols,cols_ord=cols_ord,cols_exclude=cols_exclude,PDB_pt=PDB_pt,
           file=file,dir=dir,palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
           figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
           x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_axis_pad=x_axis_pad,x_ticks_size=x_ticks_size,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,x_ticks=x_ticks,

@@ -46,6 +46,7 @@ def add_common_fastq_label_args(subparser):
     subparser.add_argument("-PSP", "--PhosphoSitePlus", type=str, help="UniProt accession", default=argparse.SUPPRESS)
     subparser.add_argument("-PDBc", "--PDB_contacts", type=str, help="PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.", default=argparse.SUPPRESS)
     subparser.add_argument("-PDBn", "--PDB_neighbors", type=str, help="PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.", default=argparse.SUPPRESS)
+
 # Plot subparser methods
 def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_parser=False):
     '''
@@ -151,6 +152,9 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
         subparser.add_argument("-ddlg", "--dont_display_legend", dest='display_legend', action="store_false", default=True, help="Display legend on plot (Default: True)")
         subparser.add_argument("-ddla", "--dont_display_labels", dest='display_labels', action="store_false", default=True, help="Display labels for significant values (Default: True)")
         subparser.add_argument("-dda", "--dont_display_axis", dest='display_axis', action="store_false", default=True, help="Display x- and y-axis lines (Default: True)")
+    if fastq_corr_parser == False and fastq_corr_parser == False:
+        subparser.add_argument("-cm", "--corr_method", default=argparse.SUPPRESS, help="Display correlation line of best fit (Default: None; options: 'pearson', 'spearman', 'kendall')", choices=['pearson', 'spearman', 'kendall'])
+        subparser.add_argument("-cw", "--corr_weight", default=argparse.SUPPRESS, help="Weights column name for correlation line (Default: None; not weighted correlation)")
 
 def add_common_plot_cat_args(subparser, fastq_parser=False):
     '''
@@ -158,7 +162,7 @@ def add_common_plot_cat_args(subparser, fastq_parser=False):
     '''
     # cat(): Required arguments
     if fastq_parser == True:
-        subparser.add_argument("-type", "--type", dest="typ", help="Type of category plot", type=str, required=True, choices=['bar', 'box', 'violin', 'strip', 'swarm', 'point', 'count', 'bar_strip', 'box_strip', 'violin_strip', 'bar_swarm', 'box_swarm', 'violin_swarm'])
+        subparser.add_argument("-g", "--graph", help="Type of category plot", type=str, required=True, choices=['bar', 'box', 'violin', 'strip', 'swarm', 'point', 'count', 'bar_strip', 'box_strip', 'violin_strip', 'bar_swarm', 'box_swarm', 'violin_swarm'])
     subparser.add_argument("-i", "--df", help="Input dataframe file path", type=str, required=True)
 
     # Optional core arguments
@@ -582,7 +586,7 @@ def add_subparser(subparsers, formatter_class=None):
     - vol(): creates volcano plot
     '''
     parser_plot = subparsers.add_parser("plot", help="Generate scatter, category, distribution, heatmap, stacked bar, and volcano plots", description="Generate scatter, category, distribution, heatmap, stacked bar, and volcano plots", formatter_class=formatter_class)
-    subparsers_plot = parser_plot.add_subparsers(dest="typ")
+    subparsers_plot = parser_plot.add_subparsers(dest="graph")
 
     # scat(): Creates scatter plot related graphs (scat, line, line_scat)
     parser_plot_type_scat = subparsers_plot.add_parser("scat", help="Create scatter plot", description="Create scatter plot", formatter_class=formatter_class)

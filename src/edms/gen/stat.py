@@ -397,7 +397,8 @@ def corr_line(df: pd.DataFrame, x: str, y: str, ax=None,
     xx = np.linspace(x.min(), x.max(), 200)
     yy = a + b * xx
 
-    ax.plot(xx, yy, color=color, linestyle=linestyle, linewidth=linewidth, alpha=alpha)
+    if ax is not None:
+        ax.plot(xx, yy, color=color, linestyle=linestyle, linewidth=linewidth, alpha=alpha)
     return a, b
 
 def weighted_corr_line(df: pd.DataFrame, x: str, y: str, weight: str, ax=None, 
@@ -437,7 +438,8 @@ def weighted_corr_line(df: pd.DataFrame, x: str, y: str, weight: str, ax=None,
     xx = np.linspace(x.min(), x.max(), 200)
     yy = a + b * xx
 
-    ax.plot(xx, yy, color=color, linestyle=linestyle, linewidth=linewidth, alpha=alpha)
+    if ax is not None:
+        ax.plot(xx, yy, color=color, linestyle=linestyle, linewidth=linewidth, alpha=alpha)
     return a, b
 
 # Comparison
