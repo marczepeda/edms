@@ -1895,8 +1895,12 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str 
             size_norm = None
             _vmin, _vmax = None, None
             if display_legend:
-                _vmin = df[size].min()
-                _vmax = df[size].max()
+                if size_dims is None:
+                    _vmin = df[size].min()
+                    _vmax = df[size].max()
+                else:
+                    _vmin = size_dims[0]
+                    _vmax = size_dims[1]
                 # Guard against degenerate case where all values are equal
                 if _vmin == _vmax:
                     _vmax = _vmin + 1e-12

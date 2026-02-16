@@ -1626,10 +1626,10 @@ def pegRNA_signature(pegRNAs: pd.DataFrame | str, config_key: str=None,
     if return_df==True: return pegRNAs
 
 def epegRNA_fasta(df: pd.DataFrame | str, linearized_vector: str, out_dir: str, 
-                  id: str='ID', tG:bool=True, make_extension: bool=True,
-                  epegRNA_spacer: str='Spacer_sequence', epegRNA_scaffold: str='Scaffold_sequence',
-                  epegRNA_extension: str='Extension_sequence', epegRNA_RTT: str='RTT_sequence',
-                  epegRNA_PBS: str='PBS_sequence', epegRNA_linker: str='Linker_sequence',
+                  id: str='ID', tG:bool=True, make_extension: bool=True, ngRNA: bool=False,
+                  spacer: str='Spacer_sequence', scaffold: str='Scaffold_sequence',
+                  extension: str='Extension_sequence', RTT: str='RTT_sequence',
+                  PBS: str='PBS_sequence', linker: str='Linker_sequence',
                   literal_eval: bool=True) -> None:
     '''
     epegRNA_fasta(): generate FASTA files representing epegRNAs cloned into a linearized vector
@@ -1641,18 +1641,19 @@ def epegRNA_fasta(df: pd.DataFrame | str, linearized_vector: str, out_dir: str,
     id (str, optional): epegRNA ID column name (Default: ID)
     tG (bool, optional): include 3' tG extension (Default: True)
     make_extension (bool, optional): include epegRNA extension (Default: True)
-    epegRNA_spacer (str, optional): epegRNA spacer column name (Default: Spacer_sequence)
-    epegRNA_scaffold (str, optional): epegRNA scaffold sequence column name (Default: Scaffold_sequence)
-    epegRNA_extension (str, optional): epegRNA extension name (Default: Extension_sequence)
-    epegRNA_RTT (str, optional): epegRNA reverse transcripase template column name (Default: RTT_sequence)
-    epegRNA_PBS (str, optional): epegRNA primer binding site column name (Default: PBS_sequence)
-    epegRNA_linker (str, optional): epegRNA linker column name (Default: Linker_sequence)
+    ngRNA (bool, optional): ngRNA mode just includes spacer and scaffold (Default: False)
+    spacer (str, optional): epegRNA spacer column name (Default: Spacer_sequence)
+    scaffold (str, optional): epegRNA scaffold sequence column name (Default: Scaffold_sequence)
+    extension (str, optional): epegRNA extension name (Default: Extension_sequence)
+    RTT (str, optional): epegRNA reverse transcripase template column name (Default: RTT_sequence)
+    PBS (str, optional): epegRNA primer binding site column name (Default: PBS_sequence)
+    linker (str, optional): epegRNA linker column name (Default: Linker_sequence)
     literal_eval (bool, optional): convert string representations (Default: True)
     '''
     # Make output directory if it does not exist
     mkdir(out_dir)
 
-    # Get pegRNAs DataFrame & linearized vector sequence from file paths if needed
+    # Get ng/pegRNAs DataFrame & linearized vector sequence from file paths if needed
     if type(df)==str:
         df = io.get(pt=df,literal_eval=literal_eval)
     try:
@@ -1664,21 +1665,26 @@ def epegRNA_fasta(df: pd.DataFrame | str, linearized_vector: str, out_dir: str,
         linearized_vector_description = "unknown linearized vector"
     
     # Make extension by concatenating RTT, PBS, and linker
-    if make_extension==True: df[epegRNA_extension] = df[epegRNA_RTT]+df[epegRNA_PBS]+df[epegRNA_linker]
-    else: print(f'Warning: Did not make extension sequence!\nMake sure "{epegRNA_extension}" column includes RTT+PBS+linker for epegRNAs.')
+    if ngRNA==False:
+        if make_extension==True: df[extension] = df[RTT]+df[PBS]+df[linker]
+        else: print(f'Warning: Did not make extension sequence!\nMake sure "{extension}" column includes RTT+PBS+linker for epegRNAs.')
     
-    # Generate epegRNA sequences & write FASTA files
-    df[f'{epegRNA_spacer}_nt1']=[s[0] for s in df[epegRNA_spacer]]
-    for i,(epegRNA_spacer_nt1) in enumerate(df[f'{epegRNA_spacer}_nt1']):
-        # Create epegRNA sequence
-        if (tG==True) & (epegRNA_spacer_nt1!='G'): # Append 5'G to spacer if not already present
-            epegRNA = 'G'+df.iloc[i][epegRNA_spacer]+df.iloc[i][epegRNA_scaffold]+df.iloc[i][epegRNA_extension]    
+    # Generate epeg/ngRNA sequences & write FASTA files
+    df[f'{spacer}_nt1']=[s[0] for s in df[spacer]]
+    for i,(spacer_nt1) in enumerate(df[f'{spacer}_nt1']):
+        # Create epeg/ngRNA sequence
+        if (tG==True) & (spacer_nt1!='G'): # Append 5'G to spacer if not already present
+            if ngRNA==False:
+                epeg_ngRNA = 'G'+df.iloc[i][spacer]+df.iloc[i][scaffold]+df.iloc[i][extension]
+            else:
+                epeg_ngRNA = 'G'+df.iloc[i][spacer]+df.iloc[i][scaffold]
         else: # Do not append 5'G to spacer if not already present or not wanted
-            epegRNA = df.iloc[i][epegRNA_spacer]+df.iloc[i][epegRNA_scaffold]+df.iloc[i][epegRNA_extension]
+            if ngRNA==False:
+                epeg_ngRNA = df.iloc[i][spacer]+df.iloc[i][scaffold]+df.iloc[i][extension]
         
-        # Write epegRNA FASTA file
+        # Write epeg/ngRNA FASTA file
         with open(os.path.join(out_dir,df.iloc[i][id]+'.fasta'),'w') as f:
-                SeqIO.write(SeqRecord(linearized_vector+Seq(epegRNA.upper()), 
+                SeqIO.write(SeqRecord(linearized_vector.upper()+Seq(epeg_ngRNA.upper()), 
                                       id=f"{df.iloc[i][id]}", 
                                       description="cloned into "+linearized_vector_description), 
                             f, 

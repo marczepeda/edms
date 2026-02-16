@@ -461,8 +461,8 @@ def add_subparser(subparsers, formatter_class=None):
 
     # savemoney():
     parser_fastq_savemoney.add_argument("-p","--pt", type=str, help="Working directory when running savemoney (full path required)", required=True)
-    parser_fastq_savemoney.add_argument("-q","--fastq_dir", type=str, help="Path to fastq directory (contains .fastq files, not .fastq.gz files; Default: './fastq')", default='./fastq')
-    parser_fastq_savemoney.add_argument("-a","--fasta_dir", type=str, help="Path to fasta directory (contains .fasta files; Default: './fasta')", default='./fasta')
+    parser_fastq_savemoney.add_argument("-q","--fastq_dir", type=str, help="Relative path to fastq directory (contains .fastq files or .fastq.gz files; Default: './fastq')", default='./fastq')
+    parser_fastq_savemoney.add_argument("-a","--fasta_dir", type=str, help="Relative path to fasta directory (contains .fasta files; Default: './fasta')", default='./fasta')
     parser_fastq_savemoney.add_argument("-o","--out_dir", type=str, help="Path to output directory (Default: '.' = current directory)", default='.')
     parser_fastq_savemoney.add_argument("-f","--out_file", type=str, help="Name of output file (Default: 'samples.csv')", default='samples.csv')
     
@@ -790,7 +790,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_pe_sensor_designer = subparsers_pe.add_parser("sensor", help='Design pegRNA sensors', description='Design pegRNA sensors', formatter_class=formatter_class)
     parser_pe_pegRNA_outcome = subparsers_pe.add_parser("outcome", help="Confirm that pegRNAs should create the predicted edit", description="Confirm that pegRNAs should create the predicted edit", formatter_class=formatter_class)
     parser_pe_pegRNA_signature = subparsers_pe.add_parser("signature", help="Create signatures for pegRNA outcomes using alignments", description="Create signatures for pegRNA outcomes using alignments", formatter_class=formatter_class)
-    parser_pe_epegRNA_fastas = subparsers_pe.add_parser("fastas", help="Generate FASTA files representing epegRNAs cloned into a linearized vector", description="Generate FASTA files representing epegRNAs cloned into a linearized vector", formatter_class=formatter_class)
+    parser_pe_epegRNA_fasta = subparsers_pe.add_parser("fasta", help="Generate FASTA files representing epegRNAs cloned into a linearized vector", description="Generate FASTA files representing epegRNAs cloned into a linearized vector", formatter_class=formatter_class)
 
     # prime_designer() [designer]:
     parser_pe_prime_designer.add_argument("-i", "--in_file", type=str, dest='in_file', help="[Required (Option 1)] Input file (.csv or .txt) with sequences for PrimeDesign. Format: target_name,target_sequence,index (Required). See examples below...")
@@ -962,21 +962,22 @@ Examples:[/red]
     parser_pe_pegRNA_signature.add_argument("-ogs", "--open_gap_score", type=float, help="Open gap score for pairwise alignment", default=argparse.SUPPRESS)
     parser_pe_pegRNA_signature.add_argument("-egs", "--extend_gap_score", type=float, help="Extend gap score for pairwise alignment", default=argparse.SUPPRESS)
 
-    # epegRNA_fastas() [fastas]:
-    parser_pe_epegRNA_fastas.add_argument("-i", "--df", type=str, help="Path to epegRNAs file", required=True)
-    parser_pe_epegRNA_fastas.add_argument("-lv", "--linearized_vector", type=str, help="Linearized vector sequence such that final plasmid is linearized vector + insert (string or .fasta)", required=True)
+    # epegRNA_fasta() [fasta]:
+    parser_pe_epegRNA_fasta.add_argument("-i", "--df", type=str, help="Path to epegRNAs file", required=True)
+    parser_pe_epegRNA_fasta.add_argument("-lv", "--linearized_vector", type=str, help="Linearized vector sequence such that final plasmid is linearized vector + insert (string or .fasta)", required=True)
 
-    parser_pe_epegRNA_fastas.add_argument("-o", "--out_dir", type=str, help="Output directory for FASTA files (Default: ./fasta)", default='./fasta')
-    parser_pe_epegRNA_fastas.add_argument("-I", "--id", type=str, help="epegRNA ID column name (Default: ID)", default='ID')
-    parser_pe_epegRNA_fastas.add_argument("-dg", "--dont_tG", dest="tG", default=True, action="store_false", help="Don't add 5' G to spacer if needed")
-    parser_pe_epegRNA_fastas.add_argument("-dme", "--dont_make_extension", dest="make_extension", default=True, action="store_false", help="Don't build extension from RTT, PBS, and linker")
-    parser_pe_epegRNA_fastas.add_argument("-es", "--epegRNA_spacer", type=str, help="epegRNA spacer column name (Default: Spacer_sequence)", default='Spacer_sequence')
-    parser_pe_epegRNA_fastas.add_argument("-esc", "--epegRNA_scaffold", type=str, default="Scaffold_sequence", help="epegRNA scaffold column")
-    parser_pe_epegRNA_fastas.add_argument("-ee", "--epegRNA_extension", type=str, default="Extension_sequence", help="epegRNA extension column")
-    parser_pe_epegRNA_fastas.add_argument("-er", "--epegRNA_RTT", type=str, default="RTT_sequence", help="epegRNA RTT column name")
-    parser_pe_epegRNA_fastas.add_argument("-ep", "--epegRNA_PBS", type=str, default="PBS_sequence", help="epegRNA PBS column name")
-    parser_pe_epegRNA_fastas.add_argument("-el", "--epegRNA_linker", type=str, default="Linker_sequence", help="epegRNA Linker column name")
-    parser_pe_epegRNA_fastas.add_argument("-nl", "--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
+    parser_pe_epegRNA_fasta.add_argument("-o", "--out_dir", type=str, help="Output directory for FASTA files (Default: ./fasta)", default='./fasta')
+    parser_pe_epegRNA_fasta.add_argument("-I", "--id", type=str, help="epegRNA ID column name (Default: ID)", default='ID')
+    parser_pe_epegRNA_fasta.add_argument("-dg", "--dont_tG", dest="tG", default=True, action="store_false", help="Don't add 5' G to spacer if needed")
+    parser_pe_epegRNA_fasta.add_argument("-dme", "--dont_make_extension", dest="make_extension", default=True, action="store_false", help="Don't build extension from RTT, PBS, and linker")
+    parser_pe_epegRNA_fasta.add_argument("-ng", "--ngRNA", default=False, action="store_true", help="ngRNA mode just includes spacer and scaffold (Default: False)")
+    parser_pe_epegRNA_fasta.add_argument("-es", "--spacer", type=str, help="epegRNA spacer column name (Default: Spacer_sequence)", default='Spacer_sequence')
+    parser_pe_epegRNA_fasta.add_argument("-esc", "--scaffold", type=str, default="Scaffold_sequence", help="epegRNA scaffold column")
+    parser_pe_epegRNA_fasta.add_argument("-ee", "--extension", type=str, default="Extension_sequence", help="epegRNA extension column")
+    parser_pe_epegRNA_fasta.add_argument("-er", "--RTT", type=str, default="RTT_sequence", help="epegRNA RTT column name")
+    parser_pe_epegRNA_fasta.add_argument("-ep", "--PBS", type=str, default="PBS_sequence", help="epegRNA PBS column name")
+    parser_pe_epegRNA_fasta.add_argument("-el", "--linker", type=str, default="Linker_sequence", help="epegRNA Linker column name")
+    parser_pe_epegRNA_fasta.add_argument("-nl", "--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
 
     # Set defaults
     parser_pe_prime_designer.set_defaults(func=pe.prime_designer)
@@ -986,7 +987,7 @@ Examples:[/red]
     parser_pe_sensor_designer.set_defaults(func=pe.sensor_designer)
     parser_pe_pegRNA_outcome.set_defaults(func=pe.pegRNA_outcome)
     parser_pe_pegRNA_signature.set_defaults(func=pe.pegRNA_signature)
-    parser_pe_epegRNA_fastas.set_defaults(func=pe.epegRNA_fasta)
+    parser_pe_epegRNA_fasta.set_defaults(func=pe.epegRNA_fasta)
 
     '''
     edms.bio.plate:

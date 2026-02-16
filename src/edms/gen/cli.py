@@ -336,6 +336,7 @@ def add_common_plot_heat_args(subparser, fastq_parser=False, stat_parser=False):
         subparser.add_argument("-FC", "--FC", type=str, help="Fold change column name (values within heatmap after log2 transformation)", required=True)
         subparser.add_argument("-wp", "--wt_prot", type=str, help="WT protein sequence", required=True)
         subparser.add_argument("-wr", "--wt_res", type=int, help="WT protein sequence residue start number", required=True)
+        subparser.add_argument("-dl", "--dont_log2", dest="log2", action="store_false", help="Don't log2 transform FC values", default=True)
         subparser.add_argument("-co", "--cutoff", type=float, help="Comparison count mean cutoff for masking low-abundance values", default=argparse.SUPPRESS)
         subparser.add_argument("-aa", "--aa", type=str, help="AA saturation mutagenesis. The 'aa' option [default] makes all amino acid substitutions ('aa_subs'), +1 amino acid insertions ('aa_ins'), and -1 amino acid deletions ('aa_dels').", choices=['aa', 'aa_subs', 'aa_ins', 'aa_dels'], default='aa')
         subparser.add_argument("-zc", "--z_col", type=str, help="Column name for Z-score normalization (Default: None)", default=argparse.SUPPRESS)

@@ -175,9 +175,9 @@ def savemoney(pt: str, fastq_dir: str='./fastq', fasta_dir: str='./fasta',
 
     Parameters:
     pt (str): working directory when running savemoney (full path required)
-    fastq_dir (str, optional): path to fastq directory (contains .fastq files, not .fastq.gz files; Default: './fastq')
-    fasta_dir (str, optional): path to fasta directory (contains .fasta files; Default: './fasta')
-    out_dir (str, optional): path to output directory (Default: None)
+    fastq_dir (str, optional): relative path to fastq directory (contains .fastq files, not .fastq.gz files; Default: './fastq')
+    fasta_dir (str, optional): relative path to fasta directory (contains .fasta files; Default: './fasta')
+    out_dir (str, optional):  path to output directory (Default: None)
     out_file (str, optional): name of output file (Default: 'samples.csv')
     return_df (bool, optional): return dataframe (Default: False)
 
@@ -187,8 +187,8 @@ def savemoney(pt: str, fastq_dir: str='./fastq', fasta_dir: str='./fasta',
 
     # Make unzip fastq if needed
     if any(fastq_file.endswith('.fastq.gz') for fastq_file in os.listdir(fastq_dir)):
-        unzip_fastqs(in_dir=fastq_dir, out_dir=os.path.join(pt,'fastq_unzipped'))
-        fastq_dir = os.path.join(pt,'fastq_unzipped')
+        unzip_fastqs(in_dir=fastq_dir, out_dir=os.path.join(fastq_dir,'unzip'))
+        fastq_dir = os.path.join(fastq_dir,'unzip')
 
     # Get fastq & fasta files
     fastq_files = [fastq_file for fastq_file in os.listdir(fastq_dir) if fastq_file.endswith(".fastq")]
@@ -197,6 +197,12 @@ def savemoney(pt: str, fastq_dir: str='./fastq', fasta_dir: str='./fasta',
     # Sort files naturally
     fastq_files = sorted(fastq_files, key=t.natural_key)
     fasta_files = sorted(fasta_files, key=t.natural_key)
+
+    # Rename fastq_dir and fasta_dir to be relative to pt
+    if fastq_dir.startswith('./'):
+        fastq_dir = os.path.join(pt, fastq_dir[2:])
+    if fasta_dir.startswith('./'):
+        fasta_dir = os.path.join(pt, fasta_dir[2:])
 
     # Determine number of fasta files per fastq file
     n_int = int(len(fasta_files)/len(fastq_files))
@@ -4320,8 +4326,12 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
             size_norm = None
             _vmin, _vmax = None, None
             if display_legend:
-                _vmin = df[size].min()
-                _vmax = df[size].max()
+                if size_dims is None:
+                    _vmin = df[size].min()
+                    _vmax = df[size].max()
+                else:
+                    _vmin = size_dims[0]
+                    _vmax = size_dims[1]
                 # Guard against degenerate case where all values are equal
                 if _vmin == _vmax:
                     _vmax = _vmin + 1e-12
@@ -4661,8 +4671,12 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
             size_norm = None
             _vmin, _vmax = None, None
             if display_legend:
-                _vmin = df[size].min()
-                _vmax = df[size].max()
+                if size_dims is None:
+                    _vmin = df[size].min()
+                    _vmax = df[size].max()
+                else:
+                    _vmin = size_dims[0]
+                    _vmax = size_dims[1]
                 # Guard against degenerate case where all values are equal
                 if _vmin == _vmax:
                     _vmax = _vmin + 1e-12
@@ -4758,11 +4772,11 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
     else:
         if np.isfinite(a) and np.isfinite(b):
             if a >= 0:
-                corr_eq = f"\ny = {b:.2f}·x + {a:.2f}; {m}² = {coeff**2:.1g})"
+                corr_eq = f"\n(y = {b:.2f}·x + {a:.2f}; {m}² = {coeff**2:.1g})"
             else:
-                corr_eq = f"\ny = {b:.2f}·x - {abs(a):.2f}; {m}² = {coeff**2:.1g})"
+                corr_eq = f"\n(y = {b:.2f}·x - {abs(a):.2f}; {m}² = {coeff**2:.1g})"
         else:
-            corr_eq = f"\nundefined; {m}² = {coeff**2:.1g})"
+            corr_eq = f"\n(undefined; {m}² = {coeff**2:.1g})"
 
     # with legend
     if display_legend == True:
@@ -4855,7 +4869,7 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
     if return_df:
         return df
 
-def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str, wt_res: int, cutoff_col: str='count_mean_compare', cutoff: float=0, aa: str='aa', z_col: str=None, z_var: str=None, label: str='Edit',
+def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str, wt_res: int, log2: bool=True, cutoff_col: str='count_mean_compare', cutoff: float=0, aa: str='aa', z_col: str=None, z_var: str=None, label: str='Edit',
         file: str=None, dir: str=None, edgecol: str='black', lw: int=1, center: float=0, cmap: str="seismic", cmap_WT: str='forestgreen', cmap_not_WT: str='lightgray', sq: bool=False, 
         cbar: bool=True, cbar_label: str=None, cbar_label_size: int=None, cbar_label_weight: str='bold', cbar_tick_size: int=None, cbar_shrink: float=None, cbar_aspect: int=None, cbar_pad: float=None, cbar_orientation: str=None,
         title: str='', title_size: int=12, title_weight: str='bold', title_font: str='Arial', figsize: tuple = (5, 5), vertical: bool=True,
@@ -4872,6 +4886,7 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str
     FC (str): fold change column name (values within heatmap after log2 transformation)
     wt_prot (str): WT protein sequence
     wt_res (int): WT protein sequence residue start number
+    log2 (bool, optional): log2 transform FC values (Default: True)
     cutoff_col (str, optional): comparison count mean column for masking low-abundance values
     cutoff (float, optional): comparison count mean cutoff for masking low-abundance values
     aa (str, optional): AA saturation mutagenesis (Options: 'aa' [default], 'aa_subs', 'aa_ins', 'aa_dels'). The 'aa' option makes all amino acid substitutions ('aa_subs'), +1 amino acid insertions ('aa_ins'), and -1 amino acid deletions ('aa_dels').
@@ -4940,7 +4955,11 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str
     df = df[df[cond_col]==cond]
 
     # Log transform data
-    df[f'log2({FC})'] = [np.log10(FC_val)/np.log10(2) for FC_val in df[FC]]
+    if log2==True:
+        df[f'log2({FC})'] = [np.log10(FC_val)/np.log10(2) for FC_val in df[FC]]
+    else:
+        df[f'log2({FC})'] = df[FC]
+        print(f"Warning: log2 transformation skipped for {FC} values, despite the log2(FC) column being created.")
 
     # Z-score normalization if specified
     if z_col is not None and z_var is not None:
