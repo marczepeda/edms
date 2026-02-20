@@ -58,6 +58,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_ngs_pcrs.add_argument("-2c","--pcr2_cycles", help="Number of cycles for PCR2", type=str, default='8')
     parser_ngs_pcrs.add_argument("-uc","--umi_cycles", help="Number of cycles for PCR1", type=str, default='3')
     parser_ngs_pcrs.add_argument("-1.5T","--pcr1.5_Tm",dest='pcr1_5_Tm', help="Annealing temperature for PCR1.5", type=str, default='65')
+    parser_ngs_pcrs.add_argument("-ds", "--dont_split_pcr1_primers", dest="split_pcr1_primers", help="Don't split PCR1 plate by primer", action="store_false", default=True)
     parser_ngs_pcrs.add_argument('-1v', '--pcr1_total_uL', type=int, default=20, help='PCR1 Total reaction volume (uL)')
     parser_ngs_pcrs.add_argument('-2v', '--pcr2_total_uL', type=int, default=20, help='PCR2 Total reaction volume (uL)')
     parser_ngs_pcrs.add_argument('-m', '--mm_x', type=float, default=1.1, help='Master mix multiplier')

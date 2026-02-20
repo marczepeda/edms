@@ -265,7 +265,7 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col: str='
          Q5_mm_x_stock: int=5, dNTP_mM_stock: int=10, fwd_uM_stock: int=10, rev_uM_stock: int=10, Q5_U_uL_stock: int=2,
          Q5_mm_x_desired: int=1,dNTP_mM_desired: float=0.2, fwd_uM_desired: float=0.5, rev_uM_desired: float=0.5, Q5_U_uL_desired: float=0.02,
          pcr1_total_uL: int=20, pcr2_total_uL: int=20, mm_x: float=1.1, ultra: bool=False, 
-         pcr1_cycles: int | str = None, pcr2_cycles: int | str = None, umi_cycles: int | str = None, pcr1_5_Tm: int | str = None) -> tuple[dict[pd.DataFrame]]:
+         pcr1_cycles: int | str = None, pcr2_cycles: int | str = None, umi_cycles: int | str = None, pcr1_5_Tm: int | str = None, split_pcr1_primers: bool=True) -> tuple[dict[pd.DataFrame]]:
     '''
     pcrs(): generates NGS PCR plan automatically
     
@@ -277,9 +277,9 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col: str='
     pcr1_id_col (str, optional): PCR1 ID column name (Default: 'PCR1 ID')
     pcr1_fwd_col (str, optional): PCR1 FWD column name (Default: 'PCR1 FWD')
     pcr1_rev_col (str, optional): PCR1 REV column name (Default: 'PCR1 REV')
-    pcr1_id_col (str, optional): PCR2 ID column name (Default: 'PCR2 ID')
-    pcr1_fwd_col (str, optional): PCR2 FWD column name (Default: 'PCR2 FWD')
-    pcr1_rev_col (str, optional): PCR2 REV column name (Default: 'PCR2 REV')
+    pcr2_id_col (str, optional): PCR2 ID column name (Default: 'PCR2 ID')
+    pcr2_fwd_col (str, optional): PCR2 FWD column name (Default: 'PCR2 FWD')
+    pcr2_rev_col (str, optional): PCR2 REV column name (Default: 'PCR2 REV')
     umi_col (str, optional): UMI column name (Default: 'UMI')
     template_uL (int): template uL per reaction
     Q5_mm_x_stock (int, optional): Q5 reaction master mix stock (Default: 5)
@@ -300,6 +300,7 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col: str='
     pcr2_cycles (int | str): Number of cycles for the PCR2 process (Default: None -> 8).
     umi_cycles (int | str): Number of cycles for the UMI PCR process (Default: None -> 3).
     pcr1_5_Tm (int | str): Annealing temperature for PCR1.5 process (Default: None -> 65; P5-FWD & P7-REV primers).
+    split_pcr1_primers (bool, optional): whether to split PCR1 plate arragement based on primer (Default: True)
 
     Dependencies: pandas,numpy,os,io,tidy,thermocycler(),pcr_mm(),pcr_mm_ultra()
     '''
@@ -328,43 +329,83 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col: str='
 
         if str(pcr)=='1':
             
-            # Store gDNA and PCR locations on plate
-            ls_df_fwd_rev = []
-            primers_ls = []
-            plate_ls = []
-            row_ls = []
-            col_ls = []
+            if split_pcr1_primers==True: # Split PCR1 plate by primer; fill plate sequentially based on unique FWD/REV combinations
 
-            plate_i = 1
-            for (fwd,rev) in t.unique_tuples(df=df,cols=[pcr1_fwd_col,pcr1_rev_col]):
-                df_fwd_rev = df[(df[pcr1_fwd_col]==fwd) & (df[pcr1_rev_col]==rev)]
-                ls_df_fwd_rev.append(df_fwd_rev)
+                # Store gDNA and PCR locations on plate
+                ls_df_fwd_rev = []
+                primers_ls = []
+                plate_ls = []
+                row_ls = []
+                col_ls = []
+
+                plate_i = 1
+                for (fwd,rev) in t.unique_tuples(df=df,cols=[pcr1_fwd_col,pcr1_rev_col]):
+                    df_fwd_rev = df[(df[pcr1_fwd_col]==fwd) & (df[pcr1_rev_col]==rev)]
+                    ls_df_fwd_rev.append(df_fwd_rev)
+                    row_i = 0
+                    col_i = 0
+                    for i in range(df_fwd_rev.shape[0]):
+                        if col_i >= len(cols):
+                            if row_i >= len(rows)-1:
+                                row_i = 0
+                                col_i = 0
+                                plate_i += 1
+                            else:
+                                row_i += 1
+                                col_i = 0
+                        primers_ls.append(f"{fwd}_{rev}")
+                        plate_ls.append(plate_i)
+                        row_ls.append(rows[row_i])
+                        col_ls.append(cols[col_i])
+                        col_i += 1
+                    plate_i += 1
+                
+                df_plate = pd.concat(ls_df_fwd_rev,ignore_index=True) # Concatenate all PCR1 FWD/REV dataframes
+                df_plate[f'{group} (PCR1)'] = [f"{plate}_{primers}" for (primers,plate) in zip(primers_ls,plate_ls)]
+                df_plate['row'] = row_ls
+                df_plate['column'] = col_ls
+
+                return df_plate
+            
+            else: # Don't split PCR1 plate by primer; fill plate sequentially based on ID order
+
+                # Copy dataframe to avoid modifying original
+                df2=df.copy()
+
+                # Define 96-well plate axis
+                rows_96_well = ['A','B','C','D','E','F','G','H']
+                cols_96_well = np.arange(1,13,1)
+
+                # Store gDNA and PCR locations on 96-well plate (excluding outer wells)
+                plate_ls = []
+                row_ls = []
+                col_ls = []
+
+                plate_i = 1
                 row_i = 0
                 col_i = 0
-                for i in range(df_fwd_rev.shape[0]):
-                    if col_i >= len(cols):
-                        if row_i >= len(rows)-1:
+                for i in range(df.shape[0]):
+                    if col_i >= len(cols_96_well):
+                        if row_i >= len(rows_96_well)-1:
                             row_i = 0
                             col_i = 0
                             plate_i += 1
                         else:
                             row_i += 1
                             col_i = 0
-                    primers_ls.append(f"{fwd}_{rev}")
                     plate_ls.append(plate_i)
-                    row_ls.append(rows[row_i])
-                    col_ls.append(cols[col_i])
+                    row_ls.append(rows_96_well[row_i])
+                    col_ls.append(cols_96_well[col_i])
                     col_i += 1
-                plate_i += 1
-            
-            df_plate = pd.concat(ls_df_fwd_rev,ignore_index=True) # Concatenate all PCR1 FWD/REV dataframes
-            df_plate[f'{group} (PCR1)'] = [f"{plate}_{primers}" for (primers,plate) in zip(primers_ls,plate_ls)]
-            df_plate['row'] = row_ls
-            df_plate['column'] = col_ls
 
-            return df_plate
+                df2[f'{group} (PCR1)'] = plate_ls
+                df2['row'] = row_ls
+                df2['column'] = col_ls
+
+                return df2
         
         elif str(pcr)=='2':
+            
             # Copy dataframe to avoid modifying original
             df2=df.copy()
 
@@ -402,11 +443,13 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col: str='
     # Create 96-well and 8-strip plate layouts
     df_96_well_pcr1 = plate(df=df,group='96-well plate', pcr='1')
     df_96_well_pcr2 = plate(df=df,group='96-well plate', pcr='2')
-    df_8_strip_pcr1 = plate(df=df,group='8-strip plate', pcr='1')
-    df_8_strip_pcr2 = plate(df=df,group='8-strip plate', pcr='2')
+    if split_pcr1_primers==True: # Include 8-strip option if pcr1 primers are split
+        df_8_strip_pcr1 = plate(df=df,group='8-strip plate', pcr='1')
+        df_8_strip_pcr2 = plate(df=df,group='8-strip plate', pcr='2')
 
     # Create pivot tables for gDNA, PCR1, and PCR2s
-    pivots = {f"96-well_{gDNA_id_col}": pd.pivot_table(data=df_96_well_pcr1,values=gDNA_id_col,index=['96-well plate (PCR1)','row'],columns='column',aggfunc='first'),
+    if split_pcr1_primers==True:
+        pivots = {f"96-well_{gDNA_id_col}": pd.pivot_table(data=df_96_well_pcr1,values=gDNA_id_col,index=['96-well plate (PCR1)','row'],columns='column',aggfunc='first'),
             f"96-well_{pcr1_id_col}": pd.pivot_table(data=df_96_well_pcr1,values=pcr1_id_col,index=['96-well plate (PCR1)','row'],columns='column',aggfunc='first'),
             f"96-well_{pcr2_id_col}": pd.pivot_table(data=df_96_well_pcr2,values=pcr2_id_col,index=['96-well plate (PCR2)','row'],columns='column',aggfunc='first'),
             f"96-well_{pcr2_fwd_col}": pd.pivot_table(data=df_96_well_pcr2,values=pcr2_fwd_col,index=['96-well plate (PCR2)','row'],columns='column',aggfunc='first'),
@@ -417,6 +460,16 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col: str='
             f"8-strip_{pcr2_fwd_col}": pd.pivot_table(data=df_8_strip_pcr2,values=pcr2_fwd_col,index=['8-strip plate (PCR2)','row'],columns='column',aggfunc='first'),
             f"8-strip_{pcr2_rev_col}": pd.pivot_table(data=df_8_strip_pcr2,values=pcr2_rev_col,index=['8-strip plate (PCR2)','row'],columns='column',aggfunc='first')
             }
+    
+    else:
+        pivots = {gDNA_id_col: pd.pivot_table(data=df_96_well_pcr1,values=gDNA_id_col,index=['96-well plate (PCR1)','row'],columns='column',aggfunc='first'),
+            pcr1_id_col: pd.pivot_table(data=df_96_well_pcr1,values=pcr1_id_col,index=['96-well plate (PCR1)','row'],columns='column',aggfunc='first'),
+            pcr1_fwd_col: pd.pivot_table(data=df_96_well_pcr1,values=pcr1_fwd_col,index=['96-well plate (PCR1)','row'],columns='column',aggfunc='first'),
+            pcr1_rev_col: pd.pivot_table(data=df_96_well_pcr1,values=pcr1_rev_col,index=['96-well plate (PCR1)','row'],columns='column',aggfunc='first'),
+            pcr2_id_col: pd.pivot_table(data=df_96_well_pcr2,values=pcr2_id_col,index=['96-well plate (PCR2)','row'],columns='column',aggfunc='first'),
+            pcr2_fwd_col: pd.pivot_table(data=df_96_well_pcr2,values=pcr2_fwd_col,index=['96-well plate (PCR2)','row'],columns='column',aggfunc='first'),
+            pcr2_rev_col: pd.pivot_table(data=df_96_well_pcr2,values=pcr2_rev_col,index=['96-well plate (PCR2)','row'],columns='column',aggfunc='first')
+              }
 
     # Get unique primer pairs and their value counts for PCR1 and PCR2
     df['PCR2 FWD MM'] = 'PCR2-FWD'
