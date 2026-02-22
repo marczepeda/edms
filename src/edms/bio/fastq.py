@@ -3357,11 +3357,11 @@ def edit_change(df: pd.DataFrame, col: str='Edit', aa_properties: list=[]) -> pd
         after_aa_prop_ls = []
     for (before,after) in t.zip_cols(df=df, cols=['Before','After']):
 
-        if len(before)==1 & len(after)==1: # Substitution (changed to)
-            if (before not in basic) & (after in basic): change.append('Basic')
-            elif (before not in acidic) & (after in acidic): change.append('Acidic')
-            elif (before not in polar) & (after in polar): change.append('Polar')
-            elif (before not in nonpolar) & (after in nonpolar): change.append('Nonpolar')
+        if len(before)==1 and len(after)==1: # Substitution (changed to)
+            if (before not in basic) and (after in basic): change.append('Basic')
+            elif (before not in acidic) and (after in acidic): change.append('Acidic')
+            elif (before not in polar) and (after in polar): change.append('Polar')
+            elif (before not in nonpolar) and (after in nonpolar): change.append('Nonpolar')
             else: change.append('Conserved')
             if aa_properties is not None: 
                 before_aa_prop_dc = dict()
@@ -3375,7 +3375,8 @@ def edit_change(df: pd.DataFrame, col: str='Edit', aa_properties: list=[]) -> pd
                 before_aa_prop_ls.append(before_aa_prop_dc)
                 after_aa_prop_ls.append(after_aa_prop_dc)
 
-        elif len(before)==1 & len(after)>1: # Insertion (changed to)
+        elif len(before)==1 and len(after)>1: # Insertion (changed to)
+
             if after[-1] in basic: change.append('Basic')
             elif after[-1] in acidic: change.append('Acidic')
             elif after[-1] in polar: change.append('Polar')
@@ -3393,7 +3394,7 @@ def edit_change(df: pd.DataFrame, col: str='Edit', aa_properties: list=[]) -> pd
                 before_aa_prop_ls.append(before_aa_prop_dc)
                 after_aa_prop_ls.append(after_aa_prop_dc)
 
-        elif len(before)>1 & len(after)==1: # Deletion (removed... inverse)
+        elif len(before)>1 and len(after)==1: # Deletion (removed... inverse)
             if before[0] in basic: change.append('Acidic')
             elif before[0] in acidic: change.append('Basic')
             elif before[0] in polar: change.append('Nonpolar')
