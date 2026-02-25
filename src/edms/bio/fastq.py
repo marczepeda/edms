@@ -3516,7 +3516,7 @@ def make_label_info(label: str, before_aa_dict: dict, after_aa_dict: dict,
             text += f"""<br><span style='font-size:{font_size}px'>{'),<br>'.join(t.split_nth('),'.join(protein_contacts.split('),')[1:]), '),',2))}</span>"""
     if nucleic_contacts is not None:
         num = nucleic_contacts.count('),') + 1
-        if ['dA','dC','dG','dT'] in nucleic_contacts:
+        if any(base in nucleic_contacts for base in ['dA','dC','dG','dT']):
             if num <= 0:
                 text += f"""<br><span style='font-size:{font_size}px'><b>DNA Contacts:</b> {nucleic_contacts}</span>"""
             else:
@@ -3537,7 +3537,7 @@ def make_label_info(label: str, before_aa_dict: dict, after_aa_dict: dict,
             text += f"""<br><span style='font-size:{font_size}px'>{'),<br>'.join(t.split_nth('),'.join(protein_neighbors.split('),')[1:]), '),',3))}</span>"""
     if nucleic_neighbors is not None:
         num = nucleic_neighbors.count('),') + 1
-        if ['dA','dC','dG','dT'] in nucleic_neighbors:
+        if any(base in nucleic_neighbors for base in ['dA','dC','dG','dT']):
             if num <= 0:
                 text += f"""<br><span style='font-size:{font_size}px'><b>DNA Neighbors (CoM):</b> {nucleic_neighbors}</span>"""
             else:
