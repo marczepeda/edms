@@ -19,8 +19,9 @@ import argparse
 import datetime
 import sys
 from rich import print as rprint
+import json
 
-from . import ngs, sanger, clone as cl, fastq as fq, pe, qPCR, transfect as tf, plate as pt
+from . import ngs, sanger, clone as cl, fastq as fq, pe, qPCR, transfect as tf, plate as pt, pwes
 from ..utils import parse_tuple_int, parse_tuple_float
 from ..gen.cli import add_common_plot_cat_args, add_common_plot_heat_args, add_common_plot_scat_args, add_common_plot_stack_args, add_common_plot_vol_args
 
@@ -1020,3 +1021,61 @@ Examples:[/red]
     # Set defaults
     parser_plate_parse_csv_to_tidy.set_defaults(func=pt.parse_csv_to_tidy)
     parser_plate_make.set_defaults(func=pt.make)
+
+    '''
+    edms.bio.pwes:
+    - clustering: Compute 3D PWES clustering analysis
+    - hist: Generates a histogram of the number edits for each cluster.
+    - cat: creates categorical graphs for PWES 3D clustering results
+    - torn: generates tornado plots for visualizing PWES clusters
+    '''
+    parser_pwes = subparsers.add_parser("pwes", help="Proximity-Weighted Enrichment Score (PWES) clustering", formatter_class=formatter_class)
+    subparsers_pwes = parser_pwes.add_subparsers()
+
+    parser_pwes_clustering = subparsers_pwes.add_parser("clustering", help="Compute 3D PWES clustering analysis", description="Compute 3D PWES clustering analysis", formatter_class=formatter_class)
+    parser_pwes_hist = subparsers_pwes.add_parser("hist", help="Generate a histogram of the number edits for each cluster", description="Generate a histogram of the number edits for each cluster", formatter_class=formatter_class)
+    parser_pwes_cat = subparsers_pwes.add_parser("cat", help="Create categorical graphs for PWES 3D clustering results", description="Create categorical graphs for PWES 3D clustering results", formatter_class=formatter_class)   
+    parser_pwes_torn = subparsers_pwes.add_parser("torn", help="Generate tornado plots for visualizing PWES clusters", description="Generate tornado plots for visualizing PWES clusters", formatter_class=formatter_class)
+
+    # clustering():
+    parser_pwes_clustering.add_argument("-p", "--pdb_file", type=str, help="PDB id or path to PDB file for structureural information. If PDB id is given, will attempt to retrieve from config or RCSB PDB.", required=True)
+    parser_pwes_clustering.add_argument("-i", "--df_scores", type=str, help="Path to input file with edit scores and AA positions.")
+    parser_pwes_clustering.add_argument("-x", "--x_col", type=str, help="Column name in input file with AA positions (Default: 'AA Number')", default='AA Number')
+    parser_pwes_clustering.add_argument("-sc", "--scores_col", type=str, help="Column name in input file with edit scores (Default: 'log2(FC)')", default='log2(FC)')
+    parser_pwes_clustering.add_argument("-id", "--id_col", type=str, help="Column name in input file with unique IDs for epegRNAs (if not using index)", default=argparse.SUPPRESS)
+    parser_pwes_clustering.add_argument("-gc", "--gene_col", type=str, help="Column name in input file with gene names (if multiple subunits)", default=argparse.SUPPRESS)
+    parser_pwes_clustering.add_argument("-gm", "--gene_map", type=json.loads, help='Dict mapping gene names to chain IDs in PDB file (if multiple subunits; e.g., {"FOXA1": "O"})', default=argparse.SUPPRESS)
+    parser_pwes_clustering.add_argument("-t", "--tanh_a", type=float, help="Parameter for tanh transformation of scores (Default: 1.0)", default=1.0)
+    parser_pwes_clustering.add_argument("-gs", "--gauss_std", type=float, help="Standard deviation for Gaussian distance factor (Default: 16.0)", default=16)
+    parser_pwes_clustering.add_argument("-d", "--dend_t", type=float, help="Threshold for cutting dendrogram in clustering (Default: 10.0)", default=10)
+    parser_pwes_clustering.add_argument("-a", "--aa_int", type=str, help="Tuple of (aa_min, aa_max) defining the aas to calculate pdists. The default is None, which takes the min/max of df_centroids", default=argparse.SUPPRESS)
+    parser_pwes_clustering.add_argument("-po", "--pos_only", action='store_true', help="If True, only use positive scores for clustering (Default: False)", default=False) 
+    parser_pwes_clustering.add_argument("-o", "--out_dir", type=str, help="Directory for output files (Default: ../out)", default='../out')
+    parser_pwes_clustering.add_argument("-f", "--out_prefix", type=str, help="Prefix for output files (Default: timestamp)", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
+    parser_pwes_clustering.add_argument("-hk","--hist_kwargs", type=json.loads, help='Dict of keyword arguments to pass to hist() for histogram generation (e.g., {"y_axis": "Count"})', default=argparse.SUPPRESS)
+    parser_pwes_clustering.add_argument("-ck", "--cat_kwargs", type=json.loads, help='Dict of keyword arguments to pass to cat() for categorical plot generation (e.g., {"line": 10})', default=argparse.SUPPRESS)
+    parser_pwes_clustering.add_argument("-tk","--torn_kwargs", type=json.loads, help='Dict of keyword arguments to pass to torn() for tornado plot generation (e.g., {"display_legend": False})', default=argparse.SUPPRESS)
+    
+    # hist():
+    parser_pwes_hist.add_argument("-i", "--df_clus", type=str, help="Path to input file with clustering results (must have cluster_col column for cluster labels)", required=True)
+    parser_pwes_hist.add_argument("-c", "--cluster_col", type=str, help="Column name in input file with cluster labels (Default: 'cl_new')", default='cl_new')
+    add_common_plot_cat_args(parser_pwes_hist, pwes_parsers=True)
+
+    # cat():
+    parser_pwes_cat.add_argument("-i", "--df_clus", type=str, help="Path to input file with clustering results (must have cluster_col column for cluster labels and scores_col column for scores)", required=True)
+    parser_pwes_cat.add_argument("-c", "--cluster_col", type=str, help="Column name in input file with cluster labels (Default: 'cl_new')", default='cl_new')
+    parser_pwes_cat.add_argument("-ss", "--scores_col", type=str, help="Column name in input file with sgRNA scores (Default: 'log2(FC)')", default='log2(FC)')
+    add_common_plot_cat_args(parser_pwes_cat, pwes_parsers=True)
+
+    # torn():
+    parser_pwes_torn.add_argument("-df", "--df", type=str, help="Path to input file with preclustering results (must have scores_col column for scores)", required=True)
+    parser_pwes_torn.add_argument("-i", "--df_clus", type=str, help="Path to input file with clustering results (must have cluster_col column for cluster labels and scores_col column for scores)", required=True)
+    parser_pwes_torn.add_argument("-c", "--cluster_col", type=str, help="Column name in input file with cluster labels (Default: 'cl_new')", default='cl_new')
+    parser_pwes_torn.add_argument("-ss", "--scores_col", type=str, help="Column name in input file with edit scores (Default: 'log2(FC)')", default='log2(FC)')
+    add_common_plot_scat_args(parser_pwes_torn, pwes_torn_parser=True)
+
+    # Set defaults
+    parser_pwes_clustering.set_defaults(func=pwes.clustering)
+    parser_pwes_hist.set_defaults(func=pwes.hist)
+    parser_pwes_cat.set_defaults(func=pwes.cat)
+    parser_pwes_torn.set_defaults(func=pwes.torn)

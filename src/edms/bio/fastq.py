@@ -3357,7 +3357,7 @@ def edit_change(df: pd.DataFrame, col: str='Edit', aa_properties: list=[]) -> pd
         after_aa_prop_ls = []
     for (before,after) in t.zip_cols(df=df, cols=['Before','After']):
 
-        if len(before)==1 and len(after)==1: # Substitution (changed to)
+        if len(before)==1 and len(after)==1 and not bool(re.search(r"\d", after)): # Substitution (changed to)
             if (before not in basic) and (after in basic): change.append('Basic')
             elif (before not in acidic) and (after in acidic): change.append('Acidic')
             elif (before not in polar) and (after in polar): change.append('Polar')
@@ -3375,7 +3375,7 @@ def edit_change(df: pd.DataFrame, col: str='Edit', aa_properties: list=[]) -> pd
                 before_aa_prop_ls.append(before_aa_prop_dc)
                 after_aa_prop_ls.append(after_aa_prop_dc)
 
-        elif len(before)==1 and len(after)>1: # Insertion (changed to)
+        elif len(before)==1 and len(after)>1 and not bool(re.search(r"\d", after)): # Insertion (changed to)
 
             if after[-1] in basic: change.append('Basic')
             elif after[-1] in acidic: change.append('Acidic')
@@ -3394,7 +3394,7 @@ def edit_change(df: pd.DataFrame, col: str='Edit', aa_properties: list=[]) -> pd
                 before_aa_prop_ls.append(before_aa_prop_dc)
                 after_aa_prop_ls.append(after_aa_prop_dc)
 
-        elif len(before)>1 and len(after)==1: # Deletion (removed... inverse)
+        elif len(before)>1 and len(after)==1 and not bool(re.search(r"\d", after)): # Deletion (removed... inverse)
             if before[0] in basic: change.append('Acidic')
             elif before[0] in acidic: change.append('Basic')
             elif before[0] in polar: change.append('Nonpolar')
@@ -3507,14 +3507,14 @@ def make_label_info(label: str, before_aa_dict: dict, after_aa_dict: dict,
         text += f"""<br><span style='font-size:{font_size}px'><b>PTM (UniProt):</b> {uniprot_ptm}</span>"""
     if phosphositeplus is not None:
         text += f"""<br><span style='font-size:{font_size}px'><b>PTM (PhosphoSitePlus [Refs]):</b> {phosphositeplus}</span>"""
-    if protein_contacts is not None:
+    if protein_contacts is not None and isinstance(protein_contacts, str):
         num = protein_contacts.count('),') + 1
         if num <= 0:
             text += f"""<br><span style='font-size:{font_size}px'><b>AA Contacts:</b> {protein_contacts}</span>"""
         else:
             text += f"""<br><span style='font-size:{font_size}px'><b>AA Contacts:</b> {protein_contacts.split('),')[0]}),</span>"""
             text += f"""<br><span style='font-size:{font_size}px'>{'),<br>'.join(t.split_nth('),'.join(protein_contacts.split('),')[1:]), '),',2))}</span>"""
-    if nucleic_contacts is not None:
+    if nucleic_contacts is not None and isinstance(nucleic_contacts, str):
         num = nucleic_contacts.count('),') + 1
         if any(base in nucleic_contacts for base in ['dA','dC','dG','dT']):
             if num <= 0:
@@ -3528,14 +3528,14 @@ def make_label_info(label: str, before_aa_dict: dict, after_aa_dict: dict,
             else:
                 text += f"""<br><span style='font-size:{font_size}px'><b>RNA Contacts:</b> {nucleic_contacts.split('),')[0]}),</span>"""
                 text += f"""<br><span style='font-size:{font_size}px'>{'),<br>'.join(t.split_nth('),'.join(nucleic_contacts.split('),')[1:]), '),',2))}</span>"""
-    if protein_neighbors is not None:
+    if protein_neighbors is not None and isinstance(protein_neighbors, str):
         num = protein_neighbors.count('),') + 1
         if num <= 0:
             text += f"""<br><span style='font-size:{font_size}px'><b>AA Neighbors (CoM):</b> {protein_neighbors}</span>"""
         else:
             text += f"""<br><span style='font-size:{font_size}px'><b>AA Neighbors (CoM):</b> {protein_neighbors.split('),')[0]}),</span>"""
             text += f"""<br><span style='font-size:{font_size}px'>{'),<br>'.join(t.split_nth('),'.join(protein_neighbors.split('),')[1:]), '),',3))}</span>"""
-    if nucleic_neighbors is not None:
+    if nucleic_neighbors is not None and isinstance(nucleic_neighbors, str):
         num = nucleic_neighbors.count('),') + 1
         if any(base in nucleic_neighbors for base in ['dA','dC','dG','dT']):
             if num <= 0:
@@ -3798,14 +3798,14 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
     return df
 
 # Plot methods
-def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list = None, cats_exclude: list|str = None, cols: str=None, cols_ord: list=None, cols_exclude: list|str=None, PDB_pt: str=None,
+def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list = None, cats_exclude: list|str = None, cols: str=None, cols_ord: list=None, cols_exclude: list|str=None, PDB_pt: str=None, line: float = None,
         file: str=None, dir: str=None, palette_or_cmap: str='colorblind', alpha: float=1.0, dodge: bool=True, jitter: bool=True, size: float=5, edgecol: str='black', lw: int=1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
         figsize: tuple = (5, 5), title: str='', title_size: int=18, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_scale: str='linear', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int=9, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_scale: str='linear', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int=9, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
         legend_title: str='', legend_title_size: int=12, legend_size: int=9, legend_bbox_to_anchor=(1,1), legend_loc: str='upper left', legend_items: tuple=(0,0), legend_ncol: int=1,
         legend_columnspacing: int=0, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=1, legend_size_html_multiplier: float=1.0,
-        show: bool=True, space_capitalize: bool=True,
+        dpi: int=0, show: bool=True, space_capitalize: bool=True,
         **kwargs):
     ''' 
     cat: creates categorical graphs
@@ -3821,6 +3821,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list
     cols_ord (list, optional): color column values order
     cols_exclude (list | str, optional): color column values exclude
     PDB_pt (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
+    line (float, optional): add horizontal line at y value or vertical line at x value
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     palette_or_cmap (str, optional): seaborn color palette or matplotlib color map
@@ -3874,6 +3875,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list
     legend_borderpad (float, optional): padding inside legend box (Default: 0.5; only for html plots)
     legend_handlelength (float, optional): marker length (Default: 1; only for html plots)
     legend_size_html_multiplier (float, optional): legend size multiplier for html plots (Default: 1.0)
+    dpi (int, optional): dots per inch for saving the plot
     show (bool, optional): show plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     
@@ -3917,14 +3919,14 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list
                     PDB_pt = f'{os.path.expanduser("~/.config/edms/PDB")}/{PDB_file}'
                     break
 
-    p.cat(graph=graph,df=df,x=x,y=y,cats_ord=cats_ord,cats_exclude=cats_exclude,cols=cols,cols_ord=cols_ord,cols_exclude=cols_exclude,PDB_pt=PDB_pt,
+    p.cat(graph=graph,df=df,x=x,y=y,cats_ord=cats_ord,cats_exclude=cats_exclude,cols=cols,cols_ord=cols_ord,cols_exclude=cols_exclude,PDB_pt=PDB_pt,line=line,
           file=file,dir=dir,palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
           figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
           x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_axis_pad=x_axis_pad,x_ticks_size=x_ticks_size,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,x_ticks=x_ticks,
           y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_scale=y_axis_scale,y_axis_dims=y_axis_dims,y_axis_pad=y_axis_pad,y_ticks_size=y_ticks_size,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,y_ticks=y_ticks,
           legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_items=legend_items,legend_ncol=legend_ncol,
           legend_columnspacing=legend_columnspacing,legend_handletextpad=legend_handletextpad,legend_labelspacing=legend_labelspacing,legend_borderpad=legend_borderpad,legend_handlelength=legend_handlelength,legend_size_html_multiplier=legend_size_html_multiplier,
-          show=show,space_capitalize=space_capitalize,**kwargs)
+          dpi=dpi,show=show,space_capitalize=space_capitalize,**kwargs)
 
 def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: str='Edit', cutoff_group: str='fastq_file', cutoff_value: float=0, cutoff_keep: bool=True, 
           cols_ord: list=[], x_ord: list=[], PDB_pt: str=None,
@@ -3934,7 +3936,7 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
           y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int=9, y_ticks_rot: int=0, y_ticks_font: str='Arial',
           legend_title: str='', legend_title_size: int=12, legend_size: int=12,legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1, 
           legend_columnspacing: int=0, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=1, legend_size_html_multiplier: float=1.0,
-          show: bool=True, space_capitalize: bool=True, **kwargs):
+          dpi: int=0, show: bool=True, space_capitalize: bool=True, **kwargs):
     ''' 
     stack(): creates stacked bar plot
 
@@ -3989,6 +3991,7 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
     legend_borderpad (float, optional): padding inside legend box (Default: 0.5; only for html plots)
     legend_handlelength (float, optional): marker length (Default: 1; only for html plots)
     legend_size_html_multiplier (float, optional): legend size multiplier for html plots (Default: 1.0)
+    dpi (int, optional): dots per inch for saving the plot
     show (bool, optional): show plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     
@@ -4045,7 +4048,7 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
             y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_dims=y_axis_dims,y_axis_pad=y_axis_pad,y_ticks_size=y_ticks_size,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,
             legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_ncol=legend_ncol,
             legend_columnspacing=legend_columnspacing, legend_handletextpad=legend_handletextpad, legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad, legend_handlelength=legend_handlelength,legend_size_html_multiplier=legend_size_html_multiplier,
-            show=show,space_capitalize=space_capitalize,PDB_pt=PDB_pt,**kwargs)
+            dpi=dpi,show=show,space_capitalize=space_capitalize,PDB_pt=PDB_pt,**kwargs)
 
 def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: tuple=None, z_col: str=None, z_var: str=None, label: str='Edit', label_size: int=16,
         label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None,
@@ -4391,14 +4394,34 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
 
         # helices
         helix_df = UniProt_ss[UniProt_ss["type"] == "α-helix"]
-        helix_spans = [(row.start, row.end - row.start + 1) for _, row in helix_df.iterrows()]
-        ax.broken_barh(helix_spans, (ss_y, ss_h), label="α-helix", facecolors='coral')
+        if is_html:
+            helix_spans = [(row.start, row.end - row.start) for _, row in helix_df.iterrows()]
+            ax.broken_barh(helix_spans, (ss_y, ss_h), label="α-helix", facecolors='turquoise')
+        else:
+            for xmin, xmax in t.zip_cols(df=helix_df, cols=['start','end']):
+                ax.axvspan(
+                    xmin,
+                    xmax,
+                    facecolor='turquoise',
+                alpha=0.15,
+                edgecolor='none',
+                zorder=0)  # put behind scatter points
 
         # β-strands
         strand_df = UniProt_ss[UniProt_ss["type"] == "β-strand"]
-        strand_spans = [(row.start, row.end - row.start + 1) for _, row in strand_df.iterrows()]
-        ax.broken_barh(strand_spans, (ss_y, ss_h), label="β-strand", facecolors='gold')
-
+        if is_html:
+            strand_spans = [(row.start, row.end - row.start) for _, row in strand_df.iterrows()]
+            ax.broken_barh(strand_spans, (ss_y, ss_h), label="β-strand", facecolors='gold')
+        else:
+            for xmin, xmax in t.zip_cols(df=strand_df, cols=['start','end']):
+                ax.axvspan(
+                    xmin,
+                    xmax,
+                    facecolor='gold',
+                alpha=0.15,
+                edgecolor='none',
+                zorder=0)  # put behind scatter points
+        
     # with legend
     if display_legend == True:
         if size_norm is not None and size is not None: # Add consistent size legend with 5 representative values
@@ -4474,7 +4497,7 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
     # Set title
     if title=='' and file is not None: 
         if space_capitalize: title=p.re_un_cap(".".join(file.split(".")[:-1]))
-        else: ".".join(file.split(".")[:-1])
+        else: title=".".join(file.split(".")[:-1])
     plt.title(title, fontsize=title_size, fontweight=title_weight, family=title_font)
 
     # Save & show fig; return dataframe

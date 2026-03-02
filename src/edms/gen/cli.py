@@ -48,13 +48,14 @@ def add_common_fastq_label_args(subparser):
     subparser.add_argument("-PDBn", "--PDB_neighbors", type=str, help="PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.", default=argparse.SUPPRESS)
 
 # Plot subparser methods
-def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_parser=False):
+def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_parser=False, pwes_torn_parser=False):
     '''
     add_common_plot_scat_args(subparser): Add common arguments for scatter plot related graphs
     '''
     # scat(): Required arguments
-    subparser.add_argument("-i", "--df", help="Input dataframe file path", type=str, required=True)
-    if fastq_torn_parser == False and fastq_corr_parser == False:
+    if pwes_torn_parser == False:
+        subparser.add_argument("-i", "--df", help="Input dataframe file path", type=str, required=True)
+    if fastq_torn_parser == False and fastq_corr_parser == False and pwes_torn_parser == False:
         subparser.add_argument("-x", "--x", help="X-axis column", type=str, required=True)
         subparser.add_argument("-y", "--y", help="Y-axis column", type=str, required=True)
     else:
@@ -65,7 +66,7 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
         subparser.add_argument("-pval", "--pval", help="p-value column name (size column if not specified)", type=str, required=True)
         
     # Optional core arguments
-    if fastq_torn_parser == False and fastq_corr_parser == False:
+    if fastq_torn_parser == False and fastq_corr_parser == False and pwes_torn_parser == False:
         subparser.add_argument("-c", "--cols", type=str, help="Color column name")
         subparser.add_argument("-co", "--cols_ord", nargs="+", help="Column order (list of values)")
         subparser.add_argument("-ce", "--cols_exclude", nargs="+", help="Columns to exclude from coloring")
@@ -84,7 +85,7 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
     subparser.add_argument("-l", "--label", type=str, help="Column name for point labels; static text for images, interactive tooltips for HTML")
 
     # Additional annotation data sources
-    if fastq_torn_parser==True or fastq_corr_parser==True:
+    if fastq_torn_parser==True or fastq_corr_parser==True or pwes_torn_parser==True:
         add_common_fastq_label_args(subparser)
         if fastq_torn_parser==True:
             subparser.add_argument("-ss_h", "--ss_h", type=int, help="Height for secondary structure in the plot (Default: autogenerate)", default=argparse.SUPPRESS)
@@ -92,7 +93,7 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
 
     subparser.add_argument("-o", "--dir", help="Output directory path", type=str, default='./out')
     subparser.add_argument("-f", "--file", help="Output file name", type=str, required=False, default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_scat.png')
-    if fastq_torn_parser == False and fastq_corr_parser == False:
+    if fastq_torn_parser == False and fastq_corr_parser == False and pwes_torn_parser == False:
         subparser.add_argument("-pc", "--palette_or_cmap", type=str, default="colorblind", help="Seaborn palette or matplotlib colormap")
         subparser.add_argument('-a', "--alpha", type=float, default=1, help="Alpha (transparency) for scatter points (0 to 1)")
     subparser.add_argument("-ec", "--edgecol", type=str, default="black", help="Edge color for scatter points")
@@ -148,31 +149,33 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
     subparser.add_argument("-d", "--dpi", type=int, help="Figure dpi (Default: 600 for non-HTML, 150 for HTML)", default=0)
     subparser.add_argument("-s", "--show", action="store_true", help="Show the plot", default=False)
     subparser.add_argument("-sc", "--space_capitalize", action="store_true", help="Capitalize label/legend strings and replace underscores with spaces")
-    if fastq_torn_parser == True or fastq_corr_parser == True:
+    if fastq_torn_parser == True or fastq_corr_parser == True or pwes_torn_parser == True:
         subparser.add_argument("-ddlg", "--dont_display_legend", dest='display_legend', action="store_false", default=True, help="Display legend on plot (Default: True)")
         subparser.add_argument("-ddla", "--dont_display_labels", dest='display_labels', action="store_false", default=True, help="Display labels for significant values (Default: True)")
         subparser.add_argument("-dda", "--dont_display_axis", dest='display_axis', action="store_false", default=True, help="Display x- and y-axis lines (Default: True)")
-    if fastq_corr_parser == False and fastq_corr_parser == False:
+    if fastq_corr_parser == True:
         subparser.add_argument("-cm", "--corr_method", default=argparse.SUPPRESS, help="Display correlation line of best fit (Default: None; options: 'pearson', 'spearman', 'kendall')", choices=['pearson', 'spearman', 'kendall'])
         subparser.add_argument("-cw", "--corr_weight", default=argparse.SUPPRESS, help="Weights column name for correlation line (Default: None; not weighted correlation)")
 
-def add_common_plot_cat_args(subparser, fastq_parser=False):
+def add_common_plot_cat_args(subparser, fastq_parser=False, pwes_parsers=False):
     '''
     add_common_plot_cat_args(subparser): Add common arguments for categorical graphs
     '''
     # cat(): Required arguments
     if fastq_parser == True:
         subparser.add_argument("-g", "--graph", help="Type of category plot", type=str, required=True, choices=['bar', 'box', 'violin', 'strip', 'swarm', 'point', 'count', 'bar_strip', 'box_strip', 'violin_strip', 'bar_swarm', 'box_swarm', 'violin_swarm'])
-    subparser.add_argument("-i", "--df", help="Input dataframe file path", type=str, required=True)
+    if pwes_parsers == False:
+        subparser.add_argument("-i", "--df", help="Input dataframe file path", type=str, required=True)
 
     # Optional core arguments
-    subparser.add_argument("-x", "--x", help="X-axis column name", type=str, default="")
-    subparser.add_argument("-y", "--y", help="Y-axis column name", type=str, default="")
-    subparser.add_argument("-co", "--cats_ord", nargs="+", help="Category column values order (x- or y-axis)")
-    subparser.add_argument("-ce", "--cats_exclude", nargs="+", help="Category column values exclude (x- or y-axis)")
-    subparser.add_argument("-cl", "--cols", type=str, help="Color column name for grouping")
-    subparser.add_argument("-clo", "--cols_ord", nargs="+", help="Color column values order")
-    subparser.add_argument("-cle", "--cols_exclude", nargs="+", help="Color column values to exclude")
+    if pwes_parsers == False:
+        subparser.add_argument("-x", "--x", help="X-axis column name", type=str, default="")
+        subparser.add_argument("-y", "--y", help="Y-axis column name", type=str, default="")
+        subparser.add_argument("-co", "--cats_ord", nargs="+", help="Category column values order (x- or y-axis)")
+        subparser.add_argument("-ce", "--cats_exclude", nargs="+", help="Category column values exclude (x- or y-axis)")
+        subparser.add_argument("-cl", "--cols", type=str, help="Color column name for grouping")
+        subparser.add_argument("-clo", "--cols_ord", nargs="+", help="Color column values order")
+        subparser.add_argument("-cle", "--cols_exclude", nargs="+", help="Color column values to exclude")
     if fastq_parser == True:
         subparser.add_argument("-PDB_pt", "--PDB_pt", type=str, help="PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information", default=argparse.SUPPRESS)
 
