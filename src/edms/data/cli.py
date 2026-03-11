@@ -166,7 +166,39 @@ def add_subparser(subparsers, formatter_class=None):
     parser_uniprot_retrieve.add_argument("-n", "--no_config", action="store_false", dest='config', help="Do not save to configuration directory", default=True)
     parser_uniprot_retrieve.add_argument("-b", "--base_url", type=str, help="Base URL for UniProt REST API (Default: https://rest.uniprot.org/uniprotkb)", default="https://rest.uniprot.org/uniprotkb")
 
+
     parser_uniprot_retrieve.set_defaults(func=uniprot.retrieve)
+
+    # draw_ss_track(): Draw a secondary structure track
+    parser_uniprot_draw_ss_track = subparsers_uniprot.add_parser("ss", help="Draw a secondary structure track", description="Draw a secondary structure track", formatter_class=formatter_class)
+
+    parser_uniprot_draw_ss_track.add_argument("-i", "--df", type=str, help="UniProt accession (if saved to ~/.config/edms/UniProt) or file path for UniProt flat file. See edms.dat.uniprot.retrieve() or edms uniprot retrieve -h for more information.", required=True)
+    
+    parser_uniprot_draw_ss_track.add_argument("-y", "--y", type=float, help="Vertical position of the track", default=argparse.SUPPRESS)
+    parser_uniprot_draw_ss_track.add_argument("-ts", "--track_start", type=float, help="Optional start bound for the track; if None, determined from data", default=argparse.SUPPRESS)
+    parser_uniprot_draw_ss_track.add_argument("-te", "--track_end", type=float, help="Optional end bound for the track; if None, determined from data", default=argparse.SUPPRESS)
+    parser_uniprot_draw_ss_track.add_argument("-hh", "--helix_height", type=float, help="Height for helices; if None, defaults to `height`", default=argparse.SUPPRESS)
+    parser_uniprot_draw_ss_track.add_argument("-sh", "--strand_height", type=float, help="Height for strands; if None, defaults to `height`", default=argparse.SUPPRESS)
+    parser_uniprot_draw_ss_track.add_argument("-lh", "--loop_height", type=float, help="Height for loops; if None, defaults to `height`", default=argparse.SUPPRESS)
+    parser_uniprot_draw_ss_track.add_argument("-xp", "--xpad", type=int, help="Horizontal padding on the left and right of the track", default=argparse.SUPPRESS)
+    parser_uniprot_draw_ss_track.add_argument("-hc", "--helix_color", type=str, help="Color for helices", default=argparse.SUPPRESS)
+    parser_uniprot_draw_ss_track.add_argument("-sc", "--strand_color", type=str, help="Color for strands", default=argparse.SUPPRESS)
+    parser_uniprot_draw_ss_track.add_argument("-lc", "--loop_color", type=str, help="Color for loops", default=argparse.SUPPRESS)
+    parser_uniprot_draw_ss_track.add_argument("-ec", "--edgecolor", type=str, help="Color of the edges of helices and strands", default=argparse.SUPPRESS)
+    parser_uniprot_draw_ss_track.add_argument("-hlw", "--helix_lw", type=float, help="Line width for helices", default=argparse.SUPPRESS)
+    parser_uniprot_draw_ss_track.add_argument("-slw", "--strand_lw", type=float, help="Line width for strands", default=argparse.SUPPRESS)
+    parser_uniprot_draw_ss_track.add_argument("-llw", "--loop_lw", type=float, help="Line width for loops", default=argparse.SUPPRESS)
+    parser_uniprot_draw_ss_track.add_argument("-lml", "--loop_min_len", type=float, help="Minimum length of loops to draw (for auto-drawn loops between elements)", default=argparse.SUPPRESS)
+    parser_uniprot_draw_ss_track.add_argument("-z", "--base_zorder", type=int, help="Z-order for the first element; subsequent elements decrease by zorder_step to create a stacking effect", default=argparse.SUPPRESS)
+    parser_uniprot_draw_ss_track.add_argument("-hlp", "--helix_loop_pad", type=float, help="Padding to apply to the start/end of helices when auto-drawing loops between elements, to make the sine wave connect more nicely; applied as a subtraction from the end of the current element and an addition to the start of the next element when determining loop start and end positions", default=argparse.SUPPRESS)
+    parser_uniprot_draw_ss_track.add_argument("-slp", "--strand_loop_pad", type=float, help="Padding to apply to the start/end of strands when auto-drawing loops between elements, to make the sine wave connect more nicely; applied as a subtraction from the end of the current element and an addition to the start of the next element when determining loop start and end positions", default=argparse.SUPPRESS)
+    parser_uniprot_draw_ss_track.add_argument("-fs","--figsize", type=parse_tuple_float, help="Size of the figure to create (width, height)", default=(10, 2))
+    parser_uniprot_draw_ss_track.add_argument("-o", "--dir", type=str, help="Output directory", default='../out')
+    parser_uniprot_draw_ss_track.add_argument("-f", "--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_uniprot_ss_track.all')
+    parser_uniprot_draw_ss_track.add_argument("-d", "--dpi", type=int, help="Figure dpi (Default: 600)", default=argparse.SUPPRESS)
+    parser_uniprot_draw_ss_track.add_argument("-s", "--show", action="store_true", help="Show plot", default=False)
+
+    parser_uniprot_draw_ss_track.set_defaults(func=uniprot.draw_ss_track)
 
     '''
     edms.data.pdb:

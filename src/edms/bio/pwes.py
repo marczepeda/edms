@@ -6,10 +6,18 @@ Adapted from: BE-SCAN (Calvin Hu)
 Description: Proximity-Weighted Enrichment Score (PWES) clustering
 
 Usage:
+[Dataclasses] ### From BE-SCAN ###
+- [Dataclass for axes, labels, etc]
+    - AxisLabelOpts: Options for axis labels, ticks, limits, etc.
+    - PWESHeatmapStyleOpts: Options for PWES heatmap styling.
+- [Dataclass for outputs]
+    - OutputOpts: Options for figure output (size, path, format, etc.)
+    - Defining default options: Instances of the above dataclasses with default values.
 [Helper Functions]
-- [HEX TO RGB CONVERSION]
+- [HEX <-> RGB CONVERSION]
     - hex_to_rgb: Convert hex color code to RGB tuple.
     - hex_list_to_rgb_list: Convert list of hex color codes to list of RGB tuples.
+    - tuple_to_hex: Convert RGB tuple to hex color code.
     - fillgaps: Fill in missing amino acid positions in the PWES matrix with NaN values.
 - [DISTANCE FACTOR (e^(-d^2 / 2t^2))]
     - process_pdb: Process PDB file to extract centroid coordinates for amino acids.
@@ -26,19 +34,21 @@ Usage:
 - [Iterative Clustering]
     - safe_slug: Make a filesystem-friendly folder name component.
     - mask_equals: Equality mask that treats NaN == NaN for grouping purposes.
+### Test ###
+- [PWES Cluster Mapping]
+    - pymol_script(): Generates a PyMOL script to display selected residues as separate objects.
 
 [Plot Functions]
 - hist: Generates a histogram of the number edits for each cluster.
 - cat: creates categorical graphs for PWES 3D clustering results
 - torn: generates tornado plots for visualizing PWES clusters
-### Future ###
-- heatmap
-- clustermap
-- colorbar
-- tuple_to_hex: Convert RGB tuple to hex color code.
-- pymol_script: Generate PyMOL script to visualize clusters on 3D structure.
+- heatmap: generates heatmap of PWES scores, with options for clustering and showing colorbar
+- heatmap_cbar: generates a standalone colorbar for the heatmap with specified orientation and styling.
+### Test ###
+- clustermap: generates clustered heatmap of PWES scores, with options for coloring clusters and styling.
 
 [Main Function]
+### Revise to include pymol_script() automation ### Test ###
 - clustering: Compute 3D PWES clustering analysis
     - run_one: Inner function that runs the clustering pipeline for a single group of data (used in iterative mode)
 '''
@@ -49,6 +59,7 @@ import gc
 import math
 import time
 import random
+from importlib.resources import files
 from datetime import datetime
 import mpld3
 import re
@@ -63,9 +74,9 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import matplotlib.font_manager as fm
+import matplotlib.patches as patches
 
 from dataclasses import dataclass, field, replace
-from typing import Any, Dict, List, Optional, Tuple, Union
 from pathlib import Path
 
 import scipy.cluster as sp_cl
@@ -85,9 +96,10 @@ import pickle
 from ..gen import io, tidy as t, plot as p, stat as st
 from ..data import uniprot, pdb
 from .fastq import add_label_info
+from ..utils import mkdir
 
 # Helper functions
-### HEX TO RGB CONVERSION
+### HEX <-> RGB CONVERSION
 def hex_to_rgb(hex_color):
     """
     Converts a hex color code to an RGB tuple.
@@ -100,6 +112,18 @@ def hex_list_to_rgb_list(hex_color_list):
     Converts a list of hex color codes to a list of RGB tuples.
     """
     return [hex_to_rgb(hex_color) for hex_color in hex_color_list]
+
+def tuple_to_hex(rgb_tuple):
+    '''
+    Converts an RGB tuple to a hex color code.
+    '''
+    if not (isinstance(rgb_tuple, tuple) and len(rgb_tuple) == 3 and
+            all(isinstance(val, float) and 0 <= val <= 1 for val in rgb_tuple)):
+        return None
+
+    r, g, b = rgb_tuple
+    r, g, b = int(r * 255), int(g * 255), int(b * 255)
+    return f"{r:02x}{g:02x}{b:02x}".upper()
 
 ### FILL GAPS
 def fillgaps(
@@ -340,70 +364,112 @@ def _mask_equals(series: pd.Series, value: Any) -> pd.Series:
         return series.isna()
     return series == value
 
+### PWES Cluster Mapping
+def pymol_script(
+    dir: str,
+    file: str,
+    pdb_filename: str,
+    residue_dict: dict,
+    colors: list, 
+    ):
+    """
+    pymol_script(): Generates a PyMOL script to display selected residues as separate objects.
+
+    Parameters:
+    dir (str): Path to save the generated PyMOL script.
+    file (str): Name of the file to save the generated PyMOL script.
+    pdb_filename (str): Path to the PDB file to load in PyMOL
+    residue_dict (dict): Dictionary where keys are cluster identifiers and values are lists of residues (e.g., [('A', 123), ('B', 45)])
+    colors (list): List of RGB tuples corresponding to each cluster for coloring the residues.
+    """
+    mkdir(dir)
+    with open(os.path.join(dir, file), 'w') as pymol_script:
+        pymol_script.write(f"load {pdb_filename}\n")
+        pymol_script.write(f"show cartoon\n")
+        pymol_script.write(f"color white\n")
+        pymol_script.write(f"zoom\n")
+
+        for i, (key, vals) in enumerate(residue_dict.items()):
+            group_name = f"Cluster{key}"
+            # res has a format of ('A', 123) #
+            selection_str = " or ".join([f"resi {str(int(res[1:]))} and chain {res[0]} and name CA" for res in vals])
+
+            color = colors[i]
+            color_hex = tuple_to_hex(color)
+            color_str = f'0x{color_hex}'
+            print(color_str)
+            
+            pymol_script.write(f"select {selection_str}\n")
+            pymol_script.write(f"create {group_name}, sele\n")
+            pymol_script.write(f"show spheres, {group_name}\n")
+            pymol_script.write(f"color {color_str}, {group_name}\n")
+            pymol_script.write(f"disable {group_name}\n")
+
 # Plot functions
 def hist(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new", line: float = None,
-    file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', alpha: float = 1.0, dodge: bool = False, jitter: bool = True, size: float = 5, edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
+    file: str = None, dir: str = None, palette_or_cmap: str = 'turbo', alpha: float = 1.0, dodge: bool = False, jitter: bool = True, size: float = 5, edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
     figsize: tuple = (5, 5), title: str = 'Number of Edits in Clusters', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial',
     x_axis: str = 'Cluster #', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 9, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
     y_axis: str = 'Count', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 9, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
     legend_title: str = '', legend_title_size: int = 12, legend_size: int = 9, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_items: tuple = (0, 0), legend_ncol: int = 1,
     legend_columnspacing: int=0, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=1, legend_size_html_multiplier: float=1.0,
-    dpi: int = 0, show: bool = True, space_capitalize: bool = True, **kwargs):
+    dpi: int = 0, transparent: bool = False, show: bool = True, space_capitalize: bool = True, **kwargs):
     """
     hist(): Generates a histogram of the number edits for each cluster.
     
     Parameters:
-    - df_clus (pd.DataFrame | str): DataFrame or path to a saved DataFrame containing clustering results, must have cluster_col column for cluster labels.
-    - cluster_col (str, optional): column name in df_clus with cluster labels (Default: "cl_new")
-    - line (float, optional): add horizontal line at y value or vertical line at x value
-    - file (str, optional): filename to save the plot (including the file extension)
-    - dir (str, optional): Directory to save the plot.
-    - palette_or_cmap (str, optional): Palette or colormap for the plot.
-    - alpha (float, optional): Alpha value for transparency of markers.
-    - edgecol (str, optional): Edge color for markers.
-    - figsize (tuple, optional): Figure size for the plot.
-    - title (str, optional): Title for the plot.
-    - title_size (int, optional): Size of the title font.
-    - title_weight (str, optional): Weight of the title font.
-    - title_font (str, optional): Font family of the title.
-    - x_axis (str, optional): Label for x-axis.
-    - x_axis_size (int, optional): Size of x-axis label font.
-    - x_axis_weight (str, optional): Weight of x-axis label font.
-    - x_axis_font (str, optional): Font family of x-axis label font.
-    - x_axis_scale (str, optional): Scale of x-axis (linear, log, etc.).
-    - x_axis_dims (tuple, optional): Dimensions of x-axis (min, max).
-    - x_axis_pad (int, optional): Padding for x-axis labels.
-    - x_ticks_size (int, optional): Size of x-tick labels font.
-    - x_ticks_rot (int, optional): Rotation angle of x-tick labels (in degrees).
-    - x_ticks_font (str, optional): Font family of x-tick labels font.
-    - x_ticks (list, optional): List of specific tick positions on the x-axis (if empty, default ticks are used).
-    - y_axis (str, optional): Label for y-axis.
-    - y_axis_size (int, optional): Size of y-axis label font.
-    - y_axis_weight (str, optional): Weight of y-axis label font.
-    - y_axis_font (str, optional): Font family of y-axis label font.
-    - y_axis_scale (str, optional): Scale of y-axis (linear, log, etc.).
-    - y_axis_dims (tuple, optional): Dimensions of y-axis (min, max).
-    - y_axis_pad (int, optional): Padding for y-axis labels.
-    - y_ticks_size (int, optional): Size of y-tick labels font.
-    - y_ticks_rot (int, optional): Rotation angle of y-tick labels (in degrees).
-    - y_ticks_font (str, optional): Font family of y-tick labels font.
-    - y_ticks (list, optional): List of specific tick positions on the y-axis (if empty, default ticks are used).
-    - legend_title (str, optional): Title for the legend.
-    - legend_title_size (int, optional): Size of the legend title font.
-    - legend_size (int, optional): Size of the legend labels font.
-    - legend_bbox_to_anchor (tuple, optional): Tuple specifying the position to anchor the legend (x, y).
-    - legend_loc (str, optional): Location of the legend (e.g., 'upper left', 'lower right').
-    - legend_items (tuple, optional): Tuple specifying the number of items in the legend (ncol, nrow).
-    - legend_ncol (int, optional): Number of columns in the legend.
-    - legend_columnspacing (float, optional): Spacing between columns in the legend.
-    - legend_handletextpad (float, optional): Padding between legend handles and text.
-    - legend_labelspacing (float, optional): Spacing between legend labels.
-    - legend_borderpad (float, optional): Padding between the legend border and its contents.
-    - legend_handlelength (float, optional): Length of the legend handles.
-    - legend_size_html_multiplier (float, optional): Multiplier for scaling legend font size when saving as HTML.
-    - dpi (int, optional): Dots per inch for saving the plot.
-    - show (bool, optional): Whether to display the plot after creating it.
-    - space_capitalize (bool, optional): Whether to capitalize words in the title and axis labels.
+    df_clus (pd.DataFrame | str): DataFrame or path to a saved DataFrame containing clustering results, must have cluster_col column for cluster labels.
+    cluster_col (str, optional): column name in df_clus with cluster labels (Default: "cl_new")
+    line (float, optional): add horizontal line at y value or vertical line at x value
+    file (str, optional): filename to save the plot (including the file extension)
+    dir (str, optional): Directory to save the plot.
+    palette_or_cmap (str, optional): Palette or colormap for the plot.
+    alpha (float, optional): Alpha value for transparency of markers.
+    edgecol (str, optional): Edge color for markers.
+    figsize (tuple, optional): Figure size for the plot.
+    title (str, optional): Title for the plot.
+    title_size (int, optional): Size of the title font.
+    title_weight (str, optional): Weight of the title font.
+    title_font (str, optional): Font family of the title.
+    x_axis (str, optional): Label for x-axis.
+    x_axis_size (int, optional): Size of x-axis label font.
+    x_axis_weight (str, optional): Weight of x-axis label font.
+    x_axis_font (str, optional): Font family of x-axis label font.
+    x_axis_scale (str, optional): Scale of x-axis (linear, log, etc.).
+    x_axis_dims (tuple, optional): Dimensions of x-axis (min, max).
+    x_axis_pad (int, optional): Padding for x-axis labels.
+    x_ticks_size (int, optional): Size of x-tick labels font.
+    x_ticks_rot (int, optional): Rotation angle of x-tick labels (in degrees).
+    x_ticks_font (str, optional): Font family of x-tick labels font.
+    x_ticks (list, optional): List of specific tick positions on the x-axis (if empty, default ticks are used).
+    y_axis (str, optional): Label for y-axis.
+    y_axis_size (int, optional): Size of y-axis label font.
+    y_axis_weight (str, optional): Weight of y-axis label font.
+    y_axis_font (str, optional): Font family of y-axis label font.
+    y_axis_scale (str, optional): Scale of y-axis (linear, log, etc.).
+    y_axis_dims (tuple, optional): Dimensions of y-axis (min, max).
+    y_axis_pad (int, optional): Padding for y-axis labels.
+    y_ticks_size (int, optional): Size of y-tick labels font.
+    y_ticks_rot (int, optional): Rotation angle of y-tick labels (in degrees).
+    y_ticks_font (str, optional): Font family of y-tick labels font.
+    y_ticks (list, optional): List of specific tick positions on the y-axis (if empty, default ticks are used).
+    legend_title (str, optional): Title for the legend.
+    legend_title_size (int, optional): Size of the legend title font.
+    legend_size (int, optional): Size of the legend labels font.
+    legend_bbox_to_anchor (tuple, optional): Tuple specifying the position to anchor the legend (x, y).
+    legend_loc (str, optional): Location of the legend (e.g., 'upper left', 'lower right').
+    legend_items (tuple, optional): Tuple specifying the number of items in the legend (ncol, nrow).
+    legend_ncol (int, optional): Number of columns in the legend.
+    legend_columnspacing (float, optional): Spacing between columns in the legend.
+    legend_handletextpad (float, optional): Padding between legend handles and text.
+    legend_labelspacing (float, optional): Spacing between legend labels.
+    legend_borderpad (float, optional): Padding between the legend border and its contents.
+    legend_handlelength (float, optional): Length of the legend handles.
+    legend_size_html_multiplier (float, optional): Multiplier for scaling legend font size when saving as HTML.
+    dpi (int, optional): Dots per inch for saving the plot.
+    transparent (bool, optional): Whether to save the plot with a transparent background.
+    show (bool, optional): Whether to display the plot after creating it.
+    space_capitalize (bool, optional): Whether to capitalize words in the title and axis labels.
     """
     if isinstance(df_clus, str):
         df_clus = io.get(df_clus)
@@ -414,78 +480,79 @@ def hist(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new", line: float =
     clust_counts[cluster_col] = clust_counts[cluster_col].astype(str)  # Ensure cluster labels are strings for categorical plotting
 
     p.cat(graph='bar', df=clust_counts, x=cluster_col, y="count", line=line,
-        file=f'{".".join(file.split(".")[:-1])}_hist.{file.split(".")[-1]}' if file else "hist.pdf", dir=dir,palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
+        file=f'{".".join(file.split(".")[:-1])}_hist.{file.split(".")[-1]}' if file else "hist.all", dir=dir,palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
         figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
         x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_axis_pad=x_axis_pad,x_ticks_size=x_ticks_size,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,x_ticks=x_ticks,
         y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_scale=y_axis_scale,y_axis_dims=y_axis_dims,y_axis_pad=y_axis_pad,y_ticks_size=y_ticks_size,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,y_ticks=y_ticks,
         legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_items=legend_items,legend_ncol=legend_ncol,
         legend_columnspacing=legend_columnspacing,legend_handletextpad=legend_handletextpad,legend_labelspacing=legend_labelspacing,legend_borderpad=legend_borderpad,legend_handlelength=legend_handlelength,legend_size_html_multiplier=legend_size_html_multiplier,
-        dpi=dpi,show=show,space_capitalize=space_capitalize,**kwargs)
+        dpi=dpi,transparent=transparent,show=show,space_capitalize=space_capitalize,**kwargs)
 
 def cat(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new",scores_col: str = "log2(FC)", line: float = None,
-    file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', alpha: float = 1.0, dodge: bool = False, jitter: bool = True, size: float = 5, edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
+    file: str = None, dir: str = None, palette_or_cmap: str = 'turbo', alpha: float = 1.0, dodge: bool = False, jitter: bool = True, size: float = 5, edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
     figsize: tuple = (5, 5), title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial',
     x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 9, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
     y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 9, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
     legend_title: str = '', legend_title_size: int = 12, legend_size: int = 9, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_items: tuple = (0, 0), legend_ncol: int = 1,
     legend_columnspacing: int=0, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=1, legend_size_html_multiplier: float=1.0,
-    dpi: int = 0, show: bool = True, space_capitalize: bool = True, **kwargs):
+    dpi: int = 0, transparent: bool = False, show: bool = True, space_capitalize: bool = True, **kwargs):
     """
     cat(): creates categorical graphs for PWES 3D clustering results
     
     Parameters:
-    - df_clus (pd.DataFrame | str): DataFrame or path to a saved DataFrame containing clustering results, must have cluster_col column for cluster labels and scores_col for values to plot.
-    - cluster_col (str, optional): column name in df_clus with cluster labels (Default: "cl_new")
-    - scores_col (str, optional): column name in df_clus with sgRNA scores (Default: "log2(FC)")
-    - line (float, optional): add horizontal line at y value or vertical line at x value
-    - file (str, optional): filename to save the plot (including the file extension)
-    - dir (str, optional): Directory to save the plot.
-    - palette_or_cmap (str, optional): Palette or colormap for the plot.
-    - alpha (float, optional): Alpha value for transparency of markers.
-    - edgecol (str, optional): Edge color for markers.
-    - figsize (tuple, optional): Figure size for the plot.
-    - title (str, optional): Title for the plot.
-    - title_size (int, optional): Size of the title font.
-    - title_weight (str, optional): Weight of the title font.
-    - title_font (str, optional): Font family of the title.
-    - x_axis (str, optional): Label for x-axis.
-    - x_axis_size (int, optional): Size of x-axis label font.
-    - x_axis_weight (str, optional): Weight of x-axis label font.
-    - x_axis_font (str, optional): Font family of x-axis label font.
-    - x_axis_scale (str, optional): Scale of x-axis (linear, log, etc.).
-    - x_axis_dims (tuple, optional): Dimensions of x-axis (min, max).
-    - x_axis_pad (int, optional): Padding for x-axis labels.
-    - x_ticks_size (int, optional): Size of x-tick labels font.
-    - x_ticks_rot (int, optional): Rotation angle of x-tick labels (in degrees).
-    - x_ticks_font (str, optional): Font family of x-tick labels font.
-    - x_ticks (list, optional): List of specific tick positions on the x-axis (if empty, default ticks are used).
-    - y_axis (str, optional): Label for y-axis.
-    - y_axis_size (int, optional): Size of y-axis label font.
-    - y_axis_weight (str, optional): Weight of y-axis label font.
-    - y_axis_font (str, optional): Font family of y-axis label font.
-    - y_axis_scale (str, optional): Scale of y-axis (linear, log, etc.).
-    - y_axis_dims (tuple, optional): Dimensions of y-axis (min, max).
-    - y_axis_pad (int, optional): Padding for y-axis labels.
-    - y_ticks_size (int, optional): Size of y-tick labels font.
-    - y_ticks_rot (int, optional): Rotation angle of y-tick labels (in degrees).
-    - y_ticks_font (str, optional): Font family of y-tick labels font.
-    - y_ticks (list, optional): List of specific tick positions on the y-axis (if empty, default ticks are used).
-    - legend_title (str, optional): Title for the legend.
-    - legend_title_size (int, optional): Size of the legend title font.
-    - legend_size (int, optional): Size of the legend labels font.
-    - legend_bbox_to_anchor (tuple, optional): Tuple specifying the position to anchor the legend (x, y).
-    - legend_loc (str, optional): Location of the legend (e.g., 'upper left', 'lower right').
-    - legend_items (tuple, optional): Tuple specifying the number of items in the legend (ncol, nrow).
-    - legend_ncol (int, optional): Number of columns in the legend.
-    - legend_columnspacing (float, optional): Spacing between columns in the legend.
-    - legend_handletextpad (float, optional): Padding between legend handles and text.
-    - legend_labelspacing (float, optional): Spacing between legend labels.
-    - legend_borderpad (float, optional): Padding between the legend border and its contents.
-    - legend_handlelength (float, optional): Length of the legend handles.
-    - legend_size_html_multiplier (float, optional): Multiplier for scaling legend font size when saving as HTML.
-    - dpi (int, optional): Dots per inch for saving the plot.
-    - show (bool, optional): Whether to display the plot after creating it.
-    - space_capitalize (bool, optional): Whether to capitalize words in the title and axis labels.
+    df_clus (pd.DataFrame | str): DataFrame or path to a saved DataFrame containing clustering results, must have cluster_col column for cluster labels and scores_col for values to plot.
+    cluster_col (str, optional): column name in df_clus with cluster labels (Default: "cl_new")
+    scores_col (str, optional): column name in df_clus with sgRNA scores (Default: "log2(FC)")
+    line (float, optional): add horizontal line at y value or vertical line at x value
+    file (str, optional): filename to save the plot (including the file extension)
+    dir (str, optional): Directory to save the plot.
+    palette_or_cmap (str, optional): Palette or colormap for the plot.
+    alpha (float, optional): Alpha value for transparency of markers.
+    edgecol (str, optional): Edge color for markers.
+    figsize (tuple, optional): Figure size for the plot.
+    title (str, optional): Title for the plot.
+    title_size (int, optional): Size of the title font.
+    title_weight (str, optional): Weight of the title font.
+    title_font (str, optional): Font family of the title.
+    x_axis (str, optional): Label for x-axis.
+    x_axis_size (int, optional): Size of x-axis label font.
+    x_axis_weight (str, optional): Weight of x-axis label font.
+    x_axis_font (str, optional): Font family of x-axis label font.
+    x_axis_scale (str, optional): Scale of x-axis (linear, log, etc.).
+    x_axis_dims (tuple, optional): Dimensions of x-axis (min, max).
+    x_axis_pad (int, optional): Padding for x-axis labels.
+    x_ticks_size (int, optional): Size of x-tick labels font.
+    x_ticks_rot (int, optional): Rotation angle of x-tick labels (in degrees).
+    x_ticks_font (str, optional): Font family of x-tick labels font.
+    x_ticks (list, optional): List of specific tick positions on the x-axis (if empty, default ticks are used).
+    y_axis (str, optional): Label for y-axis.
+    y_axis_size (int, optional): Size of y-axis label font.
+    y_axis_weight (str, optional): Weight of y-axis label font.
+    y_axis_font (str, optional): Font family of y-axis label font.
+    y_axis_scale (str, optional): Scale of y-axis (linear, log, etc.).
+    y_axis_dims (tuple, optional): Dimensions of y-axis (min, max).
+    y_axis_pad (int, optional): Padding for y-axis labels.
+    y_ticks_size (int, optional): Size of y-tick labels font.
+    y_ticks_rot (int, optional): Rotation angle of y-tick labels (in degrees).
+    y_ticks_font (str, optional): Font family of y-tick labels font.
+    y_ticks (list, optional): List of specific tick positions on the y-axis (if empty, default ticks are used).
+    legend_title (str, optional): Title for the legend.
+    legend_title_size (int, optional): Size of the legend title font.
+    legend_size (int, optional): Size of the legend labels font.
+    legend_bbox_to_anchor (tuple, optional): Tuple specifying the position to anchor the legend (x, y).
+    legend_loc (str, optional): Location of the legend (e.g., 'upper left', 'lower right').
+    legend_items (tuple, optional): Tuple specifying the number of items in the legend (ncol, nrow).
+    legend_ncol (int, optional): Number of columns in the legend.
+    legend_columnspacing (float, optional): Spacing between columns in the legend.
+    legend_handletextpad (float, optional): Padding between legend handles and text.
+    legend_labelspacing (float, optional): Spacing between legend labels.
+    legend_borderpad (float, optional): Padding between the legend border and its contents.
+    legend_handlelength (float, optional): Length of the legend handles.
+    legend_size_html_multiplier (float, optional): Multiplier for scaling legend font size when saving as HTML.
+    dpi (int, optional): Dots per inch for saving the plot.
+    transparent (bool, optional): Whether to save the plot with a transparent background.
+    show (bool, optional): Whether to display the plot after creating it.
+    space_capitalize (bool, optional): Whether to capitalize words in the title and axis labels.
     """
     if isinstance(df_clus, str):
         df_clus = io.get(df_clus)
@@ -497,40 +564,49 @@ def cat(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new",scores_col: str
 
     # Categorical bar chart of cluster counts
     p.cat(graph='swarm', df=df_clus, x=cluster_col, y=scores_col, line=line,
-        file=f'{".".join(file.split(".")[:-1])}_swarm.{file.split(".")[-1]}' if file else f"swarm.pdf", dir=dir,palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
+        file=f'{".".join(file.split(".")[:-1])}_swarm.{file.split(".")[-1]}' if file else f"swarm.all", dir=dir,palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
         figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
         x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_axis_pad=x_axis_pad,x_ticks_size=x_ticks_size,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,x_ticks=x_ticks,
         y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_scale=y_axis_scale,y_axis_dims=y_axis_dims,y_axis_pad=y_axis_pad,y_ticks_size=y_ticks_size,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,y_ticks=y_ticks,
         legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_items=legend_items,legend_ncol=legend_ncol,
         legend_columnspacing=legend_columnspacing,legend_handletextpad=legend_handletextpad,legend_labelspacing=legend_labelspacing,legend_borderpad=legend_borderpad,legend_handlelength=legend_handlelength,legend_size_html_multiplier=legend_size_html_multiplier,
-        dpi=dpi,show=show,space_capitalize=space_capitalize,**kwargs)
+        dpi=dpi,transparent=transparent,show=show,space_capitalize=space_capitalize,**kwargs)
     
     p.cat(graph='strip', df=df_clus, x=cluster_col, y=scores_col, line=line,
-        file=f'{".".join(file.split(".")[:-1])}_strip.{file.split(".")[-1]}' if file else f"strip.pdf", dir=dir,palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
+        file=f'{".".join(file.split(".")[:-1])}_strip.{file.split(".")[-1]}' if file else f"strip.all", dir=dir,palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
         figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
         x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_axis_pad=x_axis_pad,x_ticks_size=x_ticks_size,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,x_ticks=x_ticks,
         y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_scale=y_axis_scale,y_axis_dims=y_axis_dims,y_axis_pad=y_axis_pad,y_ticks_size=y_ticks_size,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,y_ticks=y_ticks,
         legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_items=legend_items,legend_ncol=legend_ncol,
         legend_columnspacing=legend_columnspacing,legend_handletextpad=legend_handletextpad,legend_labelspacing=legend_labelspacing,legend_borderpad=legend_borderpad,legend_handlelength=legend_handlelength,legend_size_html_multiplier=legend_size_html_multiplier,
-        dpi=dpi,show=show,space_capitalize=space_capitalize,**kwargs)
+        dpi=dpi,transparent=transparent,show=show,space_capitalize=space_capitalize,**kwargs)
 
     p.cat(graph='box', df=df_clus, x=cluster_col, y=scores_col, line=line,
-        file=f'{".".join(file.split(".")[:-1])}_box.{file.split(".")[-1]}' if file else f"box.pdf", dir=dir,palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
+        file=f'{".".join(file.split(".")[:-1])}_box.{file.split(".")[-1]}' if file else f"box.all", dir=dir,palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
         figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
         x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_axis_pad=x_axis_pad,x_ticks_size=x_ticks_size,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,x_ticks=x_ticks,
         y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_scale=y_axis_scale,y_axis_dims=y_axis_dims,y_axis_pad=y_axis_pad,y_ticks_size=y_ticks_size,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,y_ticks=y_ticks,
         legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_items=legend_items,legend_ncol=legend_ncol,
         legend_columnspacing=legend_columnspacing,legend_handletextpad=legend_handletextpad,legend_labelspacing=legend_labelspacing,legend_borderpad=legend_borderpad,legend_handlelength=legend_handlelength,legend_size_html_multiplier=legend_size_html_multiplier,
-        dpi=dpi,show=show,space_capitalize=space_capitalize,**kwargs)
+        dpi=dpi,transparent=transparent,show=show,space_capitalize=space_capitalize,**kwargs)
+    
+    p.cat(graph='box_strip', df=df_clus, x=cluster_col, y=scores_col, line=line,
+        file=f'{".".join(file.split(".")[:-1])}_box_strip.{file.split(".")[-1]}' if file else f"box_strip.all", dir=dir,palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
+        figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
+        x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_axis_pad=x_axis_pad,x_ticks_size=x_ticks_size,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,x_ticks=x_ticks,
+        y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_scale=y_axis_scale,y_axis_dims=y_axis_dims,y_axis_pad=y_axis_pad,y_ticks_size=y_ticks_size,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,y_ticks=y_ticks,
+        legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_items=legend_items,legend_ncol=legend_ncol,
+        legend_columnspacing=legend_columnspacing,legend_handletextpad=legend_handletextpad,legend_labelspacing=legend_labelspacing,legend_borderpad=legend_borderpad,legend_handlelength=legend_handlelength,legend_size_html_multiplier=legend_size_html_multiplier,
+        dpi=dpi,transparent=transparent,show=show,space_capitalize=space_capitalize,**kwargs)
 
-def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="cl_new", scores_col: str="log2(FC)", size: str | bool=None, size_dims: tuple=None, z_col: str=None, z_var: str=None,  label: str='Edit', label_size: int=16,
+def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="cl_new", scores_col: str="log2(FC)", individual: bool=True, size: str | bool=None, size_dims: tuple=None, label: str='Edit', label_size: int=16,
         label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None, ss_h: int=None, ss_y: int=None,
-        file: str=None, dir: str=None, edgecol: str='black', figsize=(5,5), title: str='', title_size: int=18, title_weight: str='bold', title_font: str='Arial',
+        file: str=None, dir: str=None, palette_or_cmap: str = 'turbo', edgecol: str='black', figsize=(5,5), title: str='', title_size: int=18, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int=9, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int=9, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
         legend_title: str='',legend_title_size: int=12, legend_size: int=9, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1, 
         legend_columnspacing: int=-3, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, legend_size_html_multiplier: float=0.75,
-        display_legend: bool=True, display_labels: bool=True, display_axis: bool=True, return_df: bool=True, dpi: int = 0, show: bool=True, space_capitalize: bool=True,
+        display_legend: bool=True, display_labels: bool=True, display_axis: bool=True, return_df: bool=True, dpi: int = 0, transparent: bool=False, show: bool=True, space_capitalize: bool=True,
         **kwargs) -> pd.DataFrame:
     ''' 
     torn(): creates tornado plots for visualizing PWES clusters
@@ -538,14 +614,13 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
     Parameters:
     df (dataframe | str): pandas dataframe (or file path) from fastq.torn()
     df_clus (dataframe | str): pandas dataframe (or file path) from cluster_pwes()
-    cluster_col (str): column name in df & df_clus with cluster labels to plot (Default: 'cl_new')
-    scores_col (str): column name in df & df_clus with edit scores to plot (Default: 'log2(FC)')
+    cluster_col (str, optional): column name in df & df_clus with cluster labels to plot (Default: 'cl_new')
+    scores_col (str, optional): column name in df & df_clus with edit scores to plot (Default: 'log2(FC)')
+    individual (bool, optional): show clusters on individual plot (otherwise, all clusters are shown on one plot)
     FC (str): fold change column name (y-axis)
     pval (str): p-value column name (size column if not specified)
     size (str | bool, optional): size column name (Default: pval; specify False for no size)
     size_dims (tuple, optional): (minimum,maximum) values in size column (Default: None)
-    z_col (str, optional): find rows with 'z_var' in this column for log2(FC) z-score normalization (Default: None)
-    z_var (str, optional): use rows with 'z_var' for log2(FC) z-score normalization (Default: None)
     cluster_col (str, optional): cluster column name (Default: None)
     label (str, optional): label column name (Default: 'Edit'). Can't be None.
     label_size (int, optional): label font size (Default: 16)
@@ -561,6 +636,7 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
     ss_y (int, optional): y position for secondary structure in the plot (Default: autogenerate)
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
+    palette_or_cmap (str, optional): seaborn color palette or matplotlib color map (only used if individual parameter is specified)
     edgecol (str, optional): point edge color
     figsize (tuple, optional): figure size
     title (str, optional): plot title
@@ -602,7 +678,8 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
     display_legend (bool, optional): display legend on plot (Default: True)
     display_labels (bool, optional): display labels for significant values (Default: True)
     display_axis (bool, optional): display x-axis line (Default: True)
-    dpi (int, optional): figure dpi (Default: 600 for non-HTML, 150 for HTML)
+    dpi (int, optional): figure dpi (Default: 1200 for non-HTML, 150 for HTML)
+    transparent (bool, optional): save plot with transparent background (Default: False)
     return_df (bool, optional): return dataframe (Default: True)
     show (bool, optional): show plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
@@ -679,8 +756,186 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
     if x_axis_dims==(0,0): x_axis_dims=(min(df[f'AA Number']),max(df[f'AA Number']))
     if y_axis_dims==(0,0): y_axis_dims=(min(df[scores_col]),max(df[scores_col]))
 
-    for clus in df_clus[cluster_col].unique():
-        clus_df = df_clus[df_clus[cluster_col]==clus]
+    if individual == True: # Plot all the clusters on individual plots
+        for clus in df_clus[cluster_col].unique(): 
+            clus_df = df_clus[df_clus[cluster_col]==clus]
+
+            # Generate figure
+            fig, ax = plt.subplots(figsize=figsize)
+
+            # with data
+            if display_legend==False: size=None
+            stys='Change'
+            sns.scatterplot(
+                data=df,
+                x='AA Number', y=scores_col,
+                edgecolor=edgecol, color='gray', alpha=0.25,
+                style=stys, style_order=stys_order if stys_order else None, markers=mark_order if mark_order else None,
+                size=size if display_legend else None, sizes=sizes, size_norm=size_norm,
+                legend=False, zorder = 1,
+                ax=ax, **kwargs)
+            sns.scatterplot(
+                data=clus_df[clus_df[scores_col]<0],
+                x='AA Number', y=scores_col,
+                hue=scores_col, edgecolor=edgecol, palette='Blues_r', hue_norm=(df[scores_col].min(),0),
+                style=stys, style_order=stys_order if stys_order else None, markers=mark_order if mark_order else None,
+                size=size if display_legend else None, sizes=(50,50), size_norm=size_norm,
+                legend=False, zorder = 2,
+                ax=ax, **kwargs)
+            sns.scatterplot(
+                data=clus_df[clus_df[scores_col]>=0],
+                x='AA Number', y=scores_col,
+                hue=scores_col, edgecolor=edgecol, palette='Reds', hue_norm=(0,df[scores_col].max()),
+                style=stys, style_order=stys_order if stys_order else None, markers=mark_order if mark_order else None,
+                size=size if display_legend else None, sizes=(50,50), size_norm=size_norm, 
+                legend=False, zorder = 3,
+                ax=ax, **kwargs)
+            
+            # with x-axis line
+            if display_axis == True:
+                ax.plot([x_axis_dims[0], x_axis_dims[1]], [0,0], color='black', linestyle='-', linewidth=1)
+
+            # with secondary structure
+            if UniProt is not None:
+                # Load UniProt flat file data
+                try: # from filepath
+                    UniProt_ss = uniprot.secondary_structure_from_flat_file(obj=UniProt)
+                except:
+                    try: # from config
+                        for UniProt_file in os.listdir(os.path.expanduser('~/.config/edms/UniProt/')):
+                            if UniProt.lower() in UniProt_file.lower():
+                                UniProt_ss = uniprot.secondary_structure_from_flat_file(obj=f'{os.path.expanduser("~/.config/edms/UniProt")}/{UniProt_file}')
+                                break
+                    except:
+                        raise FileNotFoundError(f"UniProt flat file not found: {UniProt}.\nPlease provide a valid filename or UniProt accession (if saved to {os.path.expanduser('~/.config/edms/UniProt/')}) or file path for UniProt flat file. See edms.dat.uniprot.retrieve_flat_file() or edms uniprot retrieve -h for more information.")
+                
+                # parameters for the secondary-structure "track"
+                if ss_h is None:
+                    ss_h  = 0.5 # height of secondary structure track
+                if ss_y is None:
+                    ss_y  = min(df[scores_col])-2*0.5 # position below min y value
+
+                # helices
+                helix_df = UniProt_ss[UniProt_ss["type"] == "α-helix"]
+                if is_html:
+                    helix_spans = [(row.start, row.end - row.start) for _, row in helix_df.iterrows()]
+                    ax.broken_barh(helix_spans, (ss_y, ss_h), label="α-helix", facecolors='turquoise')
+                else:
+                    for xmin, xmax in t.zip_cols(df=helix_df, cols=['start','end']):
+                        ax.axvspan(
+                            xmin,
+                            xmax,
+                            facecolor='turquoise',
+                        alpha=0.15,
+                        edgecolor='none',
+                        zorder=0)  # put behind scatter points
+
+                # β-strands
+                strand_df = UniProt_ss[UniProt_ss["type"] == "β-strand"]
+                if is_html:
+                    strand_spans = [(row.start, row.end - row.start) for _, row in strand_df.iterrows()]
+                    ax.broken_barh(strand_spans, (ss_y, ss_h), label="β-strand", facecolors='gold')
+                else:
+                    for xmin, xmax in t.zip_cols(df=strand_df, cols=['start','end']):
+                        ax.axvspan(
+                            xmin,
+                            xmax,
+                            facecolor='gold',
+                        alpha=0.15,
+                        edgecolor='none',
+                        zorder=0)  # put behind scatter points
+                
+            # with legend
+            if display_legend == True:
+                if size_norm is not None and size is not None: # Add consistent size legend with 5 representative values
+                    if stys is not None and mark_order is not None and stys_order is not None: # Add stys legend too
+                        legend_vals = np.linspace(_vmin, _vmax, len(mark_order))
+                        for lv,mark,sty in zip(legend_vals,mark_order,stys_order):
+                            plt.scatter([], [], s=np.interp(lv, [_vmin, _vmax], sizes), color='lightgray', label=f'{lv:.2g}; {sty}', marker=mark)
+                        if is_html:
+                            if legend_bbox_to_anchor == (1,1): legend_bbox_to_anchor = (-0.1,-0.2)
+                            if legend_ncol == 1: legend_ncol = 3
+                            plt.legend(title=legend_title if legend_title!='' else f'{size}; {stys}', 
+                                        title_fontsize=legend_title_size, fontsize=legend_size,
+                                        bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol,
+                                        columnspacing=legend_columnspacing,    # space between columns
+                                        handletextpad=legend_handletextpad,    # space between marker and text
+                                        labelspacing=legend_labelspacing,      # vertical space between entries
+                                        borderpad=legend_borderpad,            # padding inside legend box
+                                        handlelength=legend_handlelength)      # marker length
+                        else:
+                            plt.legend(title=legend_title if legend_title!='' else f'{size}; {stys}', 
+                                    title_fontsize=legend_title_size, fontsize=legend_size,
+                                    bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol)
+                    else:
+                        legend_vals = np.linspace(_vmin, _vmax, 5)
+                        for lv in legend_vals:
+                            plt.scatter([], [], s=np.interp(lv, [_vmin, _vmax], sizes), color='lightgray', label=f'{lv:.2g}')
+                        plt.legend(title=legend_title if legend_title!='' else size, 
+                                    title_fontsize=legend_title_size, fontsize=legend_size,
+                                    bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol)
+            
+            # with labels
+            if display_labels == True:
+                if is_html:
+                    # For HTML, show labels interactively as tooltips instead of static text
+                    pts = ax.scatter(
+                        x=df_clus['AA Number'],
+                        y=df_clus[scores_col],
+                        s=20,
+                        alpha=0
+                    )
+                    labels_list = df_clus[label].fillna("").astype(str).tolist()
+                    tooltip = p.SafeHTMLTooltip(pts, labels_list)
+                    clicker = p.ClickTooltip(pts, labels_list)
+                    mpld3.plugins.connect(fig, tooltip, clicker)
+                else:
+                    # For static images, keep labels as always-visible text
+                    for i, l in enumerate(df_clus[label]):
+                        plt.text(
+                            x=df_clus.iloc[i]['AA Number'],
+                            y=df_clus.iloc[i][scores_col],
+                            s=l
+                        )
+            
+            # Set x axis
+            if x_axis=='': x_axis='AA Number'
+            plt.xlabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight,fontfamily=x_axis_font, labelpad=x_axis_pad)
+            if x_ticks==[]: 
+                if x_ticks_rot==0: plt.xticks(rotation=x_ticks_rot,ha='center',va='top',fontfamily=x_ticks_font,fontsize=x_ticks_size)
+                elif x_ticks_rot == 90: plt.xticks(rotation=x_ticks_rot,ha='right',va='center',fontfamily=x_ticks_font,fontsize=x_ticks_size)
+                else: plt.xticks(rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font,fontsize=x_ticks_size)
+            else: 
+                if x_ticks_rot==0: plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot, ha='center',va='top',fontfamily=x_ticks_font,fontsize=x_ticks_size)
+                elif x_ticks_rot == 90: plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot,ha='right',va='center',fontfamily=x_ticks_font,fontsize=x_ticks_size)
+                else: plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font,fontsize=x_ticks_size)
+            
+            # Set y axis
+            if y_axis=='': y_axis=f'{scores_col}'
+            plt.ylabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight,fontfamily=y_axis_font, labelpad=y_axis_pad)
+
+            if y_ticks==[]: plt.yticks(rotation=y_ticks_rot,fontfamily=y_ticks_font,fontsize=y_ticks_size)
+            else: plt.yticks(ticks=y_ticks,labels=y_ticks,rotation=y_ticks_rot,fontfamily=y_ticks_font,fontsize=y_ticks_size)
+
+            # Set title
+            if title=='' and file is not None: 
+                if space_capitalize: title=p.re_un_cap(".".join(file.split(".")[:-1]))
+                else: title=".".join(file.split(".")[:-1])
+            plt.title(title, fontsize=title_size, fontweight=title_weight, family=title_font)
+
+            # Save & show fig; return dataframe
+            p.save_fig(file=f"{'.'.join(file.split('.')[:-1])}_tornado_{clus}.{file.split('.')[-1]}" if file is not None else f"tornado.all", dir=dir, fig=fig, dpi=dpi, PDB_pt=PDB_pt, icon='tornado')
+            if show:
+                ext = file.split('.')[-1].lower() if file is not None else ''
+                if ext not in ('html', 'json'):
+                    plt.show()
+                else:
+                    mpld3.show(fig)
+    
+    else: # Only plot clusters above or below specified thresholds on the same plot
+        clus_df = add_label_info(df=df_clus, label=label[:-5] if is_html else label, label_size=label_size, label_info=label_info,
+                        aa_properties=aa_properties, cBioPortal=cBioPortal, only_clinical=only_clinical, UniProt=UniProt, 
+                        PhosphoSitePlus=PhosphoSitePlus, PDB_contacts=PDB_contacts, PDB_neighbors=PDB_neighbors)
 
         # Generate figure
         fig, ax = plt.subplots(figsize=figsize)
@@ -697,20 +952,12 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
             legend=False, zorder = 1,
             ax=ax, **kwargs)
         sns.scatterplot(
-            data=clus_df[clus_df[scores_col]<0],
+            data=clus_df,
             x='AA Number', y=scores_col,
-            hue=scores_col, edgecolor=edgecol, palette='Blues_r', hue_norm=(df[scores_col].min(),0),
+            hue=cluster_col, edgecolor=edgecol, palette=palette_or_cmap, 
             style=stys, style_order=stys_order if stys_order else None, markers=mark_order if mark_order else None,
             size=size if display_legend else None, sizes=(50,50), size_norm=size_norm,
             legend=False, zorder = 2,
-            ax=ax, **kwargs)
-        sns.scatterplot(
-            data=clus_df[clus_df[scores_col]>=0],
-            x='AA Number', y=scores_col,
-            hue=scores_col, edgecolor=edgecol, palette='Reds', hue_norm=(0,df[scores_col].max()),
-            style=stys, style_order=stys_order if stys_order else None, markers=mark_order if mark_order else None,
-            size=size if display_legend else None, sizes=(50,50), size_norm=size_norm, 
-            legend=False, zorder = 3,
             ax=ax, **kwargs)
         
         # with x-axis line
@@ -772,8 +1019,10 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
             if size_norm is not None and size is not None: # Add consistent size legend with 5 representative values
                 if stys is not None and mark_order is not None and stys_order is not None: # Add stys legend too
                     legend_vals = np.linspace(_vmin, _vmax, len(mark_order))
-                    for lv,mark,sty in zip(legend_vals,mark_order,stys_order):
+                    for lv,mark,sty in zip(legend_vals,mark_order,stys_order): # Add legend entry for each size level with corresponding marker and stys
                         plt.scatter([], [], s=np.interp(lv, [_vmin, _vmax], sizes), color='lightgray', label=f'{lv:.2g}; {sty}', marker=mark)
+                    #for clus in df_clus[cluster_col].unique(): # Add legend entry for each cluster
+                        #plt.scatter([], [], color=palette_or_cmap[clus], label=f'Cluster {clus}', marker='o')
                     if is_html:
                         if legend_bbox_to_anchor == (1,1): legend_bbox_to_anchor = (-0.1,-0.2)
                         if legend_ncol == 1: legend_ncol = 3
@@ -802,21 +1051,21 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
             if is_html:
                 # For HTML, show labels interactively as tooltips instead of static text
                 pts = ax.scatter(
-                    x=df['AA Number'],
-                    y=df[scores_col],
+                    x=clus_df['AA Number'],
+                    y=clus_df[scores_col],
                     s=20,
                     alpha=0
                 )
-                labels_list = df[label].fillna("").astype(str).tolist()
+                labels_list = clus_df[label].fillna("").astype(str).tolist()
                 tooltip = p.SafeHTMLTooltip(pts, labels_list)
                 clicker = p.ClickTooltip(pts, labels_list)
                 mpld3.plugins.connect(fig, tooltip, clicker)
             else:
                 # For static images, keep labels as always-visible text
-                for i, l in enumerate(df[label]):
+                for i, l in enumerate(clus_df[label]):
                     plt.text(
-                        x=df.iloc[i]['AA Number'],
-                        y=df.iloc[i][scores_col],
+                        x=clus_df.iloc[i]['AA Number'],
+                        y=clus_df.iloc[i][scores_col],
                         s=l
                     )
         
@@ -846,7 +1095,7 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
         plt.title(title, fontsize=title_size, fontweight=title_weight, family=title_font)
 
         # Save & show fig; return dataframe
-        p.save_fig(file=f"{'.'.join(file.split('.')[:-1])}_tornado_{clus}.{file.split('.')[-1]}" if file is not None else f"tornado.pdf", dir=dir, fig=fig, dpi=dpi, PDB_pt=PDB_pt, icon='tornado')
+        p.save_fig(file=f"{'.'.join(file.split('.')[:-1])}_tornado.{file.split('.')[-1]}" if file is not None else f"tornado.all", dir=dir, fig=fig, dpi=dpi, transparent=transparent, PDB_pt=PDB_pt, icon='tornado')
         if show:
             ext = file.split('.')[-1].lower() if file is not None else ''
             if ext not in ('html', 'json'):
@@ -857,6 +1106,261 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
     if return_df:
         return df
 
+def heatmap(
+    df_scaled: pd.DataFrame | str, mask_on: bool = True, blackout: list[str] = ['X'],
+    file: str = None, dir: str = None, figsize: tuple = (4, 2.2),
+    color: str='black', edgecol: str=None, lw: int=0, alpha: float=1,
+    center: float=0, cmap: str="RdBu_r", sq: bool=True, vmin: float=-1, vmax: float=1, cbar: bool=False,
+    spine_color: str = "black", spine_visible: bool = True, spine_wspace: float = 0.2, spine_hspace: float = 0.2,
+    rasterize: bool=True, dpi: int=0, transparent: bool=False, show: bool=True,
+    ):
+    '''
+    heatmap(): Generates a heatmap for the scaled PWES matrix with options for masking, blackout regions, and styling.
+
+    Parameters:
+    df_scaled (pd.DataFrame | str): Scaled DataFrame containing PWES values.
+    mask_on (bool): Whether to mask the lower triangle of the heatmap.
+    blackout (list[str]): List of prefixes for rows/columns to blackout (e.g., 'X' for non-protein residues).
+    file (str, optional): save plot to filename
+    dir (str, optional): save plot to directory
+    figsize (tuple, optional): figure size per subplot
+    color (str, optional): point color
+    edgecol (str, optional): point edge color
+    lw (int, optional): line width
+    alpha (float, optional): transparency of blackout rectangles
+    center (float, optional): value at which to center the colormap
+    cmap (str, optional): colormap to use for heatmap
+    sq (bool, optional): whether to make heatmap cells square
+    vmin (float, optional): minimum value for colormap
+    vmax (float, optional): maximum value for colormap
+    cbar (bool, optional): whether to display colorbar
+    spine_color (str, optional): color of plot spines
+    spine_visible (bool, optional): whether to display plot spines
+    spine_wspace (float, optional): width space for subplot grid (Default: 0.2)
+    spine_hspace (float, optional): height space for subplot grid (Default: 0.2)
+    rasterize (bool, optional): rasterize heatmap for smaller file size (Default: True)
+    transparent (bool, optional): save plot with transparent background (Default: False)
+    dpi (int, optional): figure dpi (Default: 1200 for non-HTML, 150 for HTML)
+    show (bool, optional): show plot (Default: True)
+    '''
+    # Get dataframe if path is provided #
+    if isinstance(df_scaled, str):
+        df_scaled = io.get(df_scaled, index_col=0)
+
+    # SETUP #
+    mask = np.zeros_like(df_scaled)
+    if mask_on: mask[np.tril_indices_from(mask, k=-1)] = True # MASK FOR LOWER TRIANGLE #
+
+    # GENERATE HEATMAP #
+    fig, ax = plt.subplots(figsize=figsize)
+    sns.heatmap(
+        data=df_scaled,
+        ax=ax,
+        mask=mask,
+        center=center,
+        square=sq,
+        cmap=cmap,
+        vmin=vmin,
+        vmax=vmax,
+        cbar=cbar,
+        xticklabels=False,
+        yticklabels=False,
+        )
+
+    for edge, spine in ax.spines.items():
+        spine.set_visible(spine_visible)
+        spine.set_color(spine_color)
+
+    # SET TICKS AND LABELS #
+    #ax.set_xlabel(x_axis, fontproperties={'family': x_axis_font, 'size': x_axis_size, 'weight': x_axis_weight})
+    #ax.set_ylabel(y_axis, fontproperties={'family': y_axis_font, 'size': y_axis_size, 'weight': y_axis_weight})
+    #ax.set_xticklabels(xticks)
+    #ax.set_yticklabels(axis.yticks)
+    # TICK LABELS #
+    #for label in ax.get_xticklabels():
+    #    label.set_fontproperties({'family': x_ticks_font, 'size': x_ticks_size, 'rotation': x_ticks_rot})
+    #for label in ax.get_yticklabels(): 
+    #    label.set_fontproperties({'family': y_ticks_font, 'size': y_ticks_size, 'rotation': y_ticks_rot})
+    plt.subplots_adjust(wspace=spine_wspace, hspace=spine_hspace)
+
+    # DRAW RECTANGLES #
+    # HORIZONTAL #
+    for i, idx in enumerate(df_scaled.index):
+        for start in blackout:
+            if idx.startswith(start):
+                rect = patches.Rectangle(
+                    (0, i), len(df_scaled.columns), 1,
+                    linewidth=lw, edgecolor=edgecol, facecolor=color, alpha=alpha)
+                ax.add_patch(rect)
+    # VERTICAL #
+    for j, col in enumerate(df_scaled.columns):
+        for start in blackout:
+            if col.startswith(start):
+                rect = patches.Rectangle(
+                    (j, 0), 1, len(df_scaled),
+                    linewidth=lw, edgecolor=edgecol, facecolor=color, alpha=alpha)
+                ax.add_patch(rect)
+
+    # RASTERIZE #
+    if rasterize:
+        for coll in ax.collections:
+            coll.set_rasterized(True)
+
+    # SAVE & SHOW #
+    plt.tight_layout()
+    p.save_fig(file=file, dir=dir, fig=fig, dpi=dpi, transparent=transparent, icon='heat')
+    if show:
+        ext = file.split('.')[-1].lower() if file is not None else ''
+        if ext not in ('html', 'json'):
+            plt.show()
+        else:
+            mpld3.show(fig)
+    plt.close(fig)
+
+def heatmap_cbar(
+    orientation: str='vertical', # otherwise horizontal
+    file: str = None, dir: str = None, figsize: tuple = (.25, 2),
+    cmap: str='RdBu_r', vmin: float=-1, vmax: float=1, lw: float = 0.5,
+    tick_size: int=8, tick_width=0.5, label_font: str='Arial', label_size: int=6,
+    dpi: int=0, transparent: bool=False, show: bool=True):
+    '''
+    heatmap_cbar(): Generates a standalone colorbar for the heatmap with specified orientation and styling.
+
+    Parameters:
+    orientation (str, optional): Orientation of the colorbar ('vertical' or 'horizontal').
+    file (str, optional): save plot to filename
+    dir (str, optional): save plot to directory
+    figsize (tuple, optional): figure size per subplot
+    cmap (str, optional): colormap to use for heatmap
+    vmin (float, optional): minimum value for colormap
+    vmax (float, optional): maximum value for colormap
+    lw (float, optional): line width for colorbar outline (Default: 0.5)
+    tick_size (int, optional): font size for colorbar ticks (Default: 8)
+    tick_width (float, optional): tick width for colorbar (Default: 0.5)
+    label_font (str, optional): label font (Default: Arial)
+    label_size (int, optional): label font size (Default: 6)
+    dpi (int, optional): figure dpi (Default: 1200 for non-HTML, 150 for HTML)
+    transparent (bool, optional): save plot with transparent background (Default: False)
+    show (bool, optional): show plot (Default: True)
+    '''
+    fig, ax = plt.subplots(figsize=figsize)
+
+    norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
+    cbar = mpl.colorbar.ColorbarBase(
+        ax, norm=norm, orientation=orientation,
+        cmap=cmap)
+
+    for label in (ax.get_yticklabels() if orientation == 'vertical' else ax.get_xticklabels()):
+        label.set_fontproperties({'family': label_font, 'size': label_size})
+
+    ax.tick_params(labelsize=tick_size, width=tick_width)
+    cbar.outline.set_linewidth(lw)
+
+    # SAVE & SHOW #
+    p.save_fig(file=file, dir=dir, fig=fig, dpi=dpi, transparent=transparent, icon='heat')
+    if show:
+        ext = file.split('.')[-1].lower() if file is not None else ''
+        if ext not in ('html', 'json'):
+            plt.show()
+        else:
+            mpld3.show(fig)
+    plt.close(fig)
+
+def clustermap(
+    df_scaled: pd.DataFrame | str, 
+    link: np.ndarray | str, 
+    df_clusters: pd.DataFrame | str,
+    color_list: list=[],
+    file: str = None, dir: str = None, figsize: tuple = (4, 2.2),
+    center: float=0, cmap: str="RdBu_r", vmin: float=-1, vmax: float=1,
+    line_color: str="k", line_style: str="--", lw: float=0.25,
+    spine_color: str = "black", spine_visible: bool = True,
+    rasterize: bool=True, dpi: int=0, transparent: bool=False, show: bool=True):
+    '''
+    pwes_clustermap(): Generates a clustered heatmap for the scaled PWES matrix with options for coloring clusters and styling.
+    
+    Parameters:
+    df_scaled (pd.DataFrame | str): Scaled DataFrame containing PWES values.
+    link (np.ndarray | str): Linkage matrix for hierarchical clustering.
+    df_clusters (pd.DataFrame | str): DataFrame containing cluster assignments for rows.
+    color_list (list): List of colors for clusters (optional).
+    file (str, optional): save plot to filename
+    dir (str, optional): save plot to directory
+    figsize (tuple, optional): figure size per subplot
+    center (float, optional): value at which to center the colormap
+    cmap (str, optional): colormap to use for heatmap
+    vmin (float, optional): minimum value for colormap
+    vmax (float, optional): maximum value for colormap
+    line_color (str, optional): line color
+    line_style (str, optional): line style
+    lw (float, optional): line width
+    spine_color (str, optional): color of plot spines
+    spine_visible (bool, optional): whether to display plot spines
+    rasterize (bool, optional): rasterize heatmap for smaller file size (Default: True)
+    dpi (int, optional): figure dpi (Default: 1200 for non-HTML, 150 for HTML)
+    transparent (bool, optional): save plot with transparent background (Default: False)
+    show (bool, optional): show plot (Default: True)
+    '''
+    # Get dataframes if paths are provided #
+    if isinstance(df_scaled, str):
+        df_scaled = io.get(df_scaled)
+    if isinstance(df_clusters, str):
+        df_clusters = io.get(df_clusters)
+    
+    # Get ndarray if linkage is provided as path #
+    if isinstance(link, str):
+        link = np.load(link)
+
+    # SET COLORS FOR CLUSTERS #
+    if color_list:
+        df_colors = pd.DataFrame(index=df_scaled.index, columns=['Cluster'])
+        df_colors['Colors'] = [color_list[i-1] for i in df_clusters['cl_new']]
+        rcolor = df_colors['Colors'].copy()
+    else: rcolor = None
+
+    # CLUSTERMAP #
+    fig = sns.clustermap(
+        df_scaled,
+        row_linkage=link, col_linkage=link,
+        row_colors=rcolor,
+        figsize=figsize,
+        vmin=vmin,
+        vmax=vmax,
+        center=center, 
+        cmap=cmap,
+        xticklabels=False,
+        yticklabels=False
+        )
+    ax = fig.ax_heatmap
+
+    # AXIS SETTINGS #
+    fig.ax_heatmap.collections[0].set_rasterized(rasterize)
+    fig.cax.set_visible(False)
+    ax.set_aspect('equal')
+    fig.ax_col_dendrogram.set_visible(False)
+
+    # DRAW LINES BETWEEN CLUSTERS #
+    temp = 0
+    clusterlist = df_clusters['cl_new'].value_counts().sort_index()
+    for i in clusterlist.iloc[:-1]:
+        temp += i
+        ax.axhline(y=temp, color=line_color, linestyle=line_style, linewidth=lw)
+
+    for edge, spine in ax.spines.items():
+        spine.set_visible(spine_visible)
+        spine.set_color(spine_color)
+
+    # SAVE & SHOW #
+    plt.tight_layout()
+    p.save_fig(file=file, dir=dir, fig=fig, dpi=dpi, transparent=transparent, icon='heat')
+    if show:
+        ext = file.split('.')[-1].lower() if file is not None else ''
+        if ext not in ('html', 'json'):
+            plt.show()
+        else:
+            mpld3.show(fig)
+    plt.close(fig)
+
 # MAIN FUNCTION
 def clustering(pdb_file: str, df: pd.DataFrame | str,
             x_col: str = "AA Number", scores_col: str = "log2(FC)",
@@ -865,8 +1369,9 @@ def clustering(pdb_file: str, df: pd.DataFrame | str,
             tanh_a: float = 1, gauss_std: float = 16, dend_t: float = 10,
             aa_int: Optional[Tuple[int, int]] = None, plots: bool = True,
             out_prefix: Optional[str] = None, out_dir: Optional[str] = None,
-            pos_only: bool = False, return_dfs: bool = False, 
-            hist_kwargs: Optional[Dict] = None, cat_kwargs: Optional[Dict] = None, torn_kwargs: Optional[Dict] = None):
+            pos_only: bool = False, return_dfs: bool = False, pymol: bool = True, show: bool = False,
+            hist_kwargs: Optional[Dict] = None, cat_kwargs: Optional[Dict] = None, torn_kwargs: Optional[Dict] = None,
+            heatmap_kwargs: Optional[Dict] = None, heatmap_cbar_kwargs: Optional[Dict] = None, clustermap_kwargs: Optional[Dict] = None):
     """
     clustering(): Compute 3D PWES clustering analysis.
 
@@ -888,9 +1393,14 @@ def clustering(pdb_file: str, df: pd.DataFrame | str,
     out_dir (str, optional): directory for output files (Default: "../out")
     pos_only (bool, optional): if True, only use positive scores for clustering (Default: False)
     return_dfs (bool, optional): if True, return all dataframes (Default: False)
+    pymol (bool, optional): if True, generate PyMOL script(s) (Default: True)
+    show (bool, optional): if True, display plots (Default: True)
     hist_kwargs (dict, optional): dict of keyword arguments to pass to hist() for histogram generation. If None, defaults will be used. (Default: None)
     cat_kwargs (dict, optional): dict of keyword arguments to pass to cat() for categorical plot generation. If None, defaults will be used. (Default: None)
     torn_kwargs (dict, optional): dict of keyword arguments to pass to torn() for tornado plot generation. If None, defaults will be used. (Default: None)
+    heatmap_kwargs (dict, optional): dict of keyword arguments to pass to heatmap() for heatmap generation. If None, defaults will be used. (Default: None)
+    heatmap_cbar_kwargs (dict, optional): dict of keyword arguments to pass to heatmap_cbar() for heatmap colorbar generation. If None, defaults will be used. (Default: None)
+    clustmap_kwargs (dict, optional): dict of keyword arguments to pass to clustermap() for clustering generation. If None, defaults will be used. (Default: None)
     """
     gene_map = gene_map or {}
 
@@ -991,12 +1501,39 @@ def clustering(pdb_file: str, df: pd.DataFrame | str,
         df_pwes_sorted.to_csv(f"{out}_df_pwes_sorted.csv")
         df_pwes_unsorted.to_csv(f"{out}_df_pwes_unsorted.csv")
         df_clus.to_csv(f"{out}_df_clus.csv")
+        np.savetxt(f"{out}_linkage.npy", np.asarray(link, dtype=float))
 
         # Generate plots if requested
         if plots:
-            hist(df_clus=df_clus, scores_col=scores_col, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.pdf", **hist_kwargs)
-            cat(df_clus=df_clus, scores_col=scores_col, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.pdf", **cat_kwargs)
-            torn(df=df, df_clus=df_clus, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.pdf", **torn_kwargs)
+            if hist_kwargs is None:
+                hist(df_clus=df_clus, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.all", show=show)
+            else:
+                hist(df_clus=df_clus, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.all", show=show, **hist_kwargs)
+            if cat_kwargs is None:
+                cat(df_clus=df_clus, scores_col=scores_col, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.all", show=show)
+            else:
+                cat(df_clus=df_clus, scores_col=scores_col, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.all", show=show, **cat_kwargs)
+            if torn_kwargs is None:
+                torn(df=df, df_clus=df_clus, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.all", show=show)
+            else:
+                torn(df=df, df_clus=df_clus, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.all", show=show, **torn_kwargs)
+            if heatmap_kwargs is None:
+                heatmap(df_scaled=df_pwes_sorted, dir=out_dir_sub, file = f"{out_prefix_sub}_heatmap.all", show=show)
+            else:
+                heatmap(df_scaled=df_pwes_sorted, dir=out_dir_sub, file = f"{out_prefix_sub}_heatmap.all", show=show, **heatmap_kwargs)
+            if heatmap_cbar_kwargs is None:
+                heatmap_cbar(dir=out_dir_sub, file = f"{out_prefix_sub}_heatmap_colorbar.all", show=show)
+            else:
+                heatmap_cbar(dir=out_dir_sub, file = f"{out_prefix_sub}_heatmap_colorbar.all", show=show, **heatmap_cbar_kwargs)
+            if clustermap_kwargs is None:
+                clustermap(df_scaled=df_pwes_sorted, link=link, df_clusters=df_clus, dir=out_dir_sub, file = f"{out_prefix_sub}_clustermap.all", show=show)
+            else:
+                clustermap(df_scaled=df_pwes_sorted, link=link, df_clusters=df_clus, dir=out_dir_sub, file = f"{out_prefix_sub}_clustermap.all", show=show, **clustermap_kwargs)
+        
+        ### FIGURE THIS OUT ###
+        #if pymol:
+        #    pymol_script(dir=out_dir_sub, file=f"{out_prefix_sub}_pymol.txt",
+        #                 pdb_filename=pdb_file, residue_dict=aas_dict, colors="tab20")
 
         if return_dfs:
             return df_gauss, df_pwes_sorted, df_pwes_unsorted, df_clus, aas_dict, link

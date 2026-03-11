@@ -407,7 +407,7 @@ document.addEventListener('DOMContentLoaded', function () {{
 
     return output_html
 
-def save_fig(file: str | None, dir: str | None, fig=None, dpi: int = 0, PDB_pt: str = None, icon: str = 'python') -> None:
+def save_fig(file: str | None, dir: str | None, fig=None, dpi: int = 0, transparent: bool = True, PDB_pt: str = None, icon: str = 'python') -> None:
     """
     save_fig(): save static image and optionally interactive HTML or JSON via mpld3.
 
@@ -415,7 +415,8 @@ def save_fig(file: str | None, dir: str | None, fig=None, dpi: int = 0, PDB_pt: 
     file (str | None): output filename (static image by default; `.html` and `.json` trigger interactive mpld3 exports)
     dir (str | None): output directory
     fig: matplotlib Figure object (if None, uses current figure)
-    dpi (int, optional): resolution for static images and base resolution for interactive exports (default: 600)
+    dpi (int, optional): resolution for static images and base resolution for interactive exports (default: 1200)
+    transparent (bool, optional): whether to save static images with transparent background (default: True)
     PDB_pt (str, optional): File path to PDB file for Mol* visualization (Default: None)
     icon (str, optional): html file icon (Default: python logo)
     """
@@ -434,12 +435,23 @@ def save_fig(file: str | None, dir: str | None, fig=None, dpi: int = 0, PDB_pt: 
 
     ext = file.split('.')[-1].lower()
     if ext not in ('html', 'json'):  # Save static image
-        plt.savefig(
-            fname=os.path.join(dir, file),
-            dpi=dpi if dpi > 0 else 600,
-            bbox_inches='tight',
-            format=ext,
-        )
+        if ext != 'all':
+            plt.savefig(
+                fname=os.path.join(dir, file),
+                dpi=dpi if dpi > 0 else 1200,
+                bbox_inches='tight',
+                format=ext,
+                transparent=transparent
+            )
+        else:
+            for fmt in ['png', 'pdf', 'svg']:
+                plt.savefig(
+                    fname=os.path.join(dir, f"{file[:-4]}.{fmt}"),
+                    dpi=dpi if dpi > 0 else 1200,
+                    bbox_inches='tight',
+                    format=fmt,
+                    transparent=transparent
+                )
     else:
         # Interactive exports via mpld3
         original_dpi = fig.get_dpi()
@@ -595,7 +607,7 @@ def formatter(graph: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file:
               y_axis: str, y_axis_size: int, y_axis_weight: str, y_axis_font: str, y_axis_scale: str, y_axis_dims: tuple, y_axis_pad: int, y_ticks_size: int, y_ticks_rot: int, y_ticks_font: str, y_ticks: list,
               legend_title: str, legend_title_size: int, legend_size: int, legend_bbox_to_anchor: tuple, legend_loc: str, legend_items: tuple, legend_ncol: int,
               legend_columnspacing: int=-4, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, 
-              dpi: int = 0, show: bool = True, space_capitalize: bool = True, PDB_pt: str = None, icon: str = 'python', cats_ord: list = None) -> None:
+              dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True, PDB_pt: str = None, icon: str = 'python', cats_ord: list = None) -> None:
     ''' 
     formatter(): formats, displays, and saves plots
 
@@ -644,7 +656,8 @@ def formatter(graph: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file:
     legend_borderpad (float, optional): border padding (Default: 0.5)
     legend_handlelength (float, optional): length of legend handle (Default: 0.5)
     html (bool, optional): if True, also save an interactive HTML version of the figure using mpld3 (Default: False)
-    dpi (int, optional): figure dpi (Default: 600 for non-HTML, 150 for HTML)
+    dpi (int, optional): figure dpi (Default: 1200 for non-HTML, 150 for HTML)
+    transparent (bool, optional): whether to save static images with transparent background (default: True)
     show (bool, optional): show plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     PDB_pt (str, optional): Path to PDB file for mol* visualization; only intended for fastq plots (Default: None)
@@ -762,7 +775,7 @@ def formatter(graph: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file:
             else: move_dist_legend(ax,legend_loc,legend_title_size,legend_size,legend_bbox_to_anchor,legend_ncol)
 
     # Save & show fig
-    save_fig(file=file, dir=dir, fig=ax.figure, dpi=dpi, PDB_pt=PDB_pt, icon=icon)
+    save_fig(file=file, dir=dir, fig=ax.figure, dpi=dpi, transparent=transparent, PDB_pt=PDB_pt, icon=icon)
     if show:
         ext = file.split('.')[-1].lower() if file is not None else ''
         if ext not in ('html', 'json'):
@@ -801,7 +814,7 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, c
          y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 9, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
          legend_title: str = '', legend_title_size: int = 12, legend_size: int = 9, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_items: tuple = (0, 0), legend_ncol: int = 1,
          legend_columnspacing: int=0, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=1, legend_size_html_multiplier: float=1.0,
-         dpi: int = 0, show: bool = True, space_capitalize: bool = True, corr_method: str = None, corr_weight: str = None, **kwargs):
+         dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True, corr_method: str = None, corr_weight: str = None, **kwargs):
     ''' 
     scat(): creates scatter plot related graphs
 
@@ -861,7 +874,8 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, c
     legend_borderpad (float, optional): padding inside legend box (Default: 0.5; only for html plots)
     legend_handlelength (float, optional): marker length (Default: 1; only for html plots)
     legend_size_html_multiplier (float, optional): multiplier for legend font size in html plots (Default: 1.0)
-    dpi (int, optional): figure dpi (Default: 600 for non-HTML, 150 for HTML)
+    dpi (int, optional): figure dpi (Default: 1200 for non-HTML, 150 for HTML)
+    transparent (bool, optional): whether to save static images with transparent background (default: True)
     show (bool, optional): show plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     corr_method (str, optional): add a correlation line of best fit with (Default: None; 
@@ -1029,7 +1043,7 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, c
               y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_axis_pad=y_axis_pad, y_ticks_size=y_ticks_size, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
               legend_title=legend_title, legend_title_size=legend_title_size, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_items=legend_items, legend_ncol=legend_ncol,
               legend_columnspacing=legend_columnspacing, legend_handletextpad=legend_handletextpad, legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad, legend_handlelength=legend_handlelength,
-              dpi=dpi, show=show, space_capitalize=space_capitalize, icon='scatter')
+              dpi=dpi, transparent=transparent, show=show, space_capitalize=space_capitalize, icon='scatter')
 
 def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: list = None, cats_exclude: list|str = None, cols: str = None, cols_ord: list = None, cols_exclude: list | str = None, line: float = None,
         file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', alpha: float = 1.0, dodge: bool = False, jitter: bool = True, size: float = 5, edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
@@ -1038,7 +1052,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: 
         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 9, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
         legend_title: str = '', legend_title_size: int = 12, legend_size: int = 9, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_items: tuple = (0, 0), legend_ncol: int = 1,
         legend_columnspacing: int=0, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=1, legend_size_html_multiplier: float=1.0,
-        dpi: int = 0, show: bool = True, space_capitalize: bool = True, PDB_pt: str = None, **kwargs):
+        dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True, PDB_pt: str = None, **kwargs):
     ''' 
     cat(): creates categorical graphs
 
@@ -1105,7 +1119,8 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: 
     legend_borderpad (float, optional): padding inside legend box (Default: 0.5; only for html plots)
     legend_handlelength (float, optional): marker length (Default: 1; only for html plots)
     legend_size_html_multiplier (float, optional): multiplier for legend font size in html plots (Default: 1.0)
-    dpi (int, optional): figure dpi (Default: 600 for non-HTML, 150 for HTML)
+    dpi (int, optional): figure dpi (Default: 1200 for non-HTML, 150 for HTML)
+    transparent (bool, optional): whether to save static images with transparent background (default: True)
     show (bool, optional): show plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     PDB_pt (str, optional): Path to PDB file for mol* visualization; only intended for fastq plots (Default: None)
@@ -1197,7 +1212,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: 
             sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
             sns.stripplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, size=size, palette=palette, ax=ax, **kwargs)
         elif graph=='box_strip':
-            sns.boxplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, linewidth=lw, palette=palette, ax=ax, **kwargs)
+            sns.boxplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, linewidth=lw, palette=palette, ax=ax, fill=False, fliersize=0, color=edgecol, **kwargs)
             sns.stripplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, size=size, palette=palette, ax=ax, **kwargs)
         elif graph=='violin_strip':
             sns.violinplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
@@ -1206,7 +1221,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: 
             sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
             sns.swarmplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, size=size, palette=palette, ax=ax, **kwargs)
         elif graph=='box_swarm':
-            sns.boxplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, linewidth=lw, palette=palette, ax=ax, **kwargs)
+            sns.boxplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, linewidth=lw, palette=palette, ax=ax, fill=False, fliersize=0, color=edgecol, **kwargs)
             sns.swarmplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, size=size, palette=palette, ax=ax, **kwargs)
         elif graph=='violin_swarm':
             sns.violinplot(data=df, x=x, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
@@ -1242,7 +1257,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: 
             sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
             sns.stripplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, size=size, palette=palette, ax=ax, **kwargs)
         elif graph=='box_strip':
-            sns.boxplot(data=df, x=x, y=y, order=cats_ord, linewidth=lw, ax=ax, **kwargs)
+            sns.boxplot(data=df, x=x, y=y, order=cats_ord, linewidth=lw, ax=ax, fill=False, fliersize=0, color=edgecol, **kwargs)
             sns.stripplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, size=size, palette=palette, ax=ax, **kwargs)
         elif graph=='violin_strip':
             sns.violinplot(data=df, x=x, y=y, order=cats_ord, edgecolor=edgecol, linewidth=lw, ax=ax, palette=palette, **kwargs)
@@ -1251,7 +1266,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: 
             sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
             sns.swarmplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, size=size, palette=palette, ax=ax, **kwargs)
         elif graph=='box_swarm':
-            sns.boxplot(data=df, x=x, y=y, order=cats_ord, linewidth=lw, palette=palette, ax=ax, **kwargs)
+            sns.boxplot(data=df, x=x, y=y, order=cats_ord, linewidth=lw, palette=palette, ax=ax, fill=False, fliersize=0, color=edgecol, **kwargs)
             sns.swarmplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, alpha=alpha, linewidth=lw, dodge=dodge, size=size, palette=palette, ax=ax, **kwargs)
         elif graph=='violin_swarm':
             sns.violinplot(data=df, x=x, y=y, order=cats_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
@@ -1263,9 +1278,9 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: 
     # Add line if specified
     if line is not None:
         if df[x].apply(lambda row: isinstance(row, str)).all()==True: # x column is categorical; y is numeric
-            ax.axhline(y=line, color='black', linestyle='--', linewidth=lw)
+            ax.axhline(y=line, color='black', linestyle='--', linewidth=lw, zorder=0)
         elif df[y].apply(lambda row: isinstance(row, str)).all()==True: # y column is categorical; x is numeric
-            ax.axvline(x=line, color='black', linestyle='--', linewidth=lw)
+            ax.axvline(x=line, color='black', linestyle='--', linewidth=lw, zorder=0)
         else:
             print('Cannot add line: both x and y are numeric.')
 
@@ -1276,7 +1291,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: 
               y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_axis_pad=y_axis_pad, y_ticks_size=y_ticks_size, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
               legend_title=legend_title, legend_title_size=legend_title_size, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_items=legend_items, legend_ncol=legend_ncol,
               legend_columnspacing=legend_columnspacing, legend_handletextpad=legend_handletextpad, legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad, legend_handlelength=legend_handlelength,
-              dpi=dpi, show=show, space_capitalize=space_capitalize, PDB_pt=PDB_pt, icon='cat', cats_ord=cats_ord)
+              dpi=dpi, transparent=transparent, show=show, space_capitalize=space_capitalize, PDB_pt=PDB_pt, icon='cat', cats_ord=cats_ord)
 
 def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord: list = None, cols_exclude: list | str = None, bins: int = 40, log10_low: int = 0,
          file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', edgecol: str = 'black', lw: int = 1, ht: float = 1.5, asp: int = 5, tp: float = .8, hs: int = 0, despine: bool = False,
@@ -1284,7 +1299,7 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord:
          x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 9, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
          y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 9, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
          legend_title: str = '', legend_title_size: int = 12, legend_size: int = 9, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_items: tuple = (0, 0), legend_ncol: int = 1,
-         dpi: int = 0, show: bool = True, space_capitalize: bool = True, **kwargs):
+         dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True, **kwargs):
     ''' 
     dist(): creates distribution graphs
 
@@ -1340,7 +1355,8 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord:
     legend_bbox_to_anchor (tuple, optional): coordinates for bbox anchor
     legend_loc (str): legend location
     legend_ncol (tuple, optional): # of columns
-    dpi (int, optional): figure dpi (Default: 600 for non-HTML, 150 for HTML)
+    dpi (int, optional): figure dpi (Default: 1200 for non-HTML, 150 for HTML)
+    transparent (bool, optional): whether to save static images with transparent background (default: True)
     show (bool, optional): show plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     
@@ -1383,7 +1399,7 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord:
                   x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad, x_ticks_size=x_ticks_size, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
                   y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_axis_pad=y_axis_pad, y_ticks_size=y_ticks_size, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
                   legend_title=legend_title, legend_title_size=legend_title_size, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_items=legend_items, legend_ncol=legend_ncol,
-                  dpi=dpi, show=show, space_capitalize=space_capitalize, icon='histogram')
+                  dpi=dpi, transparent=transparent, show=show, space_capitalize=space_capitalize, icon='histogram')
     elif graph=='kde': 
         fig, ax = plt.subplots(figsize=figsize)
         if x_axis_scale=='log':
@@ -1399,7 +1415,7 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord:
                   x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad, x_ticks_size=x_ticks_size, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
                   y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_axis_pad=y_axis_pad, y_ticks_size=y_ticks_size, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
                   legend_title=legend_title, legend_title_size=legend_title_size, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_items=legend_items, legend_ncol=legend_ncol,
-                  dpi=dpi, show=show, space_capitalize=space_capitalize, icon='histogram')
+                  dpi=dpi, transparent=transparent, show=show, space_capitalize=space_capitalize, icon='histogram')
     elif graph=='hist_kde':
         fig, ax = plt.subplots(figsize=figsize)
         if x_axis_scale=='log':
@@ -1419,7 +1435,7 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord:
                   x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad, x_ticks_size=x_ticks_size, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
                   y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_axis_pad=y_axis_pad, y_ticks_size=y_ticks_size, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
                   legend_title=legend_title, legend_title_size=legend_title_size, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_items=legend_items, legend_ncol=legend_ncol,
-                  dpi=dpi, show=show, space_capitalize=space_capitalize, icon='histogram')
+                  dpi=dpi, transparent=transparent, show=show, space_capitalize=space_capitalize, icon='histogram')
     elif graph=='rid':
         # Set color scheme
         color_palettes = ["deep", "muted", "bright", "pastel", "dark", "colorblind", "husl", "hsv", "Paired", "Set1", "Set2", "Set3", "tab10", "tab20"] # List of common Seaborn palettes
@@ -1452,7 +1468,7 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord:
         if legend_title=='': legend_title=cols
         g.figure.legend(title=legend_title,title_fontsize=legend_title_size,fontsize=legend_size,
                         loc=legend_loc,bbox_to_anchor=legend_bbox_to_anchor)
-        save_fig(file=file, dir=dir, fig=g.figure, dpi=dpi, icon='histogram')
+        save_fig(file=file, dir=dir, fig=g.figure, dpi=dpi, transparent=transparent, icon='histogram')
         if show:
             ext = file.split('.')[-1].lower()  if file is not None else ''
             if ext not in ('html', 'json'):
@@ -1469,7 +1485,7 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vars: str = None,
          title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial', figsize: tuple = (5, 5),
          x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_pad: int = None, x_ticks_size: int = 9, x_ticks_rot: int = 45, x_ticks_font: str = 'Arial',
          y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_pad: int = None, y_ticks_size: int = 9, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial',
-         dpi: int = 0, show: bool = True, space_capitalize: bool = True, **kwargs):
+         dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True, **kwargs):
     '''
     heat(): creates heat plot related graphs
 
@@ -1518,7 +1534,8 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vars: str = None,
     y_ticks_size (int, optional): y-axis ticks font size
     y_ticks_rot (int, optional): y-axis ticks rotation
     y_ticks_font (str, optional): y-ticks font
-    dpi (int, optional): figure dpi (Default: 600 for non-HTML, 150 for HTML)
+    dpi (int, optional): figure dpi (Default: 1200 for non-HTML, 150 for HTML)
+    transparent (bool, optional): whether to save static images with transparent background (default: True)
     show (bool, optional): show plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     
@@ -1607,7 +1624,7 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vars: str = None,
         ax.set_facecolor('white')
     
     # Save & show fig
-    save_fig(file=file, dir=dir, fig=fig, dpi=dpi, icon='heat')
+    save_fig(file=file, dir=dir, fig=fig, dpi=dpi, transparent=transparent, icon='heat')
     if show:
         ext = file.split('.')[-1].lower()  if file is not None else ''
         if ext not in ('html', 'json'):
@@ -1622,7 +1639,7 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
           y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_dims: tuple = (0, 0),  y_axis_pad: int = None, y_ticks_size: int = 9, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial',
           legend_title: str = '', legend_title_size: int = 12, legend_size: int = 12, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_ncol: int = 1, 
           legend_columnspacing: int=0, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=1, legend_size_html_multiplier: float=1,
-          dpi: int = 0, show: bool = True, space_capitalize: bool = True, PDB_pt: str = None, **kwargs):
+          dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True, PDB_pt: str = None, **kwargs):
     ''' 
     stack(): creates stacked bar plot
 
@@ -1676,7 +1693,8 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
     legend_borderpad (float, optional): pad between legend and axes (Default: 0.5; only for html plots)
     legend_handlelength (float, optional): length of legend handle (Default: 1; only for html plots)
     legend_size_html_multiplier (float, optional): legend size multiplier for HTML plots (Default: .75)
-    dpi (int, optional): figure dpi (Default: 600 for non-HTML, 150 for HTML)
+    dpi (int, optional): figure dpi (Default: 1200 for non-HTML, 150 for HTML)
+    transparent (bool, optional): whether to save static images with transparent background (default: True)
     show (bool, optional): show plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     PDB_pt (str, optional): Path to PDB file for mol* visualization; only intended for fastq plots (Default: None)
@@ -1792,7 +1810,7 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
                 bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol)
 
     # Save & show fig; return dataframe
-    save_fig(file=file, dir=dir, fig=fig, dpi=dpi, PDB_pt=PDB_pt, icon='bar')
+    save_fig(file=file, dir=dir, fig=fig, dpi=dpi, transparent=transparent, PDB_pt=PDB_pt, icon='bar')
     if show:
         ext = file.split('.')[-1].lower() if file is not None else ''
         if ext not in ('html', 'json'):
@@ -1807,7 +1825,7 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str 
         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 9, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
         legend_title: str = '', legend_title_size: int = 12, legend_size: int = 9, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_ncol: int = 1, 
         legend_columnspacing: int=-4, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, legend_size_html_multiplier: float=0.75,
-        display_legend: bool = True, display_labels: str = 'FC & p-value', display_lines: bool = False, display_axis: bool = True, return_df: bool = True, dpi: int = 0, show: bool = True, space_capitalize: bool = True,
+        display_legend: bool = True, display_labels: str = 'FC & p-value', display_lines: bool = False, display_axis: bool = True, return_df: bool = True, dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True,
         PDB_pt: str = None, # only intended for fastq plots
         **kwargs) -> pd.DataFrame:
     ''' 
@@ -1875,7 +1893,8 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str 
     display_lines (bool, optional): display lines for threshold (Default: False)
     display_axis (bool, optional): display x- and y-axis lines (Default: True)
     return_df (bool, optional): return dataframe (Default: True)
-    dpi (int, optional): figure dpi (Default: 600 for non-HTML, 150 for HTML)
+    dpi (int, optional): figure dpi (Default: 1200 for non-HTML, 150 for HTML)
+    transparent (bool, optional): whether to save static images with transparent background (default: True)
     show (bool, optional): show plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     PDB_pt (str, optional): Path to PDB file for mol* visualization; only intended for fastq plots (Default: None)
@@ -2208,7 +2227,7 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str 
     plt.title(title, fontsize=title_size, fontweight=title_weight, family=title_font)
 
     # Save & show fig; return dataframe
-    save_fig(file=file, dir=dir, fig=fig, dpi=dpi, PDB_pt=PDB_pt, icon='volcano')
+    save_fig(file=file, dir=dir, fig=fig, dpi=dpi, transparent=transparent, PDB_pt=PDB_pt, icon='volcano')
     if show:
         ext = file.split('.')[-1].lower() if file is not None else ''
         if ext not in ('html', 'json'):

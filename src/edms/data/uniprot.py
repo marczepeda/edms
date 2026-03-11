@@ -47,11 +47,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Union
 import json
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
+from matplotlib.patches import Rectangle, Circle, Arc
+from matplotlib.patches import FancyArrowPatch
 import os
 import urllib.request
 import urllib.error
 from ..utils import mkdir
+from ..gen import plot as p
 
 # ---------------------------------------------------------------------------
 # Data models
@@ -741,3 +746,347 @@ __all__ = [
     "entries_to_dataframe",
     "load_flat_file",
 ]
+
+# ---------------------------------------------------------------------------
+# Secondary structure track
+# ---------------------------------------------------------------------------
+
+def draw_strand(
+    ax: plt.Axes,
+    start: float,
+    end: float,
+    y: float=0,
+    height: float=25,
+    color: str="gold",
+    edgecolor: str="black",
+    lw: float=0.8,
+    head_frac: float=0.25,
+    zorder: int=1,
+):
+    '''
+    draw_strand(): Draw a strand on the axis.
+
+    Parameters:
+    ax : matplotlib axis
+    start (float): start position in data coordinates
+    end (float): end position in data coordinates
+    y (float): y position in data coordinates
+    height (float): height of the strand
+    color (str): color of the strand
+    edgecolor (str): color of the edge of the strand
+    lw (float): line width of the strand
+    head_frac (float): fraction of the strand length that is the head
+    zorder (int): z-order of the strand
+    '''
+    length = end - start
+    if length <= 0:
+        return
+
+    #head_length = 1
+    head_length = max(length * head_frac, 5)
+    tail_width = height
+    head_width = height * 1.4
+
+    arrow = FancyArrowPatch(
+        (start, y),
+        (end, y),
+        arrowstyle=f"simple,tail_width={tail_width},"
+                   f"head_width={head_width},"
+                   f"head_length={head_length}",
+        facecolor=color,
+        edgecolor=edgecolor,
+        linewidth=lw,
+        mutation_scale=1,
+        zorder=zorder,
+    )
+    ax.add_patch(arrow)
+
+def draw_helix(
+    ax: plt.Axes,
+    start: float,
+    end: float,
+    y: float=0,
+    height: float=0.6,
+    color: str="turquoise",
+    edgecolor: str="black",
+    lw: float=0.8,
+    left_cap_ls: str="-",
+    right_front_ls: str="-",
+    right_back_ls: str=":",
+    right_back_alpha: float=0.8,
+    zorder: int=1,
+):
+    '''
+    draw_helix(): Draw a helix with a split right cap.
+    
+    Parameters:
+    ax : matplotlib axis
+    start (float): start position in data coordinates
+    end (float): end position in data coordinates
+    y (float): y position in data coordinates
+    height (float): height of the helix
+    color (str): color of the helix
+    edgecolor (str): color of the edge of the helix
+    lw (float): line width of the helix
+    left_cap_ls (str): line style of the left cap
+    right_front_ls (str): line style of the front right cap
+    right_back_ls (str): line style of the back right cap
+    right_back_alpha (float): alpha value of the back right cap
+    zorder (int): z-order of the helix
+    '''
+    if end <= start:
+        return
+
+    length = end - start
+    r = height / 2.0
+
+    # very short helix: fallback blob
+    if length <= height:
+        circ = Circle(((start + end) / 2.0, y), radius=length / 2.0,
+                      facecolor=color, edgecolor=edgecolor, linewidth=lw, zorder=zorder)
+        ax.add_patch(circ)
+        return
+
+    # Fill capsule (no edge)
+    rect = Rectangle((start + r, y - r), width=length - 2*r, height=height,
+                     facecolor=color, edgecolor="none", linewidth=0, zorder=zorder)
+    left = Circle((start + r, y), radius=r, facecolor=color, edgecolor="none", linewidth=0, zorder=zorder)
+    right = Circle((end - r, y), radius=r, facecolor=color, edgecolor="none", linewidth=0, zorder=zorder)
+    ax.add_patch(rect); ax.add_patch(left); ax.add_patch(right)
+
+    # Body outline
+    x0, x1 = start + r, end - r
+    ax.plot([x0, x1], [y + r, y + r], color=edgecolor, lw=lw, ls='-', zorder=zorder + 0.1)
+    ax.plot([x0, x1], [y - r, y - r], color=edgecolor, lw=lw, ls='-', zorder=zorder + 0.1)
+
+    # Left cap outline (full)
+    cxL = start + r
+    ax.add_patch(Arc((cxL, y), width=2*r, height=2*r, angle=0,
+                     theta1=-90, theta2=90, color=edgecolor, lw=lw, ls=left_cap_ls, zorder=zorder + 0.1))
+    ax.add_patch(Arc((cxL, y), width=2*r, height=2*r, angle=0,
+                     theta1=90, theta2=270, color=edgecolor, lw=lw, ls=left_cap_ls, zorder=zorder + 0.1))
+
+    # Right cap outline split: right half solid, left half dotted
+    cxR = end - r
+    ax.add_patch(Arc((cxR, y), width=2*r, height=2*r, angle=0,
+                     theta1=-90, theta2=90, color=edgecolor, lw=lw, ls=right_front_ls, zorder=zorder + 0.1))
+    ax.add_patch(Arc((cxR, y), width=2*r, height=2*r, angle=0,
+                     theta1=90, theta2=270, color=edgecolor, lw=lw, ls=right_back_ls,
+                     alpha=right_back_alpha, zorder=zorder + 0.1))
+
+def draw_loop(
+    ax: plt.Axes,
+    start: float,
+    end: float,
+    y: float=0,
+    height: float=0.6,
+    color: str="black",
+    lw: float=2.0,
+    cycles: int=None,
+    resolution: int=1000,
+    zorder: int=1,
+):
+    '''
+    draw_loop(): Draw a loop as a sine wave.
+    
+    Parameters:
+    ax : matplotlib axis
+    start (float): start position in data coordinates
+    end (float): end position in data coordinates
+    y (float): y position in data coordinates
+    height (float): height of the loop (peak-to-peak amplitude)
+    color (str): color of the loop
+    lw (float): line width of the loop
+    cycles (int): number of sine wave cycles to draw; if None, automatically scaled based on length
+    resolution (int): number of points to use for drawing the sine wave
+    zorder (int): z-order of the loop
+    '''
+    if end <= start:
+        return
+
+    length = end - start
+    if cycles is None:
+        cycles = max(0.5, int(length / 2))
+
+    x = np.linspace(start, end, resolution)
+    amp = height / 2
+    phase = 2 * np.pi * cycles * (x - start) / length
+    y_wave = y + amp * np.sin(phase)
+
+    ax.plot(x, y_wave, color=color, linewidth=lw,
+            solid_capstyle="round", zorder=zorder)
+
+def draw_ss_track(
+    df: pd.DataFrame | str,
+    y: float = 0,
+
+    track_start: float | None = None,
+    track_end: float | None = None,
+
+    helix_height: float = 0.8,
+    strand_height: float = 25,
+    loop_height: float = 0.8,
+    xpad: int = 5,
+
+    helix_color: str = "turquoise",
+    strand_color: str = "gold",
+    loop_color: str = "black",
+    edgecolor: str = "black",
+
+    helix_lw: float = 0.8,
+    strand_lw: float = 0.8,
+    loop_lw: float = 2.0,
+
+    loop_min_len: float = 1,
+
+    base_zorder: int = 1,
+    zorder_step: int = 1,
+
+    helix_loop_pad: float = 0.0,
+    strand_loop_pad: float = 0.15,
+
+    figsize: tuple = (10, 2),
+    dir: str | None = None,
+    file: str | None = None,
+    dpi: int = 0,
+    show: bool = True
+):
+    """
+    draw_ss_track(): Draw a secondary structure track
+
+    Parameters:
+    df (pd.DataFrame): UniProt accession (if saved to ~/.config/edms/UniProt) or file path for UniProt flat file. See edms.dat.uniprot.retrieve() or edms uniprot retrieve -h for more information.
+    y (float): vertical position of the track
+    track_start, track_end (float or None): optional start/end bounds for the track; if None, determined from data
+    helix_height, strand_height, loop_height (float): heights for each element type; if any is None, defaults to `height`
+    xpad (int): horizontal padding on the left and right of the track
+    helix_color, strand_color, loop_color (str): colors for each element type
+    edgecolor (str): color of the edges of helices and strands
+    helix_lw, strand_lw, loop_lw (float): line widths for each element type
+    loop_min_len (float): minimum length of loops to draw (for auto-drawn loops between elements)
+    base_zorder (int): z-order for the first element; subsequent elements decrease by zorder_step to create a stacking effect
+    helix_loop_pad, strand_loop_pad (float): padding to apply to the start/end of helices and strands when auto-drawing loops between elements, to make the sine wave connect more nicely; applied as a subtraction from the end of the current element and an addition to the start of the next element when determining loop start and end positions.
+    figsize (tuple, optional): size of the figure to create
+    dir (str, optional): output directory
+    file (str, optional): output filename
+    dpi (int, optional): figure dpi (Default: 1200)
+    show (bool, optional): show plot (Default: True)
+    """
+    if isinstance(df, str):
+        try: # from filepath
+            df = secondary_structure_from_flat_file(obj=df)
+        except:
+            try: # from config
+                for UniProt_file in os.listdir(os.path.expanduser('~/.config/edms/UniProt/')):
+                    if df.lower() in UniProt_file.lower():
+                        df = secondary_structure_from_flat_file(obj=f'{os.path.expanduser("~/.config/edms/UniProt")}/{UniProt_file}')
+                        break
+            except:
+                raise FileNotFoundError(f"UniProt flat file not found: {df}.\nPlease provide a valid filename or UniProt accession (if saved to {os.path.expanduser('~/.config/edms/UniProt/')}) or file path for UniProt flat file. See edms.dat.uniprot.retrieve_flat_file() or edms uniprot retrieve -h for more information.")
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    df["start"] = df["start"].astype(float)
+    df["end"] = df["end"].astype(float)
+    df = df.sort_values("start").reset_index(drop=True)
+
+    # Decide plotting bounds
+    first_start = float(df.loc[0, "start"])
+    last_end = float(df.loc[len(df) - 1, "end"])
+
+    if track_start is None:
+        track_start = first_start
+    if track_end is None:
+        track_end = last_end
+
+    # ---- terminal loop: track_start -> first element ----
+    if track_start < first_start:
+        draw_loop(
+            ax,
+            start=track_start,
+            end=first_start,
+            y=y,
+            height=loop_height,
+            color=loop_color,
+            lw=loop_lw,
+            zorder=base_zorder + 1,   # keep terminal loop underneath everything
+        )
+
+    # ---- draw elements + internal loops ----
+    for i, row in df.iterrows():
+        current_z = base_zorder - i * zorder_step  # N->C decrease
+
+        t = str(row["type"])
+        s = float(row["start"])
+        e = float(row["end"])
+
+        is_helix = ("α" in t) or ("alpha" in t.lower()) or ("helix" in t.lower())
+        is_strand = ("β" in t) or ("beta" in t.lower()) or ("strand" in t.lower()) or ("sheet" in t.lower())
+
+        if is_helix:
+            draw_helix(
+                ax, s, e, y=y, height=helix_height,
+                color=helix_color, edgecolor=edgecolor, lw=helix_lw, zorder=current_z
+            )
+        elif is_strand:
+            draw_strand(
+                ax, s, e, y=y, height=strand_height,
+                color=strand_color, edgecolor=edgecolor, lw=strand_lw, zorder=current_z
+            )
+        else:
+            draw_loop(
+                ax, s, e, y=y, height=loop_height,
+                color=loop_color, lw=loop_lw, zorder=current_z
+            )
+
+        # loop to next element
+        if i < len(df) - 1:
+            next_s = float(df.loc[i + 1, "start"])
+            next_t = str(df.loc[i + 1, "type"])
+
+            # Pad depending on type so the sine connects nicely
+            pad_right = helix_loop_pad if is_helix else (strand_loop_pad if is_strand else 0.0)
+            next_is_helix = ("α" in next_t) or ("alpha" in next_t.lower()) or ("helix" in next_t.lower())
+            next_is_strand = ("β" in next_t) or ("beta" in next_t.lower()) or ("strand" in next_t.lower()) or ("sheet" in next_t.lower())
+            pad_left = helix_loop_pad if next_is_helix else (strand_loop_pad if next_is_strand else 0.0)
+
+            loop_s = e - pad_right
+            loop_e = next_s + pad_left
+
+            if loop_e > loop_s and (loop_e - loop_s) >= loop_min_len:
+                # keep loop slightly underneath the "later" element so it doesn't cover it
+                draw_loop(
+                    ax, loop_s, loop_e, y=y, height=loop_height,
+                    color=loop_color, lw=loop_lw, zorder=current_z
+                )
+
+    # ---- terminal loop: last element -> track_end ----
+    if track_end > last_end:
+        draw_loop(
+            ax,
+            start=last_end-.25,
+            end=track_end,
+            y=y,
+            height=loop_height,
+            color=loop_color,
+            lw=loop_lw,
+            zorder=base_zorder + len(df) * zorder_step - .5,
+        )
+
+    # Axis formatting
+    xmin = min(track_start, first_start) - xpad
+    xmax = max(track_end, last_end) + xpad
+
+    # vertical limits: use helix height as the governing “track thickness”
+    H = max(float(helix_height), float(loop_height))
+    ax.set_xlim(xmin, xmax)
+    ax.set_ylim(-2,2)
+    ax.set_yticks([])
+    ax.spines["left"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(False)
+    ax.set_xlabel("Residue")
+
+    p.save_fig(file=file, dir=dir, fig=ax.figure, dpi=dpi)
+    if show:
+        plt.show()

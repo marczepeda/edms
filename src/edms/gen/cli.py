@@ -30,7 +30,7 @@ import sys # might use later
 from rich import print as rprint # might use later
 
 from . import com, io, plot as p, stat as st, html as ht
-from ..utils import parse_tuple_int, parse_tuple_float # might use later
+from ..utils import parse_tuple_int, parse_tuple_float
 
 # fastq helper methods
 def add_common_fastq_label_args(subparser):
@@ -76,8 +76,9 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
     else:
         subparser.add_argument("-si", "--size", type=str, help="Column name used to scale point sizes (Default: -log10('pval'); specify 'false' for no size)")
         subparser.add_argument("-sd", "--size_dims", type=parse_tuple_float, help="Size range for points formatted as min,max")
-        subparser.add_argument("-zc", "--z_col", type=str, help="Column name for Z-score normalization (Default: None)", default=argparse.SUPPRESS)
-        subparser.add_argument("-zv", "--z_var", type=str, help="Column value for Z-score normalization (Default: None)", default=argparse.SUPPRESS)
+        if pwes_torn_parser == False:
+            subparser.add_argument("-zc", "--z_col", type=str, help="Column name for Z-score normalization (Default: None)", default=argparse.SUPPRESS)
+            subparser.add_argument("-zv", "--z_var", type=str, help="Column value for Z-score normalization (Default: None)", default=argparse.SUPPRESS)
         if fastq_corr_parser == True:
             subparser.add_argument("-m", "--method", help="Correlation method (Default: 'pearson')", choices=['pearson', 'spearman', 'kendall'], type=str, default='pearson')
             subparser.add_argument("-nw", "--not_weighted", dest='weighted', action='store_false', help="Weighted correlation by size column (Default: True)", default=True)
@@ -92,9 +93,10 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
             subparser.add_argument("-ss_y", "--ss_y", type=int, help="Y position for secondary structure track in the plot (Default: autogenerate)", default=argparse.SUPPRESS)
 
     subparser.add_argument("-o", "--dir", help="Output directory path", type=str, default='./out')
-    subparser.add_argument("-f", "--file", help="Output file name", type=str, required=False, default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_scat.png')
-    if fastq_torn_parser == False and fastq_corr_parser == False and pwes_torn_parser == False:
+    subparser.add_argument("-f", "--file", help="Output file name", type=str, required=False, default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_scat.all')
+    if fastq_torn_parser == False and fastq_corr_parser == False:
         subparser.add_argument("-pc", "--palette_or_cmap", type=str, default="colorblind", help="Seaborn palette or matplotlib colormap")
+    if fastq_torn_parser == False and fastq_corr_parser == False and pwes_torn_parser == False:
         subparser.add_argument('-a', "--alpha", type=float, default=1, help="Alpha (transparency) for scatter points (0 to 1)")
     subparser.add_argument("-ec", "--edgecol", type=str, default="black", help="Edge color for scatter points")
 
@@ -147,6 +149,7 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
 
     # Display and formatting
     subparser.add_argument("-d", "--dpi", type=int, help="Figure dpi (Default: 600 for non-HTML, 150 for HTML)", default=0)
+    subparser.add_argument("-nt", "--not_transparent", dest='transparent', action="store_false", help="Don't save plot with transparent background", default=True)
     subparser.add_argument("-s", "--show", action="store_true", help="Show the plot", default=False)
     subparser.add_argument("-sc", "--space_capitalize", action="store_true", help="Capitalize label/legend strings and replace underscores with spaces")
     if fastq_torn_parser == True or fastq_corr_parser == True or pwes_torn_parser == True:
@@ -180,7 +183,7 @@ def add_common_plot_cat_args(subparser, fastq_parser=False, pwes_parsers=False):
         subparser.add_argument("-PDB_pt", "--PDB_pt", type=str, help="PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information", default=argparse.SUPPRESS)
 
     subparser.add_argument("-o", "--dir", type=str, help="Output directory", default='./out')
-    subparser.add_argument("-f", "--file", type=str, help="Output filename", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_cat.png')
+    subparser.add_argument("-f", "--file", type=str, help="Output filename", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_cat.all')
     subparser.add_argument("-pc", "--palette_or_cmap", type=str, default="colorblind", help="Seaborn color palette or matplotlib colormap")
     subparser.add_argument('-a', "--alpha", type=float, default=1, help="Alpha (transparency) for scatter points (0 to 1)")
     subparser.add_argument("-do", "--dodge", action='store_false', default=False, help="Separate points by color category")
@@ -243,6 +246,7 @@ def add_common_plot_cat_args(subparser, fastq_parser=False, pwes_parsers=False):
 
     # Display and formatting
     subparser.add_argument("-d", "--dpi", type=int, help="Figure dpi (Default: 600 for non-HTML, 150 for HTML)", default=0)
+    subparser.add_argument("-nt", "--not_transparent", dest='transparent', action="store_false", help="Don't save plot with transparent background", default=True)
     subparser.add_argument("-s", "--show", action="store_true", help="Show the plot in a window", default=False)
     subparser.add_argument("-sc", "--space_capitalize", action="store_true", help="Capitalize labels and replace underscores with spaces")
 
@@ -256,7 +260,7 @@ def add_common_plot_dist_args(subparser):
 
     # File output
     subparser.add_argument("-o", "--dir", type=str, help="Output directory", default='./out')
-    subparser.add_argument("-f", "--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_dist.png')
+    subparser.add_argument("-f", "--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_dist.all')
 
     # Optional core arguments
     subparser.add_argument("-c", "--cols", type=str, help="Color column name for grouping")
@@ -318,6 +322,7 @@ def add_common_plot_dist_args(subparser):
 
     # Final display
     subparser.add_argument("-d", "--dpi", type=int, help="Figure dpi (Default: 600 for non-HTML, 150 for HTML)", default=0)
+    subparser.add_argument("-nt", "--not_transparent", dest='transparent', action="store_false", help="Don't save plot with transparent background", default=True)
     subparser.add_argument("-s", "--show", action="store_true", help="Show the plot in an interactive window", default=False)
     subparser.add_argument("-sc", "--space_capitalize", action="store_true", help="Capitalize and space legend/label values", default=False)
 
@@ -352,7 +357,7 @@ def add_common_plot_heat_args(subparser, fastq_parser=False, stat_parser=False):
     
     if stat_parser == False:
         subparser.add_argument("-o", "--dir", type=str, help="Output directory path", default='./out')
-        subparser.add_argument("-f", "--file", type=str, help="Output filename", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_heat.png')
+        subparser.add_argument("-f", "--file", type=str, help="Output filename", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_heat.all')
     subparser.add_argument("-ec", "--edgecol", type=str, default="black", help="Color of cell edges")
     subparser.add_argument("-lw", "--lw", type=int, default=1, help="Line width for cell borders")
 
@@ -404,6 +409,7 @@ def add_common_plot_heat_args(subparser, fastq_parser=False, stat_parser=False):
 
     # Final display
     subparser.add_argument("-d", "--dpi", type=int, help="Figure dpi (Default: 600 for non-HTML, 150 for HTML)", default=0)
+    subparser.add_argument("-nt", "--not_transparent", dest='transparent', action="store_false", help="Don't save plot with transparent background", default=True)
     subparser.add_argument("-s","--show", action="store_true", help="Show the plot in an interactive window", default=False)
     if fastq_parser == False:
         subparser.add_argument("--space_capitalize", action="store_true", help="Capitalize and space labels/legend values", default=False)
@@ -420,7 +426,7 @@ def add_common_plot_stack_args(subparser, fastq_parser=False):
 
     # Optional parameters
     subparser.add_argument("-o", "--dir", type=str, help="Output directory path", default='./out')
-    subparser.add_argument("-f", "--file", type=str, help="Output filename", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_stack.png')
+    subparser.add_argument("-f", "--file", type=str, help="Output filename", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_stack.all')
     
     subparser.add_argument("-cg", "--cutoff_group", type=str, default=argparse.SUPPRESS, help="Column name to group by when applying cutoff")
     subparser.add_argument("-cv", "--cutoff_value", type=float, default=0, help="Y-axis values needs be greater than (e.g. 0)")
@@ -477,6 +483,7 @@ def add_common_plot_stack_args(subparser, fastq_parser=False):
 
     # Display and formatting
     subparser.add_argument("-d","--dpi", type=int, help="Figure dpi (Default: 600 for non-HTML, 150 for HTML)", default=0)
+    subparser.add_argument("-nt", "--not_transparent", dest='transparent', action="store_false", help="Don't save plot with transparent background", default=True)
     subparser.add_argument("-s","--show", action="store_true", help="Show the plot in an interactive window", default=False)
     subparser.add_argument("-sc","--space_capitalize", action="store_true", help="Capitalize and space legend/label values", default=False)
 
@@ -510,7 +517,7 @@ def add_common_plot_vol_args(subparser, fastq_parser=False):
 
     # Output
     subparser.add_argument("-o", "--dir", type=str, help="Output directory path", default='./out')
-    subparser.add_argument("-f", "--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_vol.png')
+    subparser.add_argument("-f", "--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_vol.all')
 
     # Aesthetics
     subparser.add_argument("-c","--color", type=str, default="lightgray", help="Color for non-significant points")
@@ -568,6 +575,7 @@ def add_common_plot_vol_args(subparser, fastq_parser=False):
     subparser.add_argument("-dda","--dont_display_axis", dest='display_axis', action="store_false", default=True, help="Display x- and y-axis lines (Default: True)")
     subparser.add_argument("-dli","--display_lines", action="store_true", help="Display lines for threshold (Default: False)", default=False)
     subparser.add_argument("-d","--dpi", type=int, help="Figure dpi (Default: 600 for non-HTML, 150 for HTML)", default=0)
+    subparser.add_argument("-nt", "--not_transparent", dest='transparent', action="store_false", help="Don't save plot with transparent background", default=True)
     subparser.add_argument("-s","--show", action="store_true", help="Show the plot in an interactive window", default=False)
     subparser.add_argument("-sc","--space_capitalize", action="store_true", help="Capitalize and space labels/legend items", default=False)
 
@@ -696,7 +704,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_stat_correlation.add_argument("-N","--no_plot", dest="plot", action="store_false", help="Don't generate correlation matrix plot", default=True)
     parser_stat_correlation.add_argument("-o", "--dir", type=str, help="Output directory (Default: ../out)",default='../out')
     parser_stat_correlation.add_argument("-F", "--file_data", type=str, help="Output data file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_correlation.csv')
-    parser_stat_correlation.add_argument("-P", "--file_plot", type=str, help="Output plot file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_correlation.pdf')
+    parser_stat_correlation.add_argument("-P", "--file_plot", type=str, help="Output plot file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_correlation.all')
     add_common_plot_heat_args(parser_stat_correlation, stat_parser=True)
 
     parser_stat_correlation.set_defaults(func=st.correlation)
@@ -872,7 +880,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_html.add_argument("-l", "--label", type=str, choices=["title", "stem", "name"], help="Card label source: 'title' (HTML <title>), 'stem' (filename without suffix), or 'name' (full filename)", default="title")
     parser_html.add_argument("-n", "--no_preview", dest="preview", action="store_false", help="Don't include an iframe preview panel in the index", default=True)
     parser_html.add_argument("-g", "--grid_cols", type=int, help="Number of columns in the responsive grid layout", default=5)
-    parser_html.add_argument("-i", "--image_types", type=str, nargs="+", help="List of image file extensions to include (e.g. .png .jpg .gif). If not specified, only .html files are included.", default=None)
+    parser_html.add_argument("-i", "--image_types", type=str, nargs="+", help="List of image file extensions to include (e.g. .all .jpg .gif). If not specified, only .html files are included.", default=None)
     parser_html.add_argument("-H", "--preview_height_px", type=int, help="Height of the preview iframe in pixels", default=900)
     parser_html.add_argument("-I", "--icon", type=str, help="Name of the SVG icon file (without .svg) to use as favicon", default="python")
     

@@ -524,7 +524,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_plot_motif.add_argument("-i", "--df", help="Path to count_motif() output file", required=True)
 
     parser_fastq_plot_motif.add_argument("-o","--out_dir", type=str, help="Directory to save plots", default=f'../out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
-    parser_fastq_plot_motif.add_argument("-s","--plot_suf", type=str, default=".pdf", help="Plot file suffix (e.g. .pdf, .png)")
+    parser_fastq_plot_motif.add_argument("-s","--plot_suf", type=str, default=".all", help="Plot file suffix (Default: '.all' => .png, .pdf, & .svg)")
     parser_fastq_plot_motif.add_argument("-n","--numeric", choices=["count", "fraction"], default="count", help="Numeric column to use for plotting (Default: 'count')")
     parser_fastq_plot_motif.add_argument("-I","--id_col", default="fastq_file", help="Column used for sample ID (Default: 'fastq_file')")
     parser_fastq_plot_motif.add_argument("-ia","--id_axis", default="fastq", help="Label to use on the plot axis (Default: 'fastq')")
@@ -538,7 +538,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_plot_alignments.add_argument("-I","--id_col", help="ID column name in the annotated library reference file", required=True)
 
     parser_fastq_plot_alignments.add_argument("-o","--out_dir", help="Output directory for plots", default=f'../out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
-    parser_fastq_plot_alignments.add_argument("-p","--plot_suf", default=".pdf", help="Plot file suffix (Default: .pdf)")
+    parser_fastq_plot_alignments.add_argument("-p","--plot_suf", default=".all", help="Plot file suffix (Default: '.all' => .png, .pdf, & .svg)")
     parser_fastq_plot_alignments.add_argument("-s","--show", action="store_true", help="Display plots interactively",default=False)
 
     # count_region() [region]:
@@ -557,7 +557,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_count_region.add_argument("-egs","--extend_gap_score", type=float, default=-0.1, help="Gap extension score (Default: -0.1)")
     parser_fastq_count_region.add_argument("-ad","--align_dims", type=parse_tuple_int, default=(0, 0), help="Alignment range formatted as 'start,end' (Default: 0,0 = all reads)")
     parser_fastq_count_region.add_argument("-ac","--align_ckpt", type=int, default=10000, help="Checkpoint frequency (Default: 10000)")
-    parser_fastq_count_region.add_argument("-p","--plot_suf", type=str, help="Plot suffix type (e.g. '.pdf')")
+    parser_fastq_count_region.add_argument("-p","--plot_suf", type=str, default=".all", help="Plot file suffix (Default: '.all' => .png, .pdf, & .svg)")
     parser_fastq_count_region.add_argument("-s","--show", action="store_true", help="Display plots interactively", default=False)
     parser_fastq_count_region.add_argument("-e","--exact", action="store_true", help="Perform exact matching only", default=False)
     parser_fastq_count_region.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
@@ -576,7 +576,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_count_alignments.add_argument("-egs","--extend_gap_score", type=float, default=-0.1, help="Gap extension penalty (Default: -0.1)")
     parser_fastq_count_alignments.add_argument("-ad","--align_dims", type=parse_tuple_int, default=(0, 0), help="Alignment range as 'start,end' (Default: 0,0 = all reads)")
     parser_fastq_count_alignments.add_argument("-ac","--align_ckpt", type=int, default=10000, help="Checkpoint frequency for saving alignment progress")
-    parser_fastq_count_alignments.add_argument("-p","--plot_suf", type=str, help="Plot file suffix (e.g. .pdf, .png)")
+    parser_fastq_count_alignments.add_argument("-p","--plot_suf", type=str, default=".all", help="Plot file suffix (Default: '.all' => .png, .pdf, & .svg)")
     parser_fastq_count_alignments.add_argument("-s","--show", action="store_true", help="Show plots interactively")
     parser_fastq_count_alignments.add_argument("-e","--exact", action="store_true", help="Perform exact matching only", default=False)
     parser_fastq_count_alignments.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
@@ -589,7 +589,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_plot_paired.add_argument("-I", "--id_col", default="ID", help="Column name for ID (Default: 'ID')")
     parser_fastq_plot_paired.add_argument("-d", "--desired_col", default="desired", help="Column name for desired sequences (Default: 'desired')")
     parser_fastq_plot_paired.add_argument("-y", "--y", default="count", help="y axis for plots (Default: 'count'; Options: 'count' & 'fraction')")
-    parser_fastq_plot_paired.add_argument("-p", "--plot_suf", default=".pdf", help="Plot file suffix (e.g. .pdf or .png)")
+    parser_fastq_plot_paired.add_argument("-p", "--plot_suf", default=".all", help="Plot file suffix (Default: '.all' => .png, .pdf, & .svg)")
     parser_fastq_plot_paired.add_argument("-s", "--show", action="store_true", help="Display plots interactively")
 
     # paired_regions():
@@ -604,7 +604,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_paired_regions.add_argument("-r2a", "--region2_alignment_col", default="r2_alignment", help="Column name for region 2 alignment data")
     parser_fastq_paired_regions.add_argument("-a", "--reads_aligned_col", default="reads_aligned", help="Column name for aligned reads (Default: 'reads_aligned')")
     parser_fastq_paired_regions.add_argument("-p", "--reads_processed_col", default="reads_processed", help="Column name for processed reads (Default: 'reads_processed')")
-    parser_fastq_paired_regions.add_argument("-P", "--plot_suf", default=".pdf", help="Plot file suffix (e.g., .pdf, .png)")
+    parser_fastq_paired_regions.add_argument("-P", "--plot_suf", default=".all", help="Plot file suffix (Default: '.all' => .png, .pdf, & .svg)")
     parser_fastq_paired_regions.add_argument("-s", "--show", action="store_true", help="Display plots interactively")
     parser_fastq_paired_regions.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
 
@@ -635,7 +635,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_count_signatures.add_argument("-ac", "--align_ckpt", type=int, default=10000, help="Checkpoint frequency (Default: 10000)")
     parser_fastq_count_signatures.add_argument("-sa", "--save_alignments", action="store_true", help="Save alignments (Default: False, save memory)", default=False)
     parser_fastq_count_signatures.add_argument("-nl", "--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
-    parser_fastq_count_signatures.add_argument("-p", "--plot_suf", type=str, help="Plot suffix type (Default: 'pdf')", default='.pdf')
+    parser_fastq_count_signatures.add_argument("-p", "--plot_suf", type=str, help="Plot suffix type (Default: '.all' => .png, .pdf, & .svg)", default='.all')
     parser_fastq_count_signatures.add_argument("-s", "--show", action="store_true", help="Display plots interactively", default=False)
     parser_fastq_count_signatures.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
 
@@ -1036,13 +1036,17 @@ Examples:[/red]
     parser_pwes_hist = subparsers_pwes.add_parser("hist", help="Generate a histogram of the number edits for each cluster", description="Generate a histogram of the number edits for each cluster", formatter_class=formatter_class)
     parser_pwes_cat = subparsers_pwes.add_parser("cat", help="Create categorical graphs for PWES 3D clustering results", description="Create categorical graphs for PWES 3D clustering results", formatter_class=formatter_class)   
     parser_pwes_torn = subparsers_pwes.add_parser("torn", help="Generate tornado plots for visualizing PWES clusters", description="Generate tornado plots for visualizing PWES clusters", formatter_class=formatter_class)
+    parser_pwes_heatmap = subparsers_pwes.add_parser("heatmap", help="Generate heatmap for PWES clustering results", description="Generate heatmap for PWES clustering results", formatter_class=formatter_class)
+    parser_pwes_heatmap_cbar = subparsers_pwes.add_parser("heatmap_cbar", help="Generate heatmap colorbar for PWES clustering results", description="Generate heatmap colorbar for PWES clustering results", formatter_class=formatter_class)
+    parser_pwes_clustermap = subparsers_pwes.add_parser("clustermap", help="Generate clustermap for PWES clustering results", description="Generate clustermap for PWES clustering results", formatter_class=formatter_class)
 
     # clustering():
     parser_pwes_clustering.add_argument("-p", "--pdb_file", type=str, help="PDB id or path to PDB file for structureural information. If PDB id is given, will attempt to retrieve from config or RCSB PDB.", required=True)
-    parser_pwes_clustering.add_argument("-i", "--df_scores", type=str, help="Path to input file with edit scores and AA positions.")
+    parser_pwes_clustering.add_argument("-i", "--df", type=str, help="Path to input file with edit scores and AA positions.")
     parser_pwes_clustering.add_argument("-x", "--x_col", type=str, help="Column name in input file with AA positions (Default: 'AA Number')", default='AA Number')
     parser_pwes_clustering.add_argument("-sc", "--scores_col", type=str, help="Column name in input file with edit scores (Default: 'log2(FC)')", default='log2(FC)')
     parser_pwes_clustering.add_argument("-id", "--id_col", type=str, help="Column name in input file with unique IDs for epegRNAs (if not using index)", default=argparse.SUPPRESS)
+    parser_pwes_clustering.add_argument("-I", "--iter_cols", type=str, nargs="+", help="If provided, run clustering separately for each value (or combination of values) in df[iter_cols]. Outputs are saved under: out_dir/<iter_cols>=<value>/  (or multi-col combo folder). The structure-derived distance matrices are computed once and reused.", default=argparse.SUPPRESS)
     parser_pwes_clustering.add_argument("-gc", "--gene_col", type=str, help="Column name in input file with gene names (if multiple subunits)", default=argparse.SUPPRESS)
     parser_pwes_clustering.add_argument("-gm", "--gene_map", type=json.loads, help='Dict mapping gene names to chain IDs in PDB file (if multiple subunits; e.g., {"FOXA1": "O"})', default=argparse.SUPPRESS)
     parser_pwes_clustering.add_argument("-t", "--tanh_a", type=float, help="Parameter for tanh transformation of scores (Default: 1.0)", default=1.0)
@@ -1054,15 +1058,22 @@ Examples:[/red]
     parser_pwes_clustering.add_argument("-f", "--out_prefix", type=str, help="Prefix for output files (Default: timestamp)", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
     parser_pwes_clustering.add_argument("-hk","--hist_kwargs", type=json.loads, help='Dict of keyword arguments to pass to hist() for histogram generation (e.g., {"y_axis": "Count"})', default=argparse.SUPPRESS)
     parser_pwes_clustering.add_argument("-ck", "--cat_kwargs", type=json.loads, help='Dict of keyword arguments to pass to cat() for categorical plot generation (e.g., {"line": 10})', default=argparse.SUPPRESS)
-    parser_pwes_clustering.add_argument("-tk","--torn_kwargs", type=json.loads, help='Dict of keyword arguments to pass to torn() for tornado plot generation (e.g., {"display_legend": False})', default=argparse.SUPPRESS)
-    
+    parser_pwes_clustering.add_argument("-tk", "--torn_kwargs", type=json.loads, help='Dict of keyword arguments to pass to torn() for tornado plot generation (e.g., {"display_legend": False})', default=argparse.SUPPRESS)
+    parser_pwes_clustering.add_argument("-hmk", "--heatmap_kwargs", type=json.loads, help='Dict of keyword arguments to pass to heatmap() for heatmap generation (e.g., {"mask_on": True})', default=argparse.SUPPRESS)
+    parser_pwes_clustering.add_argument("-cbk", "--heatmap_cbar_kwargs", type=json.loads, help='Dict of keyword arguments to pass to heatmap_cbar() for heatmap colorbar generation (e.g., {"orientation": "vertical"})', default=argparse.SUPPRESS)
+    parser_pwes_clustering.add_argument("-cmk", "--clustermap_kwargs", type=json.loads, help='Dict of keyword arguments to pass to clustermap() for clustermap generation (e.g., {"color_list": ["blue", "red", ...]})', default=argparse.SUPPRESS)
+    parser_pwes_clustering.add_argument("-np", "--no_pymol", action='store_false', dest='pymol', help="Do not include PyMOL script generation", default=True)
+    parser_pwes_clustering.add_argument("-s", "--show", action='store_true', help="Show plots", default=False)
+
     # hist():
     parser_pwes_hist.add_argument("-i", "--df_clus", type=str, help="Path to input file with clustering results (must have cluster_col column for cluster labels)", required=True)
+    
     parser_pwes_hist.add_argument("-c", "--cluster_col", type=str, help="Column name in input file with cluster labels (Default: 'cl_new')", default='cl_new')
     add_common_plot_cat_args(parser_pwes_hist, pwes_parsers=True)
 
     # cat():
     parser_pwes_cat.add_argument("-i", "--df_clus", type=str, help="Path to input file with clustering results (must have cluster_col column for cluster labels and scores_col column for scores)", required=True)
+    
     parser_pwes_cat.add_argument("-c", "--cluster_col", type=str, help="Column name in input file with cluster labels (Default: 'cl_new')", default='cl_new')
     parser_pwes_cat.add_argument("-ss", "--scores_col", type=str, help="Column name in input file with sgRNA scores (Default: 'log2(FC)')", default='log2(FC)')
     add_common_plot_cat_args(parser_pwes_cat, pwes_parsers=True)
@@ -1070,12 +1081,81 @@ Examples:[/red]
     # torn():
     parser_pwes_torn.add_argument("-df", "--df", type=str, help="Path to input file with preclustering results (must have scores_col column for scores)", required=True)
     parser_pwes_torn.add_argument("-i", "--df_clus", type=str, help="Path to input file with clustering results (must have cluster_col column for cluster labels and scores_col column for scores)", required=True)
+    
     parser_pwes_torn.add_argument("-c", "--cluster_col", type=str, help="Column name in input file with cluster labels (Default: 'cl_new')", default='cl_new')
     parser_pwes_torn.add_argument("-ss", "--scores_col", type=str, help="Column name in input file with edit scores (Default: 'log2(FC)')", default='log2(FC)')
+    parser_pwes_torn.add_argument("-to", "--together", dest="individual", action="store_true", help="Show all clusters together on one plot (otherwise, show clusters on individual plots)", default=False)
     add_common_plot_scat_args(parser_pwes_torn, pwes_torn_parser=True)
+
+    # heatmap():
+    parser_pwes_heatmap.add_argument("-i", "--df_scaled", type=str, help="Path to input file with scaled PWES matrix (must be in square format with row and column labels)", required=True)
+    
+    parser_pwes_heatmap.add_argument("-m", "--mask_on", action="store_true", help="Whether to mask the lower triangle of the heatmap (Default: False)", default=False)
+    parser_pwes_heatmap.add_argument("-b", "--blackout", type=str, nargs="+", help="List of prefixes for rows/columns to blackout (e.g., 'X' for non-protein residues) (Default: None)", default=argparse.SUPPRESS)
+    parser_pwes_heatmap.add_argument("-o", "--dir", type=str, help="Directory to save heatmap (Default: ../out)", default='../out')
+    parser_pwes_heatmap.add_argument("-f", "--file", type=str, help="Filename to save heatmap (Default: timestamp_heatmap.all => .png, .pdf, & .svg)", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_heatmap.all')
+    parser_pwes_heatmap.add_argument("-fs", "--figsize", type=parse_tuple_float, help="Figure size per subplot as x,y", default=argparse.SUPPRESS)
+    parser_pwes_heatmap.add_argument("-c", "--color", type=str, help="Face color for heatmap rectangles", default=argparse.SUPPRESS)
+    parser_pwes_heatmap.add_argument("-ec", "--edgecol", type=str, help="Edge color for heatmap cells", default=argparse.SUPPRESS)
+    parser_pwes_heatmap.add_argument("-l", "--lw", type=float, help="Line width for heatmap cell borders", default=argparse.SUPPRESS)
+    parser_pwes_heatmap.add_argument("-a", "--alpha", type=float, help="Transparency of blackout rectangles", default=argparse.SUPPRESS)
+    parser_pwes_heatmap.add_argument("-ct", "--center", type=float, help="Value at which to center the colormap", default=argparse.SUPPRESS)
+    parser_pwes_heatmap.add_argument("-cm", "--cmap", type=str, help="Colormap to use for heatmap", default=argparse.SUPPRESS)
+    parser_pwes_heatmap.add_argument("-ns", "--not_sq", dest="sq", action="store_true", help="Don't make heatmap cells square", default=argparse.SUPPRESS)
+    parser_pwes_heatmap.add_argument("-vn", "--vmin", type=float, help="Minimum value for colormap", default=argparse.SUPPRESS)
+    parser_pwes_heatmap.add_argument("-vx", "--vmax", type=float, help="Maximum value for colormap", default=argparse.SUPPRESS)
+    parser_pwes_heatmap.add_argument("-cb", "--cbar", action="store_true", help="Display colorbar", default=False)
+    parser_pwes_heatmap.add_argument("-sc", "--spine_color", type=str, help="Color of plot spines", default=argparse.SUPPRESS)
+    parser_pwes_heatmap.add_argument("-sv", "--spine_invisible", dest="spine_visible", action="store_false", help="Don't display plot spines", default=True)
+    parser_pwes_heatmap.add_argument("-ws", "--spine_wspace", type=float, help="Width space for subplot grid", default=argparse.SUPPRESS)
+    parser_pwes_heatmap.add_argument("-hs", "--spine_hspace", type=float, help="Height space for subplot grid", default=argparse.SUPPRESS)
+    parser_pwes_heatmap.add_argument("-r", "--dont_rasterize", dest="rasterize", action="store_false", help="Rasterize heatmap for smaller file size", default=True)
+    parser_pwes_heatmap.add_argument("-d", "--dpi", type=int, help="Figure dpi", default=argparse.SUPPRESS)
+    parser_pwes_heatmap.add_argument("-s", "--show", action="store_true", help="Whether to display the plot (Default: False)", default=False)
+    
+    # heatmap_cbar():
+    parser_pwes_heatmap_cbar.add_argument("-O", "--orientation", type=str, help="Orientation of the colorbar ('vertical' or 'horizontal')", default="vertical")
+    parser_pwes_heatmap_cbar.add_argument("-o", "--dir", type=str, help="Directory to save heatmap colorbar (Default: ../out)", default='../out')
+    parser_pwes_heatmap_cbar.add_argument("-f", "--file", type=str, help="Filename to save heatmap colorbar (Default: timestamp_heatmap_cbar.all => .png, .pdf, & .svg)", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_heatmap_cbar.all')
+    parser_pwes_heatmap_cbar.add_argument("-fs", "--figsize", type=parse_tuple_float, help="Figure size as x,y (Default: (0.25, 2))", default=(0.25, 2))
+    parser_pwes_heatmap_cbar.add_argument("-c", "--cmap", type=str, help="Colormap to use for heatmap colorbar (Default: 'RdBu_r')", default='RdBu_r')
+    parser_pwes_heatmap_cbar.add_argument("-vn", "--vmin", type=float, help="Minimum value for heatmap colorbar (Default: -1)", default=-1)
+    parser_pwes_heatmap_cbar.add_argument("-vx", "--vmax", type=float, help="Maximum value for heatmap colorbar (Default: 1)", default=1)
+    parser_pwes_heatmap_cbar.add_argument("-l", "--lw", type=float, help="Line width for colorbar outline (Default: 0.5)", default=0.5)
+    parser_pwes_heatmap_cbar.add_argument("-ts", "--tick_size", type=int, help="Font size for colorbar ticks (Default: 8)", default=8)
+    parser_pwes_heatmap_cbar.add_argument("-tw", "--tick_width", type=float, help="Tick width for colorbar (Default: 0.5)", default=0.5)
+    parser_pwes_heatmap_cbar.add_argument("-lf", "--label_font", type=str, help="Label font (Default: Arial)", default="Arial")
+    parser_pwes_heatmap_cbar.add_argument("-ls", "--label_size", type=int, help="Label font size (Default: 6)", default=6)
+    parser_pwes_heatmap_cbar.add_argument("-d", "--dpi", type=int, help="Figure dpi", default=argparse.SUPPRESS)
+    parser_pwes_heatmap_cbar.add_argument("-s", "--show", action="store_true", help="Whether to display the plot (Default: False)", default=False)
+
+    # clustermap():
+    parser_pwes_clustermap.add_argument("-i", "--df_scaled", type=str, help="Path to input file with scaled PWES matrix (must be in square format with row and column labels)", required=True)
+    parser_pwes_clustermap.add_argument("-l", "--link", type=str, help="Path to input file with linkage matrix for hierarchical clustering (e.g., output from clustering())", required=True)
+    parser_pwes_clustermap.add_argument("-c", "--df_clusters", type=str, help="Path to input file with cluster assignments for rows (e.g., output from clustering())", required=True)
+    
+    parser_pwes_clustermap.add_argument("-cl", "--color_list", type=str, nargs="+", help="List of colors for clusters (e.g., 'blue', 'red', ...). If not provided, default colors will be used.", default=argparse.SUPPRESS)
+    parser_pwes_clustermap.add_argument("-o", "--dir", type=str, help="Directory to save clustermap (Default: ../out)", default='../out')
+    parser_pwes_clustermap.add_argument("-f", "--file", type=str, help="Filename to save clustermap (Default: timestamp_clustermap.all => .png, .pdf, & .svg)", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_clustermap.all')
+    parser_pwes_clustermap.add_argument("-fs", "--figsize", type=parse_tuple_float, help="Figure size as x,y (Default: (4, 2.2))", default=(4, 2.2))
+    parser_pwes_clustermap.add_argument("-ct", "--center", type=float, help="Value at which to center the colormap (Default: 0)", default=0)
+    parser_pwes_clustermap.add_argument("-cm", "--cmap", type=str, help="Colormap to use for heatmap (Default: 'RdBu_r')", default='RdBu_r')
+    parser_pwes_clustermap.add_argument("-vn", "--vmin", type=float, help="Minimum value for colormap (Default: -1)", default=-1)
+    parser_pwes_clustermap.add_argument("-vx", "--vmax", type=float, help="Maximum value for colormap (Default: 1)", default=1)
+    parser_pwes_clustermap.add_argument("-lc", "--line_color", type=str, help="Line color for cluster boundaries (Default: 'k')", default='k')
+    parser_pwes_clustermap.add_argument("-ls", "--line_style", type=str, help="Line style for cluster boundaries (Default: '--')", default='--')
+    parser_pwes_clustermap.add_argument("-lw", "--line_width", type=float, help="Line width for cluster boundaries (Default: 0.25)", default=0.25)
+    parser_pwes_clustermap.add_argument("-sc", "--spine_color", type=str, help="Color of plot spines (Default: 'black')", default='black')
+    parser_pwes_clustermap.add_argument("-sv", "--spine_invisible", dest="spine_visible", action="store_false", help="Don't display plot spines", default=True)
+    parser_pwes_clustermap.add_argument("-r", "--dont_rasterize", dest="rasterize", action="store_false", help="Rasterize heatmap for smaller file size (Default: True)", default=True)
+    parser_pwes_clustermap.add_argument("-d", "--dpi", type=int, help="Figure dpi", default=argparse.SUPPRESS)
+    parser_pwes_clustermap.add_argument("-s", "--show", action="store_true", help="Whether to display the plot (Default: True)", default=True)
 
     # Set defaults
     parser_pwes_clustering.set_defaults(func=pwes.clustering)
     parser_pwes_hist.set_defaults(func=pwes.hist)
     parser_pwes_cat.set_defaults(func=pwes.cat)
     parser_pwes_torn.set_defaults(func=pwes.torn)
+    parser_pwes_heatmap.set_defaults(func=pwes.heatmap)
+    parser_pwes_heatmap_cbar.set_defaults(func=pwes.heatmap_cbar)
+    parser_pwes_clustermap.set_defaults(func=pwes.clustermap)

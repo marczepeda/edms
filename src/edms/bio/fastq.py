@@ -509,7 +509,7 @@ def count_motif(fastq_dir: str, pattern: str, out_dir: str, motif: str="motif",
     if sh == True: io.combine(in_dir=os.path.join(out_dir,f'.count_{motif}'), out_dir=f'./count_{motif}', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
     if return_df: return df # Return dataframe (optional)
 
-def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.pdf',numeric: str='count',
+def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.all',numeric: str='count',
                id_col: str='fastq_file', id_axis: str='fastq', stack_figsize: tuple=(7,3), heat_figsize: tuple=None,
                cutoff_frac:float=0.01, return_df:bool=False, show:bool=True) -> tuple[pd.DataFrame]:
     '''
@@ -518,7 +518,7 @@ def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.pdf',numeri
     Parameters:
     df (dataframe | str): count_motif() dataframe (or file path)
     out_dir (str, optional): output directory
-    plot_suf (str, optional): plot type suffix with '.' (Default: '.pdf')
+    plot_suf (str, optional): plot type suffix with '.' (Default: '.all' => .png, .pdf, & .svg)
     numeric (str, optional): 'count' or 'fraction' can be the numeric column for plots (Default: 'count')
     id_col (str, optional): id column name (Default: 'fastq_file')
     id_axis (str, optional): replace id column name on plots (Default: 'fastq')
@@ -633,7 +633,7 @@ def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.pdf',numeri
 def mismatch_alignments(align_col: str, out_dir: str, fastq_name: str,
                         fastq_df_ref: pd.DataFrame, dc_alignments: dict, dc_aligned_reads: dict,
                         dc_alignments_mismatch_pos: dict, dc_alignments_mismatch_num: dict, 
-                        return_df: bool=False) -> pd.DataFrame:
+                        return_df: bool=False, exact: bool=False) -> pd.DataFrame:
     '''
     mismatch_alignments(): Compute & save mismatch number and position per alignment; enables checkpoints
 
@@ -647,6 +647,7 @@ def mismatch_alignments(align_col: str, out_dir: str, fastq_name: str,
     dc_alignments_mismatch_pos (dict): dictionary of mismatch positions
     dc_alignments_mismatch_num (dict): dictionary of mismatch numbers
     return_df (bool, optional): return dataframe (Default: False)
+    exact (bool): perform exact matching only
     
     Dependencies: count_region(), count_alignments(), perform_alignments(), pandas, tidy
     '''
@@ -663,18 +664,19 @@ def mismatch_alignments(align_col: str, out_dir: str, fastq_name: str,
     df_fastq = pd.merge(left=df_fastq,right=df_alignments_mismatch_pos,on=align_col)
     
     # Calculate mismatch num & position per alignment
-    print('Calculate mismatch num & position per alignment')
-    mismatch_num_per_alignment_ls = []
-    mismatch_pos_per_alignment_ls = []
-    for (ref,mismatch_pos,mismatch_num,alignments) in t.zip_cols(df=df_fastq,cols=[align_col,'mismatch_pos','mismatch_num','alignments']):
-        if alignments==0:
-            mismatch_num_per_alignment_ls.append(0)
-            mismatch_pos_per_alignment_ls.append({pos:0 for pos in range(1,len(ref)+1)})
-        else:
-            mismatch_num_per_alignment_ls.append(mismatch_num/alignments)
-            mismatch_pos_per_alignment_ls.append({pos:mismatch_pos.count(pos)/alignments for pos in range(1,len(ref)+1)})
-    df_fastq['mismatch_num_per_alignment'] = mismatch_num_per_alignment_ls
-    df_fastq['mismatch_pos_per_alignment'] = mismatch_pos_per_alignment_ls
+    if not exact:
+        print('Calculate mismatch num & position per alignment')
+        mismatch_num_per_alignment_ls = []
+        mismatch_pos_per_alignment_ls = []
+        for (ref,mismatch_pos,mismatch_num,alignments) in t.zip_cols(df=df_fastq,cols=[align_col,'mismatch_pos','mismatch_num','alignments']):
+            if alignments==0:
+                mismatch_num_per_alignment_ls.append(0)
+                mismatch_pos_per_alignment_ls.append({pos:0 for pos in range(1,len(ref)+1)})
+            else:
+                mismatch_num_per_alignment_ls.append(mismatch_num/alignments)
+                mismatch_pos_per_alignment_ls.append({pos:mismatch_pos.count(pos)/alignments for pos in range(1,len(ref)+1)})
+        df_fastq['mismatch_num_per_alignment'] = mismatch_num_per_alignment_ls
+        df_fastq['mismatch_pos_per_alignment'] = mismatch_pos_per_alignment_ls
     
     # Save & return fastq dataframe
     print('Save & return fastq dataframe')
@@ -712,7 +714,7 @@ def perform_alignments(align_col: str, out_dir: str, fastq_name: str, fastq_df_r
             print(f'{s+1} out of {len(seqs)}')
             mismatch_alignments(align_col=align_col, out_dir=out_dir, fastq_name=fastq_name, fastq_df_ref=fastq_df_ref,
                                 dc_alignments=dc_alignments, dc_aligned_reads=dc_aligned_reads,
-                                dc_alignments_mismatch_pos=dc_alignments_mismatch_pos, dc_alignments_mismatch_num=dc_alignments_mismatch_num)
+                                dc_alignments_mismatch_pos=dc_alignments_mismatch_pos, dc_alignments_mismatch_num=dc_alignments_mismatch_num, exact=exact)
             memories.append(memory_timer(task=f"{fastq_name} (align {s+1} out of {len(seqs)})"))
 
         if seq is None: # Missing region or empty read
@@ -771,11 +773,11 @@ def perform_alignments(align_col: str, out_dir: str, fastq_name: str, fastq_df_r
     # Perform mismatch alignments and return fastq dataframe
     return mismatch_alignments(align_col=align_col, out_dir=out_dir, fastq_name=fastq_name, fastq_df_ref=fastq_df_ref,
                                dc_alignments=dc_alignments, dc_aligned_reads=dc_aligned_reads,
-                               dc_alignments_mismatch_pos=dc_alignments_mismatch_pos, dc_alignments_mismatch_num=dc_alignments_mismatch_num,
+                               dc_alignments_mismatch_pos=dc_alignments_mismatch_pos, dc_alignments_mismatch_num=dc_alignments_mismatch_num, exact=exact,
                                return_df=True)
     
 def plot_alignments(fastq_alignments: dict | str, align_col: str, id_col: str,
-                    out_dir: str, plot_suf: str='.pdf', show:bool=False, **plot_kwargs):
+                    out_dir: str, plot_suf: str='.all', show:bool=False, exact:bool=False, **plot_kwargs):
     ''' 
     plot_alignments(): generate line & distribution plots from fastq alignments dictionary
     
@@ -785,8 +787,9 @@ def plot_alignments(fastq_alignments: dict | str, align_col: str, id_col: str,
     id_col (str): id column name in the annotated library reference file
     fastq_dir (str): directory with fastq files
     out_dir (str): directory for output files
-    plot_suf (str, optional): plot type suffix with '.' (Default: '.pdf')
+    plot_suf (str, optional): plot type suffix with '.' (Default: '.all' => .png, .pdf, & .svg)
     show (bool, optional): show plots (Default: False)
+    exact (bool, optional): perform exact matching only (Default: False)
     **plot_kwargs (optional): plot key word arguments
 
     Dependencies: pandas & plot
@@ -798,27 +801,28 @@ def plot_alignments(fastq_alignments: dict | str, align_col: str, id_col: str,
     for fastq_name,df_fastq in fastq_alignments.items(): # Iterate through dictionary
         
         # Plot mismatch position per alignment
-        print('Plot mismatch position per alignment')
-        
-        out_dir_fastq_name = os.path.join(out_dir,fastq_name)
-        df_fastq_plot = pd.DataFrame()
-        for align,id,mismatch_pos_per_alignment in t.zip_cols(df=df_fastq,cols=[align_col,id_col,'mismatch_pos_per_alignment']):
-            df_fastq_plot_align = pd.DataFrame({align_col:[align]*len(mismatch_pos_per_alignment), # Obtain individual alignments
-                                                id_col:[id]*len(mismatch_pos_per_alignment),
-                                                'mismatch_pos':list(mismatch_pos_per_alignment.keys()),
-                                                'mismatch_pos_per_alignment':list(mismatch_pos_per_alignment.values())})
-
-            p.scat(graph='line',df=df_fastq_plot_align,x='mismatch_pos',y='mismatch_pos_per_alignment', # Plot mismatches for each alignment
-                   title=f'{fastq_name} {id}',x_axis='Alignment Position',y_axis='Mismatches/Alignment',y_axis_dims=(0,1),
-                   dir=out_dir_fastq_name,file=f'{id.replace(".","_")}{plot_suf}',
-                   show=show,**plot_kwargs)
+        if not exact:
+            print('Plot mismatch position per alignment')
             
-            df_fastq_plot = pd.concat(objs=[df_fastq_plot,df_fastq_plot_align]).reset_index(drop=True) # Group alignment mismatches
+            out_dir_fastq_name = os.path.join(out_dir,fastq_name)
+            df_fastq_plot = pd.DataFrame()
+            for align,id,mismatch_pos_per_alignment in t.zip_cols(df=df_fastq,cols=[align_col,id_col,'mismatch_pos_per_alignment']):
+                df_fastq_plot_align = pd.DataFrame({align_col:[align]*len(mismatch_pos_per_alignment), # Obtain individual alignments
+                                                    id_col:[id]*len(mismatch_pos_per_alignment),
+                                                    'mismatch_pos':list(mismatch_pos_per_alignment.keys()),
+                                                    'mismatch_pos_per_alignment':list(mismatch_pos_per_alignment.values())})
 
-        p.scat(graph='line',df=df_fastq_plot,x='mismatch_pos',y='mismatch_pos_per_alignment',cols=id_col, # Plot mismatches for each alignment
-               title=f'{fastq_name}',x_axis='Alignment Position',y_axis='Mismatches/Alignment',y_axis_dims=(0,1),
-               dir=out_dir_fastq_name,file=f'alignment_mismatches{plot_suf}',legend_ncol=int(math.ceil(len(df_fastq_plot[id_col].value_counts())/20)),
-               show=show,**plot_kwargs)
+                p.scat(graph='line',df=df_fastq_plot_align,x='mismatch_pos',y='mismatch_pos_per_alignment', # Plot mismatches for each alignment
+                    title=f'{fastq_name} {id}',x_axis='Alignment Position',y_axis='Mismatches/Alignment',y_axis_dims=(0,1),
+                    dir=out_dir_fastq_name,file=f'{id.replace(".","_")}{plot_suf}',
+                    show=show,**plot_kwargs)
+                
+                df_fastq_plot = pd.concat(objs=[df_fastq_plot,df_fastq_plot_align]).reset_index(drop=True) # Group alignment mismatches
+
+            p.scat(graph='line',df=df_fastq_plot,x='mismatch_pos',y='mismatch_pos_per_alignment',cols=id_col, # Plot mismatches for each alignment
+                title=f'{fastq_name}',x_axis='Alignment Position',y_axis='Mismatches/Alignment',y_axis_dims=(0,1),
+                dir=out_dir_fastq_name,file=f'alignment_mismatches{plot_suf}',legend_ncol=int(math.ceil(len(df_fastq_plot[id_col].value_counts())/20)),
+                show=show,**plot_kwargs)
 
         p.dist(graph='hist',df=df_fastq,x='alignments',x_axis_dims=(0,max(df_fastq['alignments'])),
                title=f'{fastq_name}',dir=out_dir_fastq_name,file=f'alignments{plot_suf}',
@@ -1036,7 +1040,7 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
         # Plot mismatch position per alignment
         if plot_suf is not None: 
             plot_alignments(fastq_alignments={fastq_name:df_fastq}, align_col=align_col, id_col=id_col,
-                            out_dir=out_dir, plot_suf=plot_suf, show=show, **plot_kwargs)
+                            out_dir=out_dir, plot_suf=plot_suf, show=show, exact=exact, **plot_kwargs)
         
     # Save and return
     memories.append(memory_timer(task='count_region()'))
@@ -1071,8 +1075,8 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
     open_gap_score (float, optional): open gap score for pairwise alignment (Default: -10)
     extend_gap_score (float, optional): extend gap score for pairwise alignment (Default: -0.1)
     align_dims (tuple, optional): (start_i, end_i) alignments per fastq file to save compute (Default: None)
-    align_ckpt (int, optional): save checkpoints for alignments (Default: 10000)    plot_suf (str, optional): plot type suffix with '.' (Default: '.pdf')
-    plot_suf (str, optional): plot type suffix with '.' (Default: None)
+    align_ckpt (int, optional): save checkpoints for alignments (Default: 10000)
+    plot_suf (str, optional): plot type suffix with '.' (Default: None, Options: (Default: '.all' => .png, .pdf, & .svg; etc.)
     show (bool, optional): show plots (Default: False)
     return_dc (bool, optional): return fastqs dictionary (Default: False)
     exact (bool, optional): perform exact matching only (Default: False)
@@ -1201,7 +1205,7 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
         # Plot mismatch position per alignment
         if plot_suf is not None: 
             plot_alignments(fastq_alignments={fastq_name:df_fastq}, align_col=align_col, id_col=id_col,
-                            out_dir=out_dir, plot_suf=plot_suf, show=show, **plot_kwargs)
+                            out_dir=out_dir, plot_suf=plot_suf, show=show, exact=exact, **plot_kwargs)
 
     # Save and return
     memories.append(memory_timer(task='count_alignments()'))
@@ -1218,7 +1222,7 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
 
 def plot_paired(df: pd.DataFrame | str, title: str, out_dir: str,  
                 id_col: str='ID', desired_col: str='desired', y: Literal['count','fraction']='count',
-                plot_suf: str='.pdf', show: bool=False, **plot_kwargs):
+                plot_suf: str='.all', show: bool=False, **plot_kwargs):
     ''' 
     plot_paired(): generate stacked bar plots from paired_regions() dataframe
     
@@ -1229,7 +1233,7 @@ def plot_paired(df: pd.DataFrame | str, title: str, out_dir: str,
     id_col (str, optional): id column name in the paired region file (Default: 'ID')
     desired_col (str, optional): desired column name in the paired region file (Default: 'desired')
     y (str, optional): y axis for plots (Default: 'count', Options: 'count' & 'fraction')
-    plot_suf (str, optional): plot type suffix with '.' (Default: '.pdf')
+    plot_suf (str, optional): plot type suffix with '.' (Default: '.all' => .png, .pdf, & .svg)
     show (bool, optional): show plots (Default: False)
     **plot_kwargs (optional): plot key word arguments
 
@@ -1276,7 +1280,7 @@ def paired_regions(meta_dir: str, region1_dir: str, region2_dir: str, out_dir: s
                    id_col: str='ID', desired_col: str='desired', 
                    region1_alignment_col: str='r1_alignment', region2_alignment_col: str='r2_alignment', 
                    reads_aligned_col: str='reads_aligned', reads_processed_col: str='reads_processed',
-                   y: Literal['count','fraction']='count', plot_suf: str='.pdf', show: bool=False, return_dc: bool=False, sh: bool=False,
+                   y: Literal['count','fraction']='count', plot_suf: str='.all', show: bool=False, return_dc: bool=False, sh: bool=False,
                    **plot_kwargs) -> dict[pd.DataFrame]:
     '''
     paired_regions(): quantify, plot, & return (un)paired regions that aligned to the annotated library
@@ -1293,7 +1297,7 @@ def paired_regions(meta_dir: str, region1_dir: str, region2_dir: str, out_dir: s
     reads_aligned_col (str, optional): reads_aligned column name in the region files (Default: 'reads_aligned')
     reads_processed_col (str, optional): reads_processed column name in the region files (Default: 'reads_processed')
     y (str, optional): y axis for plots (Default: 'count'; Options: 'count' & 'fraction')
-    plot_suf (str, optional): plot type suffix with '.' (Default: '.pdf')
+    plot_suf (str, optional): plot type suffix with '.' (Default: '.all' => .png, .pdf, & .svg)
     show (bool, optional): show plots (Default: False)
     return_dc (bool, optional): return (un)paired regions dataframe (Default: False)
     sh (bool, optional): combine output log files into a single file in working directory (Default: False)
@@ -1404,7 +1408,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                      df_motif5: pd.DataFrame | str=None, df_motif3: pd.DataFrame | str=None, fastq_col: str=None,  meta: pd.DataFrame | str=None, 
                      match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, extend_gap_score: float = -0.1, 
                      align_dims: tuple=(0,0), align_ckpt: int=10000, save_alignments: bool=False, return_df: bool=False, 
-                     literal_eval: bool=True, plot_suf: str='.pdf', show: bool=False, sh: bool=False, **plot_kwargs) -> pd.DataFrame:
+                     literal_eval: bool=True, plot_suf: str='.all', show: bool=False, sh: bool=False, **plot_kwargs) -> pd.DataFrame:
     ''' 
     count_signatures(): generate signatures from fastq read region alignments to WT sequence; count signatures, plot and return fastq signatures dataframe
 
@@ -1435,7 +1439,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
     save_alignments (bool, optional): save alignments (Default: False, save memory)
     return_df (bool, optional): return dataframe (Default: False)
     literal_eval (bool, optional): convert string representations (Default: True)
-    plot_suf (str, optional): plot type suffix with '.' (Default: '.pdf')
+    plot_suf (str, optional): plot type suffix with '.' (Default: '.all' => .png, .pdf, & .svg)
     show (bool, optional): show plots (Default: False)
     sh (bool, optional): combine output log files into a single file in working directory (Default: False)
     
@@ -3805,7 +3809,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list
         y_axis: str='', y_axis_size=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_scale: str='linear', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int=9, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
         legend_title: str='', legend_title_size: int=12, legend_size: int=9, legend_bbox_to_anchor=(1,1), legend_loc: str='upper left', legend_items: tuple=(0,0), legend_ncol: int=1,
         legend_columnspacing: int=0, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=1, legend_size_html_multiplier: float=1.0,
-        dpi: int=0, show: bool=True, space_capitalize: bool=True,
+        dpi: int=0, transparent: bool=True, show: bool=True, space_capitalize: bool=True,
         **kwargs):
     ''' 
     cat: creates categorical graphs
@@ -3876,6 +3880,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list
     legend_handlelength (float, optional): marker length (Default: 1; only for html plots)
     legend_size_html_multiplier (float, optional): legend size multiplier for html plots (Default: 1.0)
     dpi (int, optional): dots per inch for saving the plot
+    transparent (bool, optional): whether to make the background transparent when saving the plot (Default: True)
     show (bool, optional): show plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     
@@ -3926,7 +3931,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list
           y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_scale=y_axis_scale,y_axis_dims=y_axis_dims,y_axis_pad=y_axis_pad,y_ticks_size=y_ticks_size,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,y_ticks=y_ticks,
           legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_items=legend_items,legend_ncol=legend_ncol,
           legend_columnspacing=legend_columnspacing,legend_handletextpad=legend_handletextpad,legend_labelspacing=legend_labelspacing,legend_borderpad=legend_borderpad,legend_handlelength=legend_handlelength,legend_size_html_multiplier=legend_size_html_multiplier,
-          dpi=dpi,show=show,space_capitalize=space_capitalize,**kwargs)
+          dpi=dpi,transparent=transparent,show=show,space_capitalize=space_capitalize,**kwargs)
 
 def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: str='Edit', cutoff_group: str='fastq_file', cutoff_value: float=0, cutoff_keep: bool=True, 
           cols_ord: list=[], x_ord: list=[], PDB_pt: str=None,
@@ -3936,7 +3941,7 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
           y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int=9, y_ticks_rot: int=0, y_ticks_font: str='Arial',
           legend_title: str='', legend_title_size: int=12, legend_size: int=12,legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1, 
           legend_columnspacing: int=0, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=1, legend_size_html_multiplier: float=1.0,
-          dpi: int=0, show: bool=True, space_capitalize: bool=True, **kwargs):
+          dpi: int=0, transparent: bool=True, show: bool=True, space_capitalize: bool=True, **kwargs):
     ''' 
     stack(): creates stacked bar plot
 
@@ -3992,6 +3997,7 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
     legend_handlelength (float, optional): marker length (Default: 1; only for html plots)
     legend_size_html_multiplier (float, optional): legend size multiplier for html plots (Default: 1.0)
     dpi (int, optional): dots per inch for saving the plot
+    transparent (bool, optional): whether to make the background transparent when saving the plot (Default: True)
     show (bool, optional): show plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     
@@ -4048,7 +4054,7 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
             y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_dims=y_axis_dims,y_axis_pad=y_axis_pad,y_ticks_size=y_ticks_size,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,
             legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_ncol=legend_ncol,
             legend_columnspacing=legend_columnspacing, legend_handletextpad=legend_handletextpad, legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad, legend_handlelength=legend_handlelength,legend_size_html_multiplier=legend_size_html_multiplier,
-            dpi=dpi,show=show,space_capitalize=space_capitalize,PDB_pt=PDB_pt,**kwargs)
+            dpi=dpi,transparent=transparent,show=show,space_capitalize=space_capitalize,PDB_pt=PDB_pt,**kwargs)
 
 def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: tuple=None, z_col: str=None, z_var: str=None, label: str='Edit', label_size: int=16,
         label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None,
@@ -4058,7 +4064,7 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: t
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int=9, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
         legend_title: str='',legend_title_size: int=12, legend_size: int=9, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1,
         legend_columnspacing: int=-4, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, legend_size_html_multiplier: float=0.75, 
-        display_legend: bool=True, display_labels: bool=True, display_lines: bool=False, display_axis: bool=True, return_df: bool=True, dpi: int = 0, show: bool=True, space_capitalize: bool=True, 
+        display_legend: bool=True, display_labels: bool=True, display_lines: bool=False, display_axis: bool=True, return_df: bool=True, dpi: int = 0, transparent: bool=True, show: bool=True, space_capitalize: bool=True, 
         **kwargs) -> pd.DataFrame:
     ''' 
     vol(): creates volcano plot
@@ -4131,7 +4137,8 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: t
     display_labels (bool, optional): display labels for significant values (Default: True)
     display_lines (bool, optional): display threshold lines (Default: False)
     display_axis (bool, optional): display x- and y-axis lines (Default: True)
-    dpi (int, optional): figure dpi (Default: 600 for non-HTML, 150 for HTML)
+    dpi (int, optional): figure dpi (Default: 1200 for non-HTML, 150 for HTML)
+    transparent (bool, optional): whether to make the background transparent when saving the plot (Default: True)
     return_df (bool, optional): return dataframe (Default: True)
     show (bool, optional): show plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
@@ -4179,7 +4186,7 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: t
           y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_dims=y_axis_dims, y_axis_pad=y_axis_pad, y_ticks_size=y_ticks_size, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
           legend_title=legend_title, legend_title_size=legend_title_size, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_ncol=legend_ncol, 
           legend_columnspacing=legend_columnspacing, legend_handletextpad=legend_handletextpad, legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad, legend_handlelength=legend_handlelength, legend_size_html_multiplier=legend_size_html_multiplier,
-          display_legend=display_legend, display_labels=display_labels, display_lines=display_lines, display_axis=display_axis, return_df=return_df, dpi=dpi, show=show, space_capitalize=space_capitalize,
+          display_legend=display_legend, display_labels=display_labels, display_lines=display_lines, display_axis=display_axis, return_df=return_df, dpi=dpi, show=show, transparent=transparent, space_capitalize=space_capitalize,
           PDB_pt=PDB_pt,
           **kwargs)
 
@@ -4190,7 +4197,7 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int=9, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
         legend_title: str='',legend_title_size: int=12, legend_size: int=9, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1, 
         legend_columnspacing: int=-3, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, legend_size_html_multiplier: float=0.75,
-        display_legend: bool=True, display_labels: bool=True, display_axis: bool=True, return_df: bool=True, dpi: int = 0, show: bool=True, space_capitalize: bool=True,
+        display_legend: bool=True, display_labels: bool=True, display_axis: bool=True, return_df: bool=True, dpi: int = 0, transparent: bool=True, show: bool=True, space_capitalize: bool=True,
         **kwargs) -> pd.DataFrame:
     ''' 
     torn(): creates tornado plot
@@ -4258,9 +4265,10 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
     display_legend (bool, optional): display legend on plot (Default: True)
     display_labels (bool, optional): display labels for significant values (Default: True)
     display_axis (bool, optional): display x-axis line (Default: True)
-    dpi (int, optional): figure dpi (Default: 600 for non-HTML, 150 for HTML)
+    dpi (int, optional): figure dpi (Default: 1200 for non-HTML, 150 for HTML)
     return_df (bool, optional): return dataframe (Default: True)
     show (bool, optional): show plot (Default: True)
+    transparent (bool, optional): whether to make the background transparent when saving the plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     
     Dependencies: os, matplotlib, seaborn, pandas, & edit_change()
@@ -4501,7 +4509,7 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
     plt.title(title, fontsize=title_size, fontweight=title_weight, family=title_font)
 
     # Save & show fig; return dataframe
-    p.save_fig(file=file, dir=dir, fig=fig, dpi=dpi, PDB_pt=PDB_pt, icon='tornado')
+    p.save_fig(file=file, dir=dir, fig=fig, dpi=dpi, transparent=transparent, PDB_pt=PDB_pt, icon='tornado')
     if show:
         ext = file.split('.')[-1].lower() if file is not None else ''
         if ext not in ('html', 'json'):
@@ -4519,7 +4527,7 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int=9, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
         legend_title: str='',legend_title_size: int=12, legend_size: int=9, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1,
         legend_columnspacing: int=-4, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, legend_size_html_multiplier: float=0.75,
-        display_legend: bool=True, display_labels: bool=True, display_axis: bool=True, return_df: bool=True, dpi: int = 0, show: bool=True, space_capitalize: bool=True,
+        display_legend: bool=True, display_labels: bool=True, display_axis: bool=True, return_df: bool=True, dpi: int = 0, transparent: bool=True, show: bool=True, space_capitalize: bool=True,
         **kwargs) -> pd.DataFrame:
     ''' 
     corr(): creates correlation plot
@@ -4590,7 +4598,8 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
     display_legend (bool, optional): display legend on plot (Default: True)
     display_labels (bool, optional): display labels for significant values (Default: True)
     display_axis (bool, optional): display x- and y-axis lines (Default: True)
-    dpi (int, optional): figure dpi (Default: 600 for non-HTML, 150 for HTML)
+    dpi (int, optional): figure dpi (Default: 1200 for non-HTML, 150 for HTML)
+    transparent (bool, optional): whether to make the background transparent when saving the plot (Default: True)
     return_df (bool, optional): return dataframe (Default: True)
     show (bool, optional): show plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
@@ -4883,7 +4892,7 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
     plt.title(title, fontsize=title_size, fontweight=title_weight, family=title_font)
 
     # Save & show fig; return dataframe
-    p.save_fig(file=file, dir=dir, fig=fig, dpi=dpi, PDB_pt=PDB_pt, icon='scatter')
+    p.save_fig(file=file, dir=dir, fig=fig, dpi=dpi, transparent=transparent, PDB_pt=PDB_pt, icon='scatter')
     if show:
         ext = file.split('.')[-1].lower() if file is not None else ''
         if ext not in ('html', 'json'):
@@ -4899,7 +4908,7 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str
         title: str='', title_size: int=12, title_weight: str='bold', title_font: str='Arial', figsize: tuple = (5, 5), vertical: bool=True,
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_pad: int=None, x_ticks_size: int=9, x_ticks_rot: int=None, x_ticks_font: str='Arial',
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_pad: int=None, y_ticks_size: int=9, y_ticks_rot: int=None, y_ticks_font: str='Arial',
-        dpi: int=0, show: bool=True, **kwargs):
+        dpi: int=0, transparent: bool=True, show: bool=True, **kwargs):
     ''' 
     heat(): creates heatmap plot
     
@@ -4957,7 +4966,8 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str
     y_ticks_size (int, optional): y-axis ticks font size
     y_ticks_rot (int, optional): y-axis ticks rotation
     y_ticks_font (str, optional): y-ticks font
-    dpi (int, optional): figure dpi (Default: 600 for non-HTML, 150 for HTML)
+    transparent (bool, optional): whether to make the background transparent when saving the plot (Default: True)
+    dpi (int, optional): figure dpi (Default: 1200 for non-HTML, 150 for HTML)
     show (bool, optional): show plot (Default: True)
     
     Dependencies: matplotlib, seaborn, pandas, & aa_props
@@ -5248,7 +5258,7 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str
     ax.set_facecolor('white')
 
     # Save & show fig; return dataframe
-    p.save_fig(file=file, dir=dir, fig=fig, dpi=dpi, icon='heat')
+    p.save_fig(file=file, dir=dir, fig=fig, dpi=dpi, transparent=transparent, icon='heat')
     if show:
         ext = file.split('.')[-1].lower() if file is not None else ''
         if ext not in ('html', 'json'):
