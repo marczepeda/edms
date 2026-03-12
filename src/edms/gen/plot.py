@@ -809,10 +809,10 @@ def repeat_palette_cmap(palette_or_cmap: str, repeats: int):
 def scat(graph: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, cols_ord: list = None, cols_exclude: list | str = None, 
          stys: str = None, stys_order: list = [], mark_order: list = [], label: str | None = None,
          file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', alpha: float = 1.0, edgecol: str = 'black',
-         figsize: tuple = (5, 5), title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial',
-         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 9, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
-         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 9, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
-         legend_title: str = '', legend_title_size: int = 12, legend_size: int = 9, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_items: tuple = (0, 0), legend_ncol: int = 1,
+         figsize: tuple = (5, 5), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
+         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
+         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
+         legend_title: str = '', legend_title_size: int = 12, legend_size: int = 12, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_items: tuple = (0, 0), legend_ncol: int = 1,
          legend_columnspacing: int=0, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=1, legend_size_html_multiplier: float=1.0,
          dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True, corr_method: str = None, corr_weight: str = None, **kwargs):
     ''' 
@@ -1047,10 +1047,10 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, c
 
 def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: list = None, cats_exclude: list|str = None, cols: str = None, cols_ord: list = None, cols_exclude: list | str = None, line: float = None,
         file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', alpha: float = 1.0, dodge: bool = False, jitter: bool = True, size: float = 5, edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
-        figsize: tuple = (5, 5), title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial',
-        x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 9, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
-        y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 9, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
-        legend_title: str = '', legend_title_size: int = 12, legend_size: int = 9, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_items: tuple = (0, 0), legend_ncol: int = 1,
+        figsize: tuple = (5, 5), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
+        x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
+        y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
+        legend_title: str = '', legend_title_size: int = 12, legend_size: int = 12, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_items: tuple = (0, 0), legend_ncol: int = 1,
         legend_columnspacing: int=0, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=1, legend_size_html_multiplier: float=1.0,
         dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True, PDB_pt: str = None, **kwargs):
     ''' 
@@ -1295,10 +1295,10 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: 
 
 def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord: list = None, cols_exclude: list | str = None, bins: int = 40, log10_low: int = 0,
          file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', edgecol: str = 'black', lw: int = 1, ht: float = 1.5, asp: int = 5, tp: float = .8, hs: int = 0, despine: bool = False,
-         figsize: tuple = (5, 5), title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial',
-         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 9, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
-         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 9, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
-         legend_title: str = '', legend_title_size: int = 12, legend_size: int = 9, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_items: tuple = (0, 0), legend_ncol: int = 1,
+         figsize: tuple = (5, 5), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
+         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
+         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
+         legend_title: str = '', legend_title_size: int = 12, legend_size: int = 12, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_items: tuple = (0, 0), legend_ncol: int = 1,
          dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True, **kwargs):
     ''' 
     dist(): creates distribution graphs
@@ -1482,9 +1482,9 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord:
 def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vars: str = None, vals: str = None, vals_dims: tuple = None,
          file: str = None, dir: str = None, edgecol: str = 'black', lw: int = 1, annot: bool = False, center: float = None, cmap: str = "Reds", sq: bool = True,
          cbar: bool=True, cbar_label: str=None, cbar_label_size: int=None, cbar_label_weight: str='bold', cbar_tick_size: int=None, cbar_shrink: float=None, cbar_aspect: int=None, cbar_pad: float=None, cbar_orientation: str=None,
-         title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial', figsize: tuple = (5, 5),
-         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_pad: int = None, x_ticks_size: int = 9, x_ticks_rot: int = 45, x_ticks_font: str = 'Arial',
-         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_pad: int = None, y_ticks_size: int = 9, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial',
+         title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial', figsize: tuple = (5, 5),
+         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 45, x_ticks_font: str = 'Arial',
+         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial',
          dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True, **kwargs):
     '''
     heat(): creates heat plot related graphs
@@ -1634,9 +1634,9 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vars: str = None,
 
 def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str = '', cutoff_value: float = 0, cutoff_keep: bool = True, cols_ord: list = [], x_ord: list = [],
           file: str = None, dir: str = None, palette_or_cmap: str = 'tab20', repeats: int = 1, errcap: int = 4, vertical: bool = True,
-          figsize: tuple = (5, 5), title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial',
-          x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_pad: int = None, x_ticks_size: int = 9, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial',
-          y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_dims: tuple = (0, 0),  y_axis_pad: int = None, y_ticks_size: int = 9, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial',
+          figsize: tuple = (5, 5), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
+          x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial',
+          y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_dims: tuple = (0, 0),  y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial',
           legend_title: str = '', legend_title_size: int = 12, legend_size: int = 12, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_ncol: int = 1, 
           legend_columnspacing: int=0, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=1, legend_size_html_multiplier: float=1,
           dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True, PDB_pt: str = None, **kwargs):
@@ -1820,10 +1820,10 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
 
 def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str | bool = None, size_dims: tuple = None, z_col: str = None, z_var: str = None, label: str = None, stys_order: list = [], mark_order: list = [],
         FC_threshold: float = 1, pval_threshold: float = 1, file: str = None, dir: str = None, color: str = 'lightgray', alpha: float = 0.5, edgecol: str = 'black', vertical: bool = True,
-        figsize: tuple = (5, 5), title: str = '', title_size: int = 18, title_weight: str = 'bold', title_font: str = 'Arial',
-        x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 9, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
-        y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 9, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
-        legend_title: str = '', legend_title_size: int = 12, legend_size: int = 9, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_ncol: int = 1, 
+        figsize: tuple = (5, 5), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
+        x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
+        y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
+        legend_title: str = '', legend_title_size: int = 12, legend_size: int = 12, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_ncol: int = 1, 
         legend_columnspacing: int=-4, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, legend_size_html_multiplier: float=0.75,
         display_legend: bool = True, display_labels: str = 'FC & p-value', display_lines: bool = False, display_axis: bool = True, return_df: bool = True, dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True,
         PDB_pt: str = None, # only intended for fastq plots

@@ -103,7 +103,7 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
     # Figure appearance
     subparser.add_argument("-fs", "--figsize", type=parse_tuple_int, default=(5,5), help="Figure size as a tuple: width,height")
     subparser.add_argument("-t", "--title", type=str, default="", help="Plot title")
-    subparser.add_argument("-ts", "--title_size", type=int, default=18, help="Plot title font size")
+    subparser.add_argument("-ts", "--title_size", type=int, default=12, help="Plot title font size")
     subparser.add_argument("-tw", "--title_weight", type=str, default="bold", help="Plot title font weight (e.g., bold, normal)")
     subparser.add_argument("-tf", "--title_font", type=str, default="Arial", help="Font family for the title")
     # X-axis settings
@@ -114,7 +114,7 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
     subparser.add_argument("-xasc", "--x_axis_scale", type=str, default="linear", help="X-axis scale: linear, log, etc.")
     subparser.add_argument("-xad", "--x_axis_dims", type=parse_tuple_int, default=(0,0), help="X-axis range as a tuple: start,end")
     subparser.add_argument("-xap", "--x_axis_pad", type=int, default=argparse.SUPPRESS, help="Padding for X-axis label")
-    subparser.add_argument("-xts", "--x_ticks_size", type=int, default=9, help="X-axis tick labels font size")
+    subparser.add_argument("-xts", "--x_ticks_size", type=int, default=12, help="X-axis tick labels font size")
     subparser.add_argument("-xtr", "--x_ticks_rot", type=int, default=0, help="Rotation angle of X-axis tick labels")
     subparser.add_argument("-xtf", "--x_ticks_font", type=str, default="Arial", help="Font family for X-axis tick labels")
     subparser.add_argument("-xt", "--x_ticks", nargs="+", help="Specific tick values for X-axis")
@@ -127,7 +127,7 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
     subparser.add_argument("-yasc", "--y_axis_scale", type=str, default="linear", help="Y-axis scale: linear, log, etc.")
     subparser.add_argument("-yad", "--y_axis_dims", type=parse_tuple_int, default=(0,0), help="Y-axis range as a tuple: start,end")
     subparser.add_argument("-yap", "--y_axis_pad", type=int, default=argparse.SUPPRESS, help="Padding for Y-axis label")
-    subparser.add_argument("-yts", "--y_ticks_size", type=int, default=9, help="Y-axis tick labels font size")
+    subparser.add_argument("-yts", "--y_ticks_size", type=int, default=12, help="Y-axis tick labels font size")
     subparser.add_argument("-ytr", "--y_ticks_rot", type=int, default=0, help="Rotation angle of Y-axis tick labels")
     subparser.add_argument("-ytf", "--y_ticks_font", type=str, default="Arial", help="Font family for Y-axis tick labels")
     subparser.add_argument("-yt", "--y_ticks", nargs="+", help="Specific tick values for Y-axis")
@@ -135,7 +135,7 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
     # Legend settings
     subparser.add_argument("-lt", "--legend_title", type=str, default="", help="Legend title")
     subparser.add_argument("-lts", "--legend_title_size", type=int, default=12, help="Legend title font size")
-    subparser.add_argument("-ls", "--legend_size", type=int, default=9, help="Legend font size")
+    subparser.add_argument("-ls", "--legend_size", type=int, default=12, help="Legend font size")
     subparser.add_argument("-lba", "--legend_bbox_to_anchor", type=parse_tuple_float, default=(1,1), help="Bounding box anchor position for legend")
     subparser.add_argument("-ll", "--legend_loc", type=str, default="upper left", help="Location of the legend in the plot")
     subparser.add_argument("-li", "--legend_items", type=parse_tuple_int, default=(0,0), help="Legend item count as a tuple (used for layout)")
@@ -200,7 +200,7 @@ def add_common_plot_cat_args(subparser, fastq_parser=False, pwes_parsers=False):
     # Figure appearance
     subparser.add_argument("-fs", "--figsize", type=parse_tuple_int, default=(5,5), help="Figure size formatted 'width,height'")
     subparser.add_argument("-t", "--title", type=str, default="", help="Plot title text")
-    subparser.add_argument("-ts", "--title_size", type=int, default=18, help="Font size of the plot title")
+    subparser.add_argument("-ts", "--title_size", type=int, default=12, help="Font size of the plot title")
     subparser.add_argument("-tw", "--title_weight", type=str, default="bold", help="Font weight of the plot title (e.g., bold, normal)")
     subparser.add_argument("-tf", "--title_font", type=str, default="Arial", help="Font family for the plot title")
     # X-axis settings
@@ -211,7 +211,7 @@ def add_common_plot_cat_args(subparser, fastq_parser=False, pwes_parsers=False):
     subparser.add_argument("-xasc", "--x_axis_scale", type=str, default="linear", help="Scale of X-axis (e.g., linear, log)")
     subparser.add_argument("-xad", "--x_axis_dims", type=parse_tuple_float, default=(0, 0), help="X-axis range as tuple: start,end")
     subparser.add_argument("-xap", "--x_axis_pad", type=int, default=argparse.SUPPRESS, help="Padding for X-axis label")
-    subparser.add_argument("-xts", "--x_ticks_size", type=int, default=9, help="Font size for X-axis tick labels")
+    subparser.add_argument("-xts", "--x_ticks_size", type=int, default=12, help="Font size for X-axis tick labels")
     subparser.add_argument("-xtr", "--x_ticks_rot", type=int, default=0, help="Rotation angle for X-axis tick labels")
     subparser.add_argument("-xtf", "--x_ticks_font", type=str, default="Arial", help="Font family for X-axis tick labels")
     subparser.add_argument("-xt", "--x_ticks", nargs="+", help="Explicit tick values for X-axis")
@@ -224,7 +224,7 @@ def add_common_plot_cat_args(subparser, fastq_parser=False, pwes_parsers=False):
     subparser.add_argument("-yasc", "--y_axis_scale", type=str, default="linear", help="Scale of Y-axis (e.g., linear, log)")
     subparser.add_argument("-yad", "--y_axis_dims", type=parse_tuple_float, default=(0, 0), help="Y-axis range as tuple: start,end")
     subparser.add_argument("-yap", "--y_axis_pad", type=int, default=argparse.SUPPRESS, help="Padding for Y-axis label")
-    subparser.add_argument("-yts", "--y_ticks_size", type=int, default=9, help="Font size for Y-axis tick labels")
+    subparser.add_argument("-yts", "--y_ticks_size", type=int, default=12, help="Font size for Y-axis tick labels")
     subparser.add_argument("-ytr", "--y_ticks_rot", type=int, default=0, help="Rotation angle for Y-axis tick labels")
     subparser.add_argument("-ytf", "--y_ticks_font", type=str, default="Arial", help="Font family for Y-axis tick labels")
     subparser.add_argument("-yt", "--y_ticks", nargs="+", help="Explicit tick values for Y-axis")
@@ -232,7 +232,7 @@ def add_common_plot_cat_args(subparser, fastq_parser=False, pwes_parsers=False):
     # Legend settings
     subparser.add_argument("-lt", "--legend_title", type=str, default="", help="Title for the legend")
     subparser.add_argument("-lts", "--legend_title_size", type=int, default=12, help="Font size for the legend title")
-    subparser.add_argument("-ls", "--legend_size", type=int, default=9, help="Font size for legend items")
+    subparser.add_argument("-ls", "--legend_size", type=int, default=12, help="Font size for legend items")
     subparser.add_argument("-lba", "--legend_bbox_to_anchor", type=parse_tuple_float, default=(1, 1), help="Anchor position of the legend bounding box")
     subparser.add_argument("-ll", "--legend_loc", type=str, default="upper left", help="Location of the legend on the plot")
     subparser.add_argument("-li", "--legend_items", type=parse_tuple_int, default=(0, 0), help="Tuple for legend item layout")
@@ -282,7 +282,7 @@ def add_common_plot_dist_args(subparser):
     # Figure appearance
     subparser.add_argument("-fs", "--figsize", type=parse_tuple_int, default=(5,5), help="Figure size formatted as 'width,height'")
     subparser.add_argument("-t", "--title", type=str, default="", help="Plot title text")
-    subparser.add_argument("-ts", "--title_size", type=int, default=18, help="Plot title font size")
+    subparser.add_argument("-ts", "--title_size", type=int, default=12, help="Plot title font size")
     subparser.add_argument("-tw", "--title_weight", type=str, default="bold", help="Plot title font weight (e.g., bold, normal)")
     subparser.add_argument("-tf", "--title_font", type=str, default="Arial", help="Font family for the plot title")
 
@@ -294,7 +294,7 @@ def add_common_plot_dist_args(subparser):
     subparser.add_argument("-xsc", "--x_axis_scale", type=str, default="linear", help="X-axis scale (e.g., linear, log)")
     subparser.add_argument("-xd", "--x_axis_dims", type=parse_tuple_float, default=(0, 0), help="X-axis range as tuple: start,end")
     subparser.add_argument("-xp", "--x_axis_pad", type=int, default=argparse.SUPPRESS, help="Padding for X-axis label")
-    subparser.add_argument("-xts", "--x_ticks_size", type=int, default=9, help="Font size for X-axis tick labels")
+    subparser.add_argument("-xts", "--x_ticks_size", type=int, default=12, help="Font size for X-axis tick labels")
     subparser.add_argument("-xtr", "--x_ticks_rot", type=int, default=0, help="Rotation angle for X-axis tick labels")
     subparser.add_argument("-xtf", "--x_ticks_font", type=str, default="Arial", help="Font family for X-axis tick labels")
     subparser.add_argument("-xt", "--x_ticks", nargs="+", help="Explicit tick values for X-axis")
@@ -306,7 +306,7 @@ def add_common_plot_dist_args(subparser):
     subparser.add_argument("-ysc", "--y_axis_scale", type=str, default="linear", help="Y-axis scale (e.g., linear, log)")
     subparser.add_argument("-yd", "--y_axis_dims", type=parse_tuple_float, default=(0, 0), help="Y-axis range as tuple: start,end")
     subparser.add_argument("-yp", "--y_axis_pad", type=int, default=argparse.SUPPRESS, help="Padding for Y-axis label")
-    subparser.add_argument("-yts", "--y_ticks_size", type=int, default=9, help="Font size for Y-axis tick labels")
+    subparser.add_argument("-yts", "--y_ticks_size", type=int, default=12, help="Font size for Y-axis tick labels")
     subparser.add_argument("-ytr", "--y_ticks_rot", type=int, default=0, help="Rotation angle for Y-axis tick labels")
     subparser.add_argument("-ytf", "--y_ticks_font", type=str, default="Arial", help="Font family for Y-axis tick labels")
     subparser.add_argument("-yt", "--y_ticks", nargs="+", help="Explicit tick values for Y-axis")
@@ -314,7 +314,7 @@ def add_common_plot_dist_args(subparser):
     # Legend
     subparser.add_argument("-lt", "--legend_title", type=str, default="", help="Title text for the legend")
     subparser.add_argument("-lts", "--legend_title_size", type=int, default=12, help="Font size of the legend title")
-    subparser.add_argument("-ls", "--legend_size", type=int, default=9, help="Font size for legend items")
+    subparser.add_argument("-ls", "--legend_size", type=int, default=12, help="Font size for legend items")
     subparser.add_argument("-lba", "--legend_bbox_to_anchor", type=parse_tuple_float, default=(1, 1), help="Legend bbox anchor position")
     subparser.add_argument("-ll", "--legend_loc", type=str, default="upper left", help="Legend location on the plot")
     subparser.add_argument("-li", "--legend_items", type=parse_tuple_int, default=(0, 0), help="Tuple for legend layout items")
@@ -382,7 +382,7 @@ def add_common_plot_heat_args(subparser, fastq_parser=False, stat_parser=False):
 
     # Title and size
     subparser.add_argument("-t", "--title", type=str, default="", help="Plot title")
-    subparser.add_argument("-ts", "--title_size", type=int, default=18, help="Font size of the title")
+    subparser.add_argument("-ts", "--title_size", type=int, default=12, help="Font size of the title")
     subparser.add_argument("-tw", "--title_weight", type=str, default="bold", help="Font weight of the title (e.g., bold, normal)")
     subparser.add_argument("-tf", "--title_font", type=str, default="Arial", help="Font family for the title")
     subparser.add_argument("-fs", "--figsize", type=parse_tuple_int, default=(5,5), help="Figure size formatted as 'width,height'")
@@ -393,7 +393,7 @@ def add_common_plot_heat_args(subparser, fastq_parser=False, stat_parser=False):
     subparser.add_argument("-xaw", "--x_axis_weight", type=str, default="bold", help="Font weight for X-axis label")
     subparser.add_argument("-xaf", "--x_axis_font", type=str, default="Arial", help="Font family for X-axis label")
     subparser.add_argument("-xap", "--x_axis_pad", type=int, default=argparse.SUPPRESS, help="Padding for X-axis label")
-    subparser.add_argument("-xts", "--x_ticks_size", type=int, default=9, help="Font size for X-axis tick labels")
+    subparser.add_argument("-xts", "--x_ticks_size", type=int, default=12, help="Font size for X-axis tick labels")
     subparser.add_argument("-xtr", "--x_ticks_rot", type=int, default=0, help="Rotation angle for X-axis tick labels")
     subparser.add_argument("-xtf", "--x_ticks_font", type=str, default="Arial", help="Font family for X-axis tick labels")
 
@@ -403,7 +403,7 @@ def add_common_plot_heat_args(subparser, fastq_parser=False, stat_parser=False):
     subparser.add_argument("-yaw", "--y_axis_weight", type=str, default="bold", help="Font weight for Y-axis label")
     subparser.add_argument("-yaf", "--y_axis_font", type=str, default="Arial", help="Font family for Y-axis label")
     subparser.add_argument("-yap", "--y_axis_pad", type=int, default=argparse.SUPPRESS, help="Padding for Y-axis label")
-    subparser.add_argument("-yts", "--y_ticks_size", type=int, default=9, help="Font size for Y-axis tick labels")
+    subparser.add_argument("-yts", "--y_ticks_size", type=int, default=12, help="Font size for Y-axis tick labels")
     subparser.add_argument("-ytr", "--y_ticks_rot", type=int, default=0, help="Rotation angle for Y-axis tick labels")
     subparser.add_argument("-ytf", "--y_ticks_font", type=str, default="Arial", help="Font family for Y-axis tick labels")
 
@@ -442,7 +442,7 @@ def add_common_plot_stack_args(subparser, fastq_parser=False):
     # Figure & layout
     subparser.add_argument("-fs", "--figsize", type=parse_tuple_int, default=(5,5), help="Figure size formatted as 'width,height'")
     subparser.add_argument("-t", "--title", type=str, default="", help="Plot title")
-    subparser.add_argument("-ts", "--title_size", type=int, default=18, help="Font size of the title")
+    subparser.add_argument("-ts", "--title_size", type=int, default=12, help="Font size of the title")
     subparser.add_argument("-tw", "--title_weight", type=str, default="bold", help="Font weight of the title (e.g., bold, normal)")
     subparser.add_argument("-tf", "--title_font", type=str, default="Arial", help="Font family for the title")
 
@@ -452,7 +452,7 @@ def add_common_plot_stack_args(subparser, fastq_parser=False):
     subparser.add_argument("-xaw", "--x_axis_weight", type=str, default="bold", help="Font weight for X-axis label")
     subparser.add_argument("-xaf", "--x_axis_font", type=str, default="Arial", help="Font family for X-axis label")
     subparser.add_argument("-xap", "--x_axis_pad", type=int, default=argparse.SUPPRESS, help="Padding for X-axis label")
-    subparser.add_argument("-xts", "--x_ticks_size", type=int, default=9, help="Font size for X-axis tick labels")
+    subparser.add_argument("-xts", "--x_ticks_size", type=int, default=12, help="Font size for X-axis tick labels")
     subparser.add_argument("-xtr", "--x_ticks_rot", type=int, help="Rotation angle for X-axis tick labels")
     subparser.add_argument("-xtf", "--x_ticks_font", type=str, default="Arial", help="Font family for X-axis tick labels")
 
@@ -463,7 +463,7 @@ def add_common_plot_stack_args(subparser, fastq_parser=False):
     subparser.add_argument("-yaf", "--y_axis_font", type=str, default="Arial", help="Font family for Y-axis label")
     subparser.add_argument("-yad", "--y_axis_dims", type=parse_tuple_float, default=(0,0), help="Y-axis range as tuple: start,end")
     subparser.add_argument("-yap", "--y_axis_pad", type=int, default=argparse.SUPPRESS, help="Padding for Y-axis label")
-    subparser.add_argument("-yts", "--y_ticks_size", type=int, default=9, help="Font size for Y-axis tick labels")
+    subparser.add_argument("-yts", "--y_ticks_size", type=int, default=12, help="Font size for Y-axis tick labels")
     subparser.add_argument("-ytr", "--y_ticks_rot", type=int, help="Rotation angle for Y-axis tick labels")
     subparser.add_argument("-ytf", "--y_ticks_font", type=str, default="Arial", help="Font family for Y-axis tick labels")
 
@@ -528,7 +528,7 @@ def add_common_plot_vol_args(subparser, fastq_parser=False):
     # Figure setup
     subparser.add_argument("-fs","--figsize", type=parse_tuple_int, default=(5,5), help="Figure size formatted as 'width,height'")
     subparser.add_argument("-t","--title", type=str, default="", help="Plot title")
-    subparser.add_argument("-ts","--title_size", type=int, default=18, help="Font size for plot title")
+    subparser.add_argument("-ts","--title_size", type=int, default=12, help="Font size for plot title")
     subparser.add_argument("-tw","--title_weight", type=str, default="bold", help="Font weight for plot title (e.g., bold, normal)")
     subparser.add_argument("-tf","--title_font", type=str, default="Arial", help="Font family for plot title")
     # X-axis settings
@@ -538,7 +538,7 @@ def add_common_plot_vol_args(subparser, fastq_parser=False):
     subparser.add_argument("-xaf","--x_axis_font", type=str, default="Arial", help="Font family for X-axis label")
     subparser.add_argument("-xad","--x_axis_dims", type=parse_tuple_float, default=(0, 0), help="X-axis range formatted as min,max")
     subparser.add_argument("-xap","--x_axis_pad", type=int, default=argparse.SUPPRESS, help="Padding for X-axis label")
-    subparser.add_argument("-xts","--x_ticks_size", type=int, default=9, help="Font size for X-axis tick labels")
+    subparser.add_argument("-xts","--x_ticks_size", type=int, default=12, help="Font size for X-axis tick labels")
     subparser.add_argument("-xtr","--x_ticks_rot", type=int, default=0, help="Rotation angle for X-axis tick labels")
     subparser.add_argument("-xtf","--x_ticks_font", type=str, default="Arial", help="Font family for X-axis tick labels")
     subparser.add_argument("-xt","--x_ticks", nargs="+", help="Custom tick values for X-axis")
@@ -550,7 +550,7 @@ def add_common_plot_vol_args(subparser, fastq_parser=False):
     subparser.add_argument("-yaf","--y_axis_font", type=str, default="Arial", help="Font family for Y-axis label")
     subparser.add_argument("-yad","--y_axis_dims", type=parse_tuple_float, default=(0, 0), help="Y-axis range formatted as min,max")
     subparser.add_argument("-yap","--y_axis_pad", type=int, default=argparse.SUPPRESS, help="Padding for Y-axis label")
-    subparser.add_argument("-yts","--y_ticks_size", type=int, default=9, help="Font size for Y-axis tick labels")
+    subparser.add_argument("-yts","--y_ticks_size", type=int, default=12, help="Font size for Y-axis tick labels")
     subparser.add_argument("-ytr","--y_ticks_rot", type=int, default=0, help="Rotation angle for Y-axis tick labels")
     subparser.add_argument("-ytf","--y_ticks_font", type=str, default="Arial", help="Font family for Y-axis tick labels")
     subparser.add_argument("-yt","--y_ticks", nargs="+", help="Custom tick values for Y-axis")
@@ -558,7 +558,7 @@ def add_common_plot_vol_args(subparser, fastq_parser=False):
     # Legend
     subparser.add_argument("-lt","--legend_title", type=str, default="", help="Title for the legend")
     subparser.add_argument("-lts","--legend_title_size", type=int, default=12, help="Font size for legend title")
-    subparser.add_argument("-ls","--legend_size", type=int, default=9, help="Font size for legend items")
+    subparser.add_argument("-ls","--legend_size", type=int, default=12, help="Font size for legend items")
     subparser.add_argument("-lba","--legend_bbox_to_anchor", type=parse_tuple_float, default=(1, 1), help="Bounding box anchor for legend")
     subparser.add_argument("-ll","--legend_loc", type=str, default="upper left", help="Legend location on the plot")
     subparser.add_argument("-ln","--legend_ncol", type=int, default=1, help="Number of columns in the legend")
