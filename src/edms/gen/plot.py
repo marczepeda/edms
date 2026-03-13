@@ -805,8 +805,1011 @@ def repeat_palette_cmap(palette_or_cmap: str, repeats: int):
         print(f'{cmap} is not a valid matplotlib color map and did not apply repeat.')
         return cmap
 
+### Test ###
+def _facet_values(df: pd.DataFrame, col: str, order: list=None):
+    """
+    _facet_values(): Return ordered unique facet values.
+    
+    Parameters:
+    df (pd.DataFrame): DataFrame containing the facet column.
+    col (str): Column name for facetting.
+    order (list, optional): Desired order of facet values. If None, uses appearance order in DataFrame."""
+    if col is None:
+        return [None]
+    if order is not None:
+        return [v for v in order if v in set(df[col].dropna().unique())]
+    # stable-ish ordering: keep pandas appearance order
+    return df[col].dropna().drop_duplicates().tolist()
+
+def _final_save_show(fig, file: str=None, dir: str=None, dpi: int=0, transparent: bool=True, PDB_pt: str=None, icon: str='python', show: bool=True):
+    """
+    _final_save_show(): Save/show once for the whole figure using your conventions.
+    
+    Parameters:
+    fig (matplotlib.figure.Figure): Matplotlib figure object to save/show.
+    file (str, optional): Filename for saving the figure. If None, no file is saved.
+    dir (str, optional): Directory for saving the figure. Required if file is not None.
+    dpi (int, optional): DPI for saving the figure. If 0, uses default DPI (1200 for static, 150 for HTML).
+    transparent (bool, optional): Whether to save static images with transparent background (default: True).
+    PDB_pt (str, optional): Path to PDB file for Mol* visualization; only intended for fastq plots (Default: None).
+    icon (str, optional): HTML file icon (Default: python logo).
+    show (bool, optional): Whether to display the figure after saving (default: True).
+    """
+    # Save
+    save_fig(file=file, dir=dir, fig=fig, dpi=dpi, transparent=transparent, PDB_pt=PDB_pt, icon=icon)
+
+    # Show
+    if show:
+        ext = file.split('.')[-1].lower() if file is not None else ''
+        if ext not in ('html', 'json'):
+            plt.show()
+        else:
+            mpld3.show()
+
+def _make_figure_legend(fig, axes,
+                        legend_title: str, legend_title_size: int, legend_size: int,
+                        legend_bbox_to_anchor: tuple, legend_loc: str,
+                        legend_items: tuple, legend_ncol: int):
+    """
+    _make_figure_legend(): Build a single shared legend for the entire figure using handles/labels from the first axis that has one.
+
+    Parameters:
+    fig (matplotlib.figure.Figure): Matplotlib figure object to which the legend will be added.
+    axes (numpy.ndarray): Array of Matplotlib axes to search for legend handles and labels.
+    legend_title (str): Title for the legend.
+    legend_title_size (int): Font size for the legend title.
+    legend_size (int): Font size for the legend labels.
+    legend_bbox_to_anchor (tuple): Tuple specifying the coordinates for the legend's bbox anchor.
+    legend_loc (str): String specifying the location of the legend (e.g., 'upper right', 'center left').
+    legend_items (tuple): Tuple specifying the range of legend items to include (start index, end index). If (0, 0), includes all items.
+    legend_ncol (int): Integer specifying the number of columns in the legend.
+    """
+
+    handles, labels = None, None
+
+    # Find first axis that has legend entries
+    for ax in axes.flatten():
+        h, l = ax.get_legend_handles_labels()
+        if len(h) > 0:
+            handles, labels = h, l
+            break
+
+    if handles is None:
+        return  # nothing to build
+
+    # Remove legends from all axes
+    for ax in axes.flatten():
+        leg = ax.get_legend()
+        if leg is not None:
+            leg.remove()
+
+    # Slice legend items if requested
+    if legend_items != (0, 0):
+        handles = handles[legend_items[0]:legend_items[1]]
+        labels = labels[legend_items[0]:legend_items[1]]
+
+    fig.legend(
+        handles,
+        labels,
+        title=legend_title,
+        title_fontsize=legend_title_size,
+        fontsize=legend_size,
+        bbox_to_anchor=legend_bbox_to_anchor,
+        loc=legend_loc,
+        ncol=legend_ncol
+    )
+
+def _is_blank_label(v: str | list | tuple) -> bool:
+    """
+    _is_blank_label(): True when user did not explicitly set the axis label.
+    
+    Parameters:
+    v (str | list | tuple): value to check (can be None, str, or list/tuple of str)
+    """
+    if v is None:
+        return True
+    if isinstance(v, str):
+        return v.strip() == ''
+    if isinstance(v, (list, tuple)):
+        return len(v) == 0 or all((isinstance(x, str) and x.strip() == '') for x in v)
+    return False
+
+def _fmt_name(name: str, space_capitalize: bool) -> str:
+    """
+    _fmt_name(): Match your formatter default behavior for names.
+    
+    Parameters:
+    name (str): name to format
+    space_capitalize (bool): whether to apply re_un_cap() formatting (Default: True)
+    """
+    if name is None:
+        return ''
+    return re_un_cap(name) if space_capitalize else name
+
+def _facet_default_xaxis(x: str, facetx: str | None, facetx_val: str, space_capitalize: bool) -> str:
+    """
+    _facet_default_xaxis(): Return default x-axis label for a facet panel, combining base x name and facet value when applicable.
+    
+    Parameters:
+    x (str): base x-axis name
+    facetx (str | None): facet column name for x-axis faceting (None if no faceting on x-axis)
+    facetx_val (str): value of the facet for this panel (e.g., "A")
+    space_capitalize (bool): whether to apply re_un_cap() formatting (Default: True)
+    """
+    base = _fmt_name(x, space_capitalize)
+    if facetx is None:
+        return base
+    return f"{base}; {facetx_val}"
+
+def _facet_default_yaxis(y: str, facety: str | None, facety_val: str, space_capitalize: bool) -> str:
+    """
+    _facet_default_yaxis(): Return default y-axis label for a facet panel, combining base y name and facet value when applicable.
+    
+    Parameters:
+    y (str): base y-axis name
+    facety (str | None): facet column name for y-axis faceting (None if no faceting on y-axis)
+    facety_val (str): value of the facet for this panel (e.g., "A")
+    space_capitalize (bool): whether to apply re_un_cap() formatting (Default: True)
+    """
+    base = _fmt_name(y, space_capitalize)
+    if facety is None:
+        return base
+    return f"{base}; {facety_val}"
+
+def _axis_label_for_panel(axis_label: str | list | tuple, index: int, expected_len: int | None) -> str:
+    """
+    _axis_label_for_panel(): Return the appropriate label for a specific panel based on its position.
+
+    Parameters:
+    axis_label (str | list | tuple): The label(s) for the axis.
+    index (int): The column (j) or row (i) index for the panel.
+    expected_len (int | None): The number of columns (if axis_label maps to columns) or rows (if mapping to rows).
+    """
+    # scalar string -> use directly
+    if axis_label is None:
+        return ''
+    if isinstance(axis_label, str):
+        return axis_label
+    if isinstance(axis_label, (list, tuple)):
+        if expected_len is None:
+            # fallback to first element
+            return axis_label[0] if len(axis_label) > 0 else ''
+        # if lengths match expected, use matching element
+        if len(axis_label) == expected_len:
+            if index < len(axis_label):
+                return axis_label[index]
+            else:
+                return axis_label[0]
+        # if only one element present, use that
+        if len(axis_label) == 1:
+            return axis_label[0]
+        # otherwise fallback to first element
+        return axis_label[0]
+    # anything else -> string-cast
+    return str(axis_label)
+
+def _apply_formatter_on_ax(*, ax, df_sub: pd.DataFrame, graph: str,
+                           x: str, y: str, cols: str, file: str | None, dir: str,
+                           title: str | None, title_size: float, title_weight: str, title_font: str,
+                           x_axis: str | None, x_axis_size: float, x_axis_weight: str, x_axis_font: str, x_axis_scale: str, x_axis_dims: tuple[float, float], x_axis_pad: float,
+                           x_ticks_size: float, x_ticks_rot: float, x_ticks_font: str, x_ticks: list[str] | None,
+                           y_axis: str | None, y_axis_size: float, y_axis_weight: str, y_axis_font: str, y_axis_scale: str, y_axis_dims: tuple[float, float], y_axis_pad: float,
+                           y_ticks_size: float, y_ticks_rot: float, y_ticks_font: str, y_ticks: list[str] | None,
+                           legend_title: str | None, legend_title_size: float, legend_size: float, legend_bbox_to_anchor: tuple[float, float] | None, legend_loc: str | None, legend_items: list[str] | None, legend_ncol: int | None,
+                           legend_columnspacing: float, legend_handletextpad: float, legend_labelspacing: float, legend_borderpad: float, legend_handlelength: float,
+                           dpi: int, transparent: bool, show: bool, space_capitalize: bool, PDB_pt: str | None, icon: str | None, cats_ord: list[str] | None) -> None:
+    """
+    _apply_formatter_on_ax(): Apply the formatter to a specific axis with the appropriate subset of data and parameters for that panel.
+
+    Parameters:
+    ax: The specific Matplotlib axis to format.
+    df_sub (pd.DataFrame): The subset of the DataFrame corresponding to this facet panel.
+    graph (str): The type of graph to plot (e.g., 'scat', 'bar', etc.).
+    x (str), y (str), cols (str): The column names for x-axis, y-axis, and color grouping.
+    file (str | None), dir (str): The filename and directory for saving the plot (if applicable).
+    title (str | None), title_size (float), title_weight (str), title_font (str): The title and its formatting parameters.
+    x_axis (str | None), x_axis_size (float), x_axis_weight (str), x_axis_font (str), x_axis_scale (str), x_axis_dims (tuple[float, float]), x_axis_pad (float), x_ticks_size (float), x_ticks_rot (float), x_ticks_font (str), x_ticks (list[str] | None): The x-axis label and its formatting parameters.
+    y_axis (str | None), y_axis_size (float), y_axis_weight (str), y_axis_font (str), y_axis_scale (str), y_axis_dims (tuple[float, float]), y_axis_pad (float), y_ticks_size (float), y_ticks_rot (float), y_ticks_font (str), y_ticks (list[str] | None): The y-axis label and its formatting parameters.
+    legend_title (str | None), legend_title_size (float), legend_size (float), legend_bbox_to_anchor (tuple[float, float] | None), legend_loc (str | None), legend_items (list[str] | None), legend_ncol (int | None), legend_columnspacing
+    cats_ord: Order of categories for categorical plots (if applicable).
+    """
+    plt.sca(ax)  # make this axis current for plt.title/xlabel/etc in formatter
+    formatter(
+        graph=graph, ax=ax, df=df_sub, x=x, y=y, cols=cols,
+        file=None, dir=dir,  # <- don't save per facet
+        title=title, title_size=title_size, title_weight=title_weight, title_font=title_font,
+        x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font,
+        x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad,
+        x_ticks_size=x_ticks_size, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
+        y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font,
+        y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_axis_pad=y_axis_pad,
+        y_ticks_size=y_ticks_size, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
+        legend_title=legend_title, legend_title_size=legend_title_size, legend_size=legend_size,
+        legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc,
+        legend_items=legend_items, legend_ncol=legend_ncol,
+        legend_columnspacing=legend_columnspacing, legend_handletextpad=legend_handletextpad,
+        legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad,
+        legend_handlelength=legend_handlelength,
+        dpi=dpi, transparent=transparent, show=False,  # <- don't show per facet
+        space_capitalize=space_capitalize, PDB_pt=PDB_pt, icon=icon, cats_ord=cats_ord
+    )
+
+def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
+        cols: str = None, cols_ord: list = None, cols_exclude: list | str = None,
+        stys: str = None, stys_order: list = [], mark_order: list = [], label: str | None = None,
+        facetx: str = None, facety: str = None, share_axes: bool = True, facetx_order: list = None, facety_order: list = None,
+        file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', alpha: float = 1.0, edgecol: str = 'black',
+        figsize: tuple = (5, 5), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
+        x_axis: str | list = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial',
+        x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None,
+        x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
+        y_axis: str | list = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial',
+        y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None,
+        y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
+        legend_title: str = '', legend_title_size: int = 12, legend_size: int = 12,
+        legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left',
+        legend_items: tuple = (0, 0), legend_ncol: int = 1, legend_mode: str = "figure",
+        legend_columnspacing: int=0, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5,
+        legend_borderpad: float=0.5, legend_handlelength: float=1, legend_size_html_multiplier: float=1.0,
+        dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True,
+        corr_method: str = None, corr_weight: str = None,
+        **kwargs):
+    ''' 
+    scat(): creates scatter plot related graphs
+
+    Parameters:
+    graph (str): graph type (scat, line, line_scat)
+    df (dataframe | str): pandas dataframe (or file path)
+    x (str): x-axis column name
+    y (str): y-axis column name
+    cols (str, optional): color column name
+    cols_ord (list, optional): color column values order
+    cols_exclude (list | str, optional): color column values exclude
+    stys (str, optional): styles column name
+    stys_order (list, optional): styles order
+    mark_order (list, optional): marker order
+    label (str, optional): column name for point labels; static text for images, interactive tooltips for HTML
+    facetx (str, optional): column name for facet columns (creates one subplot per category in this column, arranged in separate columns)
+    facety (str, optional): column name for facet rows (creates one subplot per category in this column, arranged in separate rows)
+    share_axes (bool, optional): whether facet subplots should share x and y axes (default: True)
+    facetx_order (list, optional): order of facet columns
+    facety_order (list, optional): order of facet rows
+    file (str, optional): save plot to filename
+    dir (str, optional): save plot to directory
+    palette_or_cmap (str, optional): seaborn color palette or matplotlib color map
+    alpha (float, optional): Alpha (transparency) for scatter points (0 to 1)
+    edgecol (str, optional): point edge color
+    figsize (tuple, optional): figure size
+    title (str, optional): plot title
+    title_size (int, optional): plot title font size
+    title_weight (str, optional): plot title bold, italics, etc.
+    title_font (str, optional): plot title font
+    x_axis (str, optional): x-axis name
+    x_axis_size (int, optional): x-axis name font size
+    x_axis_weight (str, optional): x-axis name bold, italics, etc.
+    x_axis_font (str, optional): x-axis font
+    x_axis_scale (str, optional): x-axis scale linear, log, etc.
+    x_axis_dims (tuple, optional): x-axis dimensions (start, end)
+    x_axis_pad (int, optional): x-axis padding
+    x_ticks_size (int, optional): x-axis tick font size
+    x_ticks_rot (int, optional): x-axis ticks rotation
+    x_ticks_font (str, optional): x-ticks font
+    x_ticks (list, optional): x-axis tick values
+    y_axis (str, optional): y-axis name
+    y_axis_size (int, optional): y-axis name font size
+    y_axis_weight (str, optional): y-axis name bold, italics, etc.
+    y_axis_font (str, optional): y-axis font
+    y_axis_scale (str, optional): y-axis scale linear, log, etc.
+    y_axis_dims (tuple, optional): y-axis dimensions (start, end)
+    y_axis_pad (int, optional): y-axis padding
+    y_ticks_size (int, optional): y-axis tick font size
+    y_ticks_rot (int, optional): y-axis ticks rotation
+    y_ticks_font (str, optional): y_ticks font
+    y_ticks (list, optional): y-axis tick values
+    legend_title (str, optional): legend title
+    legend_title_size (str, optional): legend title font size
+    legend_size (str, optional): legend font size
+    legend_bbox_to_anchor (tuple, optional): coordinates for bbox anchor
+    legend_loc (str): legend location
+    legend_ncol (tuple, optional): # of columns
+    legend_mode (str, optional): legend mode (options: "figure", "first", "none")
+    legend_columnspacing (int, optional): space between columns (Default: 0; only for html plots)
+    legend_handletextpad (float, optional): space between marker and text (Default: 0.5; only for html plots)
+    legend_labelspacing (float, optional): vertical space between entries (Default: 0.5; only for html plots)
+    legend_borderpad (float, optional): padding inside legend box (Default: 0.5; only for html plots)
+    legend_handlelength (float, optional): marker length (Default: 1; only for html plots)
+    legend_size_html_multiplier (float, optional): multiplier for legend font size in html plots (Default: 1.0)
+    dpi (int, optional): figure dpi (Default: 1200 for non-HTML, 150 for HTML)
+    transparent (bool, optional): whether to save static images with transparent background (default: True)
+    show (bool, optional): show plot (Default: True)
+    space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
+    corr_method (str, optional): add a correlation line of best fit with (Default: None; Options: 'pearson', 'spearman', 'kendall')
+    corr_weight (str, optional): weights column name for correlation line (Default: None; not weighted correlation)
+    
+    Dependencies: os, matplotlib, seaborn, formatter(), re_un_cap(), & round_up_pow_10()
+    '''
+    # Get dataframe from file path if needed
+    if type(df) == str:
+        df = io.get(pt=df)
+
+    # Omit excluded data
+    if type(cols_exclude) == list:
+        for exclude in cols_exclude:
+            df = df[df[cols] != exclude]
+    elif type(cols_exclude) == str:
+        df = df[df[cols] != cols_exclude]
+
+    # Determine if html
+    is_html = (file is not None and file.endswith('.html'))
+
+    # Match title fontsize for html plots
+    if is_html:
+        x_axis_size = title_size
+        y_axis_size = title_size
+        x_ticks_size = title_size
+        y_ticks_size = title_size
+        legend_title_size = title_size
+        legend_size = title_size * legend_size_html_multiplier
+
+    # --- Build facet layout ---
+    col_vals = _facet_values(df, facetx, order=facetx_order)
+    row_vals = _facet_values(df, facety, order=facety_order)
+    ncols = len(col_vals)
+    nrows = len(row_vals)
+
+    # If no faceting requested, fall back to single-plot behavior
+    faceting = (facetx is not None) or (facety is not None)
+
+    # --- Faceted plotting ---
+    fig, axes = plt.subplots(
+        nrows=nrows, ncols=ncols,
+        figsize=figsize,
+        sharex=share_axes, sharey=share_axes
+    )
+    axes = np.array(axes).reshape(nrows, ncols)
+
+    def _draw_panel(df_sub: pd.DataFrame, ax: plt.Axes):
+        '''
+        _draw_panel(): Helper to draw one panel
+        
+        Parameters:
+        df_sub (pd.DataFrame): subset of the data for this facet panel
+        ax (plt.Axes): the specific axis to draw on
+        '''
+        # color scheme setup (same as your scat)
+        color_palettes = ["deep","muted","bright","pastel","dark","colorblind","husl","hsv","Paired","Set1","Set2","Set3","tab10","tab20"]
+        if palette_or_cmap in color_palettes:
+            palette = palette_or_cmap
+        elif palette_or_cmap in plt.colormaps() or isinstance(palette_or_cmap, mcolors.Colormap):
+            if cols is not None:
+                cmap = cm.get_cmap(palette_or_cmap, len(df_sub[cols].value_counts()))
+                palette = sns.color_palette([cmap(i) for i in range(cmap.N)])
+            else:
+                palette = 'colorblind'
+        else:
+            palette = 'colorblind'
+
+        # seaborn plots
+        if cols is not None and stys is not None:
+            if graph == 'scat':
+                sns.scatterplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_ord,
+                                style=stys, style_order=stys_order, markers=mark_order,
+                                edgecolor=edgecol, alpha=alpha, palette=palette, ax=ax, **kwargs)
+            elif graph == 'line':
+                sns.lineplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_ord,
+                             style=stys, style_order=stys_order, markers=mark_order,
+                             palette=palette, ax=ax, **kwargs)
+            elif graph == 'line_scat':
+                sns.lineplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_ord,
+                             style=stys, style_order=stys_order, markers=mark_order,
+                             palette=palette, ax=ax, **kwargs)
+                sns.scatterplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_ord,
+                                style=stys, style_order=stys_order, markers=mark_order,
+                                edgecolor=edgecol, alpha=alpha, palette=palette, ax=ax, **kwargs)
+            else:
+                raise ValueError("Invalid graph! scat, line, or line_scat")
+
+        elif cols is not None:
+            if graph == 'scat':
+                sns.scatterplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_ord,
+                                edgecolor=edgecol, alpha=alpha, palette=palette, ax=ax, **kwargs)
+            elif graph == 'line':
+                sns.lineplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_ord,
+                             ax=ax, palette=palette, **kwargs)
+            elif graph == 'line_scat':
+                sns.lineplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_ord,
+                             palette=palette, ax=ax, **kwargs)
+                sns.scatterplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_ord,
+                                edgecolor=edgecol, alpha=alpha, palette=palette, ax=ax, **kwargs)
+            else:
+                raise ValueError("Invalid graph! scat, line, or line_scat")
+
+        elif stys is not None:
+            if graph == 'scat':
+                sns.scatterplot(data=df_sub, x=x, y=y, style=stys, style_order=stys_order,
+                                markers=mark_order, edgecolor=edgecol, palette=palette,
+                                alpha=alpha, ax=ax, **kwargs)
+            elif graph == 'line':
+                sns.lineplot(data=df_sub, x=x, y=y, style=stys, style_order=stys_order,
+                             markers=mark_order, palette=palette, ax=ax, **kwargs)
+            elif graph == 'line_scat':
+                sns.lineplot(data=df_sub, x=x, y=y, style=stys, style_order=stys_order,
+                             markers=mark_order, palette=palette, ax=ax, **kwargs)
+                sns.scatterplot(data=df_sub, x=x, y=y, style=stys, style_order=stys_order,
+                                markers=mark_order, edgecolor=edgecol, palette=palette,
+                                alpha=alpha, ax=ax, **kwargs)
+            else:
+                raise ValueError("Invalid graph! scat, line, or line_scat")
+
+        else:
+            if graph == 'scat':
+                sns.scatterplot(data=df_sub, x=x, y=y, edgecolor=edgecol, palette=palette,
+                                alpha=alpha, ax=ax, **kwargs)
+            elif graph == 'line':
+                sns.lineplot(data=df_sub, x=x, y=y, palette=palette, ax=ax, **kwargs)
+            elif graph == 'line_scat':
+                sns.lineplot(data=df_sub, x=x, y=y, palette=palette, ax=ax, **kwargs)
+                sns.scatterplot(data=df_sub, x=x, y=y, edgecolor=edgecol, palette=palette,
+                                alpha=alpha, ax=ax, **kwargs)
+            else:
+                raise ValueError("Invalid graph! scat, line, or line_scat")
+
+        # Optional point labels: static for images, interactive for HTML
+        if label is not None and label in df.columns:
+            if is_html:
+                # Use invisible points to carry click-to-toggle tooltips in HTML
+                pts = ax.scatter(
+                    df[x],
+                    df[y],
+                    s=20,
+                    alpha=0
+                )
+                labels_list = df[label].fillna("").astype(str).tolist()
+                tooltip = SafeHTMLTooltip(pts, labels_list)
+                clicker = ClickTooltip(pts, labels_list)
+                mpld3.plugins.connect(fig, tooltip, clicker)
+
+            else:
+                # For static images, draw permanent text labels
+                for i, txt in enumerate(df[label]):
+                    ax.text(
+                        df.iloc[i][x],
+                        df.iloc[i][y],
+                        txt
+                    )
+
+        # Add correlation line of best fit if specified
+        if graph == 'scat' and corr_method is not None:
+            if corr_weight is not None and corr_weight in df.columns: # Weighted correlation
+                
+                coeff = st.weighted_correlation(
+                    df=df,
+                    x=x,
+                    y=y,
+                    weight=corr_weight,
+                    method=corr_method)
+                
+                a,b = st.weighted_corr_line(df=df, ax=ax,
+                                            x=x, 
+                                            y=y, 
+                                            weight=corr_weight)
+            else: # Unweighted correlation
+                coeff = st.weighted_correlation(df=df, x=x, y=y, method=corr_method)
+                a,b = st.corr_line(df=df, ax=ax, x=x, y=y)
+
+            # correlation equation string
+            m = "?"
+            if corr_method == 'pearson': m = "R"
+            if corr_method == 'spearman': m = "ρ"
+            if corr_method == 'kendall': m = "τ"
+            
+            if np.isfinite(a) and np.isfinite(b):
+                if a >= 0:
+                    return f"y = {b:.2f}·x + {a:.2f}; {m}² = {coeff**2:.1g}"
+                else:
+                    return f"y = {b:.2f}·x - {abs(a):.2f}; {m}² = {coeff**2:.1g}"
+            else:
+                return f"y = {b:.2f}·x + {a:.2f}; {m}² = {coeff**2:.1g}"
+        
+        else:
+            return title # = title_sub (important for single-plot case)
+
+    for i, r in enumerate(row_vals):
+        for j, c in enumerate(col_vals):
+            ax = axes[i, j]
+            df_sub = df.copy()
+            title_sub = _draw_panel(df_sub, ax)
+
+            # handle panel axis labels, which string or iterable
+            x_axis_panel = _axis_label_for_panel(x_axis, j, expected_len=ncols if facetx is not None else None)
+            y_axis_panel = _axis_label_for_panel(y_axis, i, expected_len=nrows if facety is not None else None)
+
+            # if user left axis label blank, use "axis; facet_val" for that axis
+            if _is_blank_label(x_axis):
+                x_axis_panel = _facet_default_xaxis(x=x, facetx=facetx, facetx_val=c, space_capitalize=space_capitalize)
+            if _is_blank_label(y_axis):
+                y_axis_panel = _facet_default_yaxis(y=y, facety=facety, facety_val=r, space_capitalize=space_capitalize)
+            
+            # apply formatter with the appropriate subset of data and parameters for this panel
+            _apply_formatter_on_ax(
+                ax=ax, df_sub=df_sub, graph=graph,
+                x=x, y=y, cols=cols, file=file, dir=dir,
+                title='' if (faceting and corr_method is None) else title_sub, title_size=title_size, title_weight=title_weight, title_font=title_font,
+                x_axis=x_axis_panel, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font,
+                x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad,
+                x_ticks_size=x_ticks_size, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
+                y_axis=y_axis_panel, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font,
+                y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_axis_pad=y_axis_pad,
+                y_ticks_size=y_ticks_size, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
+                legend_title=legend_title, legend_title_size=legend_title_size, legend_size=legend_size,
+                legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc,
+                legend_items=legend_items, legend_ncol=legend_ncol,
+                legend_columnspacing=legend_columnspacing, legend_handletextpad=legend_handletextpad,
+                legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad,
+                legend_handlelength=legend_handlelength,
+                dpi=dpi, transparent=transparent, show=False, space_capitalize=space_capitalize,
+                PDB_pt=None, icon='scatter', cats_ord=None
+            )
+
+            # legend handling
+            if cols is not None:
+                leg = ax.get_legend()
+                
+                if legend_mode == "none" or legend_mode == "figure":
+                    if leg is not None:
+                        leg.remove()
+
+                elif legend_mode == "first":
+                    if (i != 0 or j != 0) and leg is not None:
+                        leg.remove()
+
+            # reduce label clutter: only left column keeps y label; only bottom row keeps x label
+            if j != 0:
+                ax.set_ylabel("")
+            if i != nrows - 1:
+                ax.set_xlabel("")
+
+    # overall title
+    if title != '' and faceting:
+        fig.suptitle(title, fontsize=title_size, fontweight=title_weight, family=title_font)
+
+    # Build single shared legend for entire figure
+    if cols is not None and legend_mode == "figure":
+        if legend_title == '':
+            legend_title = cols
+
+        _make_figure_legend(
+            fig, axes,
+            legend_title=legend_title,
+            legend_title_size=legend_title_size,
+            legend_size=legend_size,
+            legend_bbox_to_anchor=legend_bbox_to_anchor,
+            legend_loc=legend_loc,
+            legend_items=legend_items,
+            legend_ncol=legend_ncol
+        )
+
+    # save/show once
+    fig.tight_layout()
+    _final_save_show(fig, file=file, dir=dir, dpi=dpi, transparent=transparent, PDB_pt=None, icon='scatter', show=show)
+    return fig, axes
+
+def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
+        cats_ord: list = None, cats_exclude: list|str = None,
+        cols: str = None, cols_ord: list = None, cols_exclude: list | str = None,
+        line: float = None, facetx: str = None, facety: str = None,
+        share_axes: bool = True, facetx_order: list = None, facety_order: list = None,
+        file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', alpha: float = 1.0,
+        dodge: bool = False, jitter: bool = True, size: float = 5,
+        edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
+        figsize: tuple = (5, 5), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
+        x_axis: str | list = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial',
+        x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None,
+        x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
+        y_axis: str | list = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial',
+        y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None,
+        y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
+        legend_title: str = '', legend_title_size: int = 12, legend_size: int = 12,
+        legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left',
+        legend_items: tuple = (0, 0), legend_ncol: int = 1, legend_mode: str = "figure",
+        legend_columnspacing: int=0, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5,
+        legend_borderpad: float=0.5, legend_handlelength: float=1, legend_size_html_multiplier: float=1.0,
+        dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True,
+        PDB_pt: str = None,
+        **kwargs):
+    ''' 
+    cat(): creates categorical graphs
+
+    Parameters:
+    graph (str): graph type (bar, box, violin, swarm, strip, point, count, bar_strip, box_strip, violin_strip, bar_swarm, box_swarm, violin_swarm)
+    df (dataframe | str): pandas dataframe (or file path)
+    x (str, optional): x-axis column name
+    y (str, optional): y-axis column name
+    cats_ord (list, optional): category column values order (x- or y-axis)
+    cats_exclude (list | str, optional): category column values exclude (x- or y-axis)
+    cols (str, optional): color column name
+    cols_ord (list, optional): color column values order
+    cols_exclude (list | str, optional): color column values exclude
+    line (float, optional): add horizontal line at y value or vertical line at x value
+    facetx (str, optional): column name for facet columns (creates one subplot per category in this column, arranged in separate columns)
+    facety (str, optional): column name for facet rows (creates one subplot per category in this column, arranged in seperate rows)
+    share_axes (bool, optional): whether facet subplots should share x and y axes (default: True)
+    facetx_order (list, optional): order of facet columns
+    facety_order (list, optional): order of facet rows
+    file (str, optional): save plot to filename
+    dir (str, optional): save plot to directory
+    palette_or_cmap (str, optional): seaborn color palette or matplotlib color map
+    alpha (float, optional): Alpha (transparency) for scatter points (0 to 1)
+    dodge (bool, optional): whether to separate points by color category
+    jitter (bool, optional): whether to add jitter to points (for strip plots)
+    size (float, optional): Marker size for scatter points
+    edgecol (str, optional): point edge color
+    lw (int, optional): line width
+    errorbar (str, optional): error bar type (sd)
+    errwid (int, optional): error bar line width
+    errcap (int, optional): error bar cap line width
+    figsize (tuple, optional): figure size
+    title (str, optional): plot title
+    title_size (int, optional): plot title font size
+    title_weight (str, optional): plot title bold, italics, etc.
+    title_font (str, optional): plot title font
+    x_axis (str, optional): x-axis name
+    x_axis_size (int, optional): x-axis name font size
+    x_axis_weight (str, optional): x-axis name bold, italics, etc.
+    x_axis_font (str, optional): x-axis font
+    x_axis_scale (str, optional): x-axis scale linear, log, etc.
+    x_axis_dims (tuple, optional): x-axis dimensions (start, end)
+    x_axis_pad (int, optional): x-axis padding
+    x_ticks_size (int, optional): x-axis ticks font size
+    x_ticks_rot (int, optional): x-axis ticks rotation
+    x_ticks_font (str, optional): x-ticks font
+    x_ticks (list, optional): x-axis tick values
+    y_axis (str, optional): y-axis name
+    y_axis_size (int, optional): y-axis name font size
+    y_axis_weight (str, optional): y-axis name bold, italics, etc.
+    y_axis_font (str, optional): y-axis font
+    y_axis_scale (str, optional): y-axis scale linear, log, etc.
+    y_axis_dims (tuple, optional): y-axis dimensions (start, end)
+    y_axis_pad (int, optional): y-axis padding
+    y_ticks_size (int, optional): y-axis ticks font size
+    y_ticks_font (str, optional): y_ticks font
+    y_ticks_rot (int, optional): y-axis ticks rotation
+    y_ticks (list, optional): y-axis tick values
+    legend_title (str, optional): legend title
+    legend_title_size (str, optional): legend title font size
+    legend_size (str, optional): legend font size
+    legend_bbox_to_anchor (tuple, optional): coordinates for bbox anchor
+    legend_loc (str): legend location
+    legend_ncol (tuple, optional): # of columns
+    legends_items (tuple, optional): legend items to show (start, end)
+    legend_mode (str, optional): legend mode (options: "figure", "first", "none")
+    legend_columnspacing (int, optional): space between columns (Default: 0; only for html plots)
+    legend_handletextpad (float, optional): space between marker and text (Default: 0.5; only for html plots)
+    legend_labelspacing (float, optional): vertical space between entries (Default: 0.5; only for html plots)
+    legend_borderpad (float, optional): padding inside legend box (Default: 0.5; only for html plots)
+    legend_handlelength (float, optional): marker length (Default: 1; only for html plots)
+    legend_size_html_multiplier (float, optional): multiplier for legend font size in html plots (Default: 1.0)
+    dpi (int, optional): figure dpi (Default: 1200 for non-HTML, 150 for HTML)
+    transparent (bool, optional): whether to save static images with transparent background (default: True)
+    show (bool, optional): show plot (Default: True)
+    space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
+    PDB_pt (str, optional): Path to PDB file for mol* visualization; only intended for fastq plots (Default: None)
+    
+    Dependencies: os, matplotlib, seaborn, formatter(), re_un_cap(), & round_up_pow_10()
+    '''
+    # Get dataframe from file path if needed
+    if type(df) == str:
+        df = io.get(pt=df)
+
+    # Match title fontsize for html plots
+    is_html = (file is not None and file.endswith('.html'))
+    if is_html:
+        x_axis_size = title_size
+        y_axis_size = title_size
+        x_ticks_size = title_size
+        y_ticks_size = title_size
+        legend_title_size = title_size
+        legend_size = title_size * legend_size_html_multiplier
+
+    # Omit excluded data
+    if type(cats_exclude) == list:
+        for exclude in cats_exclude:
+            if x != '': df = df[df[x] != exclude]
+            if y != '': df = df[df[y] != exclude]
+    elif type(cats_exclude) == str:
+        if x != '': df = df[df[x] != cats_exclude]
+        if y != '': df = df[df[y] != cats_exclude]
+
+    if type(cols_exclude) == list and cols is not None:
+        for exclude in cols_exclude:
+            df = df[df[cols] != exclude]
+    elif type(cols_exclude) == str and cols is not None:
+        df = df[df[cols] != cols_exclude]
+
+    # --- Build facet layout ---
+    col_vals = _facet_values(df, facetx, order=facetx_order)
+    row_vals = _facet_values(df, facety, order=facety_order)
+    ncols = len(col_vals)
+    nrows = len(row_vals)
+
+    faceting = (facetx is not None) or (facety is not None)
+
+    fig, axes = plt.subplots(
+        nrows=nrows, ncols=ncols,
+        figsize=figsize,
+        sharex=share_axes, sharey=share_axes
+    )
+    axes = np.array(axes).reshape(nrows, ncols)
+
+    def _draw_panel(df_sub: pd.DataFrame, ax: plt.Axes):
+        """
+        _draw_panel(): Helper to draw one panel
+        
+        Parameters:
+        df_sub (pd.DataFrame): subset of the data for this facet panel
+        ax (plt.Axes): the specific axis to draw on
+        """
+        # palette logic (same as your cat)
+        color_palettes = ["deep","muted","bright","pastel","dark","colorblind","husl","hsv","Paired","Set1","Set2","Set3","tab10","tab20"]
+        if palette_or_cmap in color_palettes:
+            palette = palette_or_cmap
+        elif palette_or_cmap in plt.colormaps() or isinstance(palette_or_cmap, mcolors.Colormap):
+            if cols is not None:
+                cmap = cm.get_cmap(palette_or_cmap, len(df_sub[cols].value_counts()))
+                palette = sns.color_palette([cmap(i) for i in range(cmap.N)])
+            elif (x != '') and df_sub[x].apply(lambda row: isinstance(row, str)).all():
+                cmap = cm.get_cmap(palette_or_cmap, len(df_sub[x].value_counts()))
+                palette = sns.color_palette([cmap(i) for i in range(cmap.N)])
+            elif (y != '') and df_sub[y].apply(lambda row: isinstance(row, str)).all():
+                cmap = cm.get_cmap(palette_or_cmap, len(df_sub[y].value_counts()))
+                palette = sns.color_palette([cmap(i) for i in range(cmap.N)])
+            else:
+                palette = 'colorblind'
+        else:
+            palette = 'colorblind'
+
+        # seaborn plots
+        if cols is not None:
+            if graph == 'bar':
+                sns.barplot(data=df_sub, x=x, y=y, order=cats_ord, errorbar=errorbar,
+                            err_kws={'color': edgecol, 'linewidth': errwid}, capsize=errcap,
+                            hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw,
+                            palette=palette, ax=ax, **kwargs)
+            elif graph == 'box':
+                sns.boxplot(data=df_sub, x=x, y=y, order=cats_ord,
+                            hue=cols, hue_order=cols_ord, linewidth=lw, palette=palette, ax=ax, **kwargs)
+            elif graph == 'violin':
+                sns.violinplot(data=df_sub, x=x, y=y, order=cats_ord,
+                               hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw,
+                               palette=palette, ax=ax, **kwargs)
+            elif graph == 'swarm':
+                sns.swarmplot(data=df_sub, x=x, y=y, order=cats_ord,
+                              hue=cols, hue_order=cols_ord, edgecolor=edgecol,
+                              alpha=alpha, linewidth=lw, dodge=dodge, size=size,
+                              palette=palette, ax=ax, **kwargs)
+            elif graph == 'strip':
+                sns.stripplot(data=df_sub, x=x, y=y, order=cats_ord,
+                              hue=cols, hue_order=cols_ord, edgecolor=edgecol,
+                              alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter,
+                              size=size, palette=palette, ax=ax, **kwargs)
+            elif graph == 'point':
+                sns.pointplot(data=df_sub, x=x, y=y, order=cats_ord,
+                              errorbar=errorbar, err_kws={'linewidth': errwid}, capsize=errcap,
+                              hue=cols, hue_order=cols_ord, palette=palette, ax=ax, **kwargs)
+            elif graph == 'count':
+                if (x != '') and (y != ''):
+                    raise ValueError("Cannot make countplot with both x and y specified.")
+                elif x != '':
+                    sns.countplot(data=df_sub, x=x, order=cats_ord, hue=cols, hue_order=cols_ord, palette=palette, ax=ax, **kwargs)
+                elif y != '':
+                    sns.countplot(data=df_sub, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, palette=palette, ax=ax, **kwargs)
+                else:
+                    raise ValueError("Cannot make countplot without x or y specified.")
+            elif graph=='bar_strip':
+                sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, 
+                            err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, 
+                            hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, 
+                            palette=palette, ax=ax, **kwargs)
+                sns.stripplot(data=df, x=x, y=y, order=cats_ord, 
+                            hue=cols, hue_order=cols_ord, edgecolor=edgecol, 
+                            alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, 
+                            size=size, palette=palette, ax=ax, **kwargs)
+            elif graph=='box_strip':
+                sns.boxplot(data=df, x=x, y=y, order=cats_ord, 
+                            hue=cols, hue_order=cols_ord, linewidth=lw, 
+                            palette=palette, ax=ax, fill=False, fliersize=0, color=edgecol, **kwargs)
+                sns.stripplot(data=df, x=x, y=y, order=cats_ord, 
+                              hue=cols, hue_order=cols_ord, edgecolor=edgecol, 
+                              alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, 
+                              size=size, palette=palette, ax=ax, **kwargs)
+            elif graph=='violin_strip':
+                sns.violinplot(data=df, x=x, y=y, order=cats_ord, 
+                               hue=cols, hue_order=cols_ord, edgecolor=edgecol, 
+                               linewidth=lw, palette=palette, ax=ax, **kwargs)
+                sns.stripplot(data=df, x=x, y=y, order=cats_ord, 
+                              hue=cols, hue_order=cols_ord, edgecolor=edgecol, 
+                              alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, 
+                              size=size, palette=palette, ax=ax, **kwargs)
+            elif graph=='bar_swarm':
+                sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, 
+                            err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, 
+                            hue=cols, hue_order=cols_ord, edgecolor=edgecol, 
+                            linewidth=lw, palette=palette, ax=ax, **kwargs)
+                sns.swarmplot(data=df, x=x, y=y, order=cats_ord, 
+                            hue=cols, hue_order=cols_ord, edgecolor=edgecol, 
+                            alpha=alpha, linewidth=lw, dodge=dodge, 
+                            size=size, palette=palette, ax=ax, **kwargs)
+            elif graph=='box_swarm':
+                sns.boxplot(data=df, x=x, y=y, order=cats_ord, 
+                            hue=cols, hue_order=cols_ord, linewidth=lw, 
+                            palette=palette, ax=ax, fill=False, fliersize=0, color=edgecol, **kwargs)
+                sns.swarmplot(data=df, x=x, y=y, order=cats_ord, 
+                            hue=cols, hue_order=cols_ord, edgecolor=edgecol, 
+                            alpha=alpha, linewidth=lw, dodge=dodge, size=size, 
+                            palette=palette, ax=ax, **kwargs)
+            elif graph=='violin_swarm':
+                sns.violinplot(data=df, x=x, y=y, order=cats_ord, 
+                               hue=cols, hue_order=cols_ord, edgecolor=edgecol, 
+                               linewidth=lw, palette=palette, ax=ax, **kwargs)
+                sns.swarmplot(data=df, x=x, y=y, order=cats_ord, 
+                            hue=cols, hue_order=cols_ord, edgecolor=edgecol, 
+                            alpha=alpha, linewidth=lw, dodge=dodge, size=size, 
+                            palette=palette, ax=ax, **kwargs)
+            else:
+                raise ValueError("Invalid graph! bar, box, violin, swarm, strip, point, count, bar_strip, box_strip, violin_strip, bar_swarm, box_swarm, violin_swarm")
+        else:
+            if graph == 'bar':
+                sns.barplot(data=df_sub, x=x, y=y, order=cats_ord, errorbar=errorbar,
+                            err_kws={'color': edgecol, 'linewidth': errwid}, capsize=errcap,
+                            edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
+            elif graph == 'box':
+                sns.boxplot(data=df_sub, x=x, y=y, order=cats_ord, 
+                            linewidth=lw, ax=ax, palette=palette, **kwargs)
+            elif graph == 'violin':
+                sns.violinplot(data=df_sub, x=x, y=y, order=cats_ord, edgecolor=edgecol, 
+                            linewidth=lw, palette=palette, ax=ax, **kwargs)
+            elif graph == 'swarm':
+                sns.swarmplot(data=df_sub, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol,
+                              alpha=alpha, linewidth=lw, dodge=dodge, size=size, palette=palette, ax=ax, **kwargs)
+            elif graph == 'strip':
+                sns.stripplot(data=df_sub, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol,
+                              alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, size=size, palette=palette, ax=ax, **kwargs)
+            elif graph == 'point':
+                sns.pointplot(data=df_sub, x=x, y=y, order=cats_ord, errorbar=errorbar,
+                              err_kws={'linewidth': errwid}, capsize=errcap, palette=palette, ax=ax, **kwargs)
+            elif graph == 'count':
+                if (x != '') and (y != ''):
+                    raise ValueError("Cannot make countplot with both x and y specified.")
+                elif x != '':
+                    sns.countplot(data=df_sub, x=x, order=cats_ord, ax=ax, palette=palette, **kwargs)
+                elif y != '':
+                    sns.countplot(data=df_sub, y=y, order=cats_ord, ax=ax, palette=palette, **kwargs)
+                else:
+                    raise ValueError("Cannot make countplot without x or y specified.")
+            elif graph=='bar_strip':
+                sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, 
+                        err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, 
+                        edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
+                sns.stripplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, 
+                        alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, size=size, palette=palette, ax=ax, **kwargs)
+            elif graph=='box_strip':
+                sns.boxplot(data=df, x=x, y=y, order=cats_ord, linewidth=lw, ax=ax, 
+                        fill=False, fliersize=0, color=edgecol, **kwargs)
+                sns.stripplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, 
+                        alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, size=size, palette=palette, ax=ax, **kwargs)
+            elif graph=='violin_strip':
+                sns.violinplot(data=df, x=x, y=y, order=cats_ord, edgecolor=edgecol, 
+                        linewidth=lw, ax=ax, palette=palette, **kwargs)
+                sns.stripplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, 
+                        alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, size=size, palette=palette, ax=ax, **kwargs)
+            elif graph=='bar_swarm':
+                sns.barplot(data=df, x=x, y=y, order=cats_ord, errorbar=errorbar, 
+                        err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, 
+                        edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
+                sns.swarmplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, 
+                        alpha=alpha, linewidth=lw, dodge=dodge, size=size, palette=palette, ax=ax, **kwargs)
+            elif graph=='box_swarm': # figure out
+                sns.boxplot(data=df, x=x, y=y, order=cats_ord, linewidth=lw, ax=ax, 
+                        fill=False, fliersize=0, color=edgecol, **kwargs)
+                sns.swarmplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, 
+                        alpha=alpha, linewidth=lw, dodge=dodge, size=size, palette=palette, ax=ax, **kwargs)
+            elif graph=='violin_swarm':
+                sns.violinplot(data=df, x=x, y=y, order=cats_ord, edgecolor=edgecol, 
+                        linewidth=lw, palette=palette, ax=ax, **kwargs)
+                sns.swarmplot(data=df, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, 
+                        alpha=alpha, linewidth=lw, dodge=dodge, size=size, palette=palette, ax=ax, **kwargs)
+            else:
+                raise ValueError("Invalid graph! bar, box, violin, swarm, strip, point, count, bar_strip, box_strip, violin_strip, bar_swarm, box_swarm, violin_swarm")
+
+        # Optional: add line
+        if line is not None and x != '' and y != '':
+            if df_sub[x].apply(lambda row: isinstance(row, str)).all():
+                ax.axhline(y=line, color='black', linestyle='--', linewidth=lw, zorder=0)
+            elif df_sub[y].apply(lambda row: isinstance(row, str)).all():
+                ax.axvline(x=line, color='black', linestyle='--', linewidth=lw, zorder=0)
+
+    for i, r in enumerate(row_vals):
+        for j, c in enumerate(col_vals):
+            ax = axes[i, j]
+            df_sub = df.copy()
+            _draw_panel(df_sub, ax)
+
+            # handle panel axis labels, which string or iterable
+            x_axis_panel = _axis_label_for_panel(x_axis, j, expected_len=ncols if facetx is not None else None)
+            y_axis_panel = _axis_label_for_panel(y_axis, i, expected_len=nrows if facety is not None else None)
+
+            # if user left axis label blank, use "axis; facet_val" for that axis
+            if _is_blank_label(x_axis):
+                x_axis_panel = _facet_default_xaxis(x=x, facetx=facetx, facetx_val=c, space_capitalize=space_capitalize)
+            if _is_blank_label(y_axis):
+                y_axis_panel = _facet_default_yaxis(y=y, facety=facety, facety_val=r, space_capitalize=space_capitalize)
+            
+            # apply formatter with the appropriate subset of data and parameters for this panel
+            _apply_formatter_on_ax(
+                ax=ax, df_sub=df_sub, graph=graph,
+                x=x, y=y, cols=cols, file=file, dir=dir,
+                title='' if faceting else title, title_size=title_size, title_weight=title_weight, title_font=title_font,
+                x_axis=x_axis_panel, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font,
+                x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad,
+                x_ticks_size=x_ticks_size, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
+                y_axis=y_axis_panel, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font,
+                y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_axis_pad=y_axis_pad,
+                y_ticks_size=y_ticks_size, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
+                legend_title=legend_title, legend_title_size=legend_title_size, legend_size=legend_size,
+                legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc,
+                legend_items=legend_items, legend_ncol=legend_ncol,
+                legend_columnspacing=legend_columnspacing, legend_handletextpad=legend_handletextpad,
+                legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad,
+                legend_handlelength=legend_handlelength,
+                dpi=dpi, transparent=transparent, show=False, space_capitalize=space_capitalize,
+                PDB_pt=None, icon='cat', cats_ord=cats_ord
+            )
+
+            # legend handling
+            if cols is not None:
+                leg = ax.get_legend()
+
+                if legend_mode == "none" or legend_mode == "figure":
+                    if leg is not None:
+                        leg.remove()
+
+                elif legend_mode == "first":
+                    if (i != 0 or j != 0) and leg is not None:
+                        leg.remove()
+
+            # reduce label clutter: only left column keeps y label; only bottom row keeps x label
+            if j != 0:
+                ax.set_ylabel("")
+            if i != nrows - 1:
+                ax.set_xlabel("")
+
+    # overall title
+    if title != '' and faceting:
+        fig.suptitle(title, fontsize=title_size, fontweight=title_weight, family=title_font)
+
+    # Build single shared legend for entire figure
+    if cols is not None and legend_mode == "figure":
+        if legend_title == '':
+            legend_title = cols
+
+        _make_figure_legend(
+            fig, axes,
+            legend_title=legend_title,
+            legend_title_size=legend_title_size,
+            legend_size=legend_size,
+            legend_bbox_to_anchor=legend_bbox_to_anchor,
+            legend_loc=legend_loc,
+            legend_items=legend_items,
+            legend_ncol=legend_ncol
+        )
+
+    # save/show once
+    fig.tight_layout()
+    _final_save_show(fig, file=file, dir=dir, dpi=dpi, transparent=transparent, PDB_pt=PDB_pt, icon='cat', show=show)
+    return fig, axes
+
 # Graph methods
-def scat(graph: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, cols_ord: list = None, cols_exclude: list | str = None, 
+def _scat(graph: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, cols_ord: list = None, cols_exclude: list | str = None, 
          stys: str = None, stys_order: list = [], mark_order: list = [], label: str | None = None,
          file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', alpha: float = 1.0, edgecol: str = 'black',
          figsize: tuple = (5, 5), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
@@ -1045,7 +2048,7 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str, cols: str = None, c
               legend_columnspacing=legend_columnspacing, legend_handletextpad=legend_handletextpad, legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad, legend_handlelength=legend_handlelength,
               dpi=dpi, transparent=transparent, show=show, space_capitalize=space_capitalize, icon='scatter')
 
-def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: list = None, cats_exclude: list|str = None, cols: str = None, cols_ord: list = None, cols_exclude: list | str = None, line: float = None,
+def _cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '', cats_ord: list = None, cats_exclude: list|str = None, cols: str = None, cols_ord: list = None, cols_exclude: list | str = None, line: float = None,
         file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', alpha: float = 1.0, dodge: bool = False, jitter: bool = True, size: float = 5, edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
         figsize: tuple = (5, 5), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],

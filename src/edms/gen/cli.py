@@ -84,7 +84,13 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
             subparser.add_argument("-nw", "--not_weighted", dest='weighted', action='store_false', help="Weighted correlation by size column (Default: True)", default=True)
 
     subparser.add_argument("-l", "--label", type=str, help="Column name for point labels; static text for images, interactive tooltips for HTML")
-
+    if fastq_torn_parser==False and fastq_corr_parser==False and pwes_torn_parser==False:
+        subparser.add_argument("-fx", "--facetx", type=str, help="Column name for facet columns (creates one subplot per category in this column, arranged in separate columns)")
+        subparser.add_argument("-fy", "--facety", type=str, help="Column name for facet rows (creates one subplot per category in this column, arranged in seperate rows)")
+        subparser.add_argument("-ds", "--dont_share_axes", dest="share_axes", action='store_false', default=True, help="Facet subplots don't share x and y axes")
+        subparser.add_argument("-fxo", "--facetx_order", nargs="+", help="Order of facet columns")
+        subparser.add_argument("-fyo", "--facety_order", nargs="+", help="Order of facet rows")
+    
     # Additional annotation data sources
     if fastq_torn_parser==True or fastq_corr_parser==True or pwes_torn_parser==True:
         add_common_fastq_label_args(subparser)
@@ -140,6 +146,8 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
     subparser.add_argument("-ll", "--legend_loc", type=str, default="upper left", help="Location of the legend in the plot")
     subparser.add_argument("-li", "--legend_items", type=parse_tuple_int, default=(0,0), help="Legend item count as a tuple (used for layout)")
     subparser.add_argument("-ln", "--legend_ncol", type=int, default=1, help="Number of columns in legend")
+    if fastq_torn_parser==False and fastq_corr_parser==False and pwes_torn_parser==False:
+        subparser.add_argument("-lm", "--legend_mode", type=str, help='legend mode (options: "figure", "first", "none"); default: "figure")', default="figure", choices=["figure", "first", "none"])
     subparser.add_argument('-lcs', "--legend_columnspacing", type=int, default=argparse.SUPPRESS, help='space between columns in legend; only for html plots')
     subparser.add_argument('-lhtp', "--legend_handletextpad", type=float, default=argparse.SUPPRESS, help='space between marker and text in legend; only for html plots')
     subparser.add_argument('-lls', "--legend_labelspacing", type=float, default=argparse.SUPPRESS, help='vertical space between entries in legend; only for html plots')
@@ -148,7 +156,7 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
     subparser.add_argument('-lshm', "--legend_size_html_multiplier", type=float, default=argparse.SUPPRESS, help='legend size multiplier for html plots')
 
     # Display and formatting
-    subparser.add_argument("-d", "--dpi", type=int, help="Figure dpi (Default: 600 for non-HTML, 150 for HTML)", default=0)
+    subparser.add_argument("-d", "--dpi", type=int, help="Figure dpi (Default: 1200 for non-HTML, 150 for HTML)", default=0)
     subparser.add_argument("-nt", "--not_transparent", dest='transparent', action="store_false", help="Don't save plot with transparent background", default=True)
     subparser.add_argument("-s", "--show", action="store_true", help="Show the plot", default=False)
     subparser.add_argument("-sc", "--space_capitalize", action="store_true", help="Capitalize label/legend strings and replace underscores with spaces")
@@ -179,6 +187,11 @@ def add_common_plot_cat_args(subparser, fastq_parser=False, pwes_parsers=False):
         subparser.add_argument("-cl", "--cols", type=str, help="Color column name for grouping")
         subparser.add_argument("-clo", "--cols_ord", nargs="+", help="Color column values order")
         subparser.add_argument("-cle", "--cols_exclude", nargs="+", help="Color column values to exclude")
+        subparser.add_argument("-fx", "--facetx", type=str, help="Column name for facet columns (creates one subplot per category in this column, arranged in separate columns)")
+        subparser.add_argument("-fy", "--facety", type=str, help="Column name for facet rows (creates one subplot per category in this column, arranged in seperate rows)")
+        subparser.add_argument("-ds", "--dont_share_axes", dest="share_axes", action='store_false', default=True, help="Facet subplots don't share x and y axes")
+        subparser.add_argument("-fxo", "--facetx_order", nargs="+", help="Order of facet columns")
+        subparser.add_argument("-fyo", "--facety_order", nargs="+", help="Order of facet rows")
     if fastq_parser == True:
         subparser.add_argument("-PDB_pt", "--PDB_pt", type=str, help="PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information", default=argparse.SUPPRESS)
 
@@ -237,6 +250,8 @@ def add_common_plot_cat_args(subparser, fastq_parser=False, pwes_parsers=False):
     subparser.add_argument("-ll", "--legend_loc", type=str, default="upper left", help="Location of the legend on the plot")
     subparser.add_argument("-li", "--legend_items", type=parse_tuple_int, default=(0, 0), help="Tuple for legend item layout")
     subparser.add_argument("-ln", "--legend_ncol", type=int, default=1, help="Number of columns in the legend")
+    if pwes_parsers == False:
+        subparser.add_argument("-lm", "--legend_mode", type=str, help='legend mode (options: "figure", "first", "none"); default: "figure")', default="figure", choices=["figure", "first", "none"])
     subparser.add_argument('-lcs', "--legend_columnspacing", type=int, default=argparse.SUPPRESS, help='space between columns in legend; only for html plots')
     subparser.add_argument('-lhp', "--legend_handletextpad", type=float, default=argparse.SUPPRESS, help='space between marker and text in legend; only for html plots')
     subparser.add_argument('-lls', "--legend_labelspacing", type=float, default=argparse.SUPPRESS, help='vertical space between entries in legend; only for html plots')
@@ -245,7 +260,7 @@ def add_common_plot_cat_args(subparser, fastq_parser=False, pwes_parsers=False):
     subparser.add_argument('-lshm', "--legend_size_html_multiplier", type=float, default=argparse.SUPPRESS, help='legend size multiplier for html plots')
 
     # Display and formatting
-    subparser.add_argument("-d", "--dpi", type=int, help="Figure dpi (Default: 600 for non-HTML, 150 for HTML)", default=0)
+    subparser.add_argument("-d", "--dpi", type=int, help="Figure dpi (Default: 1200 for non-HTML, 150 for HTML)", default=0)
     subparser.add_argument("-nt", "--not_transparent", dest='transparent', action="store_false", help="Don't save plot with transparent background", default=True)
     subparser.add_argument("-s", "--show", action="store_true", help="Show the plot in a window", default=False)
     subparser.add_argument("-sc", "--space_capitalize", action="store_true", help="Capitalize labels and replace underscores with spaces")
@@ -321,7 +336,7 @@ def add_common_plot_dist_args(subparser):
     subparser.add_argument("-ln", "--legend_ncol", type=int, default=1, help="Number of columns in the legend")
 
     # Final display
-    subparser.add_argument("-d", "--dpi", type=int, help="Figure dpi (Default: 600 for non-HTML, 150 for HTML)", default=0)
+    subparser.add_argument("-d", "--dpi", type=int, help="Figure dpi (Default: 1200 for non-HTML, 150 for HTML)", default=0)
     subparser.add_argument("-nt", "--not_transparent", dest='transparent', action="store_false", help="Don't save plot with transparent background", default=True)
     subparser.add_argument("-s", "--show", action="store_true", help="Show the plot in an interactive window", default=False)
     subparser.add_argument("-sc", "--space_capitalize", action="store_true", help="Capitalize and space legend/label values", default=False)
@@ -408,7 +423,7 @@ def add_common_plot_heat_args(subparser, fastq_parser=False, stat_parser=False):
     subparser.add_argument("-ytf", "--y_ticks_font", type=str, default="Arial", help="Font family for Y-axis tick labels")
 
     # Final display
-    subparser.add_argument("-d", "--dpi", type=int, help="Figure dpi (Default: 600 for non-HTML, 150 for HTML)", default=0)
+    subparser.add_argument("-d", "--dpi", type=int, help="Figure dpi (Default: 1200 for non-HTML, 150 for HTML)", default=0)
     subparser.add_argument("-nt", "--not_transparent", dest='transparent', action="store_false", help="Don't save plot with transparent background", default=True)
     subparser.add_argument("-s","--show", action="store_true", help="Show the plot in an interactive window", default=False)
     if fastq_parser == False:
@@ -482,7 +497,7 @@ def add_common_plot_stack_args(subparser, fastq_parser=False):
     subparser.add_argument("-lshm", "--legend_size_html_multiplier", type=float, default=argparse.SUPPRESS, help="Legend size multiplier for html plots")
 
     # Display and formatting
-    subparser.add_argument("-d","--dpi", type=int, help="Figure dpi (Default: 600 for non-HTML, 150 for HTML)", default=0)
+    subparser.add_argument("-d","--dpi", type=int, help="Figure dpi (Default: 1200 for non-HTML, 150 for HTML)", default=0)
     subparser.add_argument("-nt", "--not_transparent", dest='transparent', action="store_false", help="Don't save plot with transparent background", default=True)
     subparser.add_argument("-s","--show", action="store_true", help="Show the plot in an interactive window", default=False)
     subparser.add_argument("-sc","--space_capitalize", action="store_true", help="Capitalize and space legend/label values", default=False)
@@ -574,7 +589,7 @@ def add_common_plot_vol_args(subparser, fastq_parser=False):
     subparser.add_argument("-dl","--display_labels", type=str, nargs="+", help="Display labels for values if label column specified (Options: 'FC & p-value', 'FC', 'p-value', 'NS', 'all', or ['label1', 'label2', ..., 'labeln'])", default=["FC & p-value"])
     subparser.add_argument("-dda","--dont_display_axis", dest='display_axis', action="store_false", default=True, help="Display x- and y-axis lines (Default: True)")
     subparser.add_argument("-dli","--display_lines", action="store_true", help="Display lines for threshold (Default: False)", default=False)
-    subparser.add_argument("-d","--dpi", type=int, help="Figure dpi (Default: 600 for non-HTML, 150 for HTML)", default=0)
+    subparser.add_argument("-d","--dpi", type=int, help="Figure dpi (Default: 1200 for non-HTML, 150 for HTML)", default=0)
     subparser.add_argument("-nt", "--not_transparent", dest='transparent', action="store_false", help="Don't save plot with transparent background", default=True)
     subparser.add_argument("-s","--show", action="store_true", help="Show the plot in an interactive window", default=False)
     subparser.add_argument("-sc","--space_capitalize", action="store_true", help="Capitalize and space labels/legend items", default=False)

@@ -3803,11 +3803,12 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
 
 # Plot methods
 def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list = None, cats_exclude: list|str = None, cols: str=None, cols_ord: list=None, cols_exclude: list|str=None, PDB_pt: str=None, line: float = None,
+        facetx: str = None, facety: str = None, share_axes: bool = True, facetx_order: list = None, facety_order: list = None,
         file: str=None, dir: str=None, palette_or_cmap: str='colorblind', alpha: float=1.0, dodge: bool=True, jitter: bool=True, size: float=5, edgecol: str='black', lw: int=1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
         figsize: tuple = (5, 5), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_scale: str='linear', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_scale: str='linear', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
-        legend_title: str='', legend_title_size: int=12, legend_size: int = 12, legend_bbox_to_anchor=(1,1), legend_loc: str='upper left', legend_items: tuple=(0,0), legend_ncol: int=1,
+        legend_title: str='', legend_title_size: int=12, legend_size: int = 12, legend_bbox_to_anchor=(1,1), legend_loc: str='upper left', legend_items: tuple=(0,0), legend_ncol: int=1, legend_mode: str='figure',
         legend_columnspacing: int=0, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=1, legend_size_html_multiplier: float=1.0,
         dpi: int=0, transparent: bool=True, show: bool=True, space_capitalize: bool=True,
         **kwargs):
@@ -3826,6 +3827,11 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list
     cols_exclude (list | str, optional): color column values exclude
     PDB_pt (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
     line (float, optional): add horizontal line at y value or vertical line at x value
+    facetx (str, optional): column name for facet columns (creates one subplot per category in this column, arranged in separate columns)
+    facety (str, optional): column name for facet rows (creates one subplot per category in this column, arranged in separate rows)
+    share_axes (bool, optional): whether facet subplots should share x and y axes (default: True)
+    facetx_order (list, optional): order of facet columns
+    facety_order (list, optional): order of facet rows
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     palette_or_cmap (str, optional): seaborn color palette or matplotlib color map
@@ -3873,6 +3879,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list
     legend_items (tuple, optional): legend items to show (start, end)
     legend_ncol (tuple, optional): # of columns
     legends_items (tuple, optional): legend items to show (start, end)
+    legend_mode (str, optional): legend mode (options: "figure", "first", "none")
     legend_columnspacing (int, optional): space between columns (Default: 0; only for html plots)
     legend_handletextpad (float, optional): space between marker and text (Default: 0.5; only for html plots)
     legend_labelspacing (float, optional): vertical space between entries (Default: 0.5; only for html plots)
@@ -3925,11 +3932,12 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list
                     break
 
     p.cat(graph=graph,df=df,x=x,y=y,cats_ord=cats_ord,cats_exclude=cats_exclude,cols=cols,cols_ord=cols_ord,cols_exclude=cols_exclude,PDB_pt=PDB_pt,line=line,
+          facetx=facetx,facety=facety,share_axes=share_axes,facetx_order=facetx_order,facety_order=facety_order,
           file=file,dir=dir,palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
           figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
           x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_axis_pad=x_axis_pad,x_ticks_size=x_ticks_size,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,x_ticks=x_ticks,
           y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_scale=y_axis_scale,y_axis_dims=y_axis_dims,y_axis_pad=y_axis_pad,y_ticks_size=y_ticks_size,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,y_ticks=y_ticks,
-          legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_items=legend_items,legend_ncol=legend_ncol,
+          legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_items=legend_items,legend_ncol=legend_ncol,legend_mode=legend_mode,
           legend_columnspacing=legend_columnspacing,legend_handletextpad=legend_handletextpad,legend_labelspacing=legend_labelspacing,legend_borderpad=legend_borderpad,legend_handlelength=legend_handlelength,legend_size_html_multiplier=legend_size_html_multiplier,
           dpi=dpi,transparent=transparent,show=show,space_capitalize=space_capitalize,**kwargs)
 
