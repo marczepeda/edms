@@ -91,6 +91,7 @@ import seaborn as sns
 import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 from matplotlib.ticker import MaxNLocator
+from matplotlib.font_manager import FontProperties
 import mpld3
 from scipy.stats import ttest_ind
 import Levenshtein
@@ -3805,11 +3806,11 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
 def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list = None, cats_exclude: list|str = None, cols: str=None, cols_ord: list=None, cols_exclude: list|str=None, PDB_pt: str=None, line: float = None,
         facetx: str = None, facety: str = None, share_axes: bool = True, facetx_order: list = None, facety_order: list = None,
         file: str=None, dir: str=None, palette_or_cmap: str='colorblind', alpha: float=1.0, dodge: bool=True, jitter: bool=True, size: float=5, edgecol: str='black', lw: int=1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
-        figsize: tuple = (5, 5), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
+        figsize: tuple=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_scale: str='linear', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_scale: str='linear', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
-        legend_title: str='', legend_title_size: int=12, legend_size: int = 12, legend_bbox_to_anchor=(1,1), legend_loc: str='upper left', legend_items: tuple=(0,0), legend_ncol: int=1, legend_mode: str='figure',
-        legend_columnspacing: int=0, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=1, legend_size_html_multiplier: float=1.0,
+        legend_title: str='', legend_title_size: int=12, legend_title_weight: str='bold', legend_size: int = 12, legend_bbox_to_anchor=(1,1), legend_loc: str='upper left', legend_items: tuple=(0,0), legend_ncol: int=1, legend_mode: str='figure',
+        legend_columnspacing: int=0, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=1, html_size_multiplier: float=1.5,
         dpi: int=0, transparent: bool=True, show: bool=True, space_capitalize: bool=True,
         **kwargs):
     ''' 
@@ -3873,6 +3874,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list
     y_ticks (list, optional): y-axis tick values
     legend_title (str, optional): legend title
     legend_title_size (str, optional): legend title font size
+    legend_title_weight (str, optional): legend title bold, italics, etc.
     legend_size (str, optional): legend font size
     legend_bbox_to_anchor (tuple, optional): coordinates for bbox anchor
     legend_loc (str): legend location
@@ -3885,7 +3887,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list
     legend_labelspacing (float, optional): vertical space between entries (Default: 0.5; only for html plots)
     legend_borderpad (float, optional): padding inside legend box (Default: 0.5; only for html plots)
     legend_handlelength (float, optional): marker length (Default: 1; only for html plots)
-    legend_size_html_multiplier (float, optional): legend size multiplier for html plots (Default: 1.0)
+    html_size_multiplier (float, optional): legend size multiplier for html plots (Default: 1.0)
     dpi (int, optional): dots per inch for saving the plot
     transparent (bool, optional): whether to make the background transparent when saving the plot (Default: True)
     show (bool, optional): show plot (Default: True)
@@ -3937,18 +3939,18 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list
           figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
           x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_axis_pad=x_axis_pad,x_ticks_size=x_ticks_size,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,x_ticks=x_ticks,
           y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_scale=y_axis_scale,y_axis_dims=y_axis_dims,y_axis_pad=y_axis_pad,y_ticks_size=y_ticks_size,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,y_ticks=y_ticks,
-          legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_items=legend_items,legend_ncol=legend_ncol,legend_mode=legend_mode,
-          legend_columnspacing=legend_columnspacing,legend_handletextpad=legend_handletextpad,legend_labelspacing=legend_labelspacing,legend_borderpad=legend_borderpad,legend_handlelength=legend_handlelength,legend_size_html_multiplier=legend_size_html_multiplier,
+          legend_title=legend_title,legend_title_size=legend_title_size,legend_title_weight=legend_title_weight,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_items=legend_items,legend_ncol=legend_ncol,legend_mode=legend_mode,
+          legend_columnspacing=legend_columnspacing,legend_handletextpad=legend_handletextpad,legend_labelspacing=legend_labelspacing,legend_borderpad=legend_borderpad,legend_handlelength=legend_handlelength,html_size_multiplier=html_size_multiplier,
           dpi=dpi,transparent=transparent,show=show,space_capitalize=space_capitalize,**kwargs)
 
 def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: str='Edit', cutoff_group: str='fastq_file', cutoff_value: float=0, cutoff_keep: bool=True, 
           cols_ord: list=[], x_ord: list=[], PDB_pt: str=None,
           file: str=None, dir: str=None, palette_or_cmap: str='tab20', repeats: int=1, errcap: int=4, vertical: bool=True,
-          figsize: tuple = (5, 5), title: str='Editing Outcomes', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
+          figsize: tuple=(6,6), title: str='Editing Outcomes', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
           x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial',
           y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial',
-          legend_title: str='', legend_title_size: int=12, legend_size: int=12,legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1, 
-          legend_columnspacing: int=0, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=1, legend_size_html_multiplier: float=1.0,
+          legend_title: str='', legend_title_size: int=12, legend_title_weight: str='bold', legend_size: int=12,legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1, 
+          legend_columnspacing: int=0, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=1, html_size_multiplier: float=1.5,
           dpi: int=0, transparent: bool=True, show: bool=True, space_capitalize: bool=True, **kwargs):
     ''' 
     stack(): creates stacked bar plot
@@ -3994,6 +3996,7 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
     y_ticks_font (str, optional): y-ticks font
     legend_title (str, optional): legend title
     legend_title_size (str, optional): legend title font size
+    legend_title_weight (str, optional): legend title bold, italics, etc.
     legend_size (str, optional): legend font size
     legend_bbox_to_anchor (tuple, optional): coordinates for bbox anchor
     legend_loc (str): legend location
@@ -4003,7 +4006,7 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
     legend_labelspacing (float, optional): vertical space between entries (Default: 0.5; only for html plots)
     legend_borderpad (float, optional): padding inside legend box (Default: 0.5; only for html plots)
     legend_handlelength (float, optional): marker length (Default: 1; only for html plots)
-    legend_size_html_multiplier (float, optional): legend size multiplier for html plots (Default: 1.0)
+    html_size_multiplier (float, optional): legend size multiplier for html plots (Default: 1.0)
     dpi (int, optional): dots per inch for saving the plot
     transparent (bool, optional): whether to make the background transparent when saving the plot (Default: True)
     show (bool, optional): show plot (Default: True)
@@ -4060,18 +4063,18 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
             figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
             x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_pad=x_axis_pad,x_ticks_size=x_ticks_size,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,
             y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_dims=y_axis_dims,y_axis_pad=y_axis_pad,y_ticks_size=y_ticks_size,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,
-            legend_title=legend_title,legend_title_size=legend_title_size,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_ncol=legend_ncol,
-            legend_columnspacing=legend_columnspacing, legend_handletextpad=legend_handletextpad, legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad, legend_handlelength=legend_handlelength,legend_size_html_multiplier=legend_size_html_multiplier,
+            legend_title=legend_title,legend_title_size=legend_title_size,legend_title_weight=legend_title_weight,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_ncol=legend_ncol,
+            legend_columnspacing=legend_columnspacing, legend_handletextpad=legend_handletextpad, legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad, legend_handlelength=legend_handlelength,html_size_multiplier=html_size_multiplier,
             dpi=dpi,transparent=transparent,show=show,space_capitalize=space_capitalize,PDB_pt=PDB_pt,**kwargs)
 
 def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: tuple=None, z_col: str=None, z_var: str=None, label: str='Edit', label_size: int=16,
         label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None,
         FC_threshold: float=1, pval_threshold: float=1, file: str=None, dir: str=None, color: str='lightgray', alpha: float=0.5, edgecol: str='black', vertical: bool=True,
-        figsize: tuple = (5, 5), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
+        figsize: tuple=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
-        legend_title: str='',legend_title_size: int=12, legend_size: int = 12, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1,
-        legend_columnspacing: int=-4, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, legend_size_html_multiplier: float=0.75, 
+        legend_title: str='',legend_title_size: int=12, legend_title_weight: str='bold', legend_size: int = 12, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1,
+        legend_columnspacing: int=-4, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, html_size_multiplier: float=1.5, 
         display_legend: bool=True, display_labels: bool=True, display_lines: bool=False, display_axis: bool=True, return_df: bool=True, dpi: int = 0, transparent: bool=True, show: bool=True, space_capitalize: bool=True, 
         **kwargs) -> pd.DataFrame:
     ''' 
@@ -4131,6 +4134,7 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: t
     y_ticks (list, optional): y-axis tick values
     legend_title (str, optional): legend title
     legend_title_size (str, optional): legend title font size
+    legend_title_weight (str, optional): legend title bold, italics, etc.
     legend_size (str, optional): legend font size
     legend_bbox_to_anchor (tuple, optional): coordinates for bbox anchor
     legend_loc (str): legend location
@@ -4140,7 +4144,7 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: t
     legend_labelspacing (float, optional): vertical space between entries (Default: 0.5; only for html plots)
     legend_borderpad (float, optional): padding inside legend box (Default: 0.5; only for html plots)
     legend_handlelength (float, optional): marker length (Default: 0.5; only for html plots)
-    legend_size_html_multiplier (float, optional): legend size multiplier for html plots (Default: 0.75)
+    html_size_multiplier (float, optional): size multiplier for html plots (Default: 1.5)
     display_legend (bool, optional): display legend on plot (Default: True)
     display_labels (bool, optional): display labels for significant values (Default: True)
     display_lines (bool, optional): display threshold lines (Default: False)
@@ -4192,19 +4196,19 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: t
           figsize=figsize, title=title, title_size=title_size, title_weight=title_weight, title_font=title_font, 
           x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad, x_ticks_size = x_ticks_size, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
           y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_dims=y_axis_dims, y_axis_pad=y_axis_pad, y_ticks_size=y_ticks_size, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
-          legend_title=legend_title, legend_title_size=legend_title_size, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_ncol=legend_ncol, 
-          legend_columnspacing=legend_columnspacing, legend_handletextpad=legend_handletextpad, legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad, legend_handlelength=legend_handlelength, legend_size_html_multiplier=legend_size_html_multiplier,
+          legend_title=legend_title, legend_title_size=legend_title_size, legend_title_weight=legend_title_weight, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_ncol=legend_ncol, 
+          legend_columnspacing=legend_columnspacing, legend_handletextpad=legend_handletextpad, legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad, legend_handlelength=legend_handlelength, html_size_multiplier=html_size_multiplier,
           display_legend=display_legend, display_labels=display_labels, display_lines=display_lines, display_axis=display_axis, return_df=return_df, dpi=dpi, show=show, transparent=transparent, space_capitalize=space_capitalize,
           PDB_pt=PDB_pt,
           **kwargs)
 
 def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size_dims: tuple=None, z_col: str=None, z_var: str=None, label: str='Edit', label_size: int=16,
         label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None, ss_h: int=None, ss_y: int=None,
-        file: str=None, dir: str=None, edgecol: str='black', figsize=(5,5), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
+        file: str=None, dir: str=None, edgecol: str='black', figsize: tuple=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
-        legend_title: str='',legend_title_size: int=12, legend_size: int = 12, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1, 
-        legend_columnspacing: int=-3, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, legend_size_html_multiplier: float=0.75,
+        legend_title: str='',legend_title_size: int=12, legend_title_weight: str='bold', legend_size: int = 12, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1, 
+        legend_columnspacing: int=-3, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, html_size_multiplier: float=1.5,
         display_legend: bool=True, display_labels: bool=True, display_axis: bool=True, return_df: bool=True, dpi: int = 0, transparent: bool=True, show: bool=True, space_capitalize: bool=True,
         **kwargs) -> pd.DataFrame:
     ''' 
@@ -4260,6 +4264,7 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
     y_ticks (list, optional): y-axis tick values
     legend_title (str, optional): legend title
     legend_title_size (str, optional): legend title font size
+    legend_title_weight (str, optional): legend title bold, italics, etc.
     legend_size (str, optional): legend font size
     legend_bbox_to_anchor (tuple, optional): coordinates for bbox anchor
     legend_loc (str): legend location
@@ -4269,7 +4274,7 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
     legend_labelspacing (float, optional): vertical space between entries (Default: 0.5; only for html plots)
     legend_borderpad (float, optional): padding inside legend box (Default: 0.5; only for html plots)
     legend_handlelength (float, optional): marker length (Default: 0.5; only for html plots)
-    legend_size_html_multiplier (float, optional): legend size multiplier for html plots (Default: 0.75)
+    html_size_multiplier (float, optional): size multiplier for html plots (Default: 1.5)
     display_legend (bool, optional): display legend on plot (Default: True)
     display_labels (bool, optional): display labels for significant values (Default: True)
     display_axis (bool, optional): display x-axis line (Default: True)
@@ -4315,12 +4320,12 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
 
         if is_html == True:
             # Match title fontsize for html plots
-            x_axis_size=title_size
-            y_axis_size=title_size
-            x_ticks_size=title_size
-            y_ticks_size=title_size
-            legend_title_size=title_size
-            legend_size=title_size*legend_size_html_multiplier
+            x_axis_size=x_axis_size*html_size_multiplier
+            y_axis_size=y_axis_size*html_size_multiplier
+            x_ticks_size=x_ticks_size*html_size_multiplier
+            y_ticks_size=y_ticks_size*html_size_multiplier
+            legend_title_size=legend_title_size*html_size_multiplier
+            legend_size=legend_size*html_size_multiplier*.75
 
             # Detailed labels for html plots
             if label_info == True:
@@ -4441,6 +4446,7 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
     # with legend
     if display_legend == True:
         if size_norm is not None and size is not None: # Add consistent size legend with 5 representative values
+            legend_title_props = FontProperties(weight=legend_title_weight, size=legend_title_size)
             if stys is not None and mark_order is not None and stys_order is not None: # Add stys legend too
                 legend_vals = np.linspace(_vmin, _vmax, len(mark_order))
                 for lv,mark,sty in zip(legend_vals,mark_order,stys_order):
@@ -4449,7 +4455,7 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
                     if legend_bbox_to_anchor == (1,1): legend_bbox_to_anchor = (-0.1,-0.2)
                     if legend_ncol == 1: legend_ncol = 3
                     plt.legend(title=legend_title if legend_title!='' else f'{size}; {stys}', 
-                                title_fontsize=legend_title_size, fontsize=legend_size,
+                                title_fontproperties=legend_title_props, fontsize=legend_size,
                                 bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol,
                                 columnspacing=legend_columnspacing,    # space between columns
                                 handletextpad=legend_handletextpad,    # space between marker and text
@@ -4458,14 +4464,14 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
                                 handlelength=legend_handlelength)      # marker length
                 else:
                     plt.legend(title=legend_title if legend_title!='' else f'{size}; {stys}', 
-                            title_fontsize=legend_title_size, fontsize=legend_size,
+                            title_fontproperties=legend_title_props, fontsize=legend_size,
                             bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol)
             else:
                 legend_vals = np.linspace(_vmin, _vmax, 5)
                 for lv in legend_vals:
                     plt.scatter([], [], s=np.interp(lv, [_vmin, _vmax], sizes), color='lightgray', label=f'{lv:.2g}')
                 plt.legend(title=legend_title if legend_title!='' else size, 
-                            title_fontsize=legend_title_size, fontsize=legend_size,
+                            title_fontproperties=legend_title_props, fontsize=legend_size,
                             bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol)
     
     # with labels
@@ -4530,11 +4536,11 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
 def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: str, size: str | bool=None, size_dims: tuple=None, z_col: str=None, z_var: str=None,
         conservative: bool=True, method: str='pearson', weighted: bool=True, label: str='Edit', label_size: int=16,
         label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None,
-        file: str=None, dir: str=None, edgecol: str='black', figsize=(5,5), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
+        file: str=None, dir: str=None, edgecol: str='black', figsize: tuple=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
-        legend_title: str='',legend_title_size: int=12, legend_size: int = 12, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1,
-        legend_columnspacing: int=-4, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, legend_size_html_multiplier: float=0.75,
+        legend_title: str='',legend_title_size: int=12, legend_title_weight: str = 'bold', legend_size: int = 12, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1,
+        legend_columnspacing: int=-4, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, html_size_multiplier: float=1.5,
         display_legend: bool=True, display_labels: bool=True, display_axis: bool=True, return_df: bool=True, dpi: int = 0, transparent: bool=True, show: bool=True, space_capitalize: bool=True,
         **kwargs) -> pd.DataFrame:
     ''' 
@@ -4593,6 +4599,7 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
     y_ticks (list, optional): y-axis tick values
     legend_title (str, optional): legend title
     legend_title_size (str, optional): legend title font size
+    legend_title_weight (str, optional): legend title bold, italics, etc
     legend_size (str, optional): legend font size
     legend_bbox_to_anchor (tuple, optional): coordinates for bbox anchor
     legend_loc (str): legend location
@@ -4602,7 +4609,7 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
     legend_labelspacing (float, optional): vertical space between entries (Default: 0.5; only for html plots)
     legend_borderpad (float, optional): padding inside legend box (Default: 0.5; only for html plots)
     legend_handlelength (float, optional): marker length (Default: 0.5; only for html plots)
-    legend_size_html_multiplier (float, optional): legend size multiplier for html plots (Default: 0.75)
+    html_size_multiplier (float, optional): size multiplier for html plots (Default: 1.5)
     display_legend (bool, optional): display legend on plot (Default: True)
     display_labels (bool, optional): display labels for significant values (Default: True)
     display_axis (bool, optional): display x- and y-axis lines (Default: True)
@@ -4678,12 +4685,12 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
 
         if is_html == True:
             # Match title fontsize for html plots
-            x_axis_size=title_size
-            y_axis_size=title_size
-            x_ticks_size=title_size
-            y_ticks_size=title_size
-            legend_title_size=title_size
-            legend_size=title_size*legend_size_html_multiplier
+            x_axis_size=x_axis_size*html_size_multiplier
+            y_axis_size=y_axis_size*html_size_multiplier
+            x_ticks_size=x_ticks_size*html_size_multiplier
+            y_ticks_size=y_ticks_size*html_size_multiplier
+            legend_title_size=legend_title_size*html_size_multiplier
+            legend_size=legend_size*html_size_multiplier*.75
 
             # Detailed labels for html plots
             if label_info == True:
@@ -4822,6 +4829,7 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
     # with legend
     if display_legend == True:
         if size_norm is not None and size is not None: # Add consistent size legend with 5 representative values
+            legend_title_props = FontProperties(weight=legend_title_weight, size=legend_title_size)
             if stys is not None and mark_order is not None and stys_order is not None: # Add stys legend too
                 legend_vals = np.linspace(_vmin, _vmax, len(mark_order))
                 for lv,mark,sty in zip(legend_vals,mark_order,stys_order):
@@ -4830,7 +4838,7 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
                     if legend_bbox_to_anchor == (1,1): legend_bbox_to_anchor = (-0.1,-0.15)
                     if legend_ncol == 1: legend_ncol = 3
                     plt.legend(title=legend_title if legend_title!='' else f'{size}; {stys}', 
-                                title_fontsize=legend_title_size, fontsize=legend_size,
+                                title_fontproperties=legend_title_props, fontsize=legend_size,
                                 bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol,
                                 columnspacing=legend_columnspacing,    # space between columns
                                 handletextpad=legend_handletextpad,    # space between marker and text
@@ -4839,7 +4847,7 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
                                 handlelength=legend_handlelength)      # marker length
                 else:
                     plt.legend(title=legend_title if legend_title!='' else f'{size}; {stys}', 
-                                title_fontsize=legend_title_size, fontsize=legend_size,
+                                title_fontproperties=legend_title_props, fontsize=legend_size,
                                 bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol)
                 
             else:
@@ -4847,7 +4855,7 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
                 for lv in legend_vals:
                     plt.scatter([], [], s=np.interp(lv, [_vmin, _vmax], sizes), color='lightgray', label=f'{lv:.2g}')
                 plt.legend(title=legend_title if legend_title!='' else size, 
-                            title_fontsize=legend_title_size, fontsize=legend_size,
+                            title_fontproperties=legend_title_props, fontsize=legend_size,
                             bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol)
     
     # with labels
@@ -4913,7 +4921,7 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
 def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str, wt_res: int, log2: bool=True, cutoff_col: str='count_mean_compare', cutoff: float=0, aa: str='aa', z_col: str=None, z_var: str=None, label: str='Edit',
         file: str=None, dir: str=None, edgecol: str='black', lw: int=1, center: float=0, cmap: str="seismic", cmap_WT: str='forestgreen', cmap_not_WT: str='lightgray', sq: bool=False, 
         cbar: bool=True, cbar_label: str=None, cbar_label_size: int=None, cbar_label_weight: str='bold', cbar_tick_size: int=None, cbar_shrink: float=None, cbar_aspect: int=None, cbar_pad: float=None, cbar_orientation: str=None,
-        title: str='', title_size: int=12, title_weight: str='bold', title_font: str='Arial', figsize: tuple = (5, 5), vertical: bool=True,
+        title: str='', title_size: int=12, title_weight: str='bold', title_font: str='Arial',  figsize: tuple=(6,6), vertical: bool=True,
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=None, x_ticks_font: str='Arial',
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=None, y_ticks_font: str='Arial',
         dpi: int=0, transparent: bool=True, show: bool=True, **kwargs):

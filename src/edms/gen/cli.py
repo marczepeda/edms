@@ -107,7 +107,7 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
     subparser.add_argument("-ec", "--edgecol", type=str, default="black", help="Edge color for scatter points")
 
     # Figure appearance
-    subparser.add_argument("-fs", "--figsize", type=parse_tuple_int, default=(5,5), help="Figure size as a tuple: width,height")
+    subparser.add_argument("-fs", "--figsize", type=parse_tuple_int, default=argparse.SUPPRESS, help="Figure size as a tuple: width,height")
     subparser.add_argument("-t", "--title", type=str, default="", help="Plot title")
     subparser.add_argument("-ts", "--title_size", type=int, default=12, help="Plot title font size")
     subparser.add_argument("-tw", "--title_weight", type=str, default="bold", help="Plot title font weight (e.g., bold, normal)")
@@ -141,6 +141,7 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
     # Legend settings
     subparser.add_argument("-lt", "--legend_title", type=str, default="", help="Legend title")
     subparser.add_argument("-lts", "--legend_title_size", type=int, default=12, help="Legend title font size")
+    subparser.add_argument("-ltw", "--legend_title_weight", type=str, default='bold', help="Legend title bold, italics, etc.")
     subparser.add_argument("-ls", "--legend_size", type=int, default=12, help="Legend font size")
     subparser.add_argument("-lba", "--legend_bbox_to_anchor", type=parse_tuple_float, default=(1,1), help="Bounding box anchor position for legend")
     subparser.add_argument("-ll", "--legend_loc", type=str, default="upper left", help="Location of the legend in the plot")
@@ -153,8 +154,8 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
     subparser.add_argument('-lls', "--legend_labelspacing", type=float, default=argparse.SUPPRESS, help='vertical space between entries in legend; only for html plots')
     subparser.add_argument('-lbp', "--legend_borderpad", type=float, default=argparse.SUPPRESS, help='padding inside legend box; only for html plots')
     subparser.add_argument('-lhl', "--legend_handlelength", type=float, default=argparse.SUPPRESS, help='marker length in legend; only for html plots')
-    subparser.add_argument('-lshm', "--legend_size_html_multiplier", type=float, default=argparse.SUPPRESS, help='legend size multiplier for html plots')
-
+    subparser.add_argument("-hsm",'--html_size_multiplier', type=float, default=argparse.SUPPRESS, help='size multiplier for html plots')
+    
     # Display and formatting
     subparser.add_argument("-d", "--dpi", type=int, help="Figure dpi (Default: 1200 for non-HTML, 150 for HTML)", default=0)
     subparser.add_argument("-nt", "--not_transparent", dest='transparent', action="store_false", help="Don't save plot with transparent background", default=True)
@@ -211,11 +212,12 @@ def add_common_plot_cat_args(subparser, fastq_parser=False, pwes_parsers=False):
     subparser.add_argument("-ecap", "--errcap", type=float, default=0.1, help="Cap size on error bars")
 
     # Figure appearance
-    subparser.add_argument("-fs", "--figsize", type=parse_tuple_int, default=(5,5), help="Figure size formatted 'width,height'")
+    subparser.add_argument("-fs", "--figsize", type=parse_tuple_int, default=argparse.SUPPRESS, help="Figure size formatted 'width,height'")
     subparser.add_argument("-t", "--title", type=str, default="", help="Plot title text")
     subparser.add_argument("-ts", "--title_size", type=int, default=12, help="Font size of the plot title")
     subparser.add_argument("-tw", "--title_weight", type=str, default="bold", help="Font weight of the plot title (e.g., bold, normal)")
     subparser.add_argument("-tf", "--title_font", type=str, default="Arial", help="Font family for the plot title")
+    
     # X-axis settings
     subparser.add_argument("-xa", "--x_axis", type=str, default="", help="X-axis label text")
     subparser.add_argument("-xas", "--x_axis_size", type=int, default=12, help="Font size for the X-axis label")
@@ -245,6 +247,7 @@ def add_common_plot_cat_args(subparser, fastq_parser=False, pwes_parsers=False):
     # Legend settings
     subparser.add_argument("-lt", "--legend_title", type=str, default="", help="Title for the legend")
     subparser.add_argument("-lts", "--legend_title_size", type=int, default=12, help="Font size for the legend title")
+    subparser.add_argument("-ltw", "--legend_title_weight", type=str, default='bold', help="Legend title bold, italics, etc.")
     subparser.add_argument("-ls", "--legend_size", type=int, default=12, help="Font size for legend items")
     subparser.add_argument("-lba", "--legend_bbox_to_anchor", type=parse_tuple_float, default=(1, 1), help="Anchor position of the legend bounding box")
     subparser.add_argument("-ll", "--legend_loc", type=str, default="upper left", help="Location of the legend on the plot")
@@ -257,8 +260,8 @@ def add_common_plot_cat_args(subparser, fastq_parser=False, pwes_parsers=False):
     subparser.add_argument('-lls', "--legend_labelspacing", type=float, default=argparse.SUPPRESS, help='vertical space between entries in legend; only for html plots')
     subparser.add_argument('-lbp', "--legend_borderpad", type=float, default=argparse.SUPPRESS, help='padding inside legend box; only for html plots')
     subparser.add_argument('-lhl', "--legend_handlelength", type=float, default=argparse.SUPPRESS, help='marker length in legend; only for html plots')
-    subparser.add_argument('-lshm', "--legend_size_html_multiplier", type=float, default=argparse.SUPPRESS, help='legend size multiplier for html plots')
-
+    subparser.add_argument("-hsm",'--html_size_multiplier', type=float, default=argparse.SUPPRESS, help='size multiplier for html plots')
+    
     # Display and formatting
     subparser.add_argument("-d", "--dpi", type=int, help="Figure dpi (Default: 1200 for non-HTML, 150 for HTML)", default=0)
     subparser.add_argument("-nt", "--not_transparent", dest='transparent', action="store_false", help="Don't save plot with transparent background", default=True)
@@ -295,7 +298,7 @@ def add_common_plot_dist_args(subparser):
     subparser.add_argument("-despine", "--despine", action="store_true", help="Remove plot spines (despine)", default=False)
 
     # Figure appearance
-    subparser.add_argument("-fs", "--figsize", type=parse_tuple_int, default=(5,5), help="Figure size formatted as 'width,height'")
+    subparser.add_argument("-fs", "--figsize", type=parse_tuple_int, default=argparse.SUPPRESS, help="Figure size formatted as 'width,height'")
     subparser.add_argument("-t", "--title", type=str, default="", help="Plot title text")
     subparser.add_argument("-ts", "--title_size", type=int, default=12, help="Plot title font size")
     subparser.add_argument("-tw", "--title_weight", type=str, default="bold", help="Plot title font weight (e.g., bold, normal)")
@@ -329,6 +332,7 @@ def add_common_plot_dist_args(subparser):
     # Legend
     subparser.add_argument("-lt", "--legend_title", type=str, default="", help="Title text for the legend")
     subparser.add_argument("-lts", "--legend_title_size", type=int, default=12, help="Font size of the legend title")
+    subparser.add_argument("-ltw", "--legend_title_weight", type=str, default='bold', help="Legend title bold, italics, etc.")
     subparser.add_argument("-ls", "--legend_size", type=int, default=12, help="Font size for legend items")
     subparser.add_argument("-lba", "--legend_bbox_to_anchor", type=parse_tuple_float, default=(1, 1), help="Legend bbox anchor position")
     subparser.add_argument("-ll", "--legend_loc", type=str, default="upper left", help="Legend location on the plot")
@@ -400,7 +404,7 @@ def add_common_plot_heat_args(subparser, fastq_parser=False, stat_parser=False):
     subparser.add_argument("-ts", "--title_size", type=int, default=12, help="Font size of the title")
     subparser.add_argument("-tw", "--title_weight", type=str, default="bold", help="Font weight of the title (e.g., bold, normal)")
     subparser.add_argument("-tf", "--title_font", type=str, default="Arial", help="Font family for the title")
-    subparser.add_argument("-fs", "--figsize", type=parse_tuple_int, default=(5,5), help="Figure size formatted as 'width,height'")
+    subparser.add_argument("-fs", "--figsize", type=parse_tuple_int, default=argparse.SUPPRESS, help="Figure size formatted as 'width,height'")
 
     # X-axis
     subparser.add_argument("-xa", "--x_axis", type=str, default="", help="X-axis label")
@@ -455,7 +459,7 @@ def add_common_plot_stack_args(subparser, fastq_parser=False):
         subparser.add_argument("-PDB_pt", "--PDB_pt", type=str, default=argparse.SUPPRESS, help="PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information")
 
     # Figure & layout
-    subparser.add_argument("-fs", "--figsize", type=parse_tuple_int, default=(5,5), help="Figure size formatted as 'width,height'")
+    subparser.add_argument("-fs", "--figsize", type=parse_tuple_int, default=argparse.SUPPRESS, help="Figure size formatted as 'width,height'")
     subparser.add_argument("-t", "--title", type=str, default="", help="Plot title")
     subparser.add_argument("-ts", "--title_size", type=int, default=12, help="Font size of the title")
     subparser.add_argument("-tw", "--title_weight", type=str, default="bold", help="Font weight of the title (e.g., bold, normal)")
@@ -485,6 +489,7 @@ def add_common_plot_stack_args(subparser, fastq_parser=False):
     # Legend options
     subparser.add_argument("-lt", "--legend_title", type=str, default="", help="Legend title text")
     subparser.add_argument("-lts", "--legend_title_size", type=int, default=12, help="Font size of the legend title")
+    subparser.add_argument("-ltw", "--legend_title_weight", type=str, default='bold', help="Legend title bold, italics, etc.")
     subparser.add_argument("-ls", "--legend_size", type=int, default=12, help="Font size for legend items")
     subparser.add_argument("-lba", "--legend_bbox_to_anchor", type=parse_tuple_float, default=(1, 1), help="Anchor position for the legend bounding box")
     subparser.add_argument("-ll", "--legend_loc", type=str, default="upper left", help="Legend location on the plot")
@@ -494,7 +499,7 @@ def add_common_plot_stack_args(subparser, fastq_parser=False):
     subparser.add_argument("-lls", "--legend_labelspacing", type=float, default=argparse.SUPPRESS, help="Vertical space between entries in legend; only for html plots")
     subparser.add_argument("-lbp", "--legend_borderpad", type=float, default=argparse.SUPPRESS, help="Padding inside legend box; only for html plots")
     subparser.add_argument("-lhl", "--legend_handlelength", type=float, default=argparse.SUPPRESS, help="Marker length in legend; only for html plots")
-    subparser.add_argument("-lshm", "--legend_size_html_multiplier", type=float, default=argparse.SUPPRESS, help="Legend size multiplier for html plots")
+    subparser.add_argument("-hsm",'--html_size_multiplier', type=float, default=argparse.SUPPRESS, help='size multiplier for html plots')
 
     # Display and formatting
     subparser.add_argument("-d","--dpi", type=int, help="Figure dpi (Default: 1200 for non-HTML, 150 for HTML)", default=0)
@@ -541,7 +546,7 @@ def add_common_plot_vol_args(subparser, fastq_parser=False):
     subparser.add_argument("-v","--vertical", action="store_true", help="Use vertical layout for plot", default=False)
 
     # Figure setup
-    subparser.add_argument("-fs","--figsize", type=parse_tuple_int, default=(5,5), help="Figure size formatted as 'width,height'")
+    subparser.add_argument("-fs","--figsize", type=parse_tuple_int, default=argparse.SUPPRESS, help="Figure size formatted as 'width,height'")
     subparser.add_argument("-t","--title", type=str, default="", help="Plot title")
     subparser.add_argument("-ts","--title_size", type=int, default=12, help="Font size for plot title")
     subparser.add_argument("-tw","--title_weight", type=str, default="bold", help="Font weight for plot title (e.g., bold, normal)")
@@ -573,6 +578,7 @@ def add_common_plot_vol_args(subparser, fastq_parser=False):
     # Legend
     subparser.add_argument("-lt","--legend_title", type=str, default="", help="Title for the legend")
     subparser.add_argument("-lts","--legend_title_size", type=int, default=12, help="Font size for legend title")
+    subparser.add_argument("-ltw", "--legend_title_weight", type=str, default='bold', help="Legend title bold, italics, etc.")
     subparser.add_argument("-ls","--legend_size", type=int, default=12, help="Font size for legend items")
     subparser.add_argument("-lba","--legend_bbox_to_anchor", type=parse_tuple_float, default=(1, 1), help="Bounding box anchor for legend")
     subparser.add_argument("-ll","--legend_loc", type=str, default="upper left", help="Legend location on the plot")
@@ -582,7 +588,7 @@ def add_common_plot_vol_args(subparser, fastq_parser=False):
     subparser.add_argument("-lls",'--legend_labelspacing', type=float, default=argparse.SUPPRESS, help='vertical space between entries in legend; only for html plots')
     subparser.add_argument("-lbp",'--legend_borderpad', type=float, default=argparse.SUPPRESS, help='padding inside legend box; only for html plots')
     subparser.add_argument("-lhl",'--legend_handlelength', type=float, default=argparse.SUPPRESS, help='marker length in legend; only for html plots')
-    subparser.add_argument("-lshm",'--legend_size_html_multiplier', type=float, default=argparse.SUPPRESS, help='legend size multiplier for html plots')
+    subparser.add_argument("-hsm",'--html_size_multiplier', type=float, default=argparse.SUPPRESS, help='size multiplier for html plots')
     
     # Boolean switches
     subparser.add_argument("-ddl","--dont_display_legend", action="store_false", help="Don't display legend on plot", default=True)
