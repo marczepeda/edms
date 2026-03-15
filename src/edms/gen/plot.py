@@ -1051,7 +1051,7 @@ def _apply_formatter_on_ax(*, ax, df_sub: pd.DataFrame, graph: str,
 def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
         cols: str = None, cols_ord: list = None, cols_exclude: list | str = None,
         stys: str = None, stys_order: list = [], mark_order: list = [], label: str | None = None,
-        facetx: str = None, facety: str = None, share_axes: bool = True, facetx_order: list = None, facety_order: list = None,
+        facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None,
         file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', alpha: float = 1.0, edgecol: str = 'black',
         figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
         x_axis: str | list = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial',
@@ -1085,7 +1085,6 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
     label (str, optional): column name for point labels; static text for images, interactive tooltips for HTML
     facetx (str, optional): column name for facet columns (creates one subplot per category in this column, arranged in separate columns)
     facety (str, optional): column name for facet rows (creates one subplot per category in this column, arranged in separate rows)
-    share_axes (bool, optional): whether facet subplots should share x and y axes (default: True)
     facetx_order (list, optional): order of facet columns
     facety_order (list, optional): order of facet rows
     file (str, optional): save plot to filename
@@ -1159,6 +1158,7 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
 
     # Increase fontsize for html plots
     if is_html==True:
+        title_size=title_size*html_size_multiplier
         x_axis_size=x_axis_size*html_size_multiplier
         y_axis_size=y_axis_size*html_size_multiplier
         x_ticks_size=x_ticks_size*html_size_multiplier
@@ -1179,7 +1179,7 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
     fig, axes = plt.subplots(
         nrows=nrows, ncols=ncols,
         figsize=figsize,
-        sharex=share_axes, sharey=share_axes
+        sharex=facety is not None, sharey=facetx is not None
     )
     axes = np.array(axes).reshape(nrows, ncols)
 
@@ -1421,7 +1421,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
         cats_ord: list = None, cats_exclude: list|str = None,
         cols: str = None, cols_ord: list = None, cols_exclude: list | str = None,
         line: float = None, facetx: str = None, facety: str = None,
-        share_axes: bool = True, facetx_order: list = None, facety_order: list = None,
+        facetx_order: list = None, facety_order: list = None,
         file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', alpha: float = 1.0,
         dodge: bool = False, jitter: bool = True, size: float = 5,
         edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
@@ -1456,7 +1456,6 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
     line (float, optional): add horizontal line at y value or vertical line at x value
     facetx (str, optional): column name for facet columns (creates one subplot per category in this column, arranged in separate columns)
     facety (str, optional): column name for facet rows (creates one subplot per category in this column, arranged in seperate rows)
-    share_axes (bool, optional): whether facet subplots should share x and y axes (default: True)
     facetx_order (list, optional): order of facet columns
     facety_order (list, optional): order of facet rows
     file (str, optional): save plot to filename
@@ -1528,6 +1527,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
     # Increase fontsize for html plots
     is_html = (file is not None and file.endswith('.html'))
     if is_html==True:
+        title_size=title_size*html_size_multiplier
         x_axis_size=x_axis_size*html_size_multiplier
         y_axis_size=y_axis_size*html_size_multiplier
         x_ticks_size=x_ticks_size*html_size_multiplier
@@ -1561,7 +1561,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
     fig, axes = plt.subplots(
         nrows=nrows, ncols=ncols,
         figsize=figsize,
-        sharex=share_axes, sharey=share_axes
+        sharex=facety is not None, sharey=facetx is not None
     )
     axes = np.array(axes).reshape(nrows, ncols)
 
@@ -2264,6 +2264,7 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
     # Increase fontsize for html plots
     if is_html:
         if file.endswith('.html')==True:
+            title_size=title_size*html_size_multiplier
             x_axis_size=x_axis_size*html_size_multiplier
             y_axis_size=y_axis_size*html_size_multiplier
             x_ticks_size=x_ticks_size*html_size_multiplier
@@ -2465,6 +2466,7 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str 
     
     # Increase fontsize for html plots
     if is_html==True:
+        title_size=title_size*html_size_multiplier
         x_axis_size=x_axis_size*html_size_multiplier
         y_axis_size=y_axis_size*html_size_multiplier
         x_ticks_size=x_ticks_size*html_size_multiplier

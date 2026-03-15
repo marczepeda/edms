@@ -1,5 +1,5 @@
 '''
-Module: fastq.py
+Module: pwes.py
 Author: Marc Zepeda
 Created: 2026-03-01
 Adapted from: BE-SCAN (Calvin Hu)
@@ -34,8 +34,9 @@ Usage:
 - [Iterative Clustering]
     - safe_slug: Make a filesystem-friendly folder name component.
     - mask_equals: Equality mask that treats NaN == NaN for grouping purposes.
-### Test ###
+### Test with pymol ###
 - [PWES Cluster Mapping]
+    - make_cluster_color_dict(): Returns dict mapping cluster ID -> RGB tuple, in sorted cluster order.
     - pymol_script(): Generates a PyMOL script to display selected residues as separate objects.
 
 [Plot Functions]
@@ -44,11 +45,10 @@ Usage:
 - torn: generates tornado plots for visualizing PWES clusters
 - heatmap: generates heatmap of PWES scores, with options for clustering and showing colorbar
 - heatmap_cbar: generates a standalone colorbar for the heatmap with specified orientation and styling.
-### Test ###
 - clustermap: generates clustered heatmap of PWES scores, with options for coloring clusters and styling.
 
 [Main Function]
-### Revise to include pymol_script() automation ### Test ###
+### Test with pymol ###
 - clustering: Compute 3D PWES clustering analysis
     - run_one: Inner function that runs the clustering pipeline for a single group of data (used in iterative mode)
 '''
@@ -105,7 +105,7 @@ def hex_to_rgb(hex_color):
     Converts a hex color code to an RGB tuple.
     """
     hex_color = hex_color.lstrip("#")
-    return tuple(int(hex_color[i:i+2], 16)/256 for i in (0, 2, 4))
+    return tuple(int(hex_color[i:i+2], 16)/255 for i in (0, 2, 4)) # 256 to scale to 0-1 for matplotlib
 
 def hex_list_to_rgb_list(hex_color_list):
     """
@@ -144,7 +144,6 @@ def fillgaps(
     return full_matrix
 
 ### DISTANCE FACTOR (e^(-d^2 / 2t^2))
-
 def process_pdb(pdb_file, chains):
     '''
     Given PDB or Alphafold .pdb file, returns dataframe with X, Y, Z coordinates and amino acid number.
@@ -216,7 +215,6 @@ def gauss(distance, std):
     return dist
 
 ### ENRICHMENT SCORE CALCULATIONS
-
 def hill(lfc, m, theta):
     """
     From NZL code:
@@ -256,7 +254,6 @@ def calculate_pw_score(df_score, scores_col, tanh_a):
     return df_pws
 
 ### CALCULATE PWES
-
 def calculate_pwes(df_gauss, df_pws, list_aas, pos_only):
     """
     Calculate PWES
@@ -352,26 +349,30 @@ def _safe_slug(x: Any, max_len: int = 120) -> str:
     s = re.sub(r"[^A-Za-z0-9._=-]+", "-", s)
     return s[:max_len]
 
-def _mask_equals(series: pd.Series, value: Any) -> pd.Series:
-    """
-    _mask_equals(): Equality mask that treats NaN == NaN for grouping purposes.
-    
-    Parameters:
-    series (pd.Series): pandas Series to compare
-    value (Any): value to compare against (can be NaN)
-    """
-    if pd.isna(value):
-        return series.isna()
-    return series == value
-
 ### PWES Cluster Mapping
+def make_cluster_color_dict(cluster_ids, cmap_name="turbo"):
+    """
+    make_cluster_color_dict(): Returns dict mapping cluster ID -> RGB tuple, in sorted cluster order.
+
+    Parameters:
+    cluster_ids (iterable): Iterable of cluster identifiers (e.g., [1, 2, 3] or ['A', 'B', 'C'])
+    cmap_name (str, optional): Name of the matplotlib colormap to use (Default: "turbo")
+    """
+    cluster_ids = sorted(pd.Series(list(cluster_ids)).dropna().unique().tolist())
+    cmap = plt.get_cmap(cmap_name, max(len(cluster_ids), 1))
+
+    return {
+        cl: tuple(cmap(i)[:3])
+        for i, cl in enumerate(cluster_ids)
+    }
+
 def pymol_script(
     dir: str,
     file: str,
     pdb_filename: str,
     residue_dict: dict,
-    colors: list, 
-    ):
+    colors: list,
+):
     """
     pymol_script(): Generates a PyMOL script to display selected residues as separate objects.
 
@@ -379,31 +380,48 @@ def pymol_script(
     dir (str): Path to save the generated PyMOL script.
     file (str): Name of the file to save the generated PyMOL script.
     pdb_filename (str): Path to the PDB file to load in PyMOL
-    residue_dict (dict): Dictionary where keys are cluster identifiers and values are lists of residues (e.g., [('A', 123), ('B', 45)])
+    residue_dict (dict): Dictionary where keys are cluster identifiers and values are lists
+        of residues, e.g. ['O0168', 'O0172'] or [168, 172]
     colors (list): List of RGB tuples corresponding to each cluster for coloring the residues.
+        Must be in the same order as residue_dict.items().
     """
     mkdir(dir)
-    with open(os.path.join(dir, file), 'w') as pymol_script:
-        pymol_script.write(f"load {pdb_filename}\n")
-        pymol_script.write(f"show cartoon\n")
-        pymol_script.write(f"color white\n")
-        pymol_script.write(f"zoom\n")
+
+    with open(os.path.join(dir, file), "w") as pymol_file:
+        pymol_file.write(f"load {pdb_filename}\n")
+        pymol_file.write("show cartoon\n")
+        pymol_file.write("color white\n")
+        pymol_file.write("zoom\n")
 
         for i, (key, vals) in enumerate(residue_dict.items()):
+            if vals is None or len(vals) == 0:
+                continue
+
             group_name = f"Cluster{key}"
-            # res has a format of ('A', 123) #
-            selection_str = " or ".join([f"resi {str(int(res[1:]))} and chain {res[0]} and name CA" for res in vals])
+
+            # Handle labels like 'O0168' or plain ints like 168
+            selection_parts = []
+            for res in vals:
+                if isinstance(res, str):
+                    chain = res[0]
+                    resi = str(int(res[1:]))
+                    selection_parts.append(f"resi {resi} and chain {chain} and name CA")
+                else:
+                    selection_parts.append(f"resi {int(res)} and name CA")
+
+            selection_str = " or ".join(selection_parts)
 
             color = colors[i]
-            color_hex = tuple_to_hex(color)
-            color_str = f'0x{color_hex}'
+            color_hex = tuple_to_hex(tuple(color))
+            color_str = f"0x{color_hex}"
+
             print(color_str)
-            
-            pymol_script.write(f"select {selection_str}\n")
-            pymol_script.write(f"create {group_name}, sele\n")
-            pymol_script.write(f"show spheres, {group_name}\n")
-            pymol_script.write(f"color {color_str}, {group_name}\n")
-            pymol_script.write(f"disable {group_name}\n")
+
+            pymol_file.write(f"select sele, {selection_str}\n")
+            pymol_file.write(f"create {group_name}, sele\n")
+            pymol_file.write(f"show spheres, {group_name}\n")
+            pymol_file.write(f"color {color_str}, {group_name}\n")
+            pymol_file.write(f"disable {group_name}\n")
 
 # Plot functions
 def hist(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new", line: float = None,
@@ -490,7 +508,7 @@ def hist(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new", line: float =
         dpi=dpi,transparent=transparent,show=show,space_capitalize=space_capitalize,**kwargs)
 
 def cat(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new",scores_col: str = "log2(FC)", line: float = None,
-    file: str = None, dir: str = None, palette_or_cmap: str = 'turbo', alpha: float = 1.0, dodge: bool = False, jitter: bool = True, size: float = 5, edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
+    file: str = None, dir: str = None, palette_or_cmap: str = 'turbo', alpha: float = 0.5, dodge: bool = False, jitter: bool = True, size: float = 5, edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
     figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
     x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
     y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
@@ -565,15 +583,6 @@ def cat(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new",scores_col: str
     x_axis = x_axis if x_axis else 'Cluster #'
 
     # Categorical bar chart of cluster counts
-    p.cat(graph='swarm', df=df_clus, x=cluster_col, y=scores_col, line=line,
-        file=f'{".".join(file.split(".")[:-1])}_swarm.{file.split(".")[-1]}' if file else f"swarm.all", dir=dir,palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
-        figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
-        x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_axis_pad=x_axis_pad,x_ticks_size=x_ticks_size,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,x_ticks=x_ticks,
-        y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_scale=y_axis_scale,y_axis_dims=y_axis_dims,y_axis_pad=y_axis_pad,y_ticks_size=y_ticks_size,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,y_ticks=y_ticks,
-        legend_title=legend_title,legend_title_size=legend_title_size,legend_title_weight=legend_title_weight,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_items=legend_items,legend_ncol=legend_ncol,
-        legend_columnspacing=legend_columnspacing,legend_handletextpad=legend_handletextpad,legend_labelspacing=legend_labelspacing,legend_borderpad=legend_borderpad,legend_handlelength=legend_handlelength,html_size_multiplier=html_size_multiplier,
-        dpi=dpi,transparent=transparent,show=show,space_capitalize=space_capitalize,**kwargs)
-    
     p.cat(graph='strip', df=df_clus, x=cluster_col, y=scores_col, line=line,
         file=f'{".".join(file.split(".")[:-1])}_strip.{file.split(".")[-1]}' if file else f"strip.all", dir=dir,palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
         figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
@@ -713,6 +722,7 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
 
         if is_html == True:
             # Match title fontsize for html plots
+            title_size=title_size*html_size_multiplier
             x_axis_size=x_axis_size*html_size_multiplier
             y_axis_size=y_axis_size*html_size_multiplier
             x_ticks_size=x_ticks_size*html_size_multiplier
@@ -936,7 +946,7 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
                 else:
                     mpld3.show(fig)
     
-    else: # Only plot clusters above or below specified thresholds on the same plot
+    else: # Plot all clusters on one plot, colored by cluster
         clus_df = add_label_info(df=df_clus, label=label[:-5] if is_html else label, label_size=label_size, label_info=label_info,
                         aa_properties=aa_properties, cBioPortal=cBioPortal, only_clinical=only_clinical, UniProt=UniProt, 
                         PhosphoSitePlus=PhosphoSitePlus, PDB_contacts=PDB_contacts, PDB_neighbors=PDB_neighbors)
@@ -1308,13 +1318,13 @@ def clustermap(
     '''
     # Get dataframes if paths are provided #
     if isinstance(df_scaled, str):
-        df_scaled = io.get(df_scaled)
+        df_scaled = io.get(df_scaled, index_col=0)
     if isinstance(df_clusters, str):
         df_clusters = io.get(df_clusters)
     
     # Get ndarray if linkage is provided as path #
     if isinstance(link, str):
-        link = np.load(link)
+        link = np.loadtxt(link)
 
     # SET COLORS FOR CLUSTERS #
     if color_list:
@@ -1364,7 +1374,7 @@ def clustermap(
             plt.show()
         else:
             mpld3.show(fig)
-    plt.close(fig)
+    #plt.close(fig) # Crashes
 
 # MAIN FUNCTION
 def clustering(pdb_file: str, df: pd.DataFrame | str,
@@ -1418,7 +1428,7 @@ def clustering(pdb_file: str, df: pd.DataFrame | str,
         out_prefix = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     if isinstance(df, str): # Get df from path if needed
-        df = io.get(df)
+        df = io.get(df, literal_eval=True)
     assert x_col in df.columns, "Check [x_col] in df"
     assert scores_col in df.columns, "Check [scores_col] in df"
 
@@ -1508,6 +1518,10 @@ def clustering(pdb_file: str, df: pd.DataFrame | str,
         df_clus.to_csv(f"{out}_df_clus.csv")
         np.savetxt(f"{out}_linkage.npy", np.asarray(link, dtype=float))
 
+        # Shared cluster colors for plots + PyMOL
+        cluster_color_dict = make_cluster_color_dict(aas_dict.keys(), cmap_name="turbo") #ChatGPT
+        cluster_colors = [cluster_color_dict[cl] for cl in aas_dict.keys()] #ChatGPT
+
         # Generate plots if requested
         if plots:
             if hist_kwargs is None:
@@ -1519,9 +1533,9 @@ def clustering(pdb_file: str, df: pd.DataFrame | str,
             else:
                 cat(df_clus=df_clus, scores_col=scores_col, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.all", show=show, **cat_kwargs)
             if torn_kwargs is None:
-                torn(df=df, df_clus=df_clus, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.all", show=show)
+                torn(df=df, df_clus=df_clus, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.all", show=show, individual=False)
             else:
-                torn(df=df, df_clus=df_clus, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.all", show=show, **torn_kwargs)
+                torn(df=df, df_clus=df_clus, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.all", show=show, individual=False, **torn_kwargs)
             if heatmap_kwargs is None:
                 heatmap(df_scaled=df_pwes_sorted, dir=out_dir_sub, file = f"{out_prefix_sub}_heatmap.all", show=show)
             else:
@@ -1536,9 +1550,14 @@ def clustering(pdb_file: str, df: pd.DataFrame | str,
                 clustermap(df_scaled=df_pwes_sorted, link=link, df_clusters=df_clus, dir=out_dir_sub, file = f"{out_prefix_sub}_clustermap.all", show=show, **clustermap_kwargs)
         
         ### FIGURE THIS OUT ###
-        #if pymol:
-        #    pymol_script(dir=out_dir_sub, file=f"{out_prefix_sub}_pymol.txt",
-        #                 pdb_filename=pdb_file, residue_dict=aas_dict, colors="tab20")
+        if pymol:
+            pymol_script(
+                dir=out_dir_sub,
+                file=f"{out_prefix_sub}_pymol.pml",
+                pdb_filename=pdb_file,
+                residue_dict=aas_dict,
+                colors=cluster_colors,
+            )
 
         if return_dfs:
             return df_gauss, df_pwes_sorted, df_pwes_unsorted, df_clus, aas_dict, link
@@ -1550,30 +1569,20 @@ def clustering(pdb_file: str, df: pd.DataFrame | str,
         for c in cols:
             assert c in df.columns, f"iter_cols column not found: {c}"
 
-        # value_counts on single col or combination (MultiIndex)
-        vc = df[cols].value_counts(dropna=False)
+        results = {}
 
-        results = {}  # group_key -> outputs (only if return_dfs=True)
-
-        for key_vals, _count in vc.items():
-            print(f"\nRunning group: {dict(zip(cols, key_vals))} ({_count} rows)")
-
-            # Normalize key_vals to tuple aligned with cols
-            if len(cols) == 1:
+        for key_vals, df_sub in df.groupby(cols, dropna=False, sort=False):
+            if not isinstance(key_vals, tuple):
                 key_tuple = (key_vals,)
             else:
-                key_tuple = tuple(key_vals)
+                key_tuple = key_vals
 
-            # Build mask
-            mask = pd.Series(True, index=df.index)
-            for c, v in zip(cols, key_tuple):
-                mask &= _mask_equals(df[c], v)
+            print(f"\nRunning group: {dict(zip(cols, key_tuple))} ({len(df_sub)} rows)")
 
-            df_sub = df.loc[mask].copy()
             if df_sub.empty:
+                print(f"Warning: No data for group {dict(zip(cols, key_tuple))}. Skipping.")
                 continue
 
-            # Subfolder name
             if len(cols) == 1:
                 folder = f"{cols[0]}={_safe_slug(key_tuple[0])}"
             else:
@@ -1581,11 +1590,13 @@ def clustering(pdb_file: str, df: pd.DataFrame | str,
                 folder = "__".join(parts)
 
             out_dir_sub = os.path.join(out_dir, folder)
+
             try:
-                res = _run_one(df_sub, out_dir_sub=out_dir_sub, out_prefix_sub=out_prefix)
+                res = _run_one(df_sub.copy(), out_dir_sub=out_dir_sub, out_prefix_sub=out_prefix)
             except Exception as e:
                 print(f"Error running _run_one for group {folder}: {e}")
                 res = None
+
             if return_dfs:
                 results[key_tuple if len(cols) > 1 else key_tuple[0]] = res
 

@@ -759,7 +759,7 @@ def draw_strand(
     height: float=25,
     color: str="gold",
     edgecolor: str="black",
-    lw: float=0.8,
+    lw: float=2.0,
     head_frac: float=0.25,
     zorder: int=1,
 ):
@@ -809,7 +809,7 @@ def draw_helix(
     height: float=0.6,
     color: str="turquoise",
     edgecolor: str="black",
-    lw: float=0.8,
+    lw: float=2.0,
     left_cap_ls: str="-",
     right_front_ls: str="-",
     right_back_ls: str=":",
@@ -933,8 +933,8 @@ def draw_ss_track(
     loop_color: str = "black",
     edgecolor: str = "black",
 
-    helix_lw: float = 0.8,
-    strand_lw: float = 0.8,
+    helix_lw: float = 2.0,
+    strand_lw: float = 2.0,
     loop_lw: float = 2.0,
 
     loop_min_len: float = 1,
@@ -943,7 +943,7 @@ def draw_ss_track(
     zorder_step: int = 1,
 
     helix_loop_pad: float = 0.0,
-    strand_loop_pad: float = 0.15,
+    strand_loop_pad: float = 0.25,
 
     figsize: tuple = (10, 2),
     dir: str | None = None,

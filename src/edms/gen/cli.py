@@ -87,7 +87,6 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
     if fastq_torn_parser==False and fastq_corr_parser==False and pwes_torn_parser==False:
         subparser.add_argument("-fx", "--facetx", type=str, help="Column name for facet columns (creates one subplot per category in this column, arranged in separate columns)")
         subparser.add_argument("-fy", "--facety", type=str, help="Column name for facet rows (creates one subplot per category in this column, arranged in seperate rows)")
-        subparser.add_argument("-ds", "--dont_share_axes", dest="share_axes", action='store_false', default=True, help="Facet subplots don't share x and y axes")
         subparser.add_argument("-fxo", "--facetx_order", nargs="+", help="Order of facet columns")
         subparser.add_argument("-fyo", "--facety_order", nargs="+", help="Order of facet rows")
     
@@ -190,7 +189,6 @@ def add_common_plot_cat_args(subparser, fastq_parser=False, pwes_parsers=False):
         subparser.add_argument("-cle", "--cols_exclude", nargs="+", help="Color column values to exclude")
         subparser.add_argument("-fx", "--facetx", type=str, help="Column name for facet columns (creates one subplot per category in this column, arranged in separate columns)")
         subparser.add_argument("-fy", "--facety", type=str, help="Column name for facet rows (creates one subplot per category in this column, arranged in seperate rows)")
-        subparser.add_argument("-ds", "--dont_share_axes", dest="share_axes", action='store_false', default=True, help="Facet subplots don't share x and y axes")
         subparser.add_argument("-fxo", "--facetx_order", nargs="+", help="Order of facet columns")
         subparser.add_argument("-fyo", "--facety_order", nargs="+", help="Order of facet rows")
     if fastq_parser == True:

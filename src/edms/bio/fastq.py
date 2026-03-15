@@ -3322,24 +3322,24 @@ aa_props = {
           'pKa_C_term': None, 'pKa_N_term': None, 'pKa_side_chain': None},
 }
 
-def edit_change(df: pd.DataFrame, col: str='Edit', aa_properties: list=[]) -> pd.DataFrame:
+def edit_change(df: pd.DataFrame, edit: str='Edit', aa_properties: list=[]) -> pd.DataFrame:
     ''' 
     edit_change(): split edit column to before, after, and amino acid number; determine aa property changes
     
     Parameters:
     df (dataframe): fastq outcomes dataframe
-    col (str, optional): edit column name
+    edit (str, optional): edit column name (Default: 'Edit')
     aa_properties (list, optional): list of properties to include in labels (Default: None). Options: 'hydrophobicity', 'polarity', 'charge', 'vdw_volume', 'pKa_C_term', 'pKa_N_term', 'pKa_side_chain'
 
     Dependencies: pandas
     '''
-    df = df[(df[col].str.contains(',')==False) & # Isolate single AA changes
-              (df[col]!='WT')&(df[col]!='Not WT')].reset_index(drop=True) # Remove WT & Not WT
+    df = df[(df[edit].str.contains(',')==False) & # Isolate single AA changes
+              (df[edit]!='WT')&(df[edit]!='Not WT')].reset_index(drop=True) # Remove WT & Not WT
     
     num_ls = [] # Extract edit information
     before_ls = []
     after_ls = []
-    for edit in df[col].to_list():
+    for edit in df[edit].to_list():
         num = int(re.findall(r'\d+', edit)[0])
         before = edit[:edit.find(str(num))]
         after = edit[edit.find(str(num))+len(str(num)):]
@@ -3357,12 +3357,19 @@ def edit_change(df: pd.DataFrame, col: str='Edit', aa_properties: list=[]) -> pd
     nonpolar = ['A', 'V', 'L', 'I', 'M', 'F', 'W', 'P', 'G']
     
     change = []
+    initial_aa = []
+    resulting_aa = []
     if aa_properties is not None: 
         before_aa_prop_ls = []
         after_aa_prop_ls = []
     for (before,after) in t.zip_cols(df=df, cols=['Before','After']):
 
         if len(before)==1 and len(after)==1 and not bool(re.search(r"\d", after)): # Substitution (changed to)
+            # Initial and resulting AA (only 1 substitution)
+            initial_aa.append(before)
+            resulting_aa.append(after)
+            
+            # Change
             if (before not in basic) and (after in basic): change.append('Basic')
             elif (before not in acidic) and (after in acidic): change.append('Acidic')
             elif (before not in polar) and (after in polar): change.append('Polar')
@@ -3381,7 +3388,15 @@ def edit_change(df: pd.DataFrame, col: str='Edit', aa_properties: list=[]) -> pd
                 after_aa_prop_ls.append(after_aa_prop_dc)
 
         elif len(before)==1 and len(after)>1 and not bool(re.search(r"\d", after)): # Insertion (changed to)
+            # Initial and resulting AA (only +1 insertion)
+            if len(after)==2:
+                initial_aa.append(before)
+                resulting_aa.append(f'ins{after[1]}')
+            else:                
+                initial_aa.append(None)
+                resulting_aa.append(None)
 
+            # Change
             if after[-1] in basic: change.append('Basic')
             elif after[-1] in acidic: change.append('Acidic')
             elif after[-1] in polar: change.append('Polar')
@@ -3400,6 +3415,15 @@ def edit_change(df: pd.DataFrame, col: str='Edit', aa_properties: list=[]) -> pd
                 after_aa_prop_ls.append(after_aa_prop_dc)
 
         elif len(before)>1 and len(after)==1 and not bool(re.search(r"\d", after)): # Deletion (removed... inverse)
+            # Initial and resulting AA (only -1 deletion)
+            if len(before)==2:
+                initial_aa.append(before[0])
+                resulting_aa.append('del')
+            else:
+                initial_aa.append(None)
+                resulting_aa.append(None)
+            
+            # Change
             if before[0] in basic: change.append('Acidic')
             elif before[0] in acidic: change.append('Basic')
             elif before[0] in polar: change.append('Nonpolar')
@@ -3418,11 +3442,18 @@ def edit_change(df: pd.DataFrame, col: str='Edit', aa_properties: list=[]) -> pd
                 after_aa_prop_ls.append(after_aa_prop_dc)
         
         else: # Complex (multiple changes)
+            # Initial and resulting AA (not 1 substitution, +1 insertion, or -1 deletion)
+            initial_aa.append(None)
+            resulting_aa.append(None)
+
+            # Change
             change.append('Complex')
             if aa_properties is not None: 
                 before_aa_prop_ls.append({})
                 after_aa_prop_ls.append({})
 
+    df['Initial AA'] = initial_aa
+    df['Resulting AA'] = resulting_aa
     df['Change'] = change
     if aa_properties is not None: 
         df['Before_AA_Properties'] = before_aa_prop_ls
@@ -3593,7 +3624,7 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
     else:
         if any([prop not in ['hydrophobicity', 'polarity', 'charge', 'vdw_volume', 'pKa_C_term', 'pKa_N_term', 'pKa_side_chain'] for prop in aa_properties]):  # Validate list entries
             raise ValueError("aa_properties list can only contain: 'hydrophobicity', 'polarity', 'charge', 'vdw_volume', 'pKa_C_term', 'pKa_N_term', 'pKa_side_chain'")
-    df = edit_change(df=df, col=label, aa_properties=aa_properties)
+    df = edit_change(df=df, edit=label, aa_properties=aa_properties)
 
     # Assign cBioPortal mutation & indications
     if cBioPortal is not None:
@@ -3804,7 +3835,7 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
 
 # Plot methods
 def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list = None, cats_exclude: list|str = None, cols: str=None, cols_ord: list=None, cols_exclude: list|str=None, PDB_pt: str=None, line: float = None,
-        facetx: str = None, facety: str = None, share_axes: bool = True, facetx_order: list = None, facety_order: list = None,
+        facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None,
         file: str=None, dir: str=None, palette_or_cmap: str='colorblind', alpha: float=1.0, dodge: bool=True, jitter: bool=True, size: float=5, edgecol: str='black', lw: int=1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
         figsize: tuple=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_scale: str='linear', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
@@ -3830,7 +3861,6 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list
     line (float, optional): add horizontal line at y value or vertical line at x value
     facetx (str, optional): column name for facet columns (creates one subplot per category in this column, arranged in separate columns)
     facety (str, optional): column name for facet rows (creates one subplot per category in this column, arranged in separate rows)
-    share_axes (bool, optional): whether facet subplots should share x and y axes (default: True)
     facetx_order (list, optional): order of facet columns
     facety_order (list, optional): order of facet rows
     file (str, optional): save plot to filename
@@ -3934,7 +3964,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list
                     break
 
     p.cat(graph=graph,df=df,x=x,y=y,cats_ord=cats_ord,cats_exclude=cats_exclude,cols=cols,cols_ord=cols_ord,cols_exclude=cols_exclude,PDB_pt=PDB_pt,line=line,
-          facetx=facetx,facety=facety,share_axes=share_axes,facetx_order=facetx_order,facety_order=facety_order,
+          facetx=facetx,facety=facety,facetx_order=facetx_order,facety_order=facety_order,
           file=file,dir=dir,palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
           figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
           x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_axis_pad=x_axis_pad,x_ticks_size=x_ticks_size,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,x_ticks=x_ticks,
@@ -4320,6 +4350,7 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
 
         if is_html == True:
             # Match title fontsize for html plots
+            title_size=title_size*html_size_multiplier
             x_axis_size=x_axis_size*html_size_multiplier
             y_axis_size=y_axis_size*html_size_multiplier
             x_ticks_size=x_ticks_size*html_size_multiplier
@@ -4685,6 +4716,7 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
 
         if is_html == True:
             # Match title fontsize for html plots
+            title_size=title_size*html_size_multiplier
             x_axis_size=x_axis_size*html_size_multiplier
             y_axis_size=y_axis_size*html_size_multiplier
             x_ticks_size=x_ticks_size*html_size_multiplier
