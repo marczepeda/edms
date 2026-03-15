@@ -818,7 +818,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_io_create_sh.add_argument('-t', '--time', type=str, default='0-00:10', help='Job run time in D-HH:MM format.')
     parser_io_create_sh.add_argument('-m', '--mem', type=int, default=1000, help='Memory in MB.')
     parser_io_create_sh.add_argument('-e', '--email', type=str, default=None, help='Notification email address.')
-    parser_io_create_sh.add_argument('-y', '--python', type=str, default='python/3.12.5-fasrc01', help='Python module to load.')
+    parser_io_create_sh.add_argument('-y', '--python', type=str, default='python', help='Python module to load.')
     parser_io_create_sh.add_argument('-n', '--env', type=str, default='edms', help='Conda environment to activate.')
 
     # combine() arguments

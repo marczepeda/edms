@@ -570,14 +570,14 @@ def log10(series) -> float:
     '''
     return np.log10(np.maximum(series, 1))
 
-def move_dist_legend(ax, legend_loc: str,title_fontproperties, legend_size: int, legend_bbox_to_anchor: tuple, legend_ncol: tuple):
+def move_dist_legend(ax, legend_loc: str, legend_title_props, legend_size: int, legend_bbox_to_anchor: tuple, legend_ncol: tuple):
     ''' 
     move_dis_legend(): moves legend for distribution graphs
     
     Paramemters:
     ax: matplotlib axis
     legend_loc (str): legend location
-    title_fontproperties (str): legend title font properties (weight, size, etc.)
+    legend_title_props: legend title font properties (weight, size, etc.)
     legend_size (str): legend font size
     legend_bbox_to_anchor (tuple): coordinates for bbox anchor
     legend_ncol (tuple): # of columns

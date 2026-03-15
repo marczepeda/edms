@@ -347,7 +347,7 @@ def out_subs(dir: str):
 
 def create_sh(dir: str, file: str, 
               cores: int = 1, partition: str='serial_requeue', time: str = '0-00:10', mem: int = 1000, email: str=None,
-              python: str = 'python/3.12.5-fasrc01', env: str = 'edms'):
+              python: str = 'python', env: str = 'edms'):
     '''
     create_sh(): creates a shell script with SLURM job submission parameters for Harvard FASRC cluster.
 
@@ -359,7 +359,7 @@ def create_sh(dir: str, file: str,
     time (str, optional): The maximum runtime for the job in D-HH:MM format (Default: '0-00:10').
     mem (int, optional): The amount of memory to request for the job in MB (Default: 1000).
     email (str, optional): The email address (Default: None = get_info('Harvard')['email']).
-    python (str, optional): The python module to load (Default: 'python/3.12.5-fasrc01').
+    python (str, optional): The python module to load (Default: 'python').
     env (str, optional): The conda environment to activate (Default: 'edms').
 
     Dependencies: os, datetime, utils.mkdir(), config.get_info()
