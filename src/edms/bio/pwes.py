@@ -415,8 +415,6 @@ def pymol_script(
             color_hex = tuple_to_hex(tuple(color))
             color_str = f"0x{color_hex}"
 
-            print(color_str)
-
             pymol_file.write(f"select sele, {selection_str}\n")
             pymol_file.write(f"create {group_name}, sele\n")
             pymol_file.write(f"show spheres, {group_name}\n")
@@ -1519,8 +1517,8 @@ def clustering(pdb_file: str, df: pd.DataFrame | str,
         np.savetxt(f"{out}_linkage.npy", np.asarray(link, dtype=float))
 
         # Shared cluster colors for plots + PyMOL
-        cluster_color_dict = make_cluster_color_dict(aas_dict.keys(), cmap_name="turbo") #ChatGPT
-        cluster_colors = [cluster_color_dict[cl] for cl in aas_dict.keys()] #ChatGPT
+        cluster_color_dict = make_cluster_color_dict(aas_dict.keys(), cmap_name="turbo")
+        cluster_colors = [cluster_color_dict[cl] for cl in aas_dict.keys()]
 
         # Generate plots if requested
         if plots:
@@ -1533,9 +1531,11 @@ def clustering(pdb_file: str, df: pd.DataFrame | str,
             else:
                 cat(df_clus=df_clus, scores_col=scores_col, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.all", show=show, **cat_kwargs)
             if torn_kwargs is None:
-                torn(df=df, df_clus=df_clus, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.all", show=show, individual=False)
+                torn(df=df, df_clus=df_clus, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.all", show=show, display_labels=False, label_info=False, individual=False)
+                torn(df=df, df_clus=df_clus, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.html", show=show, individual=False)
             else:
-                torn(df=df, df_clus=df_clus, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.all", show=show, individual=False, **torn_kwargs)
+                torn(df=df, df_clus=df_clus, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.all", show=show, display_labels=False, label_info=False, individual=False, **torn_kwargs)
+                torn(df=df, df_clus=df_clus, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.html", show=show, individual=False, **torn_kwargs)
             if heatmap_kwargs is None:
                 heatmap(df_scaled=df_pwes_sorted, dir=out_dir_sub, file = f"{out_prefix_sub}_heatmap.all", show=show)
             else:
@@ -1549,7 +1549,7 @@ def clustering(pdb_file: str, df: pd.DataFrame | str,
             else:
                 clustermap(df_scaled=df_pwes_sorted, link=link, df_clusters=df_clus, dir=out_dir_sub, file = f"{out_prefix_sub}_clustermap.all", show=show, **clustermap_kwargs)
         
-        ### FIGURE THIS OUT ###
+        # Generate PyMOL script if requested
         if pymol:
             pymol_script(
                 dir=out_dir_sub,
