@@ -890,23 +890,24 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
             # with labels
             if display_labels == True:
                 if is_html:
+                    print('HERE!') # Does not dislay labels
                     # For HTML, show labels interactively as tooltips instead of static text
                     pts = ax.scatter(
-                        x=df_clus['AA Number'],
-                        y=df_clus[scores_col],
+                        x=clus_df['AA Number'],
+                        y=clus_df[scores_col],
                         s=20,
                         alpha=0
                     )
-                    labels_list = df_clus[label].fillna("").astype(str).tolist()
+                    labels_list = clus_df[label].fillna("").astype(str).tolist()
                     tooltip = p.SafeHTMLTooltip(pts, labels_list)
                     clicker = p.ClickTooltip(pts, labels_list)
                     mpld3.plugins.connect(fig, tooltip, clicker)
                 else:
                     # For static images, keep labels as always-visible text
-                    for i, l in enumerate(df_clus[label]):
+                    for i, l in enumerate(clus_df[label]):
                         plt.text(
-                            x=df_clus.iloc[i]['AA Number'],
-                            y=df_clus.iloc[i][scores_col],
+                            x=clus_df.iloc[i]['AA Number'],
+                            y=clus_df.iloc[i][scores_col],
                             s=l
                         )
             
@@ -943,6 +944,7 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
                     plt.show()
                 else:
                     mpld3.show(fig)
+            plt.close()
     
     else: # Plot all clusters on one plot, colored by cluster
         clus_df = add_label_info(df=df_clus, label=label[:-5] if is_html else label, label_size=label_size, label_info=label_info,
@@ -1115,6 +1117,7 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
                 plt.show()
             else:
                 mpld3.show(fig)
+        plt.close()
 
     if return_df:
         return df
@@ -1372,7 +1375,7 @@ def clustermap(
             plt.show()
         else:
             mpld3.show(fig)
-    #plt.close(fig) # Crashes
+    plt.close()
 
 # MAIN FUNCTION
 def clustering(pdb_file: str, df: pd.DataFrame | str,
@@ -1532,10 +1535,10 @@ def clustering(pdb_file: str, df: pd.DataFrame | str,
                 cat(df_clus=df_clus, scores_col=scores_col, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.all", show=show, **cat_kwargs)
             if torn_kwargs is None:
                 torn(df=df, df_clus=df_clus, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.all", show=show, display_labels=False, label_info=False, individual=False)
-                torn(df=df, df_clus=df_clus, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.html", show=show, individual=False)
+                #torn(df=df, df_clus=df_clus, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.html", PDB_contacts=pdb_file, show=show, display_labels=True, individual=False) # Does not dislay labels
             else:
                 torn(df=df, df_clus=df_clus, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.all", show=show, display_labels=False, label_info=False, individual=False, **torn_kwargs)
-                torn(df=df, df_clus=df_clus, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.html", show=show, individual=False, **torn_kwargs)
+                #torn(df=df, df_clus=df_clus, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.html", PDB_contacts=pdb_file, show=show, display_labels=True, individual=False, **torn_kwargs) # Does not dislay labels
             if heatmap_kwargs is None:
                 heatmap(df_scaled=df_pwes_sorted, dir=out_dir_sub, file = f"{out_prefix_sub}_heatmap.all", show=show)
             else:

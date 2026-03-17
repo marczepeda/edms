@@ -856,6 +856,8 @@ def _final_save_show(fig, file: str=None, dir: str=None, dpi: int=0, transparent
             plt.show()
         else:
             mpld3.show()
+        
+    plt.close()
 
 def _make_figure_legend(fig, axes,
                         legend_title: str, legend_title_size: int, legend_title_weight: str, legend_size: int,
@@ -2024,6 +2026,7 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord:
                 plt.show()
             else: 
                 mpld3.show()
+        plt.close()
     else:
         print('Invalid graph! hist, kde, hist_kde, rid')
         return
@@ -2180,6 +2183,7 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vars: str = None,
             plt.show()
         else: 
             mpld3.show()
+    plt.close()
 
 def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str = '', cutoff_value: float = 0, cutoff_keep: bool = True, cols_ord: list = [], x_ord: list = [],
           file: str = None, dir: str = None, palette_or_cmap: str = 'tab20', repeats: int = 1, errcap: int = 4, vertical: bool = True,
@@ -2369,6 +2373,7 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
             plt.show()
         else:
             mpld3.show(fig)
+    plt.close()
 
 def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str | bool = None, size_dims: tuple = None, z_col: str = None, z_var: str = None, label: str = None, stys_order: list = [], mark_order: list = [],
         FC_threshold: float = 1, pval_threshold: float = 1, file: str = None, dir: str = None, color: str = 'lightgray', alpha: float = 0.5, edgecol: str = 'black', vertical: bool = True,
@@ -2790,6 +2795,7 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str 
             plt.show()
         else:
             mpld3.show(fig)
+    plt.close()
     if return_df:
         return df
 
