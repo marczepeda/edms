@@ -388,7 +388,10 @@ def pymol_script(
     mkdir(dir)
 
     with open(os.path.join(dir, file), "w") as pymol_file:
-        pymol_file.write(f"load {pdb_filename}\n")
+        if '.config/edms/PDB/' in pdb_filename:
+            pymol_file.write(f"fetch {pdb_filename.split('/')[-1].split('.')[0]}\n")
+        else:
+            pymol_file.write(f"load {pdb_filename}\n")
         pymol_file.write("show cartoon\n")
         pymol_file.write("color white\n")
         pymol_file.write("zoom\n")
