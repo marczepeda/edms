@@ -59,15 +59,14 @@ def retrieve(id_or_file: str, dir: str=None) -> pd.DataFrame:
     else:
         try: # from config
             for id_or_file_config in os.listdir(os.path.expanduser('~/.config/edms/PDB/')):
-                if id_or_file.lower() in id_or_file_config.lower():
+                if id_or_file.lower() in id_or_file_config.lower() and (id_or_file_config.endswith('.cif') or id_or_file_config.endswith('.mmCIF')):
                     command = f"mkdssp {os.path.expanduser('~/.config/edms/PDB')}/{id_or_file_config} {dir}/{id_or_file}.dssp"
                     print(f"Running command: {command}")
                     subprocess.run(f"{command}", shell=True, cwd='.')
-                    print(f"Ignore warning about mmCIF file format if you file is PDB format.")
                     break
 
         except:
-            raise FileNotFoundError(f"PDB file not found: {id_or_file}.\nPlease provide a valid filename or PDB id (if saved to {os.path.expanduser('~/.config/edms/PDB/')}) or file path for PDB structure file")
+            raise FileNotFoundError(f"PDB file with .cif or .mmCIF extension was not found: {id_or_file}.\nPlease provide a valid filename or PDB id (if saved to {os.path.expanduser('~/.config/edms/PDB/')}) or file path for PDB structure file")
 
 
 def parse_segments(dssp_file: str, chain_id: str, unknown_color: str='white') -> pd.DataFrame:

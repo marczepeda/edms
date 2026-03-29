@@ -3729,12 +3729,12 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
         except:
             try: # from config
                 for PDB_contacts_file in os.listdir(os.path.expanduser('~/.config/edms/PDB/')):
-                    if PDB_contacts.lower() in PDB_contacts_file.lower():
+                    if PDB_contacts.lower() in PDB_contacts_file.lower() and PDB_contacts_file.endswith('.pdb'):
                         protein_contacts = pdb.compute_residue_contacts(f'{os.path.expanduser("~/.config/edms/PDB")}/{PDB_contacts_file}', "protein", "protein")
                         nucleic_contacts = pdb.compute_residue_contacts(f'{os.path.expanduser("~/.config/edms/PDB")}/{PDB_contacts_file}', "nucleic", "nucleic", exclude_backbone_backbone=False)
                         break
             except:
-                raise FileNotFoundError(f"PDB file not found: {PDB_contacts_file}.\nPlease provide a valid filename or PDB id (if saved to {os.path.expanduser('~/.config/edms/PDB/')}) or file path for PDB structure file")
+                raise FileNotFoundError(f"PDB file with .pdb extension was not found: {PDB_contacts_file}.\nPlease provide a valid filename or PDB id (if saved to {os.path.expanduser('~/.config/edms/PDB/')}) or file path for PDB structure file")
         
         # Merge PDB structure data with volcano plot data
         protein_contacts_ls = []
@@ -3769,12 +3769,12 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
         except:
             try: # from config
                 for PDB_neighbors_file in os.listdir(os.path.expanduser('~/.config/edms/PDB/')):
-                    if PDB_neighbors.lower() in PDB_neighbors_file.lower():
+                    if PDB_neighbors.lower() in PDB_neighbors_file.lower() and PDB_neighbors_file.endswith('.pdb'):
                         protein_neighbors = pdb.compute_residue_neighbors(f'{os.path.expanduser("~/.config/edms/PDB")}/{PDB_neighbors_file}', "protein", "protein")
                         nucleic_neighbors = pdb.compute_residue_neighbors(f'{os.path.expanduser("~/.config/edms/PDB")}/{PDB_neighbors_file}', "nucleic", "nucleic")
                         break
             except:
-                raise FileNotFoundError(f"PDB file not found: {PDB_neighbors_file}.\nPlease provide a valid filename or PDB id (if saved to {os.path.expanduser('~/.config/edms/PDB/')}) or file path for PDB structure file")
+                raise FileNotFoundError(f"PDB file with .pdb extension was not found: {PDB_neighbors_file}.\nPlease provide a valid filename or PDB id (if saved to {os.path.expanduser('~/.config/edms/PDB/')}) or file path for PDB structure file")
 
         # Merge PDB structure data with volcano plot data
         protein_neighbors_ls = []
@@ -3807,7 +3807,7 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
         except:
             try: # from config
                 for DSSP_file in os.listdir(os.path.expanduser('~/.config/edms/DSSP/')):
-                    if DSSP.lower() in DSSP_file.lower():
+                    if DSSP.lower() in DSSP_file.lower() and DSSP_file.endswith('.dssp'):
                         secondary_structure = dssp.parse_segments(f'{os.path.expanduser("~/.config/edms/DSSP")}/{DSSP_file}', chain_id=chain_id)
                         break
             except:
