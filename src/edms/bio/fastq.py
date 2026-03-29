@@ -3668,21 +3668,9 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
             except:
                 raise FileNotFoundError(f"UniProt flat file not found: {UniProt}.\nPlease provide a valid filename or UniProt accession (if saved to {os.path.expanduser('~/.config/edms/UniProt/')}) or file path for UniProt flat file. See edms.dat.uniprot.retrieve_flat_file() or edms uniprot retrieve -h for more information.")
 
-        # Merge UniProt secondary structure & ptm data with volcano plot data
-        #secondary_structure_ls = [] # Not correct for FOXA1
+        # Merge UniProt ptm data with volcano plot data
         ptms_ls = []
         for aa_num in df['AA Number']:
-
-            # Find secondary structure
-            '''found_ss = False
-            for start,end,name in t.zip_cols(df=UniProt_ss, cols=['start','end','name']):
-                if aa_num>=start and aa_num<=end:
-                    secondary_structure_ls.append(name)
-                    found_ss = True
-                    break
-            if not found_ss:
-                secondary_structure_ls.append(None)'''
-            
             # Find PTMs
             found_ptm = 0
             ptm = f""
@@ -3692,8 +3680,7 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
                     found_ptm += 1
                     break
             ptms_ls.append(ptm[:-2] if found_ptm>0 else None)
-        
-        #df['2° structure'] = secondary_structure_ls
+
         df['UniProt PTM'] = ptms_ls
     
     # Assign PhosphoSitePlus PTMs
@@ -3815,10 +3802,14 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
         
         secondary_structure_ls = []
         for aa_num in df['AA Number']:
+            found = False
             for start,end,name in t.zip_cols(df=secondary_structure, cols=['start','end','ss_name']):
                 if aa_num>=start and aa_num<=end:
                     secondary_structure_ls.append(name)
+                    found = True
                     break
+            if found==False:
+                secondary_structure_ls.append("unresolved")
         
         df['2° structure'] = secondary_structure_ls
 
