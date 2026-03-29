@@ -312,12 +312,23 @@ def epegRNA_pool(df: pd.DataFrame | str, tG:bool=True, make_extension:bool=True,
     # Get dataframes from file paths if needed
     if type(df)==str:
         df = io.get(pt=df)
+    else:
+        df = df.copy()
+
     if type(UMI_df)==str:
         UMI_df = io.get(pt=UMI_df)
+    else:
+        UMI_df = UMI_df.copy()
+
     if type(PCR_df)==str:
         PCR_df = io.get(pt=PCR_df)
+    else:
+        PCR_df = PCR_df.copy()
+
     if type(RE_type_IIS_df)==str:
         RE_type_IIS_df = io.get(pt=RE_type_IIS_df)
+    else:
+        RE_type_IIS_df = RE_type_IIS_df.copy()
     
     # Load UMI and PCR dataframes from resources if not provided
     save_time = False

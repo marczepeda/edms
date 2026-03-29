@@ -4,14 +4,16 @@ src/edms/data/cli.py             Command Line Interface for EDMS Database module
 ├── cosmic.py                   COSMIC module
 ├── cvar.py                     ClinVar module
 ├── cBioPortal.py               cBioPortal module
-└── uniprot.py                  Uniprot module
+├── uniprot.py                  Uniprot module
+├── pdb.py                      PDB module
+└── dssp.py                     DSSP module
 '''
 import argparse
 import datetime
 import sys # might use later
 from rich import print as rprint # might use later
 
-from . import cosmic as co, cvar, cBioPortal as cBP, uniprot, pdb 
+from . import cosmic as co, cvar, cBioPortal as cBP, uniprot, pdb, dssp
 from ..utils import parse_tuple_int, parse_tuple_float # might use later
 
 def add_subparser(subparsers, formatter_class=None):
@@ -210,10 +212,46 @@ def add_subparser(subparsers, formatter_class=None):
     # retrieve(): Download a PDB or PDBx/mmCIF file from the RCSB PDB REST API.
     parser_pdb_retrieve = subparsers_pdb.add_parser("retrieve", help="Download a PDB or PDBx/mmCIF file from the RCSB PDB REST API.", description="Download a PDB or PDBx/mmCIF file from the RCSB PDB REST API.", formatter_class=formatter_class)
     
-    parser_pdb_retrieve.add_argument("-i", "--id", type=str, help="4-character PDB accession (e.g. 1CRN, case-insensitive)", required=True)
+    parser_pdb_retrieve.add_argument("-i", "--id", type=str, help="4-character PDB accession (e.g. 8VG1, case-insensitive)", required=True)
     parser_pdb_retrieve.add_argument("-s", "--suf", type=str, help="Output filename suffix (e.g., .pdb or .cif (PDBx/mmCIF))", default=argparse.SUPPRESS)
     parser_pdb_retrieve.add_argument("-o", "--dir", type=str, help="Save file to specified directory (Default: None -> only save to config directory)", default=argparse.SUPPRESS)
     parser_pdb_retrieve.add_argument("-n", "--no_config", action="store_false", dest='config', help="Do not save to configuration directory", default=True)
     parser_pdb_retrieve.add_argument("-b", "--base_url", type=str, help="Base URL for RCSB PDB REST API (Default: https://files.rcsb.org/download/)", default="https://files.rcsb.org/download/")
 
     parser_pdb_retrieve.set_defaults(func=pdb.retrieve)
+
+    '''
+    edms.data.dssp:
+    - retrieve(): Retrieve DSSP data for a given PDB ID.
+    '''
+    parser_dssp = subparsers.add_parser("dssp", help="Define Secondary Structure of Proteins", description="Define Secondary Structure of Proteins", formatter_class=formatter_class)
+
+    subparsers_dssp = parser_dssp.add_subparsers()
+    
+    # retrieve(): Retrieve DSSP data for a given PDB ID.
+    parser_dssp_retrieve = subparsers_dssp.add_parser("retrieve", help="Retrieve DSSP data for a given PDB ID.", description="Retrieve DSSP data for a given PDB ID.", formatter_class=formatter_class)
+
+    parser_dssp_retrieve.add_argument("-i", "--id_or_file", type=str, help="4-character PDB accession (e.g. 8VG1, case-insensitive) or file path for PDB structure file. See edms.data.dssp.retrieve() for more information.", required=True)
+    parser_dssp_retrieve.add_argument("-o", "--dir", type=str, help="Save file to specified directory; otherwise, save to configuration directory (~/.config/edms/DSSP/).", default=argparse.SUPPRESS)
+
+    parser_dssp_retrieve.set_defaults(func=dssp.retrieve)
+
+    # plot_ss_color_key(): Plot a color key for DSSP secondary structure assignments.
+    parser_dssp_plot_ss_color_key = subparsers_dssp.add_parser("color_key", help="Plot a color key for DSSP secondary structure assignments.", description="Plot a color key for DSSP secondary structure assignments.", formatter_class=formatter_class)
+
+    parser_dssp_plot_ss_color_key.add_argument("-n", "--ncols", type=int, help="Number of columns in the key", default=argparse.SUPPRESS)
+    parser_dssp_plot_ss_color_key.add_argument("-fs", "--figsize", type=parse_tuple_float, help="Figure size (width, height)", default=argparse.SUPPRESS)
+    parser_dssp_plot_ss_color_key.add_argument("-t", "--title", type=str, help="Figure title", default=argparse.SUPPRESS)
+    parser_dssp_plot_ss_color_key.add_argument("-ts", "--title_size", type=int, help="Title font size", default=argparse.SUPPRESS)
+    parser_dssp_plot_ss_color_key.add_argument("-tw", "--title_weight", type=str, help="Title font weight (e.g., 'bold', 'normal')", default=argparse.SUPPRESS)
+    parser_dssp_plot_ss_color_key.add_argument("-F", "--fontsize", type=int, help="Label font size", default=argparse.SUPPRESS)
+    parser_dssp_plot_ss_color_key.add_argument("-sw", "--swatch_width", type=float, help="Width of color box", default=argparse.SUPPRESS)
+    parser_dssp_plot_ss_color_key.add_argument("-sh", "--swatch_height", type=float, help="Height of color box", default=argparse.SUPPRESS)
+    parser_dssp_plot_ss_color_key.add_argument("-a", "--alpha", type=float, help="Transparency of color boxes", default=argparse.SUPPRESS)
+    parser_dssp_plot_ss_color_key.add_argument("-o", "--dir", type=str, help="Directory to save the figure; if not provided, the figure is not saved", default='.')
+    parser_dssp_plot_ss_color_key.add_argument("-f", "--file", type=str, help="Filename to save the figure; if not provided, the figure is not saved", default='dssp_color_key.all')
+    parser_dssp_plot_ss_color_key.add_argument("-d", "--dpi", type=int, help="Resolution for saving the figure (Default: 1200)", default=argparse.SUPPRESS)
+    parser_dssp_plot_ss_color_key.add_argument("-nt", "--not_transparent", dest='transparent', action="store_false", help="Don't save plot with transparent background", default=True)
+    parser_dssp_plot_ss_color_key.add_argument("-s", "--show", action="store_true", help="Show plot", default=False)
+
+    parser_dssp_plot_ss_color_key.set_defaults(func=dssp.plot_ss_color_key)

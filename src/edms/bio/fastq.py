@@ -102,7 +102,7 @@ import itertools
 
 from ..bio.signature import parse_signature_literal, signature_from_alignment, expand_signature_units, is_reference_match_with_n_extra_nt_or_less
 from ..gen import io, tidy as t, plot as p, stat as st
-from ..data import uniprot, pdb
+from ..data import uniprot, pdb, dssp
 from ..utils import memory_timer, mkdir, load_resource_csv
 from .. import config
 
@@ -534,6 +534,8 @@ def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.all',numeri
     # Get dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
+    else:
+        df = df.copy()
     
     # Check numeric column
     if numeric not in ['count','fraction']:
@@ -2661,6 +2663,8 @@ def abundances(df: pd.DataFrame | str, desired_edits: list, edit_col: str='Edit'
     # Get dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
+    else:
+        df = df.copy()
     
     # Search for multple edits
     if combinations > 1:
@@ -3596,7 +3600,7 @@ def make_label_info(label: str, before_aa_dict: dict, after_aa_dict: dict,
 
 def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, label_info: bool=True, 
                    aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, 
-                   PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None) -> pd.DataFrame:
+                   PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None, DSSP: str=None, chain_id: str=None) -> pd.DataFrame:
     ''' 
     add_label_info(): AA properties for conservation (change to); plus additional info from cBioPortal, UniProt, PhosphoSitePlus, PDB if specified
     
@@ -3612,10 +3616,11 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
     PhosphoSitePlus (str, optional): UniProt accession
     PDB_contacts (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
     PDB_neighbors (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
-    
+    DSSP (str, optional): PDB ID (if saved to ~/.config/edms/DSSP) or file path for DSSP file. See edms.dat.dssp.retrieve() or edms dssp retrieve -h for more information.
+    chain_id (str, optional): PDB chain ID to use for neighbor calculations (Default: None)
+
     Dependencies: make_label_info(), pandas
     '''
-    
     # Determine AA properties to include
     if aa_properties == True:
         aa_properties = ['hydrophobicity', 'polarity', 'charge', 'vdw_volume', 'pKa_side_chain']  # All except terminal pKa
@@ -3651,32 +3656,32 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
     if UniProt is not None:
         # Load UniProt flat file data
         try: # from filepath
-            UniProt_ss = uniprot.secondary_structure_from_flat_file(obj=UniProt)
+            #UniProt_ss = uniprot.secondary_structure_from_flat_file(obj=UniProt)
             UniProt_ptms = uniprot.ptms_from_flat_file(obj=UniProt)
         except:
             try: # from config
                 for UniProt_file in os.listdir(os.path.expanduser('~/.config/edms/UniProt/')):
                     if UniProt.lower() in UniProt_file.lower():
-                        UniProt_ss = uniprot.secondary_structure_from_flat_file(obj=f'{os.path.expanduser("~/.config/edms/UniProt")}/{UniProt_file}')
+                        #UniProt_ss = uniprot.secondary_structure_from_flat_file(obj=f'{os.path.expanduser("~/.config/edms/UniProt")}/{UniProt_file}')
                         UniProt_ptms = uniprot.ptms_from_flat_file(obj=f'{os.path.expanduser("~/.config/edms/UniProt")}/{UniProt_file}')
                         break
             except:
                 raise FileNotFoundError(f"UniProt flat file not found: {UniProt}.\nPlease provide a valid filename or UniProt accession (if saved to {os.path.expanduser('~/.config/edms/UniProt/')}) or file path for UniProt flat file. See edms.dat.uniprot.retrieve_flat_file() or edms uniprot retrieve -h for more information.")
 
         # Merge UniProt secondary structure & ptm data with volcano plot data
-        secondary_structure_ls = []
+        #secondary_structure_ls = [] # Not correct for FOXA1
         ptms_ls = []
         for aa_num in df['AA Number']:
 
             # Find secondary structure
-            found_ss = False
+            '''found_ss = False
             for start,end,name in t.zip_cols(df=UniProt_ss, cols=['start','end','name']):
                 if aa_num>=start and aa_num<=end:
                     secondary_structure_ls.append(name)
                     found_ss = True
                     break
             if not found_ss:
-                secondary_structure_ls.append(None)
+                secondary_structure_ls.append(None)'''
             
             # Find PTMs
             found_ptm = 0
@@ -3688,7 +3693,7 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
                     break
             ptms_ls.append(ptm[:-2] if found_ptm>0 else None)
         
-        df['2° structure'] = secondary_structure_ls
+        #df['2° structure'] = secondary_structure_ls
         df['UniProt PTM'] = ptms_ls
     
     # Assign PhosphoSitePlus PTMs
@@ -3795,6 +3800,28 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
         df['AA Neighbors'] = protein_neighbors_ls
         df['DNA Neighbors'] = nucleic_neighbors_ls
 
+    if DSSP is not None and chain_id is not None:
+        # Load DSSP data
+        try: # from filepath
+            secondary_structure = dssp.parse_segments(DSSP, chain_id=chain_id)
+        except:
+            try: # from config
+                for DSSP_file in os.listdir(os.path.expanduser('~/.config/edms/DSSP/')):
+                    if DSSP.lower() in DSSP_file.lower():
+                        secondary_structure = dssp.parse_segments(f'{os.path.expanduser("~/.config/edms/DSSP")}/{DSSP_file}', chain_id=chain_id)
+                        break
+            except:
+                raise FileNotFoundError(f"DSSP file not found: {DSSP_file}.\nPlease provide a valid filename or DSSP/PDB id (if saved to {os.path.expanduser('~/.config/edms/DSSP/')}) or file path for DSSP structure file")
+        
+        secondary_structure_ls = []
+        for aa_num in df['AA Number']:
+            for start,end,name in t.zip_cols(df=secondary_structure, cols=['start','end','ss_name']):
+                if aa_num>=start and aa_num<=end:
+                    secondary_structure_ls.append(name)
+                    break
+        
+        df['2° structure'] = secondary_structure_ls
+
     # Make label_info
     if label_info == True:
 
@@ -3803,7 +3830,6 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
             df['Patients'] = [None]*len(df)
             df['Cancer Types'] = [None]*len(df)
         if UniProt is None:
-            df['2° structure'] = [None]*len(df)
             df['UniProt PTM'] = [None]*len(df)
         if PhosphoSitePlus is None:
             df['PhosphoSitePlus PTM'] = [None]*len(df)
@@ -3813,6 +3839,8 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
         if PDB_neighbors is None:
             df['AA Neighbors'] = [None]*len(df)
             df['DNA Neighbors'] = [None]*len(df)
+        if DSSP is None or chain_id is None:
+            df['2° structure'] = [None]*len(df)
         
         # Make label info based on available data
         df[f'{label}_info'] = [make_label_info(label, before, after, patients, cancers, structure, uniprot_ptm, phosphositeplus_ptm, protein_contacts, nucleic_contacts,protein_neighbors, nucleic_neighbors, font_size=label_size) 
@@ -3823,15 +3851,20 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
         if cBioPortal is None:
             df.drop(columns=['Patients','Cancer Types'], inplace=True)
         if UniProt is None:
-            df.drop(columns=['2° structure','UniProt PTM'], inplace=True)
+            df.drop(columns=['UniProt PTM'], inplace=True)
         if PhosphoSitePlus is None:
             df.drop(columns=['PhosphoSitePlus PTM'], inplace=True)
         if PDB_contacts is None:
             df.drop(columns=['AA Contacts','DNA Contacts'], inplace=True)
         if PDB_neighbors is None:
             df.drop(columns=['AA Neighbors','DNA Neighbors'], inplace=True)
+        if DSSP is None or chain_id is None:
+            df.drop(columns=['2° structure'], inplace=True)
 
-    return df
+    if DSSP is None or chain_id is None:
+        return df
+    else:
+        return df,secondary_structure
 
 # Plot methods
 def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list = None, cats_exclude: list|str = None, cols: str=None, cols_ord: list=None, cols_exclude: list|str=None, PDB_pt: str=None, line: float = None,
@@ -3928,6 +3961,8 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list
     # Get dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
+    else:
+        df = df.copy()
 
     # Sort data by genotype position
     if cats_ord is None:
@@ -4047,6 +4082,8 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
     # Get dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
+    else:
+        df = df.copy()
 
     # Omit smaller than cutoff and convert it to <cutoff
     if cutoff_group in df.columns and cutoff_value>0: # If cutoff group and value specified
@@ -4098,7 +4135,7 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
             dpi=dpi,transparent=transparent,show=show,space_capitalize=space_capitalize,PDB_pt=PDB_pt,**kwargs)
 
 def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: tuple=None, z_col: str=None, z_var: str=None, label: str='Edit', label_size: int=16,
-        label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None,
+        label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None, DSSP: str=None, chain_id: str=None,
         FC_threshold: float=1, pval_threshold: float=1, file: str=None, dir: str=None, color: str='lightgray', alpha: float=0.5, edgecol: str='black', vertical: bool=True,
         figsize: tuple=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
@@ -4129,6 +4166,8 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: t
     PhosphoSitePlus (str, optional): UniProt accession
     PDB_contacts (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
     PDB_neighbors (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
+    DSSP (str, optional): DSSP ID (if saved to ~/.config/edms/DSSP) or file path for DSSP structure file. See edms.dat.dssp.retrieve() or edms dssp retrieve -h for more information.
+    Chain_id (str, optional): chain ID for DSSP structure file (Default: None)
     FC_threshold (float, optional): fold change threshold (Default: 1, meaning no threshold)
     pval_threshold (float, optional): p-value threshold (Default: 1, meaning no threshold)
     file (str, optional): save plot to filename
@@ -4190,6 +4229,8 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: t
     # Get dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
+    else:
+        df = df.copy()
     
     # Organize data by conservation (changed to)
     stys_order = ['Conserved','Basic','Acidic','Polar','Nonpolar','Complex']
@@ -4207,10 +4248,16 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: t
         df.rename(columns={f'log2({FC})':f'log2({FC})_raw'}, inplace=True)
         df[f'log2({FC})'] = [(val - mu)/sigma for val in df[f'log2({FC})_raw']]
 
-    # Add label info: AA properties for conservation (change to); plus additional info from cBioPortal, UniProt, PhosphoSitePlus, PDB if specified
-    df = add_label_info(df=df, label=label, label_size=label_size, label_info=label_info,
-                        aa_properties=aa_properties, cBioPortal=cBioPortal, only_clinical=only_clinical, UniProt=UniProt, 
-                        PhosphoSitePlus=PhosphoSitePlus, PDB_contacts=PDB_contacts, PDB_neighbors=PDB_neighbors)
+    # Add label info: AA properties for conservation (change to); plus additional info from cBioPortal, UniProt, PhosphoSitePlus, PDB, and DSSP if specified
+    secondary_structure = None
+    if DSSP is not None and chain_id is not None:
+        df, secondary_structure = add_label_info(df=df, label=label, label_size=label_size, label_info=label_info,
+                            aa_properties=aa_properties, cBioPortal=cBioPortal, only_clinical=only_clinical, UniProt=UniProt, 
+                            PhosphoSitePlus=PhosphoSitePlus, PDB_contacts=PDB_contacts, PDB_neighbors=PDB_neighbors, DSSP=DSSP, chain_id=chain_id)
+    else:
+        df = add_label_info(df=df, label=label, label_size=label_size, label_info=label_info,
+                            aa_properties=aa_properties, cBioPortal=cBioPortal, only_clinical=only_clinical, UniProt=UniProt, 
+                            PhosphoSitePlus=PhosphoSitePlus, PDB_contacts=PDB_contacts, PDB_neighbors=PDB_neighbors)
 
     PDB_pt = None if PDB_contacts is None else PDB_contacts
     PDB_pt = PDB_pt if PDB_pt is not None else PDB_neighbors
@@ -4233,7 +4280,7 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: t
           **kwargs)
 
 def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size_dims: tuple=None, z_col: str=None, z_var: str=None, label: str='Edit', label_size: int=16,
-        label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None, ss_h: int=None, ss_y: int=None,
+        label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None, DSSP: str=None, chain_id: str=None, ss_h: int=None, ss_y: int=None,
         file: str=None, dir: str=None, edgecol: str='black', figsize: tuple=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
@@ -4262,6 +4309,8 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
     PhosphoSitePlus (str, optional): UniProt accession
     PDB_contacts (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
     PDB_neighbors (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
+    DSSP (str, optional): PDB ID (if saved to ~/.config/edms/DSSP) or file path for DSSP file. See edms.dat.dssp.retrieve() or edms dssp retrieve -h for more information.
+    chain_id (str, optional): Chain identifier to isolate for secondary structure analysis (Default: None)
     ss_h (int, optional): height for secondary structure in the plot (Default: autogenerate)
     ss_y (int, optional): y position for secondary structure in the plot (Default: autogenerate)
     file (str, optional): save plot to filename
@@ -4319,6 +4368,8 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
     # Get dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
+    else:
+        df = df.copy()
     
     # Organize data by conservation (changed to)
     stys_order = ['Conserved','Basic','Acidic','Polar','Nonpolar','Complex']
@@ -4336,11 +4387,17 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
         df.rename(columns={f'log2({FC})':f'log2({FC})_raw'}, inplace=True)
         df[f'log2({FC})'] = [(val - mu)/sigma for val in df[f'log2({FC})_raw']]
 
-    # Add label info: AA properties for conservation (change to); plus additional info from cBioPortal, UniProt, PhosphoSitePlus, PDB if specified
-    df = add_label_info(df=df, label=label, label_size=label_size, label_info=label_info,
-                        aa_properties=aa_properties, cBioPortal=cBioPortal, only_clinical=only_clinical, UniProt=UniProt, 
-                        PhosphoSitePlus=PhosphoSitePlus, PDB_contacts=PDB_contacts, PDB_neighbors=PDB_neighbors)
-    
+    # Add label info: AA properties for conservation (change to); plus additional info from cBioPortal, UniProt, PhosphoSitePlus, PDB, and DSSP if specified
+    secondary_structure = None
+    if DSSP is not None and chain_id is not None:
+        df, secondary_structure = add_label_info(df=df, label=label, label_size=label_size, label_info=label_info,
+                            aa_properties=aa_properties, cBioPortal=cBioPortal, only_clinical=only_clinical, UniProt=UniProt, 
+                            PhosphoSitePlus=PhosphoSitePlus, PDB_contacts=PDB_contacts, PDB_neighbors=PDB_neighbors, DSSP=DSSP, chain_id=chain_id)
+    else:
+        df = add_label_info(df=df, label=label, label_size=label_size, label_info=label_info,
+                            aa_properties=aa_properties, cBioPortal=cBioPortal, only_clinical=only_clinical, UniProt=UniProt, 
+                            PhosphoSitePlus=PhosphoSitePlus, PDB_contacts=PDB_contacts, PDB_neighbors=PDB_neighbors)
+
     PDB_pt = None if PDB_contacts is None else PDB_contacts
     PDB_pt = PDB_pt if PDB_pt is not None else PDB_neighbors
 
@@ -4425,54 +4482,29 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
         ax.plot([x_axis_dims[0], x_axis_dims[1]], [0,0], color='black', linestyle='-', linewidth=1)
 
     # with secondary structure
-    if UniProt is not None:
-        # Load UniProt flat file data
-        try: # from filepath
-            UniProt_ss = uniprot.secondary_structure_from_flat_file(obj=UniProt)
-        except:
-            try: # from config
-                for UniProt_file in os.listdir(os.path.expanduser('~/.config/edms/UniProt/')):
-                    if UniProt.lower() in UniProt_file.lower():
-                        UniProt_ss = uniprot.secondary_structure_from_flat_file(obj=f'{os.path.expanduser("~/.config/edms/UniProt")}/{UniProt_file}')
-                        break
-            except:
-                raise FileNotFoundError(f"UniProt flat file not found: {UniProt}.\nPlease provide a valid filename or UniProt accession (if saved to {os.path.expanduser('~/.config/edms/UniProt/')}) or file path for UniProt flat file. See edms.dat.uniprot.retrieve_flat_file() or edms uniprot retrieve -h for more information.")
-        
+    if secondary_structure is not None:
         # parameters for the secondary-structure "track"
         if ss_h is None:
             ss_h  = 0.5 # height of secondary structure track
         if ss_y is None:
             ss_y  = min(df[f'log2({FC})'])-2*0.5 # position below min y value
 
-        # helices
-        helix_df = UniProt_ss[UniProt_ss["type"] == "α-helix"]
-        if is_html:
-            helix_spans = [(row.start, row.end - row.start) for _, row in helix_df.iterrows()]
-            ax.broken_barh(helix_spans, (ss_y, ss_h), label="α-helix", facecolors='turquoise')
-        else:
-            for xmin, xmax in t.zip_cols(df=helix_df, cols=['start','end']):
-                ax.axvspan(
-                    xmin,
-                    xmax,
-                    facecolor='turquoise',
-                alpha=0.15,
-                edgecolor='none',
-                zorder=0)  # put behind scatter points
-
-        # β-strands
-        strand_df = UniProt_ss[UniProt_ss["type"] == "β-strand"]
-        if is_html:
-            strand_spans = [(row.start, row.end - row.start) for _, row in strand_df.iterrows()]
-            ax.broken_barh(strand_spans, (ss_y, ss_h), label="β-strand", facecolors='gold')
-        else:
-            for xmin, xmax in t.zip_cols(df=strand_df, cols=['start','end']):
-                ax.axvspan(
-                    xmin,
-                    xmax,
-                    facecolor='gold',
-                alpha=0.15,
-                edgecolor='none',
-                zorder=0)  # put behind scatter points
+        # secondary structure
+        for ss_description in secondary_structure['ss_description'].unique():
+            ss_df = secondary_structure[secondary_structure['ss_description']==ss_description]
+            
+            if is_html:
+                ss_spans = [(row.start-0.5, row.end - row.start+0.5) for _, row in ss_df.iterrows()]
+                ax.broken_barh(ss_spans, (ss_y, ss_h), label=ss_description, facecolors=ss_df['ss_color'].iloc[0])
+            else:
+                for xmin, xmax in t.zip_cols(df=ss_df, cols=['start','end']):
+                    ax.axvspan(
+                        xmin-0.5,
+                        xmax+0.5,
+                        facecolor=ss_df['ss_color'].iloc[0],
+                    alpha=0.15,
+                    edgecolor='none',
+                    zorder=0)  # put behind scatter points
         
     # with legend
     if display_legend == True:
@@ -4566,7 +4598,7 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
 
 def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: str, size: str | bool=None, size_dims: tuple=None, z_col: str=None, z_var: str=None,
         conservative: bool=True, method: str='pearson', weighted: bool=True, label: str='Edit', label_size: int=16,
-        label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None,
+        label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None, DSSP: str=None, chain_id: str=None,
         file: str=None, dir: str=None, edgecol: str='black', figsize: tuple=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
@@ -4600,6 +4632,8 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
     PhosphoSitePlus (str, optional): UniProt accession
     PDB_contacts (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
     PDB_neighbors (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
+    DSSP (str, optional): DSSP ID (if saved to ~/.config/edms/DSSP) or file path for DSSP structure file. See edms.dat.dssp.retrieve() or edms dssp retrieve -h for more information.
+    chain_id (str, optional): chain ID for DSSP structure file (Default: None)
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     edgecol (str, optional): point edge color
@@ -4655,6 +4689,8 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
     # Get dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
+    else:
+        df = df.copy()
     
     # Organize data by conservation (changed to)
     stys_order = ['Conserved','Basic','Acidic','Polar','Nonpolar','Complex']
@@ -4702,10 +4738,16 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
     else:
         min_or_sum = 'sum'
 
-    # Add label info: AA properties for conservation (change to); plus additional info from cBioPortal, UniProt, PhosphoSitePlus, PDB if specified
-    df = add_label_info(df=df, label=label, label_size=label_size, label_info=label_info,
-                        aa_properties=aa_properties, cBioPortal=cBioPortal, only_clinical=only_clinical, UniProt=UniProt, 
-                        PhosphoSitePlus=PhosphoSitePlus, PDB_contacts=PDB_contacts, PDB_neighbors=PDB_neighbors)
+    # Add label info: AA properties for conservation (change to); plus additional info from cBioPortal, UniProt, PhosphoSitePlus, PDB, and DSSP if specified
+    secondary_structure = None
+    if DSSP is not None and chain_id is not None:
+        df, secondary_structure = add_label_info(df=df, label=label, label_size=label_size, label_info=label_info,
+                            aa_properties=aa_properties, cBioPortal=cBioPortal, only_clinical=only_clinical, UniProt=UniProt, 
+                            PhosphoSitePlus=PhosphoSitePlus, PDB_contacts=PDB_contacts, PDB_neighbors=PDB_neighbors, DSSP=DSSP, chain_id=chain_id)
+    else:
+        df = add_label_info(df=df, label=label, label_size=label_size, label_info=label_info,
+                            aa_properties=aa_properties, cBioPortal=cBioPortal, only_clinical=only_clinical, UniProt=UniProt, 
+                            PhosphoSitePlus=PhosphoSitePlus, PDB_contacts=PDB_contacts, PDB_neighbors=PDB_neighbors)
     
     PDB_pt = None if PDB_contacts is None else PDB_contacts
     PDB_pt = PDB_pt if PDB_pt is not None else PDB_neighbors
@@ -5023,6 +5065,8 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str
     # Get dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
+    else:
+        df = df.copy()
     
     # cbar kwargs
     cbar_kws = dict()

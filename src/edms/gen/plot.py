@@ -1915,6 +1915,8 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord:
     # Get dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
+    else:
+        df = df.copy()
     
     # Omit excluded data
     if type(cols_exclude)==list: 
@@ -2096,6 +2098,8 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vars: str = None,
     # Get dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
+    else:
+        df = df.copy()
     
     # cbar kwargs
     cbar_kws = dict()
@@ -2258,6 +2262,8 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
     # Get dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
+    else:
+        df = df.copy()
     
     # Determine if HTML output
     if file is not None:
@@ -2462,6 +2468,8 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str 
     # Get dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
+    else:
+        df = df.copy()
     
     # Determine if we are saving to HTML (for interactive behavior)
     if file is not None:

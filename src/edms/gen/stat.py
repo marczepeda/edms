@@ -48,6 +48,8 @@ def describe(df: pd.DataFrame | str, cols:list=[], group:str='', dir:str=None, f
     # Get dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
+    else:
+        df = df.copy()
     
     if group!='': df = df.pivot(columns=group) # Splits tidy dataframe
     if len(cols)>0: df = df[cols] # Isolate specified columns
@@ -100,6 +102,8 @@ def difference(df: pd.DataFrame | str, data_col: str, compare_col: str, compare:
     # Get dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
+    else:
+        df = df.copy()
 
     if not same: # Different samples
 
@@ -270,6 +274,8 @@ def correlation(df: pd.DataFrame | str, var_cols: list=[], value_cols: list=[], 
     # Get dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
+    else:
+        df = df.copy()
 
     if (len(var_cols)==2)&(len(value_cols)==1): df = df.pivot(index=var_cols[0],columns=var_cols[1],values=value_cols[0]) # Splits tidy dataframe
     elif len(value_cols)>=1: df = df[value_cols] # Isolate specified columns for non-tidy dataframe
@@ -299,6 +305,8 @@ def weighted_correlation(df: pd.DataFrame | str, x: str, y: str, weight: str=Non
     # Get dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
+    else:
+        df = df.copy()
     
     if weight is None: # Unweighted correlation
         weight ='__weight__'
@@ -465,6 +473,8 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str,
     # Get dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
+    else:
+        df = df.copy()
 
     # Validate replicate column
     if replicate is not None:
@@ -639,6 +649,8 @@ def odds_ratio(df: pd.DataFrame | str, cond: str, cond_comp: str,
     # Get dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
+    else:
+        df = df.copy()
 
     # Get metadata
     meta_cols = list(df.columns)
@@ -776,6 +788,8 @@ def zscore(
     # Get dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
+    else:
+        df = df.copy()
 
     if out_col is None:
         out_col = f"{val}_z"

@@ -254,6 +254,8 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col: str='
     # Get samples dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
+    else:
+        df = df.copy()
 
     # Define plate axis method
     def plate(df: pd.DataFrame, group: Literal['96-well plate','8-strip_plate']) -> pd.DataFrame:

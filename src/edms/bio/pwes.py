@@ -702,17 +702,28 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
     # Get dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
+    else:
+        df = df.copy()
+    
     if type(df_clus)==str:
         df_clus = io.get(pt=df_clus)
+    else:
+        df_clus = df_clus.copy()
     
     # Organize data by conservation (changed to)
     stys_order = ['Conserved','Basic','Acidic','Polar','Nonpolar','Complex']
     mark_order = ['D','^','v','<','>','o']
 
-    # Add label info: AA properties for conservation (change to); plus additional info from cBioPortal, UniProt, PhosphoSitePlus, PDB if specified
-    df = add_label_info(df=df, label=label, label_size=label_size, label_info=label_info,
-                        aa_properties=aa_properties, cBioPortal=cBioPortal, only_clinical=only_clinical, UniProt=UniProt, 
-                        PhosphoSitePlus=PhosphoSitePlus, PDB_contacts=PDB_contacts, PDB_neighbors=PDB_neighbors)
+    # Add label info: AA properties for conservation (change to); plus additional info from cBioPortal, UniProt, PhosphoSitePlus, PDB, and DSSP if specified
+    secondary_structure = None
+    if DSSP is not None and chain_id is not None:
+        df, secondary_structure = add_label_info(df=df, label=label, label_size=label_size, label_info=label_info,
+                            aa_properties=aa_properties, cBioPortal=cBioPortal, only_clinical=only_clinical, UniProt=UniProt, 
+                            PhosphoSitePlus=PhosphoSitePlus, PDB_contacts=PDB_contacts, PDB_neighbors=PDB_neighbors, DSSP=DSSP, chain_id=chain_id)
+    else:
+        df = add_label_info(df=df, label=label, label_size=label_size, label_info=label_info,
+                            aa_properties=aa_properties, cBioPortal=cBioPortal, only_clinical=only_clinical, UniProt=UniProt, 
+                            PhosphoSitePlus=PhosphoSitePlus, PDB_contacts=PDB_contacts, PDB_neighbors=PDB_neighbors)
     
     PDB_pt = None if PDB_contacts is None else PDB_contacts
     PDB_pt = PDB_pt if PDB_pt is not None else PDB_neighbors
@@ -810,54 +821,29 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
                 ax.plot([x_axis_dims[0], x_axis_dims[1]], [0,0], color='black', linestyle='-', linewidth=1)
 
             # with secondary structure
-            if UniProt is not None:
-                # Load UniProt flat file data
-                try: # from filepath
-                    UniProt_ss = uniprot.secondary_structure_from_flat_file(obj=UniProt)
-                except:
-                    try: # from config
-                        for UniProt_file in os.listdir(os.path.expanduser('~/.config/edms/UniProt/')):
-                            if UniProt.lower() in UniProt_file.lower():
-                                UniProt_ss = uniprot.secondary_structure_from_flat_file(obj=f'{os.path.expanduser("~/.config/edms/UniProt")}/{UniProt_file}')
-                                break
-                    except:
-                        raise FileNotFoundError(f"UniProt flat file not found: {UniProt}.\nPlease provide a valid filename or UniProt accession (if saved to {os.path.expanduser('~/.config/edms/UniProt/')}) or file path for UniProt flat file. See edms.dat.uniprot.retrieve_flat_file() or edms uniprot retrieve -h for more information.")
-                
+            if secondary_structure is not None:
                 # parameters for the secondary-structure "track"
                 if ss_h is None:
                     ss_h  = 0.5 # height of secondary structure track
                 if ss_y is None:
-                    ss_y  = min(df[scores_col])-2*0.5 # position below min y value
+                    ss_y  = min(df[f'log2({FC})'])-2*0.5 # position below min y value
 
-                # helices
-                helix_df = UniProt_ss[UniProt_ss["type"] == "α-helix"]
-                if is_html:
-                    helix_spans = [(row.start, row.end - row.start) for _, row in helix_df.iterrows()]
-                    ax.broken_barh(helix_spans, (ss_y, ss_h), label="α-helix", facecolors='turquoise')
-                else:
-                    for xmin, xmax in t.zip_cols(df=helix_df, cols=['start','end']):
-                        ax.axvspan(
-                            xmin,
-                            xmax,
-                            facecolor='turquoise',
-                        alpha=0.15,
-                        edgecolor='none',
-                        zorder=0)  # put behind scatter points
-
-                # β-strands
-                strand_df = UniProt_ss[UniProt_ss["type"] == "β-strand"]
-                if is_html:
-                    strand_spans = [(row.start, row.end - row.start) for _, row in strand_df.iterrows()]
-                    ax.broken_barh(strand_spans, (ss_y, ss_h), label="β-strand", facecolors='gold')
-                else:
-                    for xmin, xmax in t.zip_cols(df=strand_df, cols=['start','end']):
-                        ax.axvspan(
-                            xmin,
-                            xmax,
-                            facecolor='gold',
-                        alpha=0.15,
-                        edgecolor='none',
-                        zorder=0)  # put behind scatter points
+                # secondary structure
+                for ss_description in secondary_structure['ss_description'].unique():
+                    ss_df = secondary_structure[secondary_structure['ss_description']==ss_description]
+                    
+                    if is_html:
+                        ss_spans = [(row.start-0.5, row.end - row.start+0.5) for _, row in ss_df.iterrows()]
+                        ax.broken_barh(ss_spans, (ss_y, ss_h), label=ss_description, facecolors=ss_df['ss_color'].iloc[0])
+                    else:
+                        for xmin, xmax in t.zip_cols(df=ss_df, cols=['start','end']):
+                            ax.axvspan(
+                                xmin-0.5,
+                                xmax+0.5,
+                                facecolor=ss_df['ss_color'].iloc[0],
+                            alpha=0.15,
+                            edgecolor='none',
+                            zorder=0)  # put behind scatter points
                 
             # with legend
             if display_legend == True:

@@ -307,6 +307,8 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col: str='
     # Get samples dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
+    else:
+        df = df.copy()
 
     # Define plate axis method
     def plate(df: pd.DataFrame, group: Literal['96-well plate','8-strip_plate'], pcr: Literal['1','2']) -> pd.DataFrame:
@@ -684,6 +686,8 @@ def hamming_distance_matrix(df: pd.DataFrame | str, id: str, seqs: str, dir:str=
     # Get dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
+    else:
+        df = df.copy()
 
     # Create empty hamming distance matrix
     n = len(df[seqs])

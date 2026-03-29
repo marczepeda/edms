@@ -35,7 +35,8 @@ dependencies = [
   "rich-argparse",
   "mpld3",
   "mdanalysis",
-  "biopandas"
+  "biopandas",
+  "dssp"
 ]
 
 classifiers = [
