@@ -4480,31 +4480,6 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
     # with x-axis line
     if display_axis == True:
         ax.plot([x_axis_dims[0], x_axis_dims[1]], [0,0], color='black', linestyle='-', linewidth=1)
-
-    # with secondary structure
-    if secondary_structure is not None:
-        # parameters for the secondary-structure "track"
-        if ss_h is None:
-            ss_h  = 0.5 # height of secondary structure track
-        if ss_y is None:
-            ss_y  = min(df[f'log2({FC})'])-2*0.5 # position below min y value
-
-        # secondary structure
-        for ss_description in secondary_structure['ss_description'].unique():
-            ss_df = secondary_structure[secondary_structure['ss_description']==ss_description]
-            
-            if is_html:
-                ss_spans = [(row.start-0.5, row.end - row.start+0.5) for _, row in ss_df.iterrows()]
-                ax.broken_barh(ss_spans, (ss_y, ss_h), label=ss_description, facecolors=ss_df['ss_color'].iloc[0])
-            else:
-                for xmin, xmax in t.zip_cols(df=ss_df, cols=['start','end']):
-                    ax.axvspan(
-                        xmin-0.5,
-                        xmax+0.5,
-                        facecolor=ss_df['ss_color'].iloc[0],
-                    alpha=0.15,
-                    edgecolor='none',
-                    zorder=0)  # put behind scatter points
         
     # with legend
     if display_legend == True:
@@ -4537,6 +4512,31 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
                             title_fontproperties=legend_title_props, fontsize=legend_size,
                             bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol)
     
+    # with secondary structure
+    if secondary_structure is not None:
+        # parameters for the secondary-structure "track"
+        if ss_h is None:
+            ss_h  = 0.5 # height of secondary structure track
+        if ss_y is None:
+            ss_y  = min(df[f'log2({FC})'])-2*0.5 # position below min y value
+
+        # secondary structure
+        for ss_description in secondary_structure['ss_description'].unique():
+            ss_df = secondary_structure[secondary_structure['ss_description']==ss_description]
+            
+            if is_html:
+                ss_spans = [(row.start-1, row.end - row.start+1) for _, row in ss_df.iterrows()]
+                ax.broken_barh(ss_spans, (ss_y, ss_h), label=ss_description, facecolors=ss_df['ss_color'].iloc[0])
+            else:
+                for xmin, xmax in t.zip_cols(df=ss_df, cols=['start','end']):
+                    ax.axvspan(
+                        xmin-0.5,
+                        xmax+0.5,
+                        facecolor=ss_df['ss_color'].iloc[0],
+                    alpha=0.15,
+                    edgecolor='none',
+                    zorder=0)  # put behind scatter points
+
     # with labels
     if display_labels == True:
         if is_html:
