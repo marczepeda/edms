@@ -10,9 +10,11 @@ Description: Define Secondary Structure of Proteins
 [DSSP functions]
 - retrieve(): Retrieve DSSP data for a given PDB ID.
 - parse_segments(): Read a DSSP file, isolate one chain, and return continuous DSSP segments.
+- ssa_str(): Convert DSSP secondary structure codes for a chain into a string format compatible with secstructartist (GitHub).
 
 [Plot functions]
 - plot_ss_color_key(): Plot a color key for DSSP secondary structure assignments.
+
 '''
 # Import packages
 import pandas as pd
@@ -20,20 +22,30 @@ import subprocess
 import os
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
+import numpy as np
+from secstructartist.artists import (
+        SecStructArtist, 
+        ElementArtist, 
+        primitives as prim,
+    )
+from pathlib import Path
 from ..utils import mkdir
 from ..gen import plot as p
 
 # DSSP code descriptions
 ss_map = {
-    "H": ["α-helix", "turquoise"], # Helix
-    "G": ["3_10-helix", "mediumblue"],
-    "I": ["π-helix", "slateblue"],
-    "P": ["polyproline-helix", "forestgreen"],
-    "B": ["β-bridge", "orange"], # Strand
-    "E": ["β-strand", "gold"],
-    "T": ["turn", "salmon"], # Flexible
-    "S": ["bend", "sienna"],
-    " ": ["coil", "darkgray"],
+    # Helices
+    "H": ["α-helix", "turquoise"], # i+4 helix
+    "G": ["3_10-helix", "mediumblue"], # i+3 helix
+    "I": ["π-helix", "slateblue"], # i+5 helix
+    "P": ["κ-helix", "forestgreen"], # polyproline helix
+    # Strands
+    "B": ["β-bridge", "orange"], # single residue β-strand
+    "E": ["β-strand", "gold"], # extended β-strand
+    # Flexible
+    "T": ["turn", "salmon"], # hydrogen-bonded turn
+    "S": ["bend", "sienna"], # bend (non-hydrogen-bonded turn)
+    " ": ["coil", "darkgray"], # loop or irregular structure
 }
 
 # DSSP functions
@@ -166,6 +178,48 @@ def parse_segments(dssp_file: str, chain_id: str, unknown_color: str='white') ->
 
     return out
 
+def ssa_str(dssp_file: str, chain_id: str,) -> str:
+    """
+    ssa_str(): Convert DSSP secondary structure codes for a chain into a string format compatible with secstructartist (GitHub).
+
+    Parameters:
+    dssp_file (str): Path to legacy DSSP output file.
+    chain_id (str): Chain identifier to extract, e.g. "A".
+    """
+    lines = Path(dssp_file).read_text().splitlines()
+
+    # DSSP data starts after the header line beginning with "  #"
+    start = None
+    for i, line in enumerate(lines):
+        if line.startswith("  #"):
+            start = i + 1
+            break
+    if start is None:
+        raise ValueError("Could not find DSSP residue table header line starting with '  #'.")
+
+    out = []
+
+    for line in lines[start:]:
+        if not line.strip():
+            continue
+        if len(line) < 17:
+            continue
+
+        # In legacy DSSP format:
+        # chain id is around column 12 (0-based index 11)
+        # SS code is around column 17 (0-based index 16)
+        # These positions are standard for classic DSSP text output.
+        this_chain = line[11]
+        ss_code = line[16]
+
+        # Skip rows from other chains
+        if this_chain != chain_id:
+            continue
+
+        out.append(ss_code)
+
+    return "".join(out)
+
 # Plot functions
 def plot_ss_color_key(
     ncols: int = 3,
@@ -245,6 +299,179 @@ def plot_ss_color_key(
         )
 
     ax.set_title(title, fontsize=title_size, fontweight=title_weight)
+    
+    plt.tight_layout()
+    if dir is not None and file is not None:
+        p.save_fig(dir=dir, file=file, dpi=dpi, transparent=transparent)
+    if show:
+        plt.show()
+    
+    plot_ss_color_key
+
+def plot_ssa(dssp_file: str, chain_id: str, artist: SecStructArtist | str = None, figsize: tuple = (8, 0.5),
+            dir: str = None, file: str = None, dpi: int = 1200, transparent: bool = True, show: bool = True, **kwargs):
+    """
+    plot_ssa(): Plot the secondary structure assignment for a given DSSP file and chain.
+
+    Parameters:
+    dssp_file (str): Path to the DSSP file.
+    chain_id (str): Chain identifier to extract, e.g. "A".
+    artist (SecStructArtist | str): Optional secstructartist ElementArtist to use for plotting; if None, edms custom style will be used.
+    dir (str, optional): Directory to save the figure; if None, the figure is not saved.
+    file (str, optional): Filename to save the figure; if None, the figure is not saved.
+    dpi (int, optional): Resolution for saving the figure.
+    transparent (bool, optional): Whether to save the figure with a transparent background.
+    show (bool, optional): Whether to display the plot (default: True).
+    """
+    # Custom artist (default if not provided)
+    ARTIST_NAME = 'dssp-custom'
+
+    ### Definition of the Element artists
+    H = ElementArtist([
+            prim.HelixPrimitive(
+                fillcolor='turquoise',
+                linecolor='#111111',
+                height_scalar=.9, 
+                ribbon_period = 3.6,
+                fill_inner_ribbon = False,
+            ),
+            prim.HelixPrimitive(
+                fillcolor="paleturquoise",
+                linecolor='#111111',
+                height_scalar=.9, 
+                ribbon_period = 3.6,
+                fill_inner_ribbon = True,
+                zorder_offset = -.5
+            )
+        ], r'$\alpha$-Helix'
+    )
+    G = ElementArtist([
+            prim.HelixPrimitive(
+                fillcolor='mediumblue',
+                linecolor='#111111',
+                height_scalar=.7, 
+                ribbon_period = 3.0,
+                fill_inner_ribbon = False,
+            ),
+            prim.HelixPrimitive(
+                fillcolor="royalblue",
+                linecolor='#111111',
+                height_scalar=.7, 
+                ribbon_period = 3.0,
+                fill_inner_ribbon = True,
+                zorder_offset = -.5
+            )
+        ], r'$3_{10}$-Helix'
+    )
+    P = ElementArtist([
+            prim.HelixPrimitive(
+                fillcolor='forestgreen',
+                linecolor='#111111',
+                height_scalar=.5, 
+                ribbon_period = 3.0,
+                fill_inner_ribbon = False,
+            ),
+            prim.HelixPrimitive(
+                fillcolor="palegreen",
+                linecolor='#111111',
+                height_scalar=.5, 
+                ribbon_period = 3.0,
+                fill_inner_ribbon = True,
+                zorder_offset = -.5
+            )
+        ], r'$\kappa$-Helix'
+    )
+    I = ElementArtist([
+            prim.HelixPrimitive(
+                fillcolor='slateblue',
+                linecolor='#111111',
+                height_scalar=1., 
+                ribbon_period = 4.1,
+                fill_inner_ribbon = False,
+            ),
+                prim.HelixPrimitive(
+                fillcolor="mediumslateblue",
+                linecolor='#111111',
+                height_scalar=1., 
+                ribbon_period = 4.1,
+                fill_inner_ribbon = True,
+                zorder_offset = -.5
+            )
+        ], r'$\pi$-Helix'
+    )
+    B = ElementArtist([
+            prim.ArrowPrimitive(
+                fillcolor='orange',
+                linecolor='#111111', 
+                height_scalar = .65,
+                height_scalar2 = .4,
+                arrow_tip_length =3
+            )
+        ], r'$\beta$-Bridge'
+    )
+    E = ElementArtist([
+            prim.ArrowPrimitive(
+                fillcolor='gold',
+                linecolor='#111111', 
+                height_scalar = .65,
+                height_scalar2 = .4,
+                arrow_tip_length = 3
+            )
+        ], r'Extended $\beta$-Strand'
+    )
+    S = ElementArtist([
+            prim.LinePrimitive(
+                linecolor = "sienna", 
+                linewidth_scalar = 5
+            )
+        ], 'Bend'
+    )
+    T = ElementArtist([
+            prim.LinePrimitive(
+                linecolor="salmon", 
+                linewidth_scalar = 5
+            )
+        ], 'H-bonded turn'
+    )
+    C = ElementArtist([
+            prim.LinePrimitive(
+                linecolor="black", 
+                linewidth_scalar = 1
+            )
+        ], 'Loop'
+    )
+
+    ### Artist setup
+    dssp_mapping = {
+        'H': H, 'h': H, 
+        'G': G, 'g': G, 
+        'P': P, 'p': P, 
+        'I': I, 'i': I,
+        'E': E, 'e': E, 
+        'B': B, 'b': B, 
+        'T': T, 't': T, 
+        'S': S, 's': S, 
+        'C': C, 'c': C, ' ': C, '-': C,
+    }
+
+    # Use custom artist if not provided
+    if artist is None:
+        artist = SecStructArtist(dssp_mapping, linewidth=.5, zorder=5)
+    
+    # Plotting
+    fig, ax = plt.subplots(figsize=figsize, subplot_kw={'projection': 'secstruct'})
+    ax.draw_secondary_structure(
+        secstruct=ssa_str(dssp_file=dssp_file, chain_id=chain_id),
+        artist=artist
+    )
+
+    # Remove the axis
+    ax.set_xlabel("")
+    ax.set_ylabel("")
+    ax.set_axis_off()
+
+    # Legend (only viewable with jupyter notebook backend)
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.6), ncol=3)
     
     plt.tight_layout()
     if dir is not None and file is not None:

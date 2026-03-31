@@ -36,7 +36,8 @@ dependencies = [
   "mpld3",
   "mdanalysis",
   "biopandas",
-  "dssp"
+  "dssp",
+  "secstructartist"
 ]
 
 classifiers = [

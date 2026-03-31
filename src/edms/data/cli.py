@@ -223,6 +223,8 @@ def add_subparser(subparsers, formatter_class=None):
     '''
     edms.data.dssp:
     - retrieve(): Retrieve DSSP data for a given PDB ID.
+    - plot_ss_color_key(): Plot a color key for DSSP secondary structure assignments.
+    - plot_ssa(): Plot the secondary structure assignment for a given DSSP file and chain.
     '''
     parser_dssp = subparsers.add_parser("dssp", help="Define Secondary Structure of Proteins", description="Define Secondary Structure of Proteins", formatter_class=formatter_class)
 
@@ -248,10 +250,25 @@ def add_subparser(subparsers, formatter_class=None):
     parser_dssp_plot_ss_color_key.add_argument("-sw", "--swatch_width", type=float, help="Width of color box", default=argparse.SUPPRESS)
     parser_dssp_plot_ss_color_key.add_argument("-sh", "--swatch_height", type=float, help="Height of color box", default=argparse.SUPPRESS)
     parser_dssp_plot_ss_color_key.add_argument("-a", "--alpha", type=float, help="Transparency of color boxes", default=argparse.SUPPRESS)
-    parser_dssp_plot_ss_color_key.add_argument("-o", "--dir", type=str, help="Directory to save the figure; if not provided, the figure is not saved", default='.')
-    parser_dssp_plot_ss_color_key.add_argument("-f", "--file", type=str, help="Filename to save the figure; if not provided, the figure is not saved", default='dssp_color_key.all')
+    parser_dssp_plot_ss_color_key.add_argument("-o", "--dir", type=str, help="Directory to save the figure (Default: '../out')", default='../out')
+    parser_dssp_plot_ss_color_key.add_argument("-f", "--file", type=str, help="Filename to save the figure (Default: 'dssp_color_key.all')", default='dssp_color_key.all')
     parser_dssp_plot_ss_color_key.add_argument("-d", "--dpi", type=int, help="Resolution for saving the figure (Default: 1200)", default=argparse.SUPPRESS)
     parser_dssp_plot_ss_color_key.add_argument("-nt", "--not_transparent", dest='transparent', action="store_false", help="Don't save plot with transparent background", default=True)
     parser_dssp_plot_ss_color_key.add_argument("-s", "--show", action="store_true", help="Show plot", default=False)
 
     parser_dssp_plot_ss_color_key.set_defaults(func=dssp.plot_ss_color_key)
+
+    # plot_ssa(): Plot the secondary structure assignment for a given DSSP file and chain.
+    parser_dssp_plot_ssa = subparsers_dssp.add_parser("ssa", help="Plot the secondary structure assignment for a given DSSP file and chain.", description="Plot the secondary structure assignment for a given DSSP file and chain.", formatter_class=formatter_class)
+
+    parser_dssp_plot_ssa.add_argument("-i", "--dssp_file", type=str, help="Path to the DSSP file to plot", required=True)
+    parser_dssp_plot_ssa.add_argument("-c", "--chain_id", type=str, help="Chain identifier to extract from the DSSP file (e.g. 'A')", required=True)
+    parser_dssp_plot_ssa.add_argument("-a", "--artist", type=str, help="Optional secstructartist ElementArtist to use for plotting; if not provided, the default edms custom style will be used", default=argparse.SUPPRESS)
+    parser_dssp_plot_ssa.add_argument("-fs", "--figsize", type=parse_tuple_float, help="Figure size (width, height)", default=(8, 0.5))
+    parser_dssp_plot_ssa.add_argument("-o", "--dir", type=str, help="Directory to save the figure (Default: '../out')", default='../out')
+    parser_dssp_plot_ssa.add_argument("-f", "--file", type=str, help="Filename to save the figure (Default: 'dssp_ssa.all'; all => .svg, .pdf, .png)", default='dssp_ssa.all')
+    parser_dssp_plot_ssa.add_argument("-d", "--dpi", type=int, help="Resolution for saving the figure (Default: 1200)", default=1200)
+    parser_dssp_plot_ssa.add_argument("-nt", "--not_transparent", dest='transparent', action="store_false", help="Don't save plot with transparent background", default=True)
+    parser_dssp_plot_ssa.add_argument("-s", "--show", action="store_true", help="Show plot", default=True)
+    
+    parser_dssp_plot_ssa.set_defaults(func=dssp.plot_ssa)
