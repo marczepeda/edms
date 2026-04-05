@@ -11,18 +11,24 @@ Description: Define Secondary Structure of Proteins
 - retrieve(): Retrieve DSSP data for a given PDB ID.
 - parse_segments(): Read a DSSP file, isolate one chain, and return continuous DSSP segments.
 - ssa_str(): Convert DSSP secondary structure codes for a chain into a string format compatible with secstructartist (GitHub).
+- dssp_pdb_id(): Extract the PDB ID from a DSSP file header, if present.
 
 [Plot functions]
 - plot_ss_color_key(): Plot a color key for DSSP secondary structure assignments.
+- plot_ssa(): Plot the secondary structure assignment for a given DSSP file and chain.
 
+[Pymol functions]
+- pymol_color_defs_from_ss_map(): Convert ss_map matplotlib colors into PyMOL set_color commands.
+- pymol_ssa(): Write a PyMOL script that colors secondary-structure elements from a DSSP file.
 '''
 # Import packages
+import re
 import pandas as pd
 import subprocess
 import os
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
-import numpy as np
+from matplotlib.colors import to_rgb
 from secstructartist.artists import (
         SecStructArtist, 
         ElementArtist, 
@@ -219,6 +225,31 @@ def ssa_str(dssp_file: str, chain_id: str,) -> str:
         out.append(ss_code)
 
     return "".join(out)
+
+def dssp_pdb_id(dssp_file: str) -> str | None:
+    """
+    dssp_pdb_id(): Extract the PDB ID from a DSSP file header, if present.
+
+    Parameters:
+    dssp_file (str): Path to the DSSP file.
+    """
+    with open(dssp_file, "r") as f:
+        for line in f:
+            if line.startswith("HEADER"):
+                # Try fixed-width PDB-style position first.
+                # In classic PDB HEADER records, the ID code is near the end.
+                fixed = line[62:66].strip().upper() if len(line) >= 66 else ""
+                if re.fullmatch(r"[A-Z0-9]{4}", fixed):
+                    return fixed
+
+                # Fallback: search the HEADER line for 4-char alphanumeric tokens.
+                tokens = re.findall(r"\b[A-Za-z0-9]{4}\b", line.upper())
+                if tokens:
+                    return tokens[-1]
+
+                return None
+
+    return None
 
 # Plot functions
 def plot_ss_color_key(
@@ -478,3 +509,143 @@ def plot_ssa(dssp_file: str, chain_id: str, artist: SecStructArtist | str = None
         p.save_fig(dir=dir, file=file, dpi=dpi, transparent=transparent)
     if show:
         plt.show()
+
+# Pymol functions
+def pymol_color_defs_from_ss_map(ss_map: dict) -> list[str]:
+    """
+    pymol_color_defs_from_ss_map(): Convert ss_map matplotlib colors into PyMOL set_color commands.
+
+    Parameters:
+    ss_map (dict): Mapping of DSSP codes to descriptions and matplotlib color names.
+    """
+    lines = []
+    for code, (_, mpl_color) in ss_map.items():
+        pymol_name = f"dssp_{code}" if code != " " else "dssp_coil"
+        r, g, b = to_rgb(mpl_color)
+        lines.append(f"set_color {pymol_name}, [{r:.4f}, {g:.4f}, {b:.4f}]")
+    return lines
+
+def pymol_ssa(
+    dssp_file: str,
+    chain_id: str,
+    dir: str,
+    file: str,
+    pdb_id_or_filename: str = None,
+    object_name: str = "prot",
+    base_color: str = "white",
+    unknown_color: str = "white",
+    execute: bool = False,
+):
+    """
+    pymol_ssa(): Write a PyMOL script that colors secondary-structure elements from a DSSP file.
+
+    Parameters:
+    dssp_file (str): Path to the DSSP file.
+    chain_id (str): Chain identifier to extract, e.g. "A".
+    dir (str): Directory to save the PyMOL script.
+    file (str): Output PyMOL script filename, e.g. 'ssa.pml'.
+    pdb_id_or_filename (str): PDB ID or path to the structure file to load in PyMOL.
+    object_name (str, optional): Name of the PyMOL object.
+    base_color (str, optional): Base color applied before DSSP coloring.
+    unknown_color (str, optional): Color for unknown DSSP codes.
+    execute (bool, optional): Whether to execute the generated PyMOL script immediately after writing it.
+    """
+    mkdir(dir)
+    out_file = os.path.join(dir, file)
+
+    df = parse_segments(
+        dssp_file=dssp_file,
+        chain_id=chain_id,
+        unknown_color=unknown_color,
+    ).copy()
+
+    if df.empty:
+        raise ValueError(f"No DSSP segments found for chain '{chain_id}'.")
+
+    def _sanitize_name(text: str) -> str:
+        text = str(text)
+        return (
+            text.replace("α", "alpha")
+                .replace("β", "beta")
+                .replace("π", "pi")
+                .replace("κ", "kappa")
+                .replace(" ", "_")
+                .replace("-", "_")
+                .replace("/", "_")
+                .replace("(", "")
+                .replace(")", "")
+                .replace(".", "")
+                .replace(",", "")
+                .replace("'", "")
+                .replace("#","")
+                .lower()
+        )
+
+    def _pymol_color_name(ss_code: str) -> str:
+        return f"dssp_{ss_code}" if ss_code != " " else "dssp_coil"
+
+    flexible_codes = {"T", "S", " "}
+
+    with open(out_file, "w") as pymol_script:
+        if pdb_id_or_filename is None:
+            pdb_id_or_filename = dssp_pdb_id(dssp_file = dssp_file)
+            if pdb_id_or_filename is None:
+                print("Warning: Could not determine PDB ID from DSSP file. Please provide a structure file path or valid PDB ID to load in PyMOL.")
+            pymol_script.write(f"fetch {pdb_id_or_filename}, {object_name}\n")
+        elif len(pdb_id_or_filename) == 4 and pdb_id_or_filename.isalnum():
+            pymol_script.write(f"fetch {pdb_id_or_filename}, {object_name}\n")
+        else:
+            pymol_script.write(f'load "{os.path.abspath(pdb_id_or_filename)}", {object_name}\n')
+        pymol_script.write(f"hide everything, {object_name}\n")
+        pymol_script.write(f"show cartoon, {object_name}\n")
+        pymol_script.write(f"color {base_color}, {object_name}\n")
+        pymol_script.write("bg_color white\n")
+        pymol_script.write("set cartoon_fancy_helices, 1\n")
+        pymol_script.write("set cartoon_flat_sheets, 1\n")
+        pymol_script.write("set cartoon_side_chain_helper, 0\n\n")
+
+        # Define PyMOL colors from matplotlib color names in ss_map
+        pymol_script.write("# DSSP colors converted from matplotlib names\n")
+        for line in pymol_color_defs_from_ss_map(ss_map):
+            pymol_script.write(line + "\n")
+        pymol_script.write("\n")
+
+        # Optional fallback color for unknown DSSP codes
+        r, g, b = to_rgb(unknown_color)
+        pymol_script.write(f"set_color dssp_unknown, [{r:.4f}, {g:.4f}, {b:.4f}]\n\n")
+
+        # Color DSSP segments directly on the original object
+        for row in df.itertuples(index=False):
+            start = int(row.start)
+            end = int(row.end)
+            ss_code = row.ss_code
+
+            selection = f"{object_name} and chain {chain_id} and resi {start}-{end}"
+            pymol_color_name = _pymol_color_name(ss_code) if ss_code in ss_map else "dssp_unknown"
+
+            pymol_script.write(f"color {pymol_color_name}, ({selection})\n")
+
+            pymol_script.write("\n")
+
+        # Optional selections by DSSP code
+        pymol_script.write("# Group residues by DSSP code\n")
+        for code in df["ss_code"].drop_duplicates():
+            code_df = df[df["ss_code"] == code]
+            if code_df.empty:
+                continue
+
+            sel_parts = [
+                f"(chain {chain_id} and resi {int(r.start)}-{int(r.end)})"
+                for r in code_df.itertuples(index=False)
+            ]
+
+            code_name = "coil" if code == " " else _sanitize_name(ss_map.get(code, [code])[0])
+            pymol_script.write(f"select dssp_{code_name}, " + " or ".join(sel_parts) + "\n")
+
+        pymol_script.write("\n")
+        pymol_script.write(f"orient {object_name} and chain {chain_id}\n")
+        pymol_script.write(f"zoom {object_name} and chain {chain_id}\n")
+        pymol_script.write("deselect\n")
+    
+    if execute:
+        subprocess.run(f"pymol {out_file}", shell=True)

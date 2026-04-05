@@ -225,6 +225,7 @@ def add_subparser(subparsers, formatter_class=None):
     - retrieve(): Retrieve DSSP data for a given PDB ID.
     - plot_ss_color_key(): Plot a color key for DSSP secondary structure assignments.
     - plot_ssa(): Plot the secondary structure assignment for a given DSSP file and chain.
+    - pymol_ssa() [pymol]: Write a PyMOL script that colors secondary-structure elements from a DSSP file.
     '''
     parser_dssp = subparsers.add_parser("dssp", help="Define Secondary Structure of Proteins", description="Define Secondary Structure of Proteins", formatter_class=formatter_class)
 
@@ -272,3 +273,18 @@ def add_subparser(subparsers, formatter_class=None):
     parser_dssp_plot_ssa.add_argument("-s", "--show", action="store_true", help="Show plot", default=True)
     
     parser_dssp_plot_ssa.set_defaults(func=dssp.plot_ssa)
+
+    # pymol_ssa() [pymol]: Write a PyMOL script that colors secondary-structure elements from a DSSP file.
+    parser_dssp_pymol_ssa = subparsers_dssp.add_parser("pymol", help="Write a PyMOL script that colors secondary-structure elements from a DSSP file.", description="Write a PyMOL script that colors secondary-structure elements from a DSSP file.", formatter_class=formatter_class)
+    
+    parser_dssp_pymol_ssa.add_argument("-i", "--dssp_file", type=str, help="Path to the DSSP file to plot", required=True)  
+    parser_dssp_pymol_ssa.add_argument("-c", "--chain_id", type=str, help="Chain identifier to extract from the DSSP file (e.g. 'A')", required=True)
+    parser_dssp_pymol_ssa.add_argument("-o", "--dir", type=str, help="Directory to save the PyMOL script (Default: '../out')", default='../out')
+    parser_dssp_pymol_ssa.add_argument("-f", "--file", type=str, help="Filename to save the PyMOL script (Default: 'dssp_ssa.pml')", default='dssp_ssa.pml')
+    parser_dssp_pymol_ssa.add_argument("-p", "--pdb_id_or_filename", type=str, help="PDB ID or path to the structure file to load in PyMOL.")
+    parser_dssp_pymol_ssa.add_argument("-n", "--object_name", type=str, help="Name of the PyMOL object to create (Default: 'prot')", default='prot')
+    parser_dssp_pymol_ssa.add_argument("-b", "--base_color", type=str, help="Base color to apply to the structure before DSSP coloring (Default: 'white')", default='white')
+    parser_dssp_pymol_ssa.add_argument("-u", "--unknown_color", type=str, help="Color to use for unknown DSSP codes (Default: 'white')", default='white')
+    parser_dssp_pymol_ssa.add_argument("-e", "--execute", action="store_true", help="Execute the generated PyMOL script immediately after writing it.", default=False)
+    
+    parser_dssp_pymol_ssa.set_defaults(func=dssp.pymol_ssa)
