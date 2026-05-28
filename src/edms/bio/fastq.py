@@ -855,7 +855,7 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
     extend_gap_score (float, optional): extend gap score for pairwise alignment (Default: -0.1)
     align_dims (tuple, optional): (start_i, end_i) alignments per fastq file to save compute (Default: None)
     align_ckpt (int, optional): save checkpoints for alignments (Default: 10000)
-    plot_suf (str, optional): plot type suffix with '.' (Default: None)
+    plot_suf (str, optional): plot file suffix (Default: None => no plot, '.all' => .png, .pdf, & .svg)
     show (bool, optional): show plots (Default: False)
     return_dc (bool, optional): return fastqs dictionary (Default: False)
     exact (bool, optional): perform exact matching only (Default: False)
@@ -1079,7 +1079,7 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
     extend_gap_score (float, optional): extend gap score for pairwise alignment (Default: -0.1)
     align_dims (tuple, optional): (start_i, end_i) alignments per fastq file to save compute (Default: None)
     align_ckpt (int, optional): save checkpoints for alignments (Default: 10000)
-    plot_suf (str, optional): plot type suffix with '.' (Default: None, Options: (Default: '.all' => .png, .pdf, & .svg; etc.)
+    plot_suf (str, optional): plot file suffix (Default: None => no plot, '.all' => .png, .pdf, & .svg)
     show (bool, optional): show plots (Default: False)
     return_dc (bool, optional): return fastqs dictionary (Default: False)
     exact (bool, optional): perform exact matching only (Default: False)
@@ -1411,7 +1411,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                      df_motif5: pd.DataFrame | str=None, df_motif3: pd.DataFrame | str=None, fastq_col: str=None,  meta: pd.DataFrame | str=None, 
                      match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, extend_gap_score: float = -0.1, 
                      align_dims: tuple=(0,0), align_ckpt: int=10000, save_alignments: bool=False, return_df: bool=False, 
-                     literal_eval: bool=True, plot_suf: str='.all', show: bool=False, sh: bool=False, **plot_kwargs) -> pd.DataFrame:
+                     literal_eval: bool=True, plot_suf: str=None, show: bool=False, sh: bool=False, **plot_kwargs) -> pd.DataFrame:
     ''' 
     count_signatures(): generate signatures from fastq read region alignments to WT sequence; count signatures, plot and return fastq signatures dataframe
 
@@ -1442,7 +1442,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
     save_alignments (bool, optional): save alignments (Default: False, save memory)
     return_df (bool, optional): return dataframe (Default: False)
     literal_eval (bool, optional): convert string representations (Default: True)
-    plot_suf (str, optional): plot type suffix with '.' (Default: '.all' => .png, .pdf, & .svg)
+    plot_suf (str, optional): plot type suffix with '.' (Default: None => no plots, '.all' => .png, .pdf, & .svg)
     show (bool, optional): show plots (Default: False)
     sh (bool, optional): combine output log files into a single file in working directory (Default: False)
     
@@ -1930,22 +1930,24 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
     
     io.save(obj=out_df, dir=out_dir, file=out_file)
     io.save(obj=out_df2, dir=out_dir, file=f"{'.'.join(out_file.split('.')[:-1])}_aggregate.{out_file.split('.')[-1]}")
-    stack(df=out_df,x='fastq_file',y='fraction',cols=edit_col,vertical=False,
-          palette_or_cmap='tab20',repeats=math.ceil(len(out_df[edit_col].unique())/20),cutoff_group='fastq_file',cutoff_value=0,legend_bbox_to_anchor=(0,-.1),legend_ncol=8,
-          figsize=(15,10), title='Edit Outcomes', dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}{plot_suf}", show=show, **plot_kwargs)
-    stack(df=out_df2,x='fastq_file',y='fraction',cols=edit_col,vertical=False,
-          palette_or_cmap='tab20',repeats=1,cutoff_group='fastq_file',cutoff_value=0,legend_bbox_to_anchor=(0,-.1),legend_ncol=3,
-          figsize=(15,10), title='Edit Outcomes', dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}_aggregate{plot_suf}", show=show, **plot_kwargs)
+    if plot_suf is not None: 
+        stack(df=out_df,x='fastq_file',y='fraction',cols=edit_col,vertical=False,
+            palette_or_cmap='tab20',repeats=math.ceil(len(out_df[edit_col].unique())/20),cutoff_group='fastq_file',cutoff_value=0,legend_bbox_to_anchor=(0,-.1),legend_ncol=8,
+            figsize=(15,10), title='Edit Outcomes', dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}{plot_suf}", show=show, **plot_kwargs)
+        stack(df=out_df2,x='fastq_file',y='fraction',cols=edit_col,vertical=False,
+            palette_or_cmap='tab20',repeats=1,cutoff_group='fastq_file',cutoff_value=0,legend_bbox_to_anchor=(0,-.1),legend_ncol=3,
+            figsize=(15,10), title='Edit Outcomes', dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}_aggregate{plot_suf}", show=show, **plot_kwargs)
     
     if n_extra_nt>0:
         io.save(obj=out_df3, dir=out_dir, file=f"{'.'.join(out_file.split('.')[:-1])}_wo_{n_extra_nt}_extra_nt.{out_file.split('.')[-1]}")
         io.save(obj=out_df4, dir=out_dir, file=f"{'.'.join(out_file.split('.')[:-1])}_wo_{n_extra_nt}_extra_nt_aggregate.{out_file.split('.')[-1]}")
-        stack(df=out_df3,x='fastq_file',y='fraction',cols=edit_col,vertical=False,
-            palette_or_cmap='tab20',repeats=math.ceil(len(out_df3[edit_col].unique())/20),cutoff_group='fastq_file',cutoff_value=0,legend_bbox_to_anchor=(0,-.1),legend_ncol=8,
-            figsize=(15,10), title='Edit Outcomes', dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}_wo_{n_extra_nt}_extra_nt{plot_suf}", show=show, **plot_kwargs)
-        stack(df=out_df4,x='fastq_file',y='fraction',cols=edit_col,vertical=False,
-            palette_or_cmap='tab20',repeats=1,cutoff_group='fastq_file',cutoff_value=0,legend_bbox_to_anchor=(0,-.1),legend_ncol=3,
-            figsize=(15,10), title='Edit Outcomes', dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}_wo_{n_extra_nt}_extra_nt_aggregate{plot_suf}", show=show, **plot_kwargs)
+        if plot_suf is not None: 
+            stack(df=out_df3,x='fastq_file',y='fraction',cols=edit_col,vertical=False,
+                palette_or_cmap='tab20',repeats=math.ceil(len(out_df3[edit_col].unique())/20),cutoff_group='fastq_file',cutoff_value=0,legend_bbox_to_anchor=(0,-.1),legend_ncol=8,
+                figsize=(15,10), title='Edit Outcomes', dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}_wo_{n_extra_nt}_extra_nt{plot_suf}", show=show, **plot_kwargs)
+            stack(df=out_df4,x='fastq_file',y='fraction',cols=edit_col,vertical=False,
+                palette_or_cmap='tab20',repeats=1,cutoff_group='fastq_file',cutoff_value=0,legend_bbox_to_anchor=(0,-.1),legend_ncol=3,
+                figsize=(15,10), title='Edit Outcomes', dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}_wo_{n_extra_nt}_extra_nt_aggregate{plot_suf}", show=show, **plot_kwargs)
 
     if return_df: return out_df
 
@@ -4134,6 +4136,7 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: t
         legend_title: str='',legend_title_size: int=12, legend_title_weight: str='bold', legend_size: int = 12, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1,
         legend_columnspacing: int=-4, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, html_size_multiplier: float=1.5, 
         display_legend: bool=True, display_labels: bool=True, display_lines: bool=False, display_axis: bool=True, return_df: bool=True, dpi: int = 0, transparent: bool=True, show: bool=True, space_capitalize: bool=True, 
+        dont_log: bool=False, # temporary
         **kwargs) -> pd.DataFrame:
     ''' 
     vol(): creates volcano plot
@@ -4228,8 +4231,13 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: t
     mark_order = ['D','^','v','<','>','o']
 
     # Log transform data
-    df[f'log2({FC})'] = [np.log10(FC_val)/np.log10(2) for FC_val in df[FC]]
-    df[f'-log10({pval})'] = [-np.log10(pval_val) for pval_val in df[pval]]
+    if not dont_log: #temporary fix need to systematically fix ### replace with default x and y; make zscore options in stat.py
+        df[f'log2({FC})'] = [np.log10(FC_val)/np.log10(2) for FC_val in df[FC]]
+        df[f'-log10({pval})'] = [-np.log10(pval_val) for pval_val in df[pval]]
+    else:
+        df[f'log2({FC})'] = df[FC]
+        df[f'-log10({pval})'] = df[pval]
+    # here 
     
     # Z-score normalization if specified
     if z_col is not None and z_var is not None:
@@ -4267,7 +4275,7 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: t
           legend_title=legend_title, legend_title_size=legend_title_size, legend_title_weight=legend_title_weight, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_ncol=legend_ncol, 
           legend_columnspacing=legend_columnspacing, legend_handletextpad=legend_handletextpad, legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad, legend_handlelength=legend_handlelength, html_size_multiplier=html_size_multiplier,
           display_legend=display_legend, display_labels=display_labels, display_lines=display_lines, display_axis=display_axis, return_df=return_df, dpi=dpi, show=show, transparent=transparent, space_capitalize=space_capitalize,
-          PDB_pt=PDB_pt,
+          PDB_pt=PDB_pt, from_fastq=True, # temporary
           **kwargs)
 
 def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size_dims: tuple=None, z_col: str=None, z_var: str=None, label: str='Edit', label_size: int=16,
@@ -4277,7 +4285,7 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
         legend_title: str='',legend_title_size: int=12, legend_title_weight: str='bold', legend_size: int = 12, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1, 
         legend_columnspacing: int=-3, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, html_size_multiplier: float=1.5,
-        display_legend: bool=True, display_labels: bool=True, display_axis: bool=True, return_df: bool=True, dpi: int = 0, transparent: bool=True, show: bool=True, space_capitalize: bool=True,
+        display_legend: bool=True, display_labels: bool=True, display_axis: bool=True, return_df: bool=True, dpi: int = 0, transparent: bool=True, show: bool=True, space_capitalize: bool=True, dont_log: bool=False, # temporary
         **kwargs) -> pd.DataFrame:
     ''' 
     torn(): creates tornado plot
@@ -4367,9 +4375,14 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
     mark_order = ['D','^','v','<','>','o']
 
     # Log transform data
-    df[f'log2({FC})'] = [np.log10(FC_val)/np.log10(2) for FC_val in df[FC]]
-    df[f'-log10({pval})'] = [-np.log10(pval_val) for pval_val in df[pval]]
-    
+    if not dont_log: #temporary fix need to systematically fix ### replace with default x and y; make zscore options in stat.py
+        df[f'log2({FC})'] = [np.log10(FC_val)/np.log10(2) for FC_val in df[FC]]
+        df[f'-log10({pval})'] = [-np.log10(pval_val) for pval_val in df[pval]]
+    else:
+        df[f'log2({FC})'] = df[FC]
+        df[f'-log10({pval})'] = df[pval]
+    # here 
+
     # Z-score normalization if specified
     if z_col is not None and z_var is not None:
         z_df = df[df[z_col]==z_var]

@@ -524,7 +524,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_plot_motif.add_argument("-i", "--df", help="Path to count_motif() output file", required=True)
 
     parser_fastq_plot_motif.add_argument("-o","--out_dir", type=str, help="Directory to save plots", default=f'../out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
-    parser_fastq_plot_motif.add_argument("-s","--plot_suf", type=str, default=".all", help="Plot file suffix (Default: '.all' => .png, .pdf, & .svg)")
+    parser_fastq_plot_motif.add_argument("-s","--plot_suf", type=str, default='.all', help="Plot file suffix (Default: '.all' => .png, .pdf, & .svg)")
     parser_fastq_plot_motif.add_argument("-n","--numeric", choices=["count", "fraction"], default="count", help="Numeric column to use for plotting (Default: 'count')")
     parser_fastq_plot_motif.add_argument("-I","--id_col", default="fastq_file", help="Column used for sample ID (Default: 'fastq_file')")
     parser_fastq_plot_motif.add_argument("-ia","--id_axis", default="fastq", help="Label to use on the plot axis (Default: 'fastq')")
@@ -538,7 +538,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_plot_alignments.add_argument("-I","--id_col", help="ID column name in the annotated library reference file", required=True)
 
     parser_fastq_plot_alignments.add_argument("-o","--out_dir", help="Output directory for plots", default=f'../out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
-    parser_fastq_plot_alignments.add_argument("-p","--plot_suf", default=".all", help="Plot file suffix (Default: '.all' => .png, .pdf, & .svg)")
+    parser_fastq_plot_alignments.add_argument("-p","--plot_suf", default='.all', help="Plot file suffix (Default: '.all' => .png, .pdf, & .svg)")
     parser_fastq_plot_alignments.add_argument("-s","--show", action="store_true", help="Display plots interactively",default=False)
 
     # count_region() [region]:
@@ -557,7 +557,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_count_region.add_argument("-egs","--extend_gap_score", type=float, default=-0.1, help="Gap extension score (Default: -0.1)")
     parser_fastq_count_region.add_argument("-ad","--align_dims", type=parse_tuple_int, default=(0, 0), help="Alignment range formatted as 'start,end' (Default: 0,0 = all reads)")
     parser_fastq_count_region.add_argument("-ac","--align_ckpt", type=int, default=10000, help="Checkpoint frequency (Default: 10000)")
-    parser_fastq_count_region.add_argument("-p","--plot_suf", type=str, default=".all", help="Plot file suffix (Default: '.all' => .png, .pdf, & .svg)")
+    parser_fastq_count_region.add_argument("-p","--plot_suf", type=str, default=None, help="Plot file suffix (Default: None => no plot, '.all' => .png, .pdf, & .svg)")
     parser_fastq_count_region.add_argument("-s","--show", action="store_true", help="Display plots interactively", default=False)
     parser_fastq_count_region.add_argument("-e","--exact", action="store_true", help="Perform exact matching only", default=False)
     parser_fastq_count_region.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
@@ -576,7 +576,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_count_alignments.add_argument("-egs","--extend_gap_score", type=float, default=-0.1, help="Gap extension penalty (Default: -0.1)")
     parser_fastq_count_alignments.add_argument("-ad","--align_dims", type=parse_tuple_int, default=(0, 0), help="Alignment range as 'start,end' (Default: 0,0 = all reads)")
     parser_fastq_count_alignments.add_argument("-ac","--align_ckpt", type=int, default=10000, help="Checkpoint frequency for saving alignment progress")
-    parser_fastq_count_alignments.add_argument("-p","--plot_suf", type=str, default=".all", help="Plot file suffix (Default: '.all' => .png, .pdf, & .svg)")
+    parser_fastq_count_alignments.add_argument("-p","--plot_suf", type=str, default=None, help="Plot file suffix (Default: None => no plot, '.all' => .png, .pdf, & .svg)")
     parser_fastq_count_alignments.add_argument("-s","--show", action="store_true", help="Show plots interactively")
     parser_fastq_count_alignments.add_argument("-e","--exact", action="store_true", help="Perform exact matching only", default=False)
     parser_fastq_count_alignments.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
@@ -635,7 +635,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_count_signatures.add_argument("-ac", "--align_ckpt", type=int, default=10000, help="Checkpoint frequency (Default: 10000)")
     parser_fastq_count_signatures.add_argument("-sa", "--save_alignments", action="store_true", help="Save alignments (Default: False, save memory)", default=False)
     parser_fastq_count_signatures.add_argument("-nl", "--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
-    parser_fastq_count_signatures.add_argument("-p", "--plot_suf", type=str, help="Plot suffix type (Default: '.all' => .png, .pdf, & .svg)", default='.all')
+    parser_fastq_count_signatures.add_argument("-p", "--plot_suf", type=str, help="Plot file suffix (Default: None => no plot, '.all' => .png, .pdf, & .svg)", default=None)
     parser_fastq_count_signatures.add_argument("-s", "--show", action="store_true", help="Display plots interactively", default=False)
     parser_fastq_count_signatures.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
 

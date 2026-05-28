@@ -325,23 +325,25 @@ def out_subs(dir: str):
     if not os.path.isdir(dir):
         raise ValueError(f"{dir} is not a valid directory.")
 
-    for root, dirs, files in os.walk(dir, topdown=False):
+    parent_dir = dir
+
+    for root, dirs, files in os.walk(parent_dir, topdown=False):
         for file in files:
             file_path = os.path.join(root, file)
-            target_path = os.path.join(dir, file)
+            target_path = os.path.join(parent_dir, file)
 
             # Resolve name conflicts by appending a counter
             base, ext = os.path.splitext(file)
             counter = 1
             while os.path.exists(target_path):
-                target_path = os.path.join(dir, f"{base}_{counter}{ext}")
+                target_path = os.path.join(parent_dir, f"{base}_{counter}{ext}")
                 counter += 1
 
             shutil.move(file_path, target_path)
 
         # Remove empty directories
-        for dir in dirs:
-            dir_path = os.path.join(root, dir)
+        for subdir in dirs:
+            dir_path = os.path.join(root, subdir)
             if os.path.isdir(dir_path) and not os.listdir(dir_path):
                 os.rmdir(dir_path)
 

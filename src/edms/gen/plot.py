@@ -2389,7 +2389,7 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str 
         legend_title: str = '', legend_title_size: int = 12, legend_title_weight: str = 'bold', legend_size: int = 12, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_ncol: int = 1, 
         legend_columnspacing: int=-4, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, html_size_multiplier: float=1.5,
         display_legend: bool = True, display_labels: str = 'FC & p-value', display_lines: bool = False, display_axis: bool = True, return_df: bool = True, dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True,
-        PDB_pt: str = None, # only intended for fastq plots
+        PDB_pt: str = None, from_fastq: bool = False, # only intended for fastq plots
         **kwargs) -> pd.DataFrame:
     ''' 
     vol(): creates volcano plot
@@ -2488,7 +2488,8 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, stys: str = None, size: str 
         legend_size=legend_size*html_size_multiplier*.75
     
     # Prevent overwriting edms.fastq.vol()
-    if f'log2({FC})_raw' not in df.columns:
+    if not from_fastq:
+    #if f'log2({FC})_raw' not in df.columns:
 
         # Log transform data
         df[f'log2({FC})'] = [np.log10(FC_val)/np.log10(2) for FC_val in df[FC]]

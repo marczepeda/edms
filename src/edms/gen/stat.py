@@ -453,6 +453,7 @@ def weighted_corr_line(df: pd.DataFrame, x: str, y: str, weight: str, ax=None,
 # Comparison
 def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str, 
             var: str, count: str, pseudocount: int=1, alternative: str='two-sided', replicate: str = None,
+            log2_or: str | None = None, se_log2_or: str | None = None, confidence_lambda: float | str | None = 'auto',
             dir: str = None, file: str = None, verbose: bool = False) -> pd.DataFrame:
     ''' 
     compare(): computes FC, pval, and log transformations relative to a specified condition
@@ -466,12 +467,15 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str,
     count (str): count column name
     pseudocount (int, optional): pseudocount to avoid log(0) & /0 (Default: 1)
     alternative (str, optional): alternative hypothesis for statistical test ('two-sided', 'less', or 'greater'; Default: 'two-sided')
+    log2_or (str, optional): log2 odds ratio column name (Default: None)
+    se_log2_or (str, optional): standard error of log2 odds ratio column name (Default: None)
+    confidence_lambda (float | str | None, optional): scaling factor for variance term in confidence score; auto mode, scale the variance term so it is roughly comparable to se_log2_or^2. (Default: 'auto')
     dir (str, optional): save directory
     file (str, optional): save file
     verbose (bool, optional): print progress to console (Default: False)
     '''
     # Get dataframe from file path if needed
-    if type(df)==str:
+    if isinstance(df, str):
         df = io.get(pt=df)
     else:
         df = df.copy()
@@ -487,11 +491,26 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str,
         if any(df_replicate_vc['count'] != df_replicate_vc_1):
             raise ValueError(f"Unequal number of replicates per condition in replicate column '{replicate}'")    
 
+    # Validate optional OR columns
+    if log2_or is not None and log2_or not in df.columns:
+        raise ValueError(f"log2_or '{log2_or}' not found in df")
+    if se_log2_or is not None and se_log2_or not in df.columns:
+        raise ValueError(f"se_log2_or '{se_log2_or}' not found in df")
+    if (log2_or is None) ^ (se_log2_or is None):
+        raise ValueError("Provide both log2_or and se_log2_or, or neither")
+
     # Get metadata
     meta_cols = list(df.columns)
     if count not in meta_cols: # Validate count column
         raise ValueError(f"count column '{count}' not found in df")
     meta_cols.remove(count)
+
+    exclude_meta = set()
+    if log2_or is not None:
+        exclude_meta.add(log2_or)
+    if se_log2_or is not None:
+        exclude_meta.add(se_log2_or)
+    meta_cols = [c for c in meta_cols if c not in exclude_meta]
 
     if verbose: 
         print(f'Add pseudocount ({pseudocount}) to avoid log(0) & compute fraction per million (FPM)')
@@ -525,12 +544,14 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str,
         # Define aggregation dictionary dynamically
         agg_dict = {}
         for col in meta_cols: # Include metadata columns as sets
-            agg_dict[col] = lambda x: set(x)
+            agg_dict[col] = lambda x: set(
+                tuple(i) if isinstance(i, list) else i for i in x
+            )
         # Include both mean and list of original values
         agg_dict[count] = 'mean'
         agg_dict[f'{count}+{pseudocount}'] = 'mean'
-        agg_dict['FPM'] = ['mean', list]
-        agg_dict['FPM_pc'] = ['mean', list]
+        agg_dict['FPM'] = ['mean', list, 'var', 'count']
+        agg_dict['FPM_pc'] = ['mean', list, 'var', 'count']
 
         # Join samples back into 1 dataframe and split by condition
         for c, df_cond in t.split(df=t.join(dc=dc, col=sample), key=cond).items():
@@ -579,10 +600,11 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str,
             df_other_edit['FPM_mean_compare'] = [df_comp_edit.iloc[0]['FPM_mean']] * df_other_edit.shape[0]
 
             # Robust FC using pseudocount-adjusted FPM; guard against zero denominator
-            _den = float(df_comp_edit.iloc[0]['FPM_pc_mean'])
-            if _den <= 0:
-                _den = np.finfo(float).eps
-            df_other_edit['FC'] = df_other_edit['FPM_pc_mean'] / _den
+            den = float(df_comp_edit.iloc[0]['FPM_pc_mean'])
+            if den <= 0:
+                den = np.finfo(float).eps
+            df_other_edit['FC'] = df_other_edit['FPM_pc_mean'] / den
+            df_other_edit['log2FC'] = np.log2(df_other_edit['FC'].replace(0, np.finfo(float).eps))
 
             # Two-sample t-tests using the adjusted per-sample values
             ttests = [
@@ -591,7 +613,35 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str,
             ]
             df_other_edit['pval'] = [ttest[1] for ttest in ttests]
             df_other_edit['tstat'] = [ttest[0] for ttest in ttests]
+            
+            # replicate-level noise term
+            var_other_val = df_other_edit['FPM_pc_var'].fillna(0.0).astype(float)
+            mean_other_val = df_other_edit['FPM_pc_mean'].fillna(0.0).astype(float)
+            n_other_val = df_other_edit['FPM_pc_count'].fillna(1.0).astype(float)
+
+            var_comp_val = float(df_comp_edit.iloc[0].get('FPM_pc_var', 0.0))
+            if np.isnan(var_comp_val):
+                var_comp_val = 0.0
+            mean_comp_val = float(df_comp_edit.iloc[0].get('FPM_pc_mean', 0.0))
+            if np.isnan(mean_comp_val):
+                mean_comp_val = 0.0
+            n_comp_val = float(df_comp_edit.iloc[0].get('FPM_pc_count', 1.0))
+            if np.isnan(n_comp_val) or n_comp_val <= 0:
+                n_comp_val = 1.0
+            
+            df_other_edit['FPM_pc_var_compare'] = var_comp_val
+            df_other_edit['FPM_pc_n_compare'] = n_comp_val
+            
+            alpha = 1.0
+            mean_floor = 1e-12
+
+            df_other_edit['var_term'] = (
+                var_other_val / (np.maximum(mean_other_val, mean_floor) ** 2 * np.maximum(n_other_val, 1.0))
+                + alpha * var_comp_val / (max(mean_comp_val, mean_floor) ** 2 * max(n_comp_val, 1.0))
+            )
+
             df_stat = pd.concat([df_stat, df_other_edit])
+
         df_stat['compare'] = [cond_comp] * df_stat.shape[0]
         df_stat = df_stat.sort_values(by=[cond, var]).reset_index(drop=True)
 
@@ -601,10 +651,9 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str,
             print(f'Replicate-based version:\nCompute FC within replicates relative to {cond_comp}:')
 
         df_stat = pd.DataFrame()
-        df_comp = t.join(dc=dc, col=sample)
-        df_comp = df_comp[df_comp[cond] == cond_comp]
-        df_other = t.join(dc=dc, col=sample)
-        df_other = df_other[df_other[cond] != cond_comp]
+        joined = t.join(dc=dc, col=sample)
+        df_comp = joined[joined[cond] == cond_comp]
+        df_other = joined[joined[cond] != cond_comp]
 
         # Pair within replicate: match on (var, replicate)
         paired = df_other.merge(
@@ -621,6 +670,88 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str,
         paired['FC'] = paired['FPM_pc'].astype(float) / np.maximum(paired['FPM_pc_compare'], eps)
         paired['log2FC'] = np.log2(np.maximum(paired['FC'].astype(float), eps))
         df_stat = paired.sort_values(by=[cond, var, replicate]).reset_index(drop=True)
+
+        # summarize replicate variability by (cond, var)
+        grp = (
+            df_stat.groupby([cond, var], as_index=False)
+            .agg(
+                FPM_pc_mean=('FPM_pc', 'mean'),
+                FPM_pc_var=('FPM_pc', 'var'),
+                FPM_pc_count=('FPM_pc', 'count'),
+                FC_mean=('FC', 'mean'),
+                log2FC_mean=('log2FC', 'mean'),
+            )
+        )
+
+        grp_comp = grp[grp[cond] == cond_comp][[var, 'FPM_pc_mean', 'FPM_pc_var', 'FPM_pc_count']]
+        grp_comp = grp_comp.rename(columns={
+            'FPM_pc_mean': 'FPM_pc_mean_compare',
+            'FPM_pc_var': 'FPM_pc_var_compare',
+            'FPM_pc_count': 'FPM_pc_n_compare'
+        })
+
+        grp_other = grp[grp[cond] != cond_comp].merge(grp_comp, on=var, how='left')
+
+        mean_floor = 1e-12
+        alpha = 1.0
+
+        grp_other['var_term'] = (
+            grp_other['FPM_pc_var'].fillna(0.0).astype(float)
+            / (
+                np.maximum(grp_other['FPM_pc_mean'].fillna(0.0).astype(float), mean_floor) ** 2
+                * np.maximum(grp_other['FPM_pc_count'].fillna(1.0).astype(float), 1.0)
+            )
+            + alpha *
+            grp_other['FPM_pc_var_compare'].fillna(0.0).astype(float)
+            / (
+                np.maximum(grp_other['FPM_pc_mean_compare'].fillna(0.0).astype(float), mean_floor) ** 2
+                * np.maximum(grp_other['FPM_pc_n_compare'].fillna(1.0).astype(float), 1.0)
+            )
+        )
+
+        df_stat = grp_other.copy()
+        df_stat['compare'] = cond_comp
+
+    # optional OR-based combined score
+    if log2_or is not None and se_log2_or is not None:
+        keep_cols = [cond, var, log2_or, se_log2_or]
+        or_df = df[[c for c in keep_cols if c in df.columns]].copy()
+        or_df = or_df.drop_duplicates(subset=[cond, var])
+
+        df_stat = df_stat.merge(or_df, on=[cond, var], how='left')
+
+        df_stat['se_log2_or_sq'] = df_stat[se_log2_or].astype(float) ** 2
+        df_stat['var_term'] = df_stat['var_term'].astype(float)
+
+        valid = (
+            np.isfinite(df_stat['se_log2_or_sq']) &
+            np.isfinite(df_stat['var_term']) &
+            (df_stat['var_term'] > 0)
+        )
+
+        lambda_used = np.nan
+        if isinstance(confidence_lambda, str):
+            if confidence_lambda != 'auto':
+                raise ValueError("confidence_lambda must be a float, None, or 'auto'")
+            if valid.any():
+                lambda_used = np.nanmedian(df_stat.loc[valid, 'se_log2_or_sq']) / np.nanmedian(df_stat.loc[valid, 'var_term'])
+            else:
+                lambda_used = 1.0
+        elif confidence_lambda is None:
+            lambda_used = 1.0
+        else:
+            lambda_used = float(confidence_lambda)
+
+        if verbose:
+            print(f'Using confidence_lambda = {lambda_used}')
+
+        df_stat['confidence_lambda'] = lambda_used
+        df_stat['confidence_se'] = np.sqrt(
+            df_stat['se_log2_or_sq'] + lambda_used * np.maximum(df_stat['var_term'], 0.0)
+        )
+        df_stat['confidence_score'] = (
+            df_stat[log2_or].astype(float) / np.maximum(df_stat['confidence_se'], np.finfo(float).eps)
+        )
         
     # Save & return statistics dataframe
     if dir is not None and file is not None:
@@ -647,20 +778,30 @@ def odds_ratio(df: pd.DataFrame | str, cond: str, cond_comp: str,
     verbose (bool, optional): print progress to console (Default: False)
     '''
     # Get dataframe from file path if needed
-    if type(df)==str:
+    if isinstance(df, str):
         df = io.get(pt=df)
     else:
         df = df.copy()
+
+    # Validate columns
+    required_cols = [cond, var, count]
+    for col in required_cols:
+        if col not in df.columns:
+            raise ValueError(f"Required column '{col}' not found in df")
 
     # Get metadata
     meta_cols = list(df.columns)
     meta_cols.remove(count)
 
-    if verbose: print(f'Combine counts across samples in the same condition & add pseudocount ({pseudocount}) to avoid /0')
+    if verbose: 
+        print(f'Combine counts across samples in the same condition & add pseudocount ({pseudocount}) to avoid /0')
+    
     # Define aggregation dictionary dynamically
     agg_dict = {}
     for col in meta_cols: # Include metadata columns as sets
-        agg_dict[col] = lambda x: set(x)
+        agg_dict[col] = lambda x: set(
+            tuple(i) if isinstance(i, list) else i for i in x
+        )
     # Include count sum
     agg_dict[count] = 'sum'
 
@@ -677,7 +818,9 @@ def odds_ratio(df: pd.DataFrame | str, cond: str, cond_comp: str,
     # Add pseudocount to counts
     df[f'{count}+{pseudocount}'] = df[count] + pseudocount
 
-    if verbose: print(f'Split comparison groups: condition from ({var_comp}) from other variables')
+    if verbose: 
+        print(f'Split comparison groups: condition from ({var_comp}) from other variables')
+    
     # Get comparison variable count and count+pseudocount for comparison condition
     df_cond_comp = df[df[cond] == cond_comp].reset_index(drop=True)
     df_cond_comp_var_comp = df_cond_comp[df_cond_comp[var] == var_comp]
@@ -692,7 +835,9 @@ def odds_ratio(df: pd.DataFrame | str, cond: str, cond_comp: str,
     # Remove comparison condition from main dataframe
     df = df[df[cond] != cond_comp].reset_index(drop=True)
 
-    if verbose: print(f'Split dataframe by condition & compute odds ratio:')
+    if verbose: 
+        print(f'Split dataframe by condition & compute odds ratio:')
+    
     # Iterate through conditions 
     df_stat = pd.DataFrame()
     for c in df[cond].unique():
@@ -722,6 +867,9 @@ def odds_ratio(df: pd.DataFrame | str, cond: str, cond_comp: str,
         # Iterate through variables within condition; compute odds ratio & pval from fisher exact test
         fe_or_ls = []
         pval_ls = []
+        log2_or_ls = []
+        se_log2_or_ls = []
+        z_or_ls = []
 
         for v in df_cond[var].unique(): # Iterate through variables
             # Isolate variable & variable comparison counts
@@ -731,16 +879,27 @@ def odds_ratio(df: pd.DataFrame | str, cond: str, cond_comp: str,
             except IndexError:
                 raise ValueError(f'No data found for condition "{cond_comp}" and variable "{v}". Cannot compute odds ratio.')
             
-            # Compute odds ratio & fisher exact test
+            # Compute fisher exact test
             fe_or, pval = fisher_exact(table=[[cond_var_count_pc, cond_var_comp_count_pc], [cond_comp_var_count_pc, cond_comp_var_comp_count_pc]],
                                         alternative=alternative)
+            
+            log2_or = np.log2(fe_or)
+            se_log2_or = np.sqrt((1.0 / cond_var_count_pc) + (1.0 / cond_var_comp_count_pc) + (1.0 / cond_comp_var_count_pc) + (1.0 / cond_comp_var_comp_count_pc))/np.log(2)
+            z_or = log2_or / se_log2_or
+
             fe_or_ls.append(fe_or)
             pval_ls.append(pval)
+            log2_or_ls.append(log2_or)
+            se_log2_or_ls.append(se_log2_or)
+            z_or_ls.append(z_or)
         
         # Add results to condition dataframe
         df_cond['fisher_exact_odds_ratio'] = fe_or_ls
         df_cond['fisher_exact_pval'] = pval_ls
-        
+        df_cond['log2_fisher_exact_odds_ratio'] = log2_or_ls
+        df_cond['standard_error_log2_fisher_exact_odds_ratio'] = se_log2_or_ls
+        df_cond['z_score_fisher_exact_odds_ratio'] = z_or_ls
+
         # Append to statistics dataframe
         df_stat = pd.concat([df_stat, df_cond]).reset_index(drop=True)
     
