@@ -37,9 +37,9 @@ from Bio.PDB.PDBIO import PDBIO
 _PathLike = Union[str, os.PathLike]
 
 
-def retrieve(id: str, suf: str=None, dir: str=None, config: bool=True, base_url: str="https://files.rcsb.org/download") -> Path:
+def retrieve(id: str, suf: str | list=['.pdb', '.cif'], dir: str=None, config: bool=True, base_url: str="https://files.rcsb.org/download") -> Path:
     """
-    retrieve(): Download a PDB or mmCIF file from the RCSB PDB REST API.
+    retrieve(): Download a PDB and/or mmCIF file from the RCSB PDB REST API.
 
     Parameters:
     id (str): 4-character PDB accession (e.g. "1CRN", case-insensitive).
@@ -49,34 +49,40 @@ def retrieve(id: str, suf: str=None, dir: str=None, config: bool=True, base_url:
     base_url (str, optional): Base URL for the RCSB PDB REST API download endpoint (Default: "https://files.rcsb.org/download").
     """
     # Determine file format from filename if provided
-    if suf is None: suf = ".pdb"  # Default to PDB
-    elif suf != ".cif" and suf != ".pdb": raise ValueError(f'suf must end with ".cif" or ".pdb", not {suf!r}')
+    if isinstance(suf, list):
+        if not any(s in ['.cif', '.pdb'] for s in suf):
+            raise ValueError(f'suf must end with ".cif" or ".pdb", not {suf!r}')
+    else:
+        if suf != ".cif" and suf != ".pdb":
+            raise ValueError(f'suf must end with ".cif" or ".pdb", not {suf!r}')
+        suf = [suf] # Convert to list for uniform processing
 
     # Download PDBx/mmCIF or PDB from RCSB PDB REST API
     id = id.lower()
-    url = f"{base_url.rstrip('/')}/{id}{suf}"
-    try:
-        with urllib.request.urlopen(url) as resp:
-            # UniProt flat files are UTF-8 text
-            text = resp.read().decode("utf-8")
-    except urllib.error.HTTPError as e:
-        raise RuntimeError(f"Failed to download PDB entry {id} "
-                           f"(HTTP {e.code}) from {url}") from e
-    except urllib.error.URLError as e:
-        raise RuntimeError(f"Failed to reach RCSB PDB at {url}: {e.reason}") from e
-    
-    # Save file to...
-    file = f"{id}{suf}"
-    if dir is not None: # specified directory
-        mkdir(dir) # Ensure directory exists
-        out_path = Path(dir) / file if dir else Path(file)
-        out_path.write_text(text)
+    for s in suf:
+        url = f"{base_url.rstrip('/')}/{id}{s}"
+        try:
+            with urllib.request.urlopen(url) as resp:
+                # UniProt flat files are UTF-8 text
+                text = resp.read().decode("utf-8")
+        except urllib.error.HTTPError as e:
+            raise RuntimeError(f"Failed to download PDB entry {id} "
+                            f"(HTTP {e.code}) from {url}") from e
+        except urllib.error.URLError as e:
+            raise RuntimeError(f"Failed to reach RCSB PDB at {url}: {e.reason}") from e
+        
+        # Save file to...
+        file = f"{id}{s}"
+        if dir is not None: # specified directory
+            mkdir(dir) # Ensure directory exists
+            out_path = Path(dir) / file if dir else Path(file)
+            out_path.write_text(text)
 
-    if config==True: # config directory
-        dir = os.path.expanduser("~/.config/edms/PDB")
-        mkdir(dir) # Ensure directory exists
-        out_path = Path(dir) / file
-        out_path.write_text(text)
+        if config==True: # config directory
+            dir = os.path.expanduser("~/.config/edms/PDB")
+            mkdir(dir) # Ensure directory exists
+            out_path = Path(dir) / file
+            out_path.write_text(text)
 
 
 def _infer_confidence_per_residue(u: "mda.Universe", selection: str) -> np.ndarray:

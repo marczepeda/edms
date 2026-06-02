@@ -168,7 +168,6 @@ def add_subparser(subparsers, formatter_class=None):
     parser_uniprot_retrieve.add_argument("-n", "--no_config", action="store_false", dest='config', help="Do not save to configuration directory", default=True)
     parser_uniprot_retrieve.add_argument("-b", "--base_url", type=str, help="Base URL for UniProt REST API (Default: https://rest.uniprot.org/uniprotkb)", default="https://rest.uniprot.org/uniprotkb")
 
-
     parser_uniprot_retrieve.set_defaults(func=uniprot.retrieve)
 
     # draw_ss_track(): Draw a secondary structure track
@@ -213,7 +212,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_pdb_retrieve = subparsers_pdb.add_parser("retrieve", help="Download a PDB or PDBx/mmCIF file from the RCSB PDB REST API.", description="Download a PDB or PDBx/mmCIF file from the RCSB PDB REST API.", formatter_class=formatter_class)
     
     parser_pdb_retrieve.add_argument("-i", "--id", type=str, help="4-character PDB accession (e.g. 8VG1, case-insensitive)", required=True)
-    parser_pdb_retrieve.add_argument("-s", "--suf", type=str, help="Output filename suffix (e.g., .pdb or .cif (PDBx/mmCIF))", default=argparse.SUPPRESS)
+    parser_pdb_retrieve.add_argument("-s", "--suf", type=str, nargs='+', help="Output filename suffix (e.g., .pdb and/or .cif (PDBx/mmCIF))", default=['.pdb', '.cif'])
     parser_pdb_retrieve.add_argument("-o", "--dir", type=str, help="Save file to specified directory (Default: None -> only save to config directory)", default=argparse.SUPPRESS)
     parser_pdb_retrieve.add_argument("-n", "--no_config", action="store_false", dest='config', help="Do not save to configuration directory", default=True)
     parser_pdb_retrieve.add_argument("-b", "--base_url", type=str, help="Base URL for RCSB PDB REST API (Default: https://files.rcsb.org/download/)", default="https://files.rcsb.org/download/")

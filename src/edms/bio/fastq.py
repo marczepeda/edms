@@ -3983,14 +3983,6 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list
                                'genotypes':genotypes})
         cols_ord = list(assign.sort_values(by='positions')['genotypes'])
 
-    # PDB label information
-    if PDB_pt is not None:
-        if len(PDB_pt)==4: # If PDB ID given
-            for PDB_file in os.listdir(os.path.expanduser('~/.config/edms/PDB/')):
-                if PDB_pt.lower() in PDB_file.lower():
-                    PDB_pt = f'{os.path.expanduser("~/.config/edms/PDB")}/{PDB_file}'
-                    break
-
     p.cat(graph=graph,df=df,x=x,y=y,cats_ord=cats_ord,cats_exclude=cats_exclude,cols=cols,cols_ord=cols_ord,cols_exclude=cols_exclude,PDB_pt=PDB_pt,line=line,
           facetx=facetx,facety=facety,facetx_order=facetx_order,facety_order=facety_order,
           file=file,dir=dir,palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
@@ -4108,14 +4100,6 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
         assign = pd.DataFrame({'positions':positions,
                                'genotypes':genotypes})
         cols_ord = list(assign.sort_values(by='positions')['genotypes'])
-    
-    # PDB label information
-    if PDB_pt is not None:
-        if len(PDB_pt)==4: # If PDB ID given
-            for PDB_file in os.listdir(os.path.expanduser('~/.config/edms/PDB/')):
-                if PDB_pt.lower() in PDB_file.lower():
-                    PDB_pt = f'{os.path.expanduser("~/.config/edms/PDB")}/{PDB_file}'
-                    break
 
     # Make stacked barplot
     p.stack(df=df_cut,x=x,y=y,cols=cols,cutoff_group=cutoff_group,cutoff_value=0,cutoff_keep=cutoff_keep,cols_ord=cols_ord,x_ord=x_ord,
@@ -4127,29 +4111,27 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
             legend_columnspacing=legend_columnspacing, legend_handletextpad=legend_handletextpad, legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad, legend_handlelength=legend_handlelength,html_size_multiplier=html_size_multiplier,
             dpi=dpi,transparent=transparent,show=show,space_capitalize=space_capitalize,PDB_pt=PDB_pt,**kwargs)
 
-def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: tuple=None, z_col: str=None, z_var: str=None, label: str='Edit', label_size: int=16,
+def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple=None, label: str='Edit', label_size: int=16,
         label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None, DSSP: str=None, chain_id: str=None,
-        FC_threshold: float=1, pval_threshold: float=1, file: str=None, dir: str=None, color: str='lightgray', alpha: float=0.5, edgecol: str='black', vertical: bool=True,
+        x_threshold: float = 0, y_threshold: float = 0, bidirectional_x_threshold: bool = True, bidirectional_y_threshold: bool = False,
+        file: str=None, dir: str=None, color: str='lightgray', alpha: float=0.5, edgecol: str='black', vertical: bool=True,
         figsize: tuple=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
         legend_title: str='',legend_title_size: int=12, legend_title_weight: str='bold', legend_size: int = 12, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1,
         legend_columnspacing: int=-4, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, html_size_multiplier: float=1.5, 
-        display_legend: bool=True, display_labels: bool=True, display_lines: bool=False, display_axis: bool=True, return_df: bool=True, dpi: int = 0, transparent: bool=True, show: bool=True, space_capitalize: bool=True, 
-        dont_log: bool=False, # temporary
+        display_legend: bool=True, display_labels: str | list | bool = None, display_lines: bool=False, display_axis: bool=True, return_df: bool=True, dpi: int = 0, transparent: bool=True, show: bool=True, space_capitalize: bool=True,
         **kwargs) -> pd.DataFrame:
     ''' 
     vol(): creates volcano plot
     
     Parameters:
     df (dataframe | str): pandas dataframe (or file path) from st.compare()
-    FC (str): fold change column name (x-axis)
-    pval (str): p-value column name (y-axis)
+    x (str): x-axis column name (i.e., log2(FC))
+    y (str): y-axis column name (i.e., -log10(pval), tstat, etc.)
     cols (str, optional): color column name
     size (str | bool, optional): size column name (Default: pval; specify False for no size)
     size_dims (tuple, optional): (minimum,maximum) values in size column (Default: None)
-    z_col (str, optional): find rows with 'z_var' in this column for log2(FC) z-score normalization (Default: None)
-    z_var (str, optional): use rows with 'z_var' for log2(FC) z-score normalization (Default: None)
     label (str, optional): label column name (Default: 'Edit'). Can't be None.
     label_size (int, optional): label font size (Default: 16)
     label_info (bool, optional): include additional info for labels if .html plot (Default: True)
@@ -4162,8 +4144,10 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: t
     PDB_neighbors (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
     DSSP (str, optional): DSSP ID (if saved to ~/.config/edms/DSSP) or file path for DSSP structure file. See edms.dat.dssp.retrieve() or edms dssp retrieve -h for more information.
     Chain_id (str, optional): chain ID for DSSP structure file (Default: None)
-    FC_threshold (float, optional): fold change threshold (Default: 1, meaning no threshold)
-    pval_threshold (float, optional): p-value threshold (Default: 1, meaning no threshold)
+    x_threshold (float, optional): x-axis threshold (Default: 0)
+    y_threshold (float, optional): y-axis threshold (Default: 0)
+    bidirectional_x_threshold (float, optional): both positive and negative x-axis thresholds (Default: True)
+    bidirectional_y_threshold (float, optional): both positive and negative y-axis thresholds (Default: False)
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     color (str, optional): matplotlib color for nonsignificant values
@@ -4209,8 +4193,8 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: t
     legend_handlelength (float, optional): marker length (Default: 0.5; only for html plots)
     html_size_multiplier (float, optional): size multiplier for html plots (Default: 1.5)
     display_legend (bool, optional): display legend on plot (Default: True)
-    display_labels (bool, optional): display labels for significant values (Default: True)
-    display_lines (bool, optional): display threshold lines (Default: False)
+    display_labels (str | list | bool, optional): display labels for values if label column specified (Options: 'all', [], f'{x} & {y}', f'{x}', f'{y}', 'neither', True or False)
+    display_lines (bool, optional): display lines for threshold (Default: False)
     display_axis (bool, optional): display x- and y-axis lines (Default: True)
     dpi (int, optional): figure dpi (Default: 1200 for non-HTML, 150 for HTML)
     transparent (bool, optional): whether to make the background transparent when saving the plot (Default: True)
@@ -4229,24 +4213,7 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: t
     # Organize data by conservation (changed to)
     stys_order = ['Conserved','Basic','Acidic','Polar','Nonpolar','Complex']
     mark_order = ['D','^','v','<','>','o']
-
-    # Log transform data
-    if not dont_log: #temporary fix need to systematically fix ### replace with default x and y; make zscore options in stat.py
-        df[f'log2({FC})'] = [np.log10(FC_val)/np.log10(2) for FC_val in df[FC]]
-        df[f'-log10({pval})'] = [-np.log10(pval_val) for pval_val in df[pval]]
-    else:
-        df[f'log2({FC})'] = df[FC]
-        df[f'-log10({pval})'] = df[pval]
-    # here 
     
-    # Z-score normalization if specified
-    if z_col is not None and z_var is not None:
-        z_df = df[df[z_col]==z_var]
-        mu = np.mean(z_df[f'log2({FC})'])
-        sigma = np.std(z_df[f'log2({FC})'])
-        df.rename(columns={f'log2({FC})':f'log2({FC})_raw'}, inplace=True)
-        df[f'log2({FC})'] = [(val - mu)/sigma for val in df[f'log2({FC})_raw']]
-
     # Add label info: AA properties for conservation (change to); plus additional info from cBioPortal, UniProt, PhosphoSitePlus, PDB, and DSSP if specified
     secondary_structure = None
     if DSSP is not None and chain_id is not None:
@@ -4267,37 +4234,36 @@ def vol(df: pd.DataFrame | str, FC: str, pval: str, size: str=None, size_dims: t
             if legend_ncol == 1: legend_ncol = 3
 
     # Volcano plot
-    p.vol(df=df, FC=FC, pval=pval, size=size, stys='Change', size_dims=size_dims, z_col=z_col, z_var=z_var, label=label, stys_order=stys_order, mark_order=mark_order,
-          FC_threshold=FC_threshold, pval_threshold=pval_threshold, file=file, dir=dir, color=color, alpha=alpha, edgecol=edgecol, vertical=vertical,
+    p.vol(df=df, x=x, y=y, size=size, stys='Change', size_dims=size_dims, label=label, stys_order=stys_order, mark_order=mark_order,
+          x_threshold=x_threshold, y_threshold=y_threshold, bidirectional_x_threshold=bidirectional_x_threshold, bidirectional_y_threshold=bidirectional_y_threshold, 
+          file=file, dir=dir, color=color, alpha=alpha, edgecol=edgecol, vertical=vertical,
           figsize=figsize, title=title, title_size=title_size, title_weight=title_weight, title_font=title_font, 
           x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad, x_ticks_size = x_ticks_size, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
           y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_dims=y_axis_dims, y_axis_pad=y_axis_pad, y_ticks_size=y_ticks_size, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
           legend_title=legend_title, legend_title_size=legend_title_size, legend_title_weight=legend_title_weight, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_ncol=legend_ncol, 
           legend_columnspacing=legend_columnspacing, legend_handletextpad=legend_handletextpad, legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad, legend_handlelength=legend_handlelength, html_size_multiplier=html_size_multiplier,
           display_legend=display_legend, display_labels=display_labels, display_lines=display_lines, display_axis=display_axis, return_df=return_df, dpi=dpi, show=show, transparent=transparent, space_capitalize=space_capitalize,
-          PDB_pt=PDB_pt, from_fastq=True, # temporary
+          PDB_pt=PDB_pt,
           **kwargs)
 
-def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size_dims: tuple=None, z_col: str=None, z_var: str=None, label: str='Edit', label_size: int=16,
+def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, size_dims: tuple=None, label: str='Edit', label_size: int=16,
         label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None, DSSP: str=None, chain_id: str=None, ss_h: int=None, ss_y: int=None,
         file: str=None, dir: str=None, edgecol: str='black', figsize: tuple=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
         legend_title: str='',legend_title_size: int=12, legend_title_weight: str='bold', legend_size: int = 12, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1, 
         legend_columnspacing: int=-3, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, html_size_multiplier: float=1.5,
-        display_legend: bool=True, display_labels: bool=True, display_axis: bool=True, return_df: bool=True, dpi: int = 0, transparent: bool=True, show: bool=True, space_capitalize: bool=True, dont_log: bool=False, # temporary
+        display_legend: bool=True, display_labels: bool = False, display_axis: bool=True, return_df: bool=True, dpi: int = 0, transparent: bool=True, show: bool=True, space_capitalize: bool=True,
         **kwargs) -> pd.DataFrame:
     ''' 
     torn(): creates tornado plot
     
     Parameters:
     df (dataframe | str): pandas dataframe (or file path) from st.compare()
-    FC (str): fold change column name (y-axis)
-    pval (str): p-value column name (size column if not specified)
-    size (str | bool, optional): size column name (Default: pval; specify False for no size)
+    y (str): y-axis column name (i.e., log2(FC))
+    x (str): x-axis column name (Default: 'AA Number')
+    size (str | bool, optional): size column name (Default: None)
     size_dims (tuple, optional): (minimum,maximum) values in size column (Default: None)
-    z_col (str, optional): find rows with 'z_var' in this column for log2(FC) z-score normalization (Default: None)
-    z_var (str, optional): use rows with 'z_var' for log2(FC) z-score normalization (Default: None)
     label (str, optional): label column name (Default: 'Edit'). Can't be None.
     label_size (int, optional): label font size (Default: 16)
     label_info (bool, optional): include additional info for labels if .html plot (Default: True)
@@ -4354,7 +4320,7 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
     legend_handlelength (float, optional): marker length (Default: 0.5; only for html plots)
     html_size_multiplier (float, optional): size multiplier for html plots (Default: 1.5)
     display_legend (bool, optional): display legend on plot (Default: True)
-    display_labels (bool, optional): display labels for significant values (Default: True)
+    display_labels (bool, optional): display labels (Default: False)
     display_axis (bool, optional): display x-axis line (Default: True)
     dpi (int, optional): figure dpi (Default: 1200 for non-HTML, 150 for HTML)
     return_df (bool, optional): return dataframe (Default: True)
@@ -4373,23 +4339,6 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
     # Organize data by conservation (changed to)
     stys_order = ['Conserved','Basic','Acidic','Polar','Nonpolar','Complex']
     mark_order = ['D','^','v','<','>','o']
-
-    # Log transform data
-    if not dont_log: #temporary fix need to systematically fix ### replace with default x and y; make zscore options in stat.py
-        df[f'log2({FC})'] = [np.log10(FC_val)/np.log10(2) for FC_val in df[FC]]
-        df[f'-log10({pval})'] = [-np.log10(pval_val) for pval_val in df[pval]]
-    else:
-        df[f'log2({FC})'] = df[FC]
-        df[f'-log10({pval})'] = df[pval]
-    # here 
-
-    # Z-score normalization if specified
-    if z_col is not None and z_var is not None:
-        z_df = df[df[z_col]==z_var]
-        mu = np.mean(z_df[f'log2({FC})'])
-        sigma = np.std(z_df[f'log2({FC})'])
-        df.rename(columns={f'log2({FC})':f'log2({FC})_raw'}, inplace=True)
-        df[f'log2({FC})'] = [(val - mu)/sigma for val in df[f'log2({FC})_raw']]
 
     # Add label info: AA properties for conservation (change to); plus additional info from cBioPortal, UniProt, PhosphoSitePlus, PDB, and DSSP if specified
     secondary_structure = None
@@ -4426,21 +4375,19 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
     else:
         is_html = False
 
-    # Organize data by 'pval' or specified 'size' column, typically input abundance
+    # Organize data by specified 'size' column, typically input abundance
     sizes=(1,100)
-    if size in [False,'False','false']: # No size
+    size_norm = None
+    if size in [False,'False','false', None]: # No size
         size = None 
 
     else:
-        if size is None: size = f'-log10({pval})' # default to pval
-
         if size is not None and size in df.columns:
             # Filter by size dimensions
             if size_dims is not None: 
                 df = df[(df[size]>=size_dims[0])&(df[size]<=size_dims[1])]
 
             # Shared size normalization across all scatter calls so marker areas are consistent
-            size_norm = None
             _vmin, _vmax = None, None
             if display_legend:
                 if size_dims is None:
@@ -4455,8 +4402,8 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
                 size_norm = mcolors.Normalize(vmin=_vmin, vmax=_vmax)
     
     # Set dimensions
-    if x_axis_dims==(0,0): x_axis_dims=(min(df[f'AA Number']),max(df[f'AA Number']))
-    if y_axis_dims==(0,0): y_axis_dims=(min(df[f'log2({FC})']),max(df[f'log2({FC})']))
+    if x_axis_dims==(0,0): x_axis_dims=(min(df[x]),max(df[x]))
+    if y_axis_dims==(0,0): y_axis_dims=(min(df[y]),max(df[y]))
 
     # Generate figure
     fig, ax = plt.subplots(figsize=figsize)
@@ -4465,17 +4412,17 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
     if display_legend==False: size=None
     stys='Change'
     sns.scatterplot(
-        data=df[df[f'log2({FC})']<0],
-        x='AA Number', y=f'log2({FC})',
-        hue=f'log2({FC})', edgecolor=edgecol, palette='Blues_r', 
+        data=df[df[y]<0],
+        x=x, y=y,
+        hue=y, edgecolor=edgecol, palette='Blues_r', 
         style=stys, style_order=stys_order if stys_order else None, markers=mark_order if mark_order else None,
         size=size if display_legend else None, sizes=sizes, size_norm=size_norm,
         legend=False,
         ax=ax, **kwargs)
     sns.scatterplot(
-        data=df[df[f'log2({FC})']>=0],
-        x='AA Number', y=f'log2({FC})',
-        hue=f'log2({FC})', edgecolor=edgecol, palette='Reds', 
+        data=df[df[y]>=0],
+        x=x, y=y,
+        hue=y, edgecolor=edgecol, palette='Reds', 
         style=stys, style_order=stys_order if stys_order else None, markers=mark_order if mark_order else None,
         size=size if display_legend else None, sizes=sizes, size_norm=size_norm, 
         legend=False,
@@ -4522,7 +4469,7 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
         if ss_h is None:
             ss_h  = 0.5 # height of secondary structure track
         if ss_y is None:
-            ss_y  = min(df[f'log2({FC})'])-2*0.5 # position below min y value
+            ss_y  = min(df[y])-2*0.5 # position below min y value
 
         # secondary structure
         for ss_description in secondary_structure['ss_description'].unique():
@@ -4546,8 +4493,8 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
         if is_html:
             # For HTML, show labels interactively as tooltips instead of static text
             pts = ax.scatter(
-                x=df['AA Number'],
-                y=df[f'log2({FC})'],
+                x=df[x],
+                y=df[y],
                 s=20,
                 alpha=0
             )
@@ -4559,13 +4506,13 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
             # For static images, keep labels as always-visible text
             for i, l in enumerate(df[label]):
                 plt.text(
-                    x=df.iloc[i]['AA Number'],
-                    y=df.iloc[i][f'log2({FC})'],
+                    x=df.iloc[i][x],
+                    y=df.iloc[i][y],
                     s=l
                 )
     
     # Set x axis
-    if x_axis=='': x_axis='AA Number'
+    if x_axis=='': x_axis=x
     plt.xlabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight,fontfamily=x_axis_font, labelpad=x_axis_pad)
     if x_ticks==[]: 
         if x_ticks_rot==0: plt.xticks(rotation=x_ticks_rot,ha='center',va='top',fontfamily=x_ticks_font,fontsize=x_ticks_size)
@@ -4577,7 +4524,7 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
         else: plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font,fontsize=x_ticks_size)
     
     # Set y axis
-    if y_axis=='': y_axis=f'log2({FC})'
+    if y_axis=='': y_axis=y
     plt.ylabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight,fontfamily=y_axis_font, labelpad=y_axis_pad)
 
     if y_ticks==[]: plt.yticks(rotation=y_ticks_rot,fontfamily=y_ticks_font,fontsize=y_ticks_size)
@@ -4600,7 +4547,7 @@ def torn(df: pd.DataFrame | str, FC: str, pval: str, size: str | bool=None, size
     if return_df:
         return df
 
-def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: str, size: str | bool=None, size_dims: tuple=None, z_col: str=None, z_var: str=None,
+def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, scores_col: str, size: str =None, size_dims: tuple=None, z_col: str=None, z_var: str=None,
         conservative: bool=True, method: str='pearson', weighted: bool=True, label: str='Edit', label_size: int=16,
         label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None, DSSP: str=None, chain_id: str=None,
         file: str=None, dir: str=None, edgecol: str='black', figsize: tuple=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
@@ -4617,9 +4564,8 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
     df (dataframe | str): pandas dataframe (or file path) from st.compare()
     cond_col (str): condition column name for comparison
     cond_vals (list): two condition values for comparison (x and y-axis)
-    FC (str): fold change column name (x and y-axis)
-    pval (str): p-value column name (size column if not specified)
-    size (str | bool, optional): size column name (Default: pval; specify False for no size)
+    scores_col (str): column name for values to correlate (e.g. log2(FC))
+    size (str, optional): size column name (Default: None)
     size_dims (tuple, optional): (minimum,maximum) values in size column (Default: None)
     z_col (str, optional): find rows with 'z_var' in this column for log2(FC) z-score normalization (Default: None)
     z_var (str, optional): use rows with 'z_var' for log2(FC) z-score normalization (Default: None)
@@ -4700,25 +4646,13 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
     stys_order = ['Conserved','Basic','Acidic','Polar','Nonpolar','Complex']
     mark_order = ['D','^','v','<','>','o']
 
-    # Log transform data
-    df[f'log2({FC})'] = [np.log10(FC_val)/np.log10(2) for FC_val in df[FC]]
-    df[f'-log10({pval})'] = [-np.log10(pval_val) for pval_val in df[pval]]
-
-    # Z-score normalization if specified
-    if z_col is not None and z_var is not None:
-        z_df = df[df[z_col]==z_var]
-        mu = np.mean(z_df[f'log2({FC})'])
-        sigma = np.std(z_df[f'log2({FC})'])
-        df.rename(columns={f'log2({FC})':f'log2({FC})_raw'}, inplace=True)
-        df[f'log2({FC})'] = [(val - mu)/sigma for val in df[f'log2({FC})_raw']]
-
     # Split dataframe into two conditions for correlation plot
     df1 = df[df[cond_col]==cond_vals[0]].copy()
     df2 = df[df[cond_col]==cond_vals[1]].copy()
 
     if size in df.columns: # include size column
-        df = pd.merge(df1[[f'log2({FC})',f'-log10({pval})',size,label,cond_col]], 
-                    df2[[f'log2({FC})',f'-log10({pval})',size,label,cond_col]], 
+        df = pd.merge(df1[[f'scores_col',size,label,cond_col]], 
+                    df2[[f'scores_col',size,label,cond_col]], 
                     on=label, how='inner',
                     suffixes=(f'_{cond_vals[0]}', f'_{cond_vals[1]}'))
         del df1, df2
@@ -4726,15 +4660,13 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
         df[f'min({size})'] = df[[f'{size}_{cond_vals[0]}', f'{size}_{cond_vals[1]}']].min(axis=1)
 
     else: # no size column
-        df = pd.merge(df1[[f'log2({FC})',f'-log10({pval})',label,cond_col]], 
-                    df2[[f'log2({FC})',f'-log10({pval})',label,cond_col]], 
+        df = pd.merge(df1[[f'scores_col',label,cond_col]], 
+                    df2[[f'scores_col',label,cond_col]], 
                     on=label, how='inner',
                     suffixes=(f'_{cond_vals[0]}', f'_{cond_vals[1]}'))
         del df1, df2
     
-    df[f'sum(-log10({pval}))'] = df[f'-log10({pval})_{cond_vals[0]}'] + df[f'-log10({pval})_{cond_vals[1]}']
-    df[f'min(-log10({pval}))'] = df[[f'-log10({pval})_{cond_vals[0]}', f'-log10({pval})_{cond_vals[1]}']].min(axis=1)
-    df[f'magnitude(log2({FC}))'] = [np.sqrt(log2fc_0**2 + log2fc_1**2) for log2fc_0, log2fc_1 in t.zip_cols(df=df, cols=[f'log2({FC})_{cond_vals[0]}',f'log2({FC})_{cond_vals[1]}'])]
+    df[f'magnitude({scores_col})'] = [np.sqrt(scores_0**2 + scores_1**2) for scores_0, scores_1 in t.zip_cols(df=df, cols=[f'{scores_col}_{cond_vals[0]}',f'{scores_col}_{cond_vals[1]}'])]
 
     # Use min or sum based on conservative
     if conservative==True:
@@ -4777,15 +4709,13 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
     else:
         is_html = False
 
-    # Organize data by 'pval' or specified 'size' column, typically input abundance
+    # Organize data by specified 'size' column, typically input abundance
     sizes=(1,100)
-    if size in [False,'False','false']: # No size
+    size_norm = None
+    if size in [False,'False','false', None]: # No size
         size = None
 
     else:
-        if size is None: # default to pval
-            size = f'-log10({pval})'
-
         if f'{size}_{cond_vals[0]}' in df.columns and f'{size}_{cond_vals[1]}' in df.columns:
             size = f'{min_or_sum}({size})'
 
@@ -4794,7 +4724,6 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
                 df = df[(df[size]>=size_dims[0])&(df[size]<=size_dims[1])]
 
             # Shared size normalization across all scatter calls so marker areas are consistent
-            size_norm = None
             _vmin, _vmax = None, None
             if display_legend:
                 if size_dims is None:
@@ -4819,33 +4748,33 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
     if display_legend==False: size=None
     stys='Change'
     sns.scatterplot( # bottom left
-        data=df[(df[f'log2({FC})_{cond_vals[0]}']<=0) & (df[f'log2({FC})_{cond_vals[1]}']<=0)],
-        x=f'log2({FC})_{cond_vals[0]}', y=f'log2({FC})_{cond_vals[1]}',
-        hue=f'magnitude(log2({FC}))', edgecolor=edgecol, palette='Blues', 
+        data=df[(df[f'{scores_col}_{cond_vals[0]}']<=0) & (df[f'{scores_col}_{cond_vals[1]}']<=0)],
+        x=f'{scores_col}_{cond_vals[0]}', y=f'{scores_col}_{cond_vals[1]}',
+        hue=f'magnitude({scores_col})', edgecolor=edgecol, palette='Blues', 
         style=stys, style_order=stys_order if stys_order else None, markers=mark_order if mark_order else None,
         size=size if display_legend else None, sizes=sizes, size_norm=size_norm,
         legend=False,
         ax=ax, **kwargs)
     sns.scatterplot( # top left
-        data=df[(df[f'log2({FC})_{cond_vals[0]}']<=0) & (df[f'log2({FC})_{cond_vals[1]}']>0)],
-        x=f'log2({FC})_{cond_vals[0]}', y=f'log2({FC})_{cond_vals[1]}',
-        hue=f'magnitude(log2({FC}))', edgecolor=edgecol, palette='Greens', 
+        data=df[(df[f'{scores_col}_{cond_vals[0]}']<=0) & (df[f'{scores_col}_{cond_vals[1]}']>0)],
+        x=f'{scores_col}_{cond_vals[0]}', y=f'{scores_col}_{cond_vals[1]}',
+        hue=f'magnitude({scores_col})', edgecolor=edgecol, palette='Greens', 
         style=stys, style_order=stys_order if stys_order else None, markers=mark_order if mark_order else None,
         size=size if display_legend else None, sizes=sizes, size_norm=size_norm,
         legend=False,
         ax=ax, **kwargs)
     sns.scatterplot( # bottom right
-        data=df[(df[f'log2({FC})_{cond_vals[0]}']>0) & (df[f'log2({FC})_{cond_vals[1]}']<=0)],
-        x=f'log2({FC})_{cond_vals[0]}', y=f'log2({FC})_{cond_vals[1]}',
-        hue=f'magnitude(log2({FC}))', edgecolor=edgecol, palette='Oranges', 
+        data=df[(df[f'{scores_col}_{cond_vals[0]}']>0) & (df[f'{scores_col}_{cond_vals[1]}']<=0)],
+        x=f'{scores_col}_{cond_vals[0]}', y=f'{scores_col}_{cond_vals[1]}',
+        hue=f'magnitude({scores_col})', edgecolor=edgecol, palette='Oranges', 
         style=stys, style_order=stys_order if stys_order else None, markers=mark_order if mark_order else None,
         size=size if display_legend else None, sizes=sizes, size_norm=size_norm, 
         legend=False,
         ax=ax, **kwargs)
     sns.scatterplot( # top right
-        data=df[(df[f'log2({FC})_{cond_vals[0]}']>0) & (df[f'log2({FC})_{cond_vals[1]}']>0)],
-        x=f'log2({FC})_{cond_vals[0]}', y=f'log2({FC})_{cond_vals[1]}',
-        hue=f'magnitude(log2({FC}))', edgecolor=edgecol, palette='Reds', 
+        data=df[(df[f'{scores_col}_{cond_vals[0]}']>0) & (df[f'{scores_col}_{cond_vals[1]}']>0)],
+        x=f'{scores_col}_{cond_vals[0]}', y=f'{scores_col}_{cond_vals[1]}',
+        hue=f'magnitude({scores_col})', edgecolor=edgecol, palette='Reds', 
         style=stys, style_order=stys_order if stys_order else None, markers=mark_order if mark_order else None,
         size=size if display_legend else None, sizes=sizes, size_norm=size_norm, 
         legend=False,
@@ -4857,29 +4786,29 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
         ax.plot([0,0], [y_axis_dims[0], y_axis_dims[1]], color='black', linestyle='-', linewidth=1)
 
     # with correlation line and coefficient
-    if weighted==True and size not in [False,'False','false']: # weighted
+    if weighted==True and size not in [False,'False','false', None]: # weighted
         coeff = st.weighted_correlation(
             df=df,
-            x=f'log2({FC})_{cond_vals[0]}',
-            y=f'log2({FC})_{cond_vals[1]}',
+            x=f'{scores_col}_{cond_vals[0]}',
+            y=f'{scores_col}_{cond_vals[1]}',
             weight=size,
             method=method)
         
         a,b = st.weighted_corr_line(df=df, ax=ax,
-                                    x=f'log2({FC})_{cond_vals[0]}', 
-                                    y=f'log2({FC})_{cond_vals[1]}', 
+                                    x=f'{scores_col}_{cond_vals[0]}', 
+                                    y=f'{scores_col}_{cond_vals[1]}', 
                                     weight=size)
 
     else: # unweighted
         coeff = st.weighted_correlation(
             df=df,
-            x=f'log2({FC})_{cond_vals[0]}',
-            y=f'log2({FC})_{cond_vals[1]}',
+            x=f'{scores_col}_{cond_vals[0]}',
+            y=f'{scores_col}_{cond_vals[1]}',
             method=method)
         
         a,b = st.corr_line(df=df, ax=ax,
-                            x=f'log2({FC})_{cond_vals[0]}', 
-                            y=f'log2({FC})_{cond_vals[1]}')
+                            x=f'{scores_col}_{cond_vals[0]}', 
+                            y=f'{scores_col}_{cond_vals[1]}')
 
     # correlation equation string
     m = "?"
@@ -4941,8 +4870,8 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
         if is_html:
             # For HTML, show labels interactively as tooltips instead of static text
             pts = ax.scatter(
-                x=df[f'log2({FC})_{cond_vals[0]}'],
-                y=df[f'log2({FC})_{cond_vals[1]}'],
+                x=df[f'{scores_col}_{cond_vals[0]}'],
+                y=df[f'{scores_col}_{cond_vals[1]}'],
                 s=20,
                 alpha=0
             )
@@ -4954,8 +4883,8 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
             # For static images, keep labels as always-visible text
             for i, l in enumerate(df[label]):
                 plt.text(
-                    x=df.iloc[i][f'log2({FC})_{cond_vals[0]}'],
-                    y=df.iloc[i][f'log2({FC})_{cond_vals[1]}'],
+                    x=df.iloc[i][f'{scores_col}_{cond_vals[0]}'],
+                    y=df.iloc[i][f'{scores_col}_{cond_vals[1]}'],
                     s=l
                 )
     
@@ -4996,7 +4925,7 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, FC: str, pval: 
     if return_df:
         return df
 
-def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str, wt_res: int, log2: bool=True, cutoff_col: str='count_mean_compare', cutoff: float=0, aa: str='aa', z_col: str=None, z_var: str=None, label: str='Edit',
+def heat(df: pd.DataFrame | str, cond_col: str, cond: str, scores_col: str, wt_prot: str, wt_res: int, log2: bool=True, cutoff_col: str='count_mean_compare', cutoff: float=0, aa: str='aa', label: str='Edit',
         file: str=None, dir: str=None, edgecol: str='black', lw: int=1, center: float=0, cmap: str="seismic", cmap_WT: str='forestgreen', cmap_not_WT: str='lightgray', sq: bool=False, 
         cbar: bool=True, cbar_label: str=None, cbar_label_size: int=None, cbar_label_weight: str='bold', cbar_tick_size: int=None, cbar_shrink: float=None, cbar_aspect: int=None, cbar_pad: float=None, cbar_orientation: str=None,
         title: str='', title_size: int=12, title_weight: str='bold', title_font: str='Arial',  figsize: tuple=(6,6), vertical: bool=True,
@@ -5010,15 +4939,12 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str
     df (dataframe | str): pandas dataframe (or file path) from st.compare()
     cond_col (str): Condition column name
     cond (str): Condition column value for filtering
-    FC (str): fold change column name (values within heatmap after log2 transformation)
+    scores_col (str): scores column name (e.g. 'log2(FC)')
     wt_prot (str): WT protein sequence
     wt_res (int): WT protein sequence residue start number
-    log2 (bool, optional): log2 transform FC values (Default: True)
     cutoff_col (str, optional): comparison count mean column for masking low-abundance values
     cutoff (float, optional): comparison count mean cutoff for masking low-abundance values
     aa (str, optional): AA saturation mutagenesis (Options: 'aa' [default], 'aa_subs', 'aa_ins', 'aa_dels'). The 'aa' option makes all amino acid substitutions ('aa_subs'), +1 amino acid insertions ('aa_ins'), and -1 amino acid deletions ('aa_dels').
-    z_col (str, optional): find rows with 'z_var' in this column for log2(FC) z-score normalization (Default: None)
-    z_var (str, optional): use rows with 'z_var' for log2(FC) z-score normalization (Default: None)
     label (str, optional): label column name (Default: 'Edit'). Can't be None.
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
@@ -5075,7 +5001,7 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str
     # cbar kwargs
     cbar_kws = dict()
     if cbar_label is not None: cbar_kws['label'] = cbar_label
-    else: cbar_kws['label'] = f'log2({FC})'
+    else: cbar_kws['label'] = scores_col
     if cbar_shrink is not None: cbar_kws['shrink'] = cbar_shrink
     if cbar_aspect is not None: cbar_kws['aspect'] = cbar_aspect
     if cbar_pad is not None: cbar_kws['pad'] = cbar_pad
@@ -5084,21 +5010,6 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str
     # Isolate condition dataframe
     df = df[df[cond_col]==cond]
 
-    # Log transform data
-    if log2==True:
-        df[f'log2({FC})'] = [np.log10(FC_val)/np.log10(2) for FC_val in df[FC]]
-    else:
-        df[f'log2({FC})'] = df[FC]
-        print(f"Warning: log2 transformation skipped for {FC} values, despite the log2(FC) column being created.")
-
-    # Z-score normalization if specified
-    if z_col is not None and z_var is not None:
-        z_df = df[df[z_col]==z_var]
-        mu = np.mean(z_df[f'log2({FC})'])
-        sigma = np.std(z_df[f'log2({FC})'])
-        df.rename(columns={f'log2({FC})':f'log2({FC})_raw'}, inplace=True)
-        df[f'log2({FC})'] = [(val - mu)/sigma for val in df[f'log2({FC})_raw']]
-    
     # Add label info: Before, Number, After, AA properties
     df = add_label_info(df=df, label=label)
     df.drop(columns=[f'{label}_info'], inplace=True)
@@ -5174,8 +5085,8 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str
                 vals['DMS_After']=["del"]
                 vals['DMS_Before_Number']=[f"{wt_prot[num-wt_res]}{num}"]
             
-            # Extract log2FC, label info, and comparison count mean for each amino acid change
-            log2FC_ls=[]
+            # Extract scores, label info, and comparison count mean for each amino acid change
+            scores_ls=[]
             #label_ls=[]
             comparison_count_mean_ls=[]
             
@@ -5187,7 +5098,7 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str
                 # Filter to specific amino acid change
                 df_temp3 = df_temp2[df_temp2['DMS_After'] == DMS_after]
                 if df_temp3.empty == False: # Present
-                    log2FC_ls.append(df_temp3[f'log2({FC})'].to_list()[0])
+                    scores_ls.append(df_temp3[scores_col].to_list()[0])
                     #label_ls.append(df_temp3[label].to_list()[0])
                     comparison_count_mean_ls.append(df_temp3[cutoff_col].to_list()[0])
 
@@ -5195,11 +5106,11 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str
                         print(f"Warning: Multiple entries found for {wt_prot[num-wt_res]}{num}{DMS_after} in condition {cond}. Using first entry.")
 
                 else: # Absent
-                    log2FC_ls.append(None)
+                    scores_ls.append(None)
                     #label_ls.append('')
                     comparison_count_mean_ls.append(-1)
 
-            vals[f'log2({FC})']=log2FC_ls
+            vals[scores_col]=scores_ls
             #vals[label]=label_ls
             vals[cutoff_col]=comparison_count_mean_ls
             df_ls.append(pd.DataFrame(vals))
@@ -5230,21 +5141,21 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str
     elif aa == 'aa_ins': index = [f"ins{key}" for key in aa_props.keys() if key != '*']
     elif aa == 'aa_dels': index = ['del']
 
-    df2_log2FC = pd.pivot(df2, columns='AA Number', index='DMS_After', values=f'log2({FC})').astype(float).reindex(index)
+    df2_scores = pd.pivot(df2, columns='AA Number', index='DMS_After', values=scores_col).astype(float).reindex(index)
     #df2_label = pd.pivot(df2, columns='AA Number', index='DMS_After', values=label).astype(str).reindex(index)
     df2_compare_count_mean = pd.pivot(df2, columns='AA Number', index='DMS_After', values=cutoff_col).astype(float).reindex(index)
 
     # Mask values below cutoff & WT
-    mask_not_WT = np.zeros(df2_log2FC.shape, dtype=bool)
-    mask_WT = np.zeros(df2_log2FC.shape, dtype=bool)
+    mask_not_WT = np.zeros(df2_scores.shape, dtype=bool)
+    mask_WT = np.zeros(df2_scores.shape, dtype=bool)
 
     # Iterate through dataframe to set masks
-    nrows, ncols = df2_log2FC.shape
+    nrows, ncols = df2_scores.shape
     for i in range(nrows):
         for j in range(ncols):
-            if df2_log2FC.index[i] == df2[(df2['AA Number'] == df2_log2FC.columns[j])].reset_index(drop=True).iloc[0,0]:
+            if df2_scores.index[i] == df2[(df2['AA Number'] == df2_scores.columns[j])].reset_index(drop=True).iloc[0,0]:
                 mask_WT[i, j] = True # WT
-            elif np.isnan(df2_log2FC.iat[i, j]) or df2_compare_count_mean.iat[i, j] < cutoff:
+            elif np.isnan(df2_scores.iat[i, j]) or df2_compare_count_mean.iat[i, j] < cutoff:
                 mask_not_WT[i, j] = True # NaN value or comparison count mean below cutoff
 
     if vertical==True: # Vertical orientation
@@ -5252,7 +5163,7 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str
         # Create figure
         fig, ax = plt.subplots(figsize=(figsize[0],figsize[1]))
         
-        sns.heatmap(df2_log2FC, mask=mask_not_WT | mask_WT, # Data heatmap
+        sns.heatmap(df2_scores, mask=mask_not_WT | mask_WT, # Data heatmap
                     cbar_kws=cbar_kws,
                     cmap=cmap, center=center,
                     ax=ax, linecolor=edgecol, linewidths=lw, 
@@ -5280,7 +5191,7 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str
         else: ax.set_ylabel(y_axis,fontsize=y_axis_size,fontweight=y_axis_weight,fontfamily=y_axis_font, labelpad=y_axis_pad)
         
         # Format x ticks
-        ax.set_xticks(np.arange(df2_log2FC.shape[1]) + 0.5)
+        ax.set_xticks(np.arange(df2_scores.shape[1]) + 0.5)
         ax.set_xticklabels(df2['DMS_Before_Number'].unique())
         if x_ticks_rot is None: x_ticks_rot=45
         if x_ticks_rot==0: plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, ha="center", va="top", rotation_mode="anchor",fontname=x_ticks_font,fontsize=x_ticks_size) 
@@ -5288,8 +5199,8 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str
         else: plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, ha="right",rotation_mode="anchor",fontname=x_ticks_font,fontsize=x_ticks_size) 
         
         # Format y ticks
-        ax.set_yticks(np.arange(df2_log2FC.shape[0]) + 0.5)
-        ax.set_yticklabels(df2_log2FC.index)
+        ax.set_yticks(np.arange(df2_scores.shape[0]) + 0.5)
+        ax.set_yticklabels(df2_scores.index)
         if y_ticks_rot is None: y_ticks_rot=0
         plt.setp(ax.get_yticklabels(), rotation=y_ticks_rot, va='center', ha="right",rotation_mode="anchor",fontname=y_ticks_font,fontsize=y_ticks_size)
     
@@ -5298,7 +5209,7 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str
         # Create figure
         fig, ax = plt.subplots(figsize=(figsize[0],figsize[1]))
         
-        sns.heatmap(df2_log2FC.T, mask=mask_not_WT.T | mask_WT.T, # Data heatmap
+        sns.heatmap(df2_scores.T, mask=mask_not_WT.T | mask_WT.T, # Data heatmap
                     cbar_kws=cbar_kws,
                     cmap=cmap, center=center,
                     ax=ax, linecolor=edgecol, linewidths=lw, 
@@ -5326,14 +5237,14 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, FC: str, wt_prot: str
         else: ax.set_xlabel(y_axis,fontsize=y_axis_size,fontweight=y_axis_weight,fontfamily=y_axis_font, labelpad=y_axis_pad)
         
         # Format y ticks
-        ax.set_yticks(np.arange(df2_log2FC.shape[1]) + 0.5)
+        ax.set_yticks(np.arange(df2_scores.shape[1]) + 0.5)
         ax.set_yticklabels(df2['DMS_Before_Number'].unique())
         if x_ticks_rot is None: x_ticks_rot=0
         plt.setp(ax.get_yticklabels(), rotation=x_ticks_rot, va="center", ha="right",rotation_mode="anchor",fontname=x_ticks_font,fontsize=x_ticks_size) 
         
         # Format x ticks
-        ax.set_xticks(np.arange(df2_log2FC.shape[0]) + 0.5)
-        ax.set_xticklabels(df2_log2FC.index)
+        ax.set_xticks(np.arange(df2_scores.shape[0]) + 0.5)
+        ax.set_xticklabels(df2_scores.index)
         if y_ticks_rot is None: y_ticks_rot=45
         if y_ticks_rot==0: plt.setp(ax.get_xticklabels(), rotation=y_ticks_rot, ha="center", va="top", rotation_mode="anchor",fontname=y_ticks_font,fontsize=y_ticks_size)
         elif y_ticks_rot == 90: plt.setp(ax.get_xticklabels(), rotation=y_ticks_rot, ha="right", va="center", rotation_mode="anchor",fontname=y_ticks_font,fontsize=y_ticks_size)

@@ -143,6 +143,32 @@ def vcs_ordered(df: pd.DataFrame, cols: list | str) -> pd.Series:
     order = unique_tuples(df=df, cols=cols) # Get unique tuples
     return pd.Series([vcs[pair] for pair in order], index=order)
 
+def unpack_singleton_iterables(df: pd.DataFrame, inplace: bool = False) -> pd.DataFrame:
+    """
+    unpack_singleton_iterables(): Replace list/set/tuple values containing exactly one item with that item.
+
+    Only modifies values like:
+        [x] -> x
+        (x,) -> x
+        {x} -> x
+
+    Leaves empty or multi-value iterables unchanged.
+    """
+    if not inplace:
+        df = df.copy()
+
+    def unpack_value(x):
+        if isinstance(x, (list, tuple, set)) and len(x) == 1:
+            return next(iter(x))
+        return x
+
+    object_cols = df.select_dtypes(include="object").columns
+
+    for col in object_cols:
+        df[col] = df[col].map(unpack_value)
+
+    return df
+
 # Dictionary methods
 def filter_kwargs(keywords: list, **kwargs) -> dict:
     '''

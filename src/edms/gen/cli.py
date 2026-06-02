@@ -46,6 +46,8 @@ def add_common_fastq_label_args(subparser):
     subparser.add_argument("-PSP", "--PhosphoSitePlus", type=str, help="UniProt accession", default=argparse.SUPPRESS)
     subparser.add_argument("-PDBc", "--PDB_contacts", type=str, help="PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.", default=argparse.SUPPRESS)
     subparser.add_argument("-PDBn", "--PDB_neighbors", type=str, help="PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.", default=argparse.SUPPRESS)
+    subparser.add_argument("-DSSP", "--DSSP", type=str, help="PDB ID (if saved to ~/.config/edms/DSSP) or file path for DSSP file. See edms.dat.dssp.retrieve() or edms dssp retrieve -h for more information.", default=argparse.SUPPRESS)
+    subparser.add_argument("-ci", "--chain_id", type=str, help="Chain identifier to isolate for secondary structure analysis (Default: None)", default=argparse.SUPPRESS)
 
 # Plot subparser methods
 def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_parser=False, pwes_torn_parser=False):
@@ -55,16 +57,14 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
     # scat(): Required arguments
     if pwes_torn_parser == False:
         subparser.add_argument("-i", "--df", help="Input dataframe file path", type=str, required=True)
-    if fastq_torn_parser == False and fastq_corr_parser == False and pwes_torn_parser == False:
-        subparser.add_argument("-x", "--x", help="X-axis column", type=str, required=True)
-        subparser.add_argument("-y", "--y", help="Y-axis column", type=str, required=True)
-    else:
         if fastq_corr_parser == True:
             subparser.add_argument("-cc", "--cond_col", help="condition column name for comparison", type=str, required=True)
             subparser.add_argument("-cv", "--cond_vals", nargs="+", help="two condition values for comparison (x and y-axis)", type=str, required=True)
-        subparser.add_argument("-FC", "--FC", help="Fold change column name (Y-axis)", type=str, required=True)
-        subparser.add_argument("-pval", "--pval", help="p-value column name (size column if not specified)", type=str, required=True)
-        
+            subparser.add_argument("-scol", "--scores_col", help="column name for values to correlate (e.g. log2(FC))", type=str, required=True)
+        else:
+            subparser.add_argument("-x", "--x", help="X-axis column", type=str, required=True)
+            subparser.add_argument("-y", "--y", help="Y-axis column", type=str, required=True)
+
     # Optional core arguments
     if fastq_torn_parser == False and fastq_corr_parser == False and pwes_torn_parser == False:
         subparser.add_argument("-c", "--cols", type=str, help="Color column name")
@@ -74,11 +74,8 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
         subparser.add_argument("-so", "--stys_order", nargs="+", help="Style order (list of values)")
         subparser.add_argument("-mo", "--mark_order", nargs="+", help="Marker order (list of marker styles)")
     else:
-        subparser.add_argument("-si", "--size", type=str, help="Column name used to scale point sizes (Default: -log10('pval'); specify 'false' for no size)")
+        subparser.add_argument("-si", "--size", type=str, help="Column name used to scale point sizes (Default: None", default=argparse.SUPPRESS)
         subparser.add_argument("-sd", "--size_dims", type=parse_tuple_float, help="Size range for points formatted as min,max")
-        if pwes_torn_parser == False:
-            subparser.add_argument("-zc", "--z_col", type=str, help="Column name for Z-score normalization (Default: None)", default=argparse.SUPPRESS)
-            subparser.add_argument("-zv", "--z_var", type=str, help="Column value for Z-score normalization (Default: None)", default=argparse.SUPPRESS)
         if fastq_corr_parser == True:
             subparser.add_argument("-m", "--method", help="Correlation method (Default: 'pearson')", choices=['pearson', 'spearman', 'kendall'], type=str, default='pearson')
             subparser.add_argument("-nw", "--not_weighted", dest='weighted', action='store_false', help="Weighted correlation by size column (Default: True)", default=True)
@@ -89,6 +86,11 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
         subparser.add_argument("-fy", "--facety", type=str, help="Column name for facet rows (creates one subplot per category in this column, arranged in seperate rows)")
         subparser.add_argument("-fxo", "--facetx_order", nargs="+", help="Order of facet columns")
         subparser.add_argument("-fyo", "--facety_order", nargs="+", help="Order of facet rows")
+        subparser.add_argument("-xe", "--x_err", type=str, help="Column name for x error bars", default=argparse.SUPPRESS)
+        subparser.add_argument("-ye", "--y_err", type=str, help="Column name for y error bars", default=argparse.SUPPRESS)
+        subparser.add_argument("-ecap", "--err_capsize", type=float, help="Error bar cap size (Default: 0.2)", default=0.2)
+        subparser.add_argument("-ea", "--err_alpha", type=float, help="Error bar transparency (Default: 1)", default=1)
+        subparser.add_argument("-ecol", "--err_color", type=str, help="Error bar color (Default: black)", default="black")
     
     # Additional annotation data sources
     if fastq_torn_parser==True or fastq_corr_parser==True or pwes_torn_parser==True:
@@ -136,7 +138,7 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
     subparser.add_argument("-ytr", "--y_ticks_rot", type=int, default=0, help="Rotation angle of Y-axis tick labels")
     subparser.add_argument("-ytf", "--y_ticks_font", type=str, default="Arial", help="Font family for Y-axis tick labels")
     subparser.add_argument("-yt", "--y_ticks", nargs="+", help="Specific tick values for Y-axis")
-
+    
     # Legend settings
     subparser.add_argument("-lt", "--legend_title", type=str, default="", help="Legend title")
     subparser.add_argument("-lts", "--legend_title_size", type=int, default=12, help="Legend title font size")
@@ -161,9 +163,9 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
     subparser.add_argument("-s", "--show", action="store_true", help="Show the plot", default=False)
     subparser.add_argument("-sc", "--space_capitalize", action="store_true", help="Capitalize label/legend strings and replace underscores with spaces")
     if fastq_torn_parser == True or fastq_corr_parser == True or pwes_torn_parser == True:
-        subparser.add_argument("-ddlg", "--dont_display_legend", dest='display_legend', action="store_false", default=True, help="Display legend on plot (Default: True)")
-        subparser.add_argument("-ddla", "--dont_display_labels", dest='display_labels', action="store_false", default=True, help="Display labels for significant values (Default: True)")
-        subparser.add_argument("-dda", "--dont_display_axis", dest='display_axis', action="store_false", default=True, help="Display x- and y-axis lines (Default: True)")
+        subparser.add_argument("-ddlg", "--dont_display_legend", dest='display_legend', action="store_false", default=True, help="Don't display legend on plot")
+        subparser.add_argument("-ddla", "--dont_display_labels", dest='display_labels', action="store_false", default=True, help="Don't display labels")
+        subparser.add_argument("-dda", "--dont_display_axis", dest='display_axis', action="store_false", default=True, help="on't display x- and y-axis lines")
     if fastq_corr_parser == True:
         subparser.add_argument("-cm", "--corr_method", default=argparse.SUPPRESS, help="Display correlation line of best fit (Default: None; options: 'pearson', 'spearman', 'kendall')", choices=['pearson', 'spearman', 'kendall'])
         subparser.add_argument("-cw", "--corr_weight", default=argparse.SUPPRESS, help="Weights column name for correlation line (Default: None; not weighted correlation)")
@@ -362,14 +364,11 @@ def add_common_plot_heat_args(subparser, fastq_parser=False, stat_parser=False):
     if fastq_parser == True:
         subparser.add_argument("-cc", "--cond_col", type=str, help="Condition column name", required=True)
         subparser.add_argument("-c", "--cond", type=str, help="Condition value for filtering", required=True)
-        subparser.add_argument("-FC", "--FC", type=str, help="Fold change column name (values within heatmap after log2 transformation)", required=True)
+        subparser.add_argument("-scol", "--scores_col", type=str, help="Scores column name (e.g. 'log2(FC)')", required=True)
         subparser.add_argument("-wp", "--wt_prot", type=str, help="WT protein sequence", required=True)
         subparser.add_argument("-wr", "--wt_res", type=int, help="WT protein sequence residue start number", required=True)
-        subparser.add_argument("-dl", "--dont_log2", dest="log2", action="store_false", help="Don't log2 transform FC values", default=True)
         subparser.add_argument("-co", "--cutoff", type=float, help="Comparison count mean cutoff for masking low-abundance values", default=argparse.SUPPRESS)
         subparser.add_argument("-aa", "--aa", type=str, help="AA saturation mutagenesis. The 'aa' option [default] makes all amino acid substitutions ('aa_subs'), +1 amino acid insertions ('aa_ins'), and -1 amino acid deletions ('aa_dels').", choices=['aa', 'aa_subs', 'aa_ins', 'aa_dels'], default='aa')
-        subparser.add_argument("-zc", "--z_col", type=str, help="Column name for Z-score normalization (Default: None)", default=argparse.SUPPRESS)
-        subparser.add_argument("-zv", "--z_var", type=str, help="Column value for Z-score normalization (Default: None)", default=argparse.SUPPRESS)
         subparser.add_argument("-l", "--label", type=str, help="Label column name (Default: 'Edit'). Can't be None.", default='Edit')
     
     if stat_parser == False:
@@ -511,15 +510,13 @@ def add_common_plot_vol_args(subparser, fastq_parser=False):
     '''
     # Required arguments
     subparser.add_argument("-i", "--df", type=str, help="Input dataframe file path from edms stat compare", required=True)
-    subparser.add_argument("-FC", "--FC", type=str, help="Fold change column name (X-axis)", required=True)
-    subparser.add_argument("-pval", "--pval", type=str, help="P-value column name (Y-axis)", required=True)
+    subparser.add_argument("-x", "--x", type=str, help="x-axis column name (i.e., log2(FC))", required=True)
+    subparser.add_argument("-y", "--y", type=str, help="y-axis column name (i.e., -log10('pval'), tstat, etc.)", required=True)
 
     # Optional data columns
     subparser.add_argument("-stys", "--stys", type=str, help="Style column name for custom markers")
-    subparser.add_argument("-size", "--size", type=str, help="Column name used to scale point sizes (Default: -log10('pval'); specify 'false' for no size)")
+    subparser.add_argument("-size", "--size", type=str, help="Column name used to scale point sizes (Default: None)", default=argparse.SUPPRESS)
     subparser.add_argument("-sd", "--size_dims", type=parse_tuple_float, help="Size range for points formatted as min,max")
-    subparser.add_argument("-zc", "--z_col", type=str, help="Column name for Z-score normalization (Default: None)", default=argparse.SUPPRESS)
-    subparser.add_argument("-zv", "--z_var", type=str, help="Column value for Z-score normalization (Default: None)", default=argparse.SUPPRESS)    
     subparser.add_argument("-l", "--label", type=str, help="Column containing text labels for points")
     if fastq_parser==False:
         subparser.add_argument("-so","--stys_order", type=str, nargs="+", help="Style column values order")
@@ -530,8 +527,10 @@ def add_common_plot_vol_args(subparser, fastq_parser=False):
         add_common_fastq_label_args(subparser)
         
     # Thresholds
-    subparser.add_argument("-ft","--FC_threshold", type=float, default=1, help="Fold change threshold for significance")
-    subparser.add_argument("-pt","--pval_threshold", type=float, default=1, help="P-value threshold for significance")
+    subparser.add_argument("-tx","--x_threshold", type=float, default=argparse.SUPPRESS, help="x-value threshold")
+    subparser.add_argument("-ty","--y_threshold", type=float, default=argparse.SUPPRESS, help="y-value threshold")
+    subparser.add_argument("-nbtx","--no_bidirectional_x_threshold", dest='bidirectional_x_threshold', action="store_false", help="both positive and negative x-axis thresholds (Default: True)", default=True)
+    subparser.add_argument("-bty","--bidirectional_y_threshold", dest='bidirectional_y_threshold', action="store_true", help="both positive and negative y-axis thresholds (Default: False)", default=False)
 
     # Output
     subparser.add_argument("-o", "--dir", type=str, help="Output directory path", default='./out')
@@ -590,7 +589,7 @@ def add_common_plot_vol_args(subparser, fastq_parser=False):
     
     # Boolean switches
     subparser.add_argument("-ddl","--dont_display_legend", action="store_false", help="Don't display legend on plot", default=True)
-    subparser.add_argument("-dl","--display_labels", type=str, nargs="+", help="Display labels for values if label column specified (Options: 'FC & p-value', 'FC', 'p-value', 'NS', 'all', or ['label1', 'label2', ..., 'labeln'])", default=["FC & p-value"])
+    subparser.add_argument("-dl","--display_labels", type=str, nargs="+", help="Display labels for values if label column specified (Options: 'all', [], f'{x} & {y}', f'{x}', f'{y}', 'neither', 'True', 'False')", default=argparse.SUPPRESS)
     subparser.add_argument("-dda","--dont_display_axis", dest='display_axis', action="store_false", default=True, help="Display x- and y-axis lines (Default: True)")
     subparser.add_argument("-dli","--display_lines", action="store_true", help="Display lines for threshold (Default: False)", default=False)
     subparser.add_argument("-d","--dpi", type=int, help="Figure dpi (Default: 1200 for non-HTML, 150 for HTML)", default=0)
@@ -740,6 +739,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_stat_compare.add_argument("-p","--pseudocount", type=int, default=1, help="Pseudocount to avoid log(0) or divide-by-zero errors")
     parser_stat_compare.add_argument("-r","--replicate", type=str, help="Replicate column name (use pairwise comparisons instead of aggregate)", default=argparse.SUPPRESS)
     parser_stat_compare.add_argument("-a","--alternative", type=str, default="two-sided", choices=["two-sided", "less", "greater"], help="Alternative hypothesis for Fisher's exact test (Default: two-sided)")
+    parser_stat_compare.add_argument("-cp", "--column_prefix", type=str, default=argparse.SUPPRESS, help="Prefix for new columns (_ is added between prefix and stat name if provided prefix does not end with _)")
     parser_stat_compare.add_argument("-o", "--dir", type=str, help="Output directory (Default: ../out)",default='../out')
     parser_stat_compare.add_argument("-f", "--file", type=str, help="Output file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_compare.csv')
     parser_stat_compare.add_argument("-v","--verbose", action="store_true", help="Print progress to console", default=False)

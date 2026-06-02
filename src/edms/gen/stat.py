@@ -453,8 +453,7 @@ def weighted_corr_line(df: pd.DataFrame, x: str, y: str, weight: str, ax=None,
 # Comparison
 def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str, 
             var: str, count: str, pseudocount: int=1, alternative: str='two-sided', replicate: str = None,
-            log2_or: str | None = None, se_log2_or: str | None = None, confidence_lambda: float | str | None = 'auto',
-            dir: str = None, file: str = None, verbose: bool = False) -> pd.DataFrame:
+            column_prefix: str = '', dir: str = None, file: str = None, verbose: bool = False) -> pd.DataFrame:
     ''' 
     compare(): computes FC, pval, and log transformations relative to a specified condition
 
@@ -466,10 +465,9 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str,
     var (str): variable column name
     count (str): count column name
     pseudocount (int, optional): pseudocount to avoid log(0) & /0 (Default: 1)
+    replicate (str, optional): replicate column name (optional; if provided, computes statistics for each sample separately and then aggregates by condition)
     alternative (str, optional): alternative hypothesis for statistical test ('two-sided', 'less', or 'greater'; Default: 'two-sided')
-    log2_or (str, optional): log2 odds ratio column name (Default: None)
-    se_log2_or (str, optional): standard error of log2 odds ratio column name (Default: None)
-    confidence_lambda (float | str | None, optional): scaling factor for variance term in confidence score; auto mode, scale the variance term so it is roughly comparable to se_log2_or^2. (Default: 'auto')
+    column_prefix (str, optional): prefix for new columns (Default: '')
     dir (str, optional): save directory
     file (str, optional): save file
     verbose (bool, optional): print progress to console (Default: False)
@@ -479,6 +477,17 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str,
         df = io.get(pt=df)
     else:
         df = df.copy()
+
+    # Validate column prefix
+    if not isinstance(column_prefix, str):
+        raise ValueError("column_prefix must be a string")
+    elif column_prefix != '' and not column_prefix.endswith('_'):
+        column_prefix += '_'
+    
+    # Rename count column with prefix for clarity
+    if f'{column_prefix}{count}' in df.columns:
+        raise ValueError(f"Column name '{column_prefix}{count}' already exists in df. Please choose a different column_prefix or count column name to avoid conflicts.")
+    df.rename(columns={count: f'{column_prefix}{count}'}, inplace=True)
 
     # Validate replicate column
     if replicate is not None:
@@ -491,49 +500,44 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str,
         if any(df_replicate_vc['count'] != df_replicate_vc_1):
             raise ValueError(f"Unequal number of replicates per condition in replicate column '{replicate}'")    
 
-    # Validate optional OR columns
-    if log2_or is not None and log2_or not in df.columns:
-        raise ValueError(f"log2_or '{log2_or}' not found in df")
-    if se_log2_or is not None and se_log2_or not in df.columns:
-        raise ValueError(f"se_log2_or '{se_log2_or}' not found in df")
-    if (log2_or is None) ^ (se_log2_or is None):
-        raise ValueError("Provide both log2_or and se_log2_or, or neither")
+    
+    # Add pseudocount to avoid log(0) & compute fraction per million (FPM)
+    if verbose: 
+        print(f'Add pseudocount ({pseudocount}) to avoid log(0) & compute fraction per million (FPM)')
+    if pseudocount < 0:
+        raise ValueError("pseudocount must be a non-negative integer")
+    elif pseudocount == 0:
+        print("Warning: pseudocount of 0 may lead to log(0) and divide-by-zero errors")
+    df[f'{column_prefix}{count}+{pseudocount}'] = df[f'{column_prefix}{count}'] + pseudocount
+    df[f'{column_prefix}pc'] = pseudocount
 
     # Get metadata
     meta_cols = list(df.columns)
-    if count not in meta_cols: # Validate count column
-        raise ValueError(f"count column '{count}' not found in df")
-    meta_cols.remove(count)
+    if f'{column_prefix}{count}' not in meta_cols: # Validate count column
+        raise ValueError(f"count column '{column_prefix}{count}' not found in df")
+    meta_cols.remove(f'{column_prefix}{count}')
 
     exclude_meta = set()
-    if log2_or is not None:
-        exclude_meta.add(log2_or)
-    if se_log2_or is not None:
-        exclude_meta.add(se_log2_or)
-    meta_cols = [c for c in meta_cols if c not in exclude_meta]
-
-    if verbose: 
-        print(f'Add pseudocount ({pseudocount}) to avoid log(0) & compute fraction per million (FPM)')
-    df[f'{count}+{pseudocount}'] = df[count] + pseudocount
+    meta_cols = [c for c in meta_cols if c not in exclude_meta]    
 
     # Compute per-sample library-normalized values
     dc = t.split(df=df, key=sample)
     for s, df_sample in dc.items():
-        count_total = float(df_sample[count].sum())
+        count_total = float(df_sample[f'{column_prefix}{count}'].sum())
         n_rows = int(df_sample.shape[0])
         count_total_pc = count_total + pseudocount * n_rows
 
         # Classic FPM; avoid divide-by-zero
         if count_total > 0:
-            dc[s]['FPM'] = [c / count_total * 1_000_000 for c in df_sample[count]]
+            dc[s][f'{column_prefix}FPM'] = [c / count_total * 1_000_000 for c in df_sample[f'{column_prefix}{count}']]
         else:
-            dc[s]['FPM'] = [0.0] * n_rows
+            dc[s][f'{column_prefix}FPM'] = [0.0] * n_rows
 
         # Pseudocount-adjusted FPM for robust FC (adds pseudocount to each observation and to the library size)
         if count_total_pc > 0:
-            dc[s]['FPM_pc'] = [(c + pseudocount) / count_total_pc * 1_000_000 for c in df_sample[count]]
+            dc[s][f'{column_prefix}FPM_pc'] = [(c + pseudocount) / count_total_pc * 1_000_000 for c in df_sample[f'{column_prefix}{count}']]
         else:
-            dc[s]['FPM_pc'] = [0.0] * n_rows
+            dc[s][f'{column_prefix}FPM_pc'] = [0.0] * n_rows
 
     if replicate is None: # Aggregate version
 
@@ -547,11 +551,9 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str,
             agg_dict[col] = lambda x: set(
                 tuple(i) if isinstance(i, list) else i for i in x
             )
-        # Include both mean and list of original values
-        agg_dict[count] = 'mean'
-        agg_dict[f'{count}+{pseudocount}'] = 'mean'
-        agg_dict['FPM'] = ['mean', list, 'var', 'count']
-        agg_dict['FPM_pc'] = ['mean', list, 'var', 'count']
+        # Include mean, list, variance, and count of values for transparency and downstream analyses
+        agg_dict[f'{column_prefix}{count}'] = list
+        agg_dict[f'{column_prefix}FPM_pc'] = ['mean', list, 'var', 'count']
 
         # Join samples back into 1 dataframe and split by condition
         for c, df_cond in t.split(df=t.join(dc=dc, col=sample), key=cond).items():
@@ -587,62 +589,32 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str,
             if verbose: 
                 print(f'{v}')
             df_other_edit = df_other[df_other[var] == v].copy()
-            df_comp_edit = df_comp[df_comp[var] == v]
+            df_comp_edit = df_comp[df_comp[var] == v].copy()
 
             # If the comparison group has no rows for this variable, skip
             if df_comp_edit.empty:
                 continue
-
-            # Carry through comparison means for transparency
-            df_other_edit[f'{count}_mean_compare'] = [df_comp_edit.iloc[0][f'{count}_mean']] * df_other_edit.shape[0]
-            df_other_edit[f'{count}+{pseudocount}_mean_compare'] = [df_comp_edit.iloc[0][f'{count}+{pseudocount}_mean']] * df_other_edit.shape[0]
-            df_other_edit['FPM_pc_mean_compare'] = [df_comp_edit.iloc[0]['FPM_pc_mean']] * df_other_edit.shape[0]
-            df_other_edit['FPM_mean_compare'] = [df_comp_edit.iloc[0]['FPM_mean']] * df_other_edit.shape[0]
-
-            # Robust FC using pseudocount-adjusted FPM; guard against zero denominator
-            den = float(df_comp_edit.iloc[0]['FPM_pc_mean'])
-            if den <= 0:
-                den = np.finfo(float).eps
-            df_other_edit['FC'] = df_other_edit['FPM_pc_mean'] / den
-            df_other_edit['log2FC'] = np.log2(df_other_edit['FC'].replace(0, np.finfo(float).eps))
+            
+            # Carry through comparison counts for transparency
+            df_other_edit[f'{column_prefix}{count}_list_{cond_comp}'] = [df_comp_edit.iloc[0][f'{column_prefix}{count}_list']] * df_other_edit.shape[0]
+            
+            # Pseudocount-adjusted FPM
+            df_other_edit[f'{column_prefix}FC'] = df_other_edit[f'{column_prefix}FPM_pc_mean'] / df_comp_edit.iloc[0][f'{column_prefix}FPM_pc_mean']
+            df_other_edit[f'{column_prefix}log2(FC)'] = np.log2(df_other_edit[f'{column_prefix}FC'])
 
             # Two-sample t-tests using the adjusted per-sample values
+            comp_FPM_pc_list = list(df_comp_edit.iloc[0][f'{column_prefix}FPM_pc_list'])
             ttests = [
-                ttest_ind(list(other_vals), list(df_comp_edit.iloc[0]['FPM_pc_list']), alternative=alternative)
-                for other_vals in df_other_edit['FPM_pc_list']
+                ttest_ind(list(other_vals), comp_FPM_pc_list, alternative=alternative)
+                for other_vals in df_other_edit[f'{column_prefix}FPM_pc_list']
             ]
-            df_other_edit['pval'] = [ttest[1] for ttest in ttests]
-            df_other_edit['tstat'] = [ttest[0] for ttest in ttests]
+            df_other_edit[f'{column_prefix}pval'] = [ttest[1] for ttest in ttests]
+            df_other_edit[f'{column_prefix}-log10(pval)'] = -np.log10(df_other_edit[f'{column_prefix}pval'])
+            df_other_edit[f'{column_prefix}tstat'] = [ttest[0] for ttest in ttests]
             
-            # replicate-level noise term
-            var_other_val = df_other_edit['FPM_pc_var'].fillna(0.0).astype(float)
-            mean_other_val = df_other_edit['FPM_pc_mean'].fillna(0.0).astype(float)
-            n_other_val = df_other_edit['FPM_pc_count'].fillna(1.0).astype(float)
-
-            var_comp_val = float(df_comp_edit.iloc[0].get('FPM_pc_var', 0.0))
-            if np.isnan(var_comp_val):
-                var_comp_val = 0.0
-            mean_comp_val = float(df_comp_edit.iloc[0].get('FPM_pc_mean', 0.0))
-            if np.isnan(mean_comp_val):
-                mean_comp_val = 0.0
-            n_comp_val = float(df_comp_edit.iloc[0].get('FPM_pc_count', 1.0))
-            if np.isnan(n_comp_val) or n_comp_val <= 0:
-                n_comp_val = 1.0
-            
-            df_other_edit['FPM_pc_var_compare'] = var_comp_val
-            df_other_edit['FPM_pc_n_compare'] = n_comp_val
-            
-            alpha = 1.0
-            mean_floor = 1e-12
-
-            df_other_edit['var_term'] = (
-                var_other_val / (np.maximum(mean_other_val, mean_floor) ** 2 * np.maximum(n_other_val, 1.0))
-                + alpha * var_comp_val / (max(mean_comp_val, mean_floor) ** 2 * max(n_comp_val, 1.0))
-            )
-
             df_stat = pd.concat([df_stat, df_other_edit])
 
-        df_stat['compare'] = [cond_comp] * df_stat.shape[0]
+        df_stat[f'{column_prefix}compare'] = [cond_comp] * df_stat.shape[0]
         df_stat = df_stat.sort_values(by=[cond, var]).reset_index(drop=True)
 
     else: # Replicate-based version
@@ -657,102 +629,71 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str,
 
         # Pair within replicate: match on (var, replicate)
         paired = df_other.merge(
-            df_comp[[var, replicate, 'FPM_pc', 'FPM']],
+            df_comp[[var, replicate, f'{column_prefix}FPM_pc', f'{column_prefix}FPM']],
             on=[var, replicate],
             how='inner',
-            suffixes=('', '_compare')
+            suffixes=('', f'_{cond_comp}')
         )
 
+        def paired_ttest(g):
+            x = g[f'{column_prefix}FPM_pc'].astype(float)
+            y = g[f'{column_prefix}FPM_pc_{cond_comp}'].astype(float)
+
+            if len(g) < 2:
+                return pd.Series({
+                    f'{column_prefix}tstat': np.nan,
+                    f'{column_prefix}pval': np.nan,
+                })
+
+            res = ttest_rel(x, y, alternative=alternative, nan_policy='omit')
+
+            return pd.Series({
+                f'{column_prefix}tstat': res.statistic,
+                f'{column_prefix}pval': res.pvalue,
+                f'{column_prefix}-log10(pval)': -np.log10(res.pvalue) if res.pvalue > 0 else np.inf,
+            })
+        
         # Compute FC within replicate
         eps = np.finfo(float).eps
-        paired['compare'] = cond_comp
-        paired['FPM_pc_compare'] = paired['FPM_pc_compare'].astype(float)
-        paired['FC'] = paired['FPM_pc'].astype(float) / np.maximum(paired['FPM_pc_compare'], eps)
-        paired['log2FC'] = np.log2(np.maximum(paired['FC'].astype(float), eps))
+        paired[f'{column_prefix}compare'] = cond_comp
+        paired[f'{column_prefix}FPM_pc_{cond_comp}'] = paired[f'{column_prefix}FPM_pc_{cond_comp}'].astype(float)
+        paired[f'{column_prefix}FC'] = paired[f'{column_prefix}FPM_pc'].astype(float) / np.maximum(paired[f'{column_prefix}FPM_pc_{cond_comp}'], eps)
+        paired[f'{column_prefix}log2(FC)'] = np.log2(np.maximum(paired[f'{column_prefix}FC'].astype(float), eps))
         df_stat = paired.sort_values(by=[cond, var, replicate]).reset_index(drop=True)
 
         # summarize replicate variability by (cond, var)
         grp = (
             df_stat.groupby([cond, var], as_index=False)
             .agg(
-                FPM_pc_mean=('FPM_pc', 'mean'),
-                FPM_pc_var=('FPM_pc', 'var'),
-                FPM_pc_count=('FPM_pc', 'count'),
-                FC_mean=('FC', 'mean'),
-                log2FC_mean=('log2FC', 'mean'),
+                FPM_pc_mean=(f'{column_prefix}FPM_pc', 'mean'),
+                FPM_pc_var=(f'{column_prefix}FPM_pc', 'var'),
+                FPM_pc_count=(f'{column_prefix}FPM_pc', 'count'),
+                FC_mean=(f'{column_prefix}FC', 'mean'),
+                log2FC_mean=(f'{column_prefix}log2(FC)', 'mean'),
             )
-        )
-
-        grp_comp = grp[grp[cond] == cond_comp][[var, 'FPM_pc_mean', 'FPM_pc_var', 'FPM_pc_count']]
-        grp_comp = grp_comp.rename(columns={
-            'FPM_pc_mean': 'FPM_pc_mean_compare',
-            'FPM_pc_var': 'FPM_pc_var_compare',
-            'FPM_pc_count': 'FPM_pc_n_compare'
-        })
-
-        grp_other = grp[grp[cond] != cond_comp].merge(grp_comp, on=var, how='left')
-
-        mean_floor = 1e-12
-        alpha = 1.0
-
-        grp_other['var_term'] = (
-            grp_other['FPM_pc_var'].fillna(0.0).astype(float)
-            / (
-                np.maximum(grp_other['FPM_pc_mean'].fillna(0.0).astype(float), mean_floor) ** 2
-                * np.maximum(grp_other['FPM_pc_count'].fillna(1.0).astype(float), 1.0)
-            )
-            + alpha *
-            grp_other['FPM_pc_var_compare'].fillna(0.0).astype(float)
-            / (
-                np.maximum(grp_other['FPM_pc_mean_compare'].fillna(0.0).astype(float), mean_floor) ** 2
-                * np.maximum(grp_other['FPM_pc_n_compare'].fillna(1.0).astype(float), 1.0)
-            )
-        )
-
-        df_stat = grp_other.copy()
-        df_stat['compare'] = cond_comp
-
-    # optional OR-based combined score
-    if log2_or is not None and se_log2_or is not None:
-        keep_cols = [cond, var, log2_or, se_log2_or]
-        or_df = df[[c for c in keep_cols if c in df.columns]].copy()
-        or_df = or_df.drop_duplicates(subset=[cond, var])
-
-        df_stat = df_stat.merge(or_df, on=[cond, var], how='left')
-
-        df_stat['se_log2_or_sq'] = df_stat[se_log2_or].astype(float) ** 2
-        df_stat['var_term'] = df_stat['var_term'].astype(float)
-
-        valid = (
-            np.isfinite(df_stat['se_log2_or_sq']) &
-            np.isfinite(df_stat['var_term']) &
-            (df_stat['var_term'] > 0)
-        )
-
-        lambda_used = np.nan
-        if isinstance(confidence_lambda, str):
-            if confidence_lambda != 'auto':
-                raise ValueError("confidence_lambda must be a float, None, or 'auto'")
-            if valid.any():
-                lambda_used = np.nanmedian(df_stat.loc[valid, 'se_log2_or_sq']) / np.nanmedian(df_stat.loc[valid, 'var_term'])
-            else:
-                lambda_used = 1.0
-        elif confidence_lambda is None:
-            lambda_used = 1.0
-        else:
-            lambda_used = float(confidence_lambda)
-
-        if verbose:
-            print(f'Using confidence_lambda = {lambda_used}')
-
-        df_stat['confidence_lambda'] = lambda_used
-        df_stat['confidence_se'] = np.sqrt(
-            df_stat['se_log2_or_sq'] + lambda_used * np.maximum(df_stat['var_term'], 0.0)
-        )
-        df_stat['confidence_score'] = (
-            df_stat[log2_or].astype(float) / np.maximum(df_stat['confidence_se'], np.finfo(float).eps)
         )
         
+        ttest_df = (
+            paired
+            .groupby([cond, var])
+            .apply(paired_ttest)
+            .reset_index()
+        )
+
+        grp_comp = grp[grp[cond] == cond_comp][[var, f'{column_prefix}FPM_pc_mean', f'{column_prefix}FPM_pc_var', f'{column_prefix}FPM_pc_count']]
+        grp_comp = grp_comp.rename(columns={
+            f'{column_prefix}FPM_pc_mean': f'{column_prefix}FPM_pc_mean_{cond_comp}',
+            f'{column_prefix}FPM_pc_var': f'{column_prefix}FPM_pc_var_{cond_comp}',
+            f'{column_prefix}FPM_pc_count': f'{column_prefix}FPM_pc_n_{cond_comp}',
+        })
+
+        df_stat = grp[grp[cond] != cond_comp].merge(grp_comp, on=var, how='left').merge(ttest_df, on=[cond, var], how='left')
+        df_stat[f'{column_prefix}compare'] = [cond_comp] * df_stat.shape[0]
+        df_stat = df_stat.sort_values(by=[cond, var]).reset_index(drop=True)
+    
+    # Unpack single-value lists, tuples, and sets for clarity
+    t.unpack_singleton_iterables(df=df_stat, inplace=True)
+    
     # Save & return statistics dataframe
     if dir is not None and file is not None:
         io.save(obj=df_stat, dir=dir, file=file) 
@@ -903,6 +844,9 @@ def odds_ratio(df: pd.DataFrame | str, cond: str, cond_comp: str,
         # Append to statistics dataframe
         df_stat = pd.concat([df_stat, df_cond]).reset_index(drop=True)
     
+    # Unpack single-value lists, tuples, and sets for clarity
+    t.unpack_singleton_iterables(df=df_stat, inplace=True)
+
     # Save & return statistics dataframe
     if dir is not None and file is not None:
         io.save(obj=df_stat, dir=dir, file=file) 
@@ -976,6 +920,9 @@ def zscore(
     out[out_col] = (out[val] - out["_mu__"]) / denom
     out.drop(columns=["_mu__", "_sigma__"], inplace=True)
     
+    # Unpack single-value lists, tuples, and sets for clarity
+    t.unpack_singleton_iterables(df=out, inplace=True)
+
     # Save & return dataframe
     if dir is not None and file is not None:
         io.save(obj=out, dir=dir, file=file)  

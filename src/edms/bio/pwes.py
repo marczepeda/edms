@@ -611,14 +611,14 @@ def cat(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new",scores_col: str
         legend_columnspacing=legend_columnspacing,legend_handletextpad=legend_handletextpad,legend_labelspacing=legend_labelspacing,legend_borderpad=legend_borderpad,legend_handlelength=legend_handlelength,html_size_multiplier=html_size_multiplier,
         dpi=dpi,transparent=transparent,show=show,space_capitalize=space_capitalize,**kwargs)
 
-def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="cl_new", scores_col: str="log2(FC)", individual: bool=True, size: str | bool=None, size_dims: tuple=None, label: str='Edit', label_size: int=16,
-        label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None, ss_h: int=None, ss_y: int=None,
+def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="cl_new", scores_col: str="log2(FC)", individual: bool=True, size: str=None, size_dims: tuple=None, label: str='Edit', label_size: int=16,
+        label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None, DSSP: str=None, chain_id: str=None, ss_h: int=None, ss_y: int=None,
         file: str=None, dir: str=None, palette_or_cmap: str = 'turbo', edgecol: str='black', figsize=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
         legend_title: str='',legend_title_size: int=12, legend_title_weight: str ='bold', legend_size: int = 12, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1, 
         legend_columnspacing: int=-3, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, html_size_multiplier: float=1.5,
-        display_legend: bool=True, display_labels: bool=True, display_axis: bool=True, return_df: bool=True, dpi: int = 0, transparent: bool=False, show: bool=True, space_capitalize: bool=True,
+        display_legend: bool=True, display_labels: bool=False, display_axis: bool=True, return_df: bool=True, dpi: int = 0, transparent: bool=False, show: bool=True, space_capitalize: bool=True,
         **kwargs) -> pd.DataFrame:
     ''' 
     torn(): creates tornado plots for visualizing PWES clusters
@@ -629,9 +629,7 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
     cluster_col (str, optional): column name in df & df_clus with cluster labels to plot (Default: 'cl_new')
     scores_col (str, optional): column name in df & df_clus with edit scores to plot (Default: 'log2(FC)')
     individual (bool, optional): show clusters on individual plot (otherwise, all clusters are shown on one plot)
-    FC (str): fold change column name (y-axis)
-    pval (str): p-value column name (size column if not specified)
-    size (str | bool, optional): size column name (Default: pval; specify False for no size)
+    size (str | bool, optional): size column name (Default: None)
     size_dims (tuple, optional): (minimum,maximum) values in size column (Default: None)
     cluster_col (str, optional): cluster column name (Default: None)
     label (str, optional): label column name (Default: 'Edit'). Can't be None.
@@ -644,6 +642,8 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
     PhosphoSitePlus (str, optional): UniProt accession
     PDB_contacts (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
     PDB_neighbors (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
+    DSSP (str, optional): PDB ID (if saved to ~/.config/edms/DSSP) or file path for DSSP file. See edms.dat.dssp.retrieve() or edms dssp retrieve -h for more information.
+    chain_id (str, optional): Chain identifier to isolate for secondary structure analysis (Default: None)
     ss_h (int, optional): height for secondary structure in the plot (Default: autogenerate)
     ss_y (int, optional): y position for secondary structure in the plot (Default: autogenerate)
     file (str, optional): save plot to filename
@@ -689,7 +689,7 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
     legend_handlelength (float, optional): marker length (Default: 0.5; only for html plots)
     html_size_multiplier (float, optional): size multiplier for html plots (Default: 1.5)
     display_legend (bool, optional): display legend on plot (Default: True)
-    display_labels (bool, optional): display labels for significant values (Default: True)
+    display_labels (bool, optional): display labels (Default: False)
     display_axis (bool, optional): display x-axis line (Default: True)
     dpi (int, optional): figure dpi (Default: 1200 for non-HTML, 150 for HTML)
     transparent (bool, optional): save plot with transparent background (Default: False)
@@ -755,8 +755,6 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
         size = None 
 
     else:
-        if size is None: size = '-log10(pval)' # default to pval
-
         if size is not None and size in df.columns:
             # Filter by size dimensions
             if size_dims is not None: 
