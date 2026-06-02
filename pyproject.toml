@@ -40,13 +40,13 @@ dependencies = [
   "secstructartist @ git+https://github.com/aethertier/secstructartist.git@b95da50ef6b864eb08e31bb6ad622592050c95f7",
 ]
 
-[project.optional-dependencies]
-pymol = ["pymol-open-source"]
-
 classifiers = [
   "Programming Language :: Python :: 3",
   "Operating System :: OS Independent"
 ]
+
+[project.optional-dependencies]
+pymol = ["pymol-open-source"]
 
 [project.scripts]
 edms = "edms.main:main"
