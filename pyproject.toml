@@ -36,7 +36,7 @@ dependencies = [
   "mpld3",
   "mdanalysis",
   "biopandas",
-  "dssp",
+  "pydssp",
   "secstructartist @ git+https://github.com/aethertier/secstructartist.git@b95da50ef6b864eb08e31bb6ad622592050c95f7",
   "pymol-open-source"
 ]
