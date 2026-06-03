@@ -1296,22 +1296,22 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
             if is_html:
                 # Use invisible points to carry click-to-toggle tooltips in HTML
                 pts = ax.scatter(
-                    df[x],
-                    df[y],
+                    df_sub[x],
+                    df_sub[y],
                     s=20,
                     alpha=0
                 )
-                labels_list = df[label].fillna("").astype(str).tolist()
+                labels_list = df_sub[label].fillna("").astype(str).tolist()
                 tooltip = SafeHTMLTooltip(pts, labels_list)
                 clicker = ClickTooltip(pts, labels_list)
                 mpld3.plugins.connect(fig, tooltip, clicker)
 
             else:
                 # For static images, draw permanent text labels
-                for i, txt in enumerate(df[label]):
+                for i, txt in enumerate(df_sub[label]):
                     ax.text(
-                        df.iloc[i][x],
-                        df.iloc[i][y],
+                        df_sub.iloc[i][x],
+                        df_sub.iloc[i][y],
                         txt
                     )
         
@@ -1332,23 +1332,23 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
                     ax.errorbar(x_val, y_val, yerr=y_err_val, fmt='none', ecolor=err_color, alpha=err_alpha, capsize=err_capsize, zorder=0)
 
         # Add correlation line of best fit if specified
-        if graph == 'scat' and corr_method is not None:
+        if graph == 'scat' and corr_method is not None and not df_sub.empty:
             if corr_weight is not None and corr_weight in df.columns: # Weighted correlation
                 
                 coeff = st.weighted_correlation(
-                    df=df,
+                    df=df_sub,
                     x=x,
                     y=y,
                     weight=corr_weight,
                     method=corr_method)
                 
-                a,b = st.weighted_corr_line(df=df, ax=ax,
+                a,b = st.weighted_corr_line(df=df_sub, ax=ax,
                                             x=x, 
                                             y=y, 
                                             weight=corr_weight)
             else: # Unweighted correlation
-                coeff = st.weighted_correlation(df=df, x=x, y=y, method=corr_method)
-                a,b = st.corr_line(df=df, ax=ax, x=x, y=y)
+                coeff = st.weighted_correlation(df=df_sub, x=x, y=y, method=corr_method)
+                a,b = st.corr_line(df=df_sub, ax=ax, x=x, y=y)
 
             # correlation equation string
             m = "?"
@@ -1364,6 +1364,9 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
             else:
                 return f"y = {b:.2f}·x + {a:.2f}; {m}² = {coeff**2:.1g}"
         
+        elif df_sub.empty:
+            return ""
+
         else:
             return title # = title_sub (important for single-plot case)
 

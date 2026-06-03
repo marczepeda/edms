@@ -29,11 +29,14 @@ import os
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 from matplotlib.colors import to_rgb
-from secstructartist.artists import (
-        SecStructArtist, 
-        ElementArtist, 
-        primitives as prim,
-    )
+try:
+    from secstructartist.artists import (
+            SecStructArtist, 
+            ElementArtist, 
+            primitives as prim,
+        )
+except ImportError:
+    print("Warning: secstructartist is not installed properly.\nCannot use edms dssp ssa or plot_ssa() function.")
 from pathlib import Path
 from ..utils import mkdir
 from ..gen import plot as p
