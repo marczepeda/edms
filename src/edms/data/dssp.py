@@ -342,7 +342,7 @@ def plot_ss_color_key(
     
     plot_ss_color_key
 
-def plot_ssa(dssp_file: str, chain_id: str, artist: SecStructArtist | str = None, figsize: tuple = (8, 0.5),
+def plot_ssa(dssp_file: str, chain_id: str, artist = None, figsize: tuple = (8, 0.5),
             dir: str = None, file: str = None, dpi: int = 1200, transparent: bool = True, show: bool = True, **kwargs):
     """
     plot_ssa(): Plot the secondary structure assignment for a given DSSP file and chain.
