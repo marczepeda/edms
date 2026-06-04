@@ -2421,7 +2421,7 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
     plt.close()
 
 def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = None, size_dims: tuple = None, label: str = None, stys_order: list = [], mark_order: list = [],
-        x_threshold: float = 0, y_threshold: float = 0, bidirectional_x_threshold: bool = True, bidirectional_y_threshold: bool = False, 
+        x_threshold: float = 0, y_threshold: float = 0, bidirectional_x_threshold: bool = True, bidirectional_y_threshold: bool = False,
         file: str = None, dir: str = None, color: str = 'lightgray', alpha: float = 0.5, edgecol: str = 'black', vertical: bool = True,
         figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
@@ -2527,32 +2527,38 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
         legend_title_size=legend_title_size*html_size_multiplier
         legend_size=legend_size*html_size_multiplier*.75
 
-    # Organize data by significance
+    # Organize data by thresholds
     threshold = []
-    for (x_val,y_val) in zip(df[x],df[y]):
-        if bidirectional_x_threshold and bidirectional_y_threshold: # Both positive and negative values greater than thresholds
-            if (np.abs(x_val)>=x_threshold)&(np.abs(y_val)>=y_threshold): threshold.append(f'{x} & {y}')
-            elif (np.abs(x_val)<x_threshold)&(np.abs(y_val)>=y_threshold): threshold.append(f'{y}')
-            elif (np.abs(x_val)>=x_threshold)&(np.abs(y_val)<y_threshold): threshold.append(f'{x}')
+    if isinstance(display_labels, list) and label is not None: # Threshold based on labels specified
+        for l in df[label].values:
+            if l in display_labels: threshold.append(f'{x} & {y}')
             else: threshold.append('neither')
 
-        elif bidirectional_x_threshold and not bidirectional_y_threshold: # Only x-axis has both positive and negative values greater than threshold
-            if (np.abs(x_val)>=x_threshold)&(y_val>=y_threshold): threshold.append(f'{x} & {y}')
-            elif (np.abs(x_val)<x_threshold)&(y_val>=y_threshold): threshold.append(f'{y}')
-            elif (np.abs(x_val)>=x_threshold)&(y_val<y_threshold): threshold.append(f'{x}')
-            else: threshold.append('neither')
-        
-        elif not bidirectional_x_threshold and bidirectional_y_threshold: # Only y-axis has both positive and negative values greater than threshold
-            if (x_val>=x_threshold)&(np.abs(y_val)>=y_threshold): threshold.append(f'{x} & {y}')
-            elif (x_val<x_threshold)&(np.abs(y_val)>=y_threshold): threshold.append(f'{y}')
-            elif (x_val>=x_threshold)&(np.abs(y_val)<y_threshold): threshold.append(f'{x}')
-            else: threshold.append('neither')
+    else: # Threshold based on x and y values
+        for (x_val,y_val) in zip(df[x],df[y]):
+            if bidirectional_x_threshold and bidirectional_y_threshold: # Both positive and negative values greater than thresholds
+                if (np.abs(x_val)>=x_threshold)&(np.abs(y_val)>=y_threshold): threshold.append(f'{x} & {y}')
+                elif (np.abs(x_val)<x_threshold)&(np.abs(y_val)>=y_threshold): threshold.append(f'{y}')
+                elif (np.abs(x_val)>=x_threshold)&(np.abs(y_val)<y_threshold): threshold.append(f'{x}')
+                else: threshold.append('neither')
 
-        else: # Neither x- nor y-axis has both positive and negative values greater than threshold
-            if (x_val>=x_threshold)&(y_val>y_threshold): threshold.append(f'{x} & {y}')
-            elif (x_val<x_threshold)&(y_val>=y_threshold): threshold.append(f'{y}')
-            elif (x_val>=x_threshold)&(y_val<y_threshold): threshold.append(f'{x}')
-            else: threshold.append('neither')
+            elif bidirectional_x_threshold and not bidirectional_y_threshold: # Only x-axis has both positive and negative values greater than threshold
+                if (np.abs(x_val)>=x_threshold)&(y_val>=y_threshold): threshold.append(f'{x} & {y}')
+                elif (np.abs(x_val)<x_threshold)&(y_val>=y_threshold): threshold.append(f'{y}')
+                elif (np.abs(x_val)>=x_threshold)&(y_val<y_threshold): threshold.append(f'{x}')
+                else: threshold.append('neither')
+            
+            elif not bidirectional_x_threshold and bidirectional_y_threshold: # Only y-axis has both positive and negative values greater than threshold
+                if (x_val>=x_threshold)&(np.abs(y_val)>=y_threshold): threshold.append(f'{x} & {y}')
+                elif (x_val<x_threshold)&(np.abs(y_val)>=y_threshold): threshold.append(f'{y}')
+                elif (x_val>=x_threshold)&(np.abs(y_val)<y_threshold): threshold.append(f'{x}')
+                else: threshold.append('neither')
+
+            else: # Neither x- nor y-axis has both positive and negative values greater than threshold
+                if (x_val>=x_threshold)&(y_val>y_threshold): threshold.append(f'{x} & {y}')
+                elif (x_val<x_threshold)&(y_val>=y_threshold): threshold.append(f'{y}')
+                elif (x_val>=x_threshold)&(y_val<y_threshold): threshold.append(f'{x}')
+                else: threshold.append('neither')
 
     df['Threshold']=threshold
     

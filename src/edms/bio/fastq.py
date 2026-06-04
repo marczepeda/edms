@@ -4235,7 +4235,7 @@ def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple
 
     # Volcano plot
     p.vol(df=df, x=x, y=y, size=size, stys='Change', size_dims=size_dims, label=label, stys_order=stys_order, mark_order=mark_order,
-          x_threshold=x_threshold, y_threshold=y_threshold, bidirectional_x_threshold=bidirectional_x_threshold, bidirectional_y_threshold=bidirectional_y_threshold, 
+          x_threshold=x_threshold, y_threshold=y_threshold, bidirectional_x_threshold=bidirectional_x_threshold, bidirectional_y_threshold=bidirectional_y_threshold,
           file=file, dir=dir, color=color, alpha=alpha, edgecol=edgecol, vertical=vertical,
           figsize=figsize, title=title, title_size=title_size, title_weight=title_weight, title_font=title_font, 
           x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad, x_ticks_size = x_ticks_size, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
@@ -4925,7 +4925,7 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, scores_col: str
     if return_df:
         return df
 
-def heat(df: pd.DataFrame | str, cond_col: str, cond: str, scores_col: str, wt_prot: str, wt_res: int, log2: bool=True, cutoff_col: str='count_mean_compare', cutoff: float=0, aa: str='aa', label: str='Edit',
+def heat(df: pd.DataFrame | str, cond_col: str, cond: str, scores_col: str, wt_prot: str, wt_res: int, cutoff_col: str=None, cutoff: float=0, aa: str='aa', label: str='Edit',
         file: str=None, dir: str=None, edgecol: str='black', lw: int=1, center: float=0, cmap: str="seismic", cmap_WT: str='forestgreen', cmap_not_WT: str='lightgray', sq: bool=False, 
         cbar: bool=True, cbar_label: str=None, cbar_label_size: int=None, cbar_label_weight: str='bold', cbar_tick_size: int=None, cbar_shrink: float=None, cbar_aspect: int=None, cbar_pad: float=None, cbar_orientation: str=None,
         title: str='', title_size: int=12, title_weight: str='bold', title_font: str='Arial',  figsize: tuple=(6,6), vertical: bool=True,
@@ -5088,7 +5088,7 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, scores_col: str, wt_p
             # Extract scores, label info, and comparison count mean for each amino acid change
             scores_ls=[]
             #label_ls=[]
-            comparison_count_mean_ls=[]
+            cutoff_ls=[]
             
             # Filter to specific residue and WT amino acid
             df_temp2 = df_temp[(df_temp['AA Number']==num) & (df_temp['DMS_Before']==wt_prot[num-wt_res])]
@@ -5100,7 +5100,7 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, scores_col: str, wt_p
                 if df_temp3.empty == False: # Present
                     scores_ls.append(df_temp3[scores_col].to_list()[0])
                     #label_ls.append(df_temp3[label].to_list()[0])
-                    comparison_count_mean_ls.append(df_temp3[cutoff_col].to_list()[0])
+                    cutoff_ls.append(df_temp3[cutoff_col].to_list()[0])
 
                     if df_temp3.shape[0]>1:
                         print(f"Warning: Multiple entries found for {wt_prot[num-wt_res]}{num}{DMS_after} in condition {cond}. Using first entry.")
@@ -5108,11 +5108,11 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, scores_col: str, wt_p
                 else: # Absent
                     scores_ls.append(None)
                     #label_ls.append('')
-                    comparison_count_mean_ls.append(-1)
+                    cutoff_ls.append(-1)
 
             vals[scores_col]=scores_ls
             #vals[label]=label_ls
-            vals[cutoff_col]=comparison_count_mean_ls
+            vals[cutoff_col]=cutoff_ls
             df_ls.append(pd.DataFrame(vals))
 
         return pd.concat(df_ls, ignore_index=True)
