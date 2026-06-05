@@ -436,9 +436,9 @@ def add_common_plot_stack_args(subparser, fastq_parser=False):
     '''
     # Required arguments
     subparser.add_argument("-i", "--df", type=str, help="Input dataframe file path", required=True)
-    subparser.add_argument("-x", "--x", type=str, help="X-axis column name")
-    subparser.add_argument("-y", "--y", type=str, help="Y-axis column name")
-    subparser.add_argument("-c", "--cols", type=str, help="Color column name for stacking")
+    subparser.add_argument("-x", "--x", type=str, help="X-axis column name (categorical)", required=True)
+    subparser.add_argument("-y", "--y", type=str, help="Y-axis column name (numerical)", required=True)
+    subparser.add_argument("-c", "--cols", type=str, help="Color column name (categorical)", required=True)
 
     # Optional parameters
     subparser.add_argument("-o", "--dir", type=str, help="Output directory path", default='./out')
@@ -449,6 +449,10 @@ def add_common_plot_stack_args(subparser, fastq_parser=False):
     subparser.add_argument("-cr", "--cutoff_remove", dest="cutoff_keep",action="store_false", help="Remove values below cutoff", default=True)
     subparser.add_argument("-co", "--cols_ord", nargs="+", help="Order of values in the color column")
     subparser.add_argument("-xo", "--x_ord", nargs="+", help="Custom order of X-axis categories")
+    subparser.add_argument("-fx", "--facetx", type=str, help="Column name for facet columns (creates one subplot per category in this column, arranged in separate columns)")
+    subparser.add_argument("-fy", "--facety", type=str, help="Column name for facet rows (creates one subplot per category in this column, arranged in seperate rows)")
+    subparser.add_argument("-fxo", "--facetx_order", nargs="+", help="Order of facet columns")
+    subparser.add_argument("-fyo", "--facety_order", nargs="+", help="Order of facet rows")
     subparser.add_argument("-pc", "--palette_or_cmap", type=str, default="Set2", help="Seaborn palette or Matplotlib colormap for stacked bars")
     subparser.add_argument("-ec", "--errcap", type=int, default=4, help="Width of error bar caps")
     subparser.add_argument("-v", "--vertical", action="store_true", help="Stack bars vertically (default True)", default=False)
@@ -491,6 +495,7 @@ def add_common_plot_stack_args(subparser, fastq_parser=False):
     subparser.add_argument("-lba", "--legend_bbox_to_anchor", type=parse_tuple_float, default=(1, 1), help="Anchor position for the legend bounding box")
     subparser.add_argument("-ll", "--legend_loc", type=str, default="upper left", help="Legend location on the plot")
     subparser.add_argument("-ln", "--legend_ncol", type=int, default=1, help="Number of columns in the legend")
+    subparser.add_argument("-lm", "--legend_mode", type=str, help='legend mode (options: "figure", "first", "none"); default: "figure")', default="figure", choices=["figure", "first", "none"])
     subparser.add_argument("-lcs", "--legend_columnspacing", type=int, default=argparse.SUPPRESS, help="Space between columns in legend; only for html plots")
     subparser.add_argument("-lhtp", "--legend_handletextpad", type=float, default=argparse.SUPPRESS, help="Space between marker and text in legend; only for html plots")
     subparser.add_argument("-lls", "--legend_labelspacing", type=float, default=argparse.SUPPRESS, help="Vertical space between entries in legend; only for html plots")

@@ -831,6 +831,79 @@ def repeat_palette_cmap(palette_or_cmap: str, repeats: int):
         print(f'{cmap} is not a valid matplotlib color map and did not apply repeat.')
         return cmap
 
+def _is_faceted(facetx: str=None, facety: str=None) -> bool:
+    return facetx is not None or facety is not None
+
+def _subset_for_facet(df: pd.DataFrame, facetx: str=None, facety: str=None, c=None, r=None) -> pd.DataFrame:
+    """
+    Return facet subset:
+    - facetx -> columns, value c
+    - facety -> rows, value r
+    """
+    if facetx is not None and facety is not None:
+        return df[(df[facetx] == c) & (df[facety] == r)].copy()
+    elif facetx is not None:
+        return df[df[facetx] == c].copy()
+    elif facety is not None:
+        return df[df[facety] == r].copy()
+    return df.copy()
+
+
+def _facet_axis_labels(x_axis, y_axis, *,
+                       x_default: str, y_default: str,
+                       facetx: str=None, facety: str=None,
+                       c=None, r=None,
+                       j: int=0, i: int=0,
+                       ncols: int=1, nrows: int=1,
+                       space_capitalize: bool=True):
+    """
+    Return panel-specific x/y axis labels using the same conventions as scat/cat.
+    """
+    x_axis_panel = _axis_label_for_panel(x_axis, j, expected_len=ncols if facetx is not None else None)
+    y_axis_panel = _axis_label_for_panel(y_axis, i, expected_len=nrows if facety is not None else None)
+
+    if _is_blank_label(x_axis):
+        x_axis_panel = _facet_default_xaxis(
+            x=x_default,
+            facetx=facetx,
+            facetx_val=c,
+            space_capitalize=space_capitalize
+        )
+
+    if _is_blank_label(y_axis):
+        y_axis_panel = _facet_default_yaxis(
+            y=y_default,
+            facety=facety,
+            facety_val=r,
+            space_capitalize=space_capitalize
+        )
+
+    return x_axis_panel, y_axis_panel
+
+
+def _hide_inner_axis_labels(ax, i: int, j: int, nrows: int, ncols: int):
+    """
+    Keep only left-column y labels and bottom-row x labels.
+    """
+    if j != 0:
+        ax.set_ylabel("")
+    if i != nrows - 1:
+        ax.set_xlabel("")
+
+
+def _handle_panel_legend(ax, *, legend_mode: str, i: int, j: int):
+    """
+    Standard subplot legend handling.
+    """
+    leg = ax.get_legend()
+    if legend_mode in ("none", "figure"):
+        if leg is not None:
+            leg.remove()
+    elif legend_mode == "first":
+        if (i != 0 or j != 0) and leg is not None:
+            leg.remove()
+### End New ###
+
 def _facet_values(df: pd.DataFrame, col: str, order: list=None):
     """
     _facet_values(): Return ordered unique facet values.
@@ -878,48 +951,44 @@ def _make_figure_legend(fig, axes,
                         legend_bbox_to_anchor: tuple, legend_loc: str,
                         legend_items: tuple, legend_ncol: int):
     """
-    _make_figure_legend(): Build a single shared legend for the entire figure using handles/labels from the first axis that has one.
-
-    Parameters:
-    fig (matplotlib.figure.Figure): Matplotlib figure object to which the legend will be added.
-    axes (numpy.ndarray): Array of Matplotlib axes to search for legend handles and labels.
-    legend_title (str): Title for the legend.
-    legend_title_size (int): Font size for the legend title.
-    legend_title_weight (str, optional): legend title bold, italics, etc.
-    legend_size (int): Font size for the legend labels.
-    legend_bbox_to_anchor (tuple): Tuple specifying the coordinates for the legend's bbox anchor.
-    legend_loc (str): String specifying the location of the legend (e.g., 'upper right', 'center left').
-    legend_items (tuple): Tuple specifying the range of legend items to include (start index, end index). If (0, 0), includes all items.
-    legend_ncol (int): Integer specifying the number of columns in the legend.
+    Build one shared figure legend by combining legend entries from all subplot axes.
+    Deduplicates by label while preserving first-seen order.
     """
 
-    handles, labels = None, None
+    handles_all = []
+    labels_all = []
 
-    # Find first axis that has legend entries
-    for ax in axes.flatten():
-        h, l = ax.get_legend_handles_labels()
-        if len(h) > 0:
-            handles, labels = h, l
-            break
+    for ax in np.array(axes).flatten():
+        handles, labels = ax.get_legend_handles_labels()
 
-    if handles is None:
-        return  # nothing to build
+        for h, l in zip(handles, labels):
+            if l is None or l == "" or l.startswith("_"):
+                continue
+            if l not in labels_all:
+                handles_all.append(h)
+                labels_all.append(l)
 
-    # Remove legends from all axes
-    for ax in axes.flatten():
+    # Remove all subplot legends
+    for ax in np.array(axes).flatten():
         leg = ax.get_legend()
         if leg is not None:
             leg.remove()
 
-    # Slice legend items if requested
-    if legend_items != (0, 0):
-        handles = handles[legend_items[0]:legend_items[1]]
-        labels = labels[legend_items[0]:legend_items[1]]
+    if len(handles_all) == 0:
+        return
 
-    legend_title_props = FontProperties(weight=legend_title_weight, size=legend_title_size)
+    if legend_items != (0, 0):
+        handles_all = handles_all[legend_items[0]:legend_items[1]]
+        labels_all = labels_all[legend_items[0]:legend_items[1]]
+
+    legend_title_props = FontProperties(
+        weight=legend_title_weight,
+        size=legend_title_size
+    )
+
     fig.legend(
-        handles,
-        labels,
+        handles_all,
+        labels_all,
         title=legend_title,
         title_fontproperties=legend_title_props,
         fontsize=legend_size,
@@ -1602,7 +1671,8 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
     fig, axes = plt.subplots(
         nrows=nrows, ncols=ncols,
         figsize=figsize,
-        sharex=facety is not None, sharey=facetx is not None
+        sharex=facety is not None, 
+        sharey=facetx is not None
     )
     axes = np.array(axes).reshape(nrows, ncols)
 
@@ -2229,13 +2299,14 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vars: str = None,
     plt.close()
 
 def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str = '', cutoff_value: float = 0, cutoff_keep: bool = True, cols_ord: list = [], x_ord: list = [],
-          file: str = None, dir: str = None, palette_or_cmap: str = 'tab20', repeats: int = 1, errcap: int = 4, vertical: bool = True,
-          figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
-          x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial',
-          y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_dims: tuple = (0, 0),  y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial',
-          legend_title: str = '', legend_title_size: int = 12, legend_title_weight: str = 'bold', legend_size: int = 12, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_ncol: int = 1, 
-          legend_columnspacing: int=0, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=1, html_size_multiplier: float=1.5,
-          dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True, PDB_pt: str = None, **kwargs):
+        facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None,
+        file: str = None, dir: str = None, palette_or_cmap: str = 'tab20', repeats: int = 1, errcap: int = 4, vertical: bool = True,
+        figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
+        x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial',
+        y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_dims: tuple = (0, 0),  y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial',
+        legend_title: str = '', legend_title_size: int = 12, legend_title_weight: str = 'bold', legend_size: int = 12, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_ncol: int = 1, legend_mode: str = "figure",
+        legend_columnspacing: int=0, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=1, html_size_multiplier: float=1.5,
+        dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True, PDB_pt: str = None, **kwargs):
     ''' 
     stack(): creates stacked bar plot
 
@@ -2249,6 +2320,10 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
     cutoff_keep (bool, optional): keep cutoff group even if below cutoff (Default: True)
     cols_ord (list, optional): color column values order
     x_ord (list, optional): x-axis column values order
+    facetx (str, optional): column name for x-axis faceting
+    facety (str, optional): column name for y-axis faceting
+    facetx_order (list, optional): order of x-axis facet values
+    facety_order (list, optional): order of y-axis facet values
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     palette_or_cmap (str, optional): seaborn palette or matplotlib color map
@@ -2284,6 +2359,7 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
     legend_bbox_to_anchor (tuple, optional): coordinates for bbox anchor
     legend_loc (str): legend location
     legend_ncol (tuple, optional): # of columns
+    legend_mode (str, optional): legend mode (options: "figure", "first", "none")
     legend_columnspacing (int, optional): spacing between legend columns (Default: 0; only for html plots)
     legend_handletextpad (float, optional): pad between legend handle and text (Default: 0.5; only for html plots)
     legend_labelspacing (float, optional): vertical space between legend entries (Default: 0.5; only for html plots)
@@ -2299,126 +2375,332 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
     Dependencies: re, os, pandas, numpy, matplotlib.pyplot, & io
     '''
     # Get dataframe from file path if needed
-    if type(df)==str:
+    if type(df) == str:
         df = io.get(pt=df)
     else:
         df = df.copy()
-    
+
     # Determine if HTML output
-    if file is not None:
-        is_html=file.endswith('.html')
-    else:
-        is_html=False
-    
+    is_html = file is not None and file.endswith('.html')
+
     # Increase fontsize for html plots
     if is_html:
-        if file.endswith('.html')==True:
-            title_size=title_size*html_size_multiplier
-            x_axis_size=x_axis_size*html_size_multiplier
-            y_axis_size=y_axis_size*html_size_multiplier
-            x_ticks_size=x_ticks_size*html_size_multiplier
-            y_ticks_size=y_ticks_size*html_size_multiplier
-            legend_title_size=legend_title_size*html_size_multiplier
-            legend_size=legend_size*html_size_multiplier*.75
+        title_size = title_size * html_size_multiplier
+        x_axis_size = x_axis_size * html_size_multiplier
+        y_axis_size = y_axis_size * html_size_multiplier
+        x_ticks_size = x_ticks_size * html_size_multiplier
+        y_ticks_size = y_ticks_size * html_size_multiplier
+        legend_title_size = legend_title_size * html_size_multiplier
+        legend_size = legend_size * html_size_multiplier * 0.75
 
-    # Omit smaller than cutoff and convert it to <cutoff
-    if cutoff_group in df.columns and cutoff_value>0: # If cutoff group and value specified
-        df_cut=df[df[y]>=cutoff_value]
-        if cutoff_keep==True: # Keep cutoff group even if below cutoff
-            df_other=df[df[y]<cutoff_value]
+    # Apply cutoff and convert it to <cutoff before faceting
+    if cutoff_group in df.columns and cutoff_value > 0:
+        df_cut = df[df[y] >= cutoff_value].copy()
+
+        if cutoff_keep: # Keep cutoff group even if below cutoff
+            df_other = df[df[y] < cutoff_value].copy()
+
             for group in list(df_other[cutoff_group].value_counts().keys()):
-                df_temp = df_other[df_other[cutoff_group]==group]
-                df_temp[y]=sum(df_temp[y])
-                df_temp[cols]=f'<{cutoff_value}'
-                df_cut = pd.concat([df_cut,df_temp.iloc[:1]])
+                df_temp = df_other[df_other[cutoff_group] == group].copy()
+                df_temp[y] = df_temp[y].sum()
+                df_temp[cols] = f'<{cutoff_value}'
+                df_cut = pd.concat([df_cut, df_temp.iloc[:1]], ignore_index=True)
     else: # Otherwise use full dataframe
-        df_cut=df
+        df_cut = df.copy()
 
-    # Make pivot table
-    df_pivot=pd.pivot_table(df_cut, index=x, columns=cols, values=y, aggfunc=np.mean)
-    df_pivot_err=pd.pivot_table(df_cut, index=x, columns=cols, values=y, aggfunc=np.std)
-    if cols_ord!=[]: df_pivot=df_pivot.reindex(columns=cols_ord)
-    if x_ord!=[]: df_pivot=df_pivot.reindex(index=x_ord)
+    # Get facet values and number of rows and columns for subplots
+    col_vals = _facet_values(df_cut, facetx, order=facetx_order)
+    row_vals = _facet_values(df_cut, facety, order=facety_order)
 
-    # Make stacked barplot
-    if vertical: # orientation
-        ax = df_pivot.plot(kind='bar',yerr=df_pivot_err,capsize=errcap, figsize=figsize,colormap=repeat_palette_cmap(palette_or_cmap,repeats),stacked=True,**kwargs)
-        fig = ax.get_figure()
-        
-        # Set x axis
-        if x_axis=='': 
-            if space_capitalize: x_axis=re_un_cap(x)
-            else: x_axis=x
-        plt.xlabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight,fontfamily=x_axis_font,labelpad=x_axis_pad)
-        if x_ticks_rot == 0: plt.xticks(rotation=x_ticks_rot,ha='center',va='top',fontfamily=x_ticks_font,fontsize=x_ticks_size)
-        elif x_ticks_rot == 90: plt.xticks(rotation=x_ticks_rot,ha='right',va='center',fontfamily=x_ticks_font,fontsize=x_ticks_size)
-        else: plt.xticks(rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font,fontsize=x_ticks_size)
+    ncols = len(col_vals)
+    nrows = len(row_vals)
+    faceting = _is_faceted(facetx, facety)
 
-        # Set y axis
-        if y_axis=='': 
-            if space_capitalize: y_axis=re_un_cap(y)
-            else: y_axis=y
-        plt.ylabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight,fontfamily=y_axis_font,labelpad=y_axis_pad)
-        plt.yticks(rotation=y_ticks_rot,fontfamily=y_ticks_font, fontsize=y_ticks_size)
+    # Create subplots
+    fig, axes = plt.subplots(
+        nrows=nrows,
+        ncols=ncols,
+        figsize=figsize,
+        sharex=facety is not None,
+        sharey=facetx is not None
+    )
+    axes = np.array(axes).reshape(nrows, ncols)
 
-        if y_axis_dims==(0,0): print('Default y axis dimensions.')
-        else: plt.ylim(y_axis_dims[0],y_axis_dims[1])
-
-    else: # Horizontal orientation
-        ax = df_pivot.plot(kind='barh',xerr=df_pivot_err,capsize=errcap, figsize=figsize,colormap=repeat_palette_cmap(palette_or_cmap,repeats),stacked=True,**kwargs)
-        fig = ax.get_figure()
-
-        # Set y axis
-        if x_axis=='': 
-            if space_capitalize: x_axis=re_un_cap(x)
-            else: x_axis=x
-        plt.ylabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight,fontfamily=x_axis_font,labelpad=x_axis_pad)
-        plt.yticks(rotation=x_ticks_rot,fontfamily=x_ticks_font, fontsize=x_ticks_size)
-        
-        # Set x axis
-        if y_axis=='': 
-            if space_capitalize: y_axis=re_un_cap(y)
-            else: y_axis=y
-        plt.xlabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight,fontfamily=y_axis_font,labelpad=y_axis_pad)
-        if y_ticks_rot == 0: plt.xticks(rotation=y_ticks_rot,ha='center',va='top',fontfamily=y_ticks_font, fontsize=y_ticks_size)
-        elif y_ticks_rot == 90: plt.xticks(rotation=y_ticks_rot,ha='right',va='center',fontfamily=y_ticks_font, fontsize=y_ticks_size)
-        else: plt.xticks(rotation=y_ticks_rot,ha='right',fontfamily=y_ticks_font, fontsize=y_ticks_size)
-
-        if y_axis_dims==(0,0): print('Default x axis dimensions.')
-        else: plt.xlim(y_axis_dims[0],y_axis_dims[1])
-        
-    # Set title
-    if title=='' and file is not None: title=re_un_cap(".".join(file.split(".")[:-1]))
-    plt.title(title, fontsize=title_size, fontweight=title_weight, family=title_font)
-    
-    # Set legend
-    if legend_title=='': 
-        if space_capitalize: legend_title=re_un_cap(cols)
-        else: legend_title=cols
-    legend_title_props = FontProperties(weight=legend_title_weight, size=legend_title_size)
-    if is_html:
-        if legend_bbox_to_anchor == (1,1): legend_bbox_to_anchor = (-0.1,-0.15)
-        plt.legend(title=legend_title, 
-                   title_fontproperties=legend_title_props, fontsize=legend_size,
-                    bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol,
-                    columnspacing=legend_columnspacing,    # space between columns
-                    handletextpad=legend_handletextpad,    # space between marker and text
-                    labelspacing=legend_labelspacing,      # vertical space between entries
-                    borderpad=legend_borderpad,            # padding inside legend box
-                    handlelength=legend_handlelength)      # marker length
+    # global category ordering
+    if cols_ord != []:
+        all_categories = cols_ord
     else:
-        plt.legend(title=legend_title, title_fontproperties=legend_title_props, fontsize=legend_size, 
-                bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol)
+        all_categories = (
+            df_cut[cols]
+            .dropna()
+            .drop_duplicates()
+            .tolist()
+        )
 
-    # Save & show fig; return dataframe
-    save_fig(file=file, dir=dir, fig=fig, dpi=dpi, transparent=transparent, PDB_pt=PDB_pt, icon='bar')
-    if show:
-        ext = file.split('.')[-1].lower() if file is not None else ''
-        if ext not in ('html', 'json'):
-            plt.show()
+    # generate colors once
+    cmap = repeat_palette_cmap(
+        palette_or_cmap,
+        repeats=max(
+            repeats,
+            int(np.ceil(len(all_categories)/20))
+        )
+    )
+
+    colors = [
+        cmap(i/(max(len(all_categories)-1,1)))
+        for i in range(len(all_categories))
+    ]
+
+    category_colors = dict(zip(all_categories, colors))
+
+    # Methods for plotting and formatting
+    def _make_pivots(df_sub: pd.DataFrame): # Make pivot table
+        df_pivot = pd.pivot_table(
+            df_sub,
+            index=x,
+            columns=cols,
+            values=y,
+            aggfunc=np.mean
+        )
+
+        df_pivot_err = pd.pivot_table(
+            df_sub,
+            index=x,
+            columns=cols,
+            values=y,
+            aggfunc=np.std
+        )
+
+        if cols_ord != []:
+            df_pivot = df_pivot.reindex(columns=cols_ord)
+            df_pivot_err = df_pivot_err.reindex(columns=cols_ord)
+
+        if x_ord != []:
+            df_pivot = df_pivot.reindex(index=x_ord)
+            df_pivot_err = df_pivot_err.reindex(index=x_ord)
+
+        return df_pivot, df_pivot_err
+
+    def _format_ticks(ax): # Format ticks
+        plt.sca(ax)
+
+        if vertical:
+            if x_ticks_rot == 0:
+                plt.xticks(rotation=x_ticks_rot, ha='center', va='top',
+                           fontfamily=x_ticks_font, fontsize=x_ticks_size)
+            elif x_ticks_rot == 90:
+                plt.xticks(rotation=x_ticks_rot, ha='right', va='center',
+                           fontfamily=x_ticks_font, fontsize=x_ticks_size)
+            else:
+                plt.xticks(rotation=x_ticks_rot, ha='right',
+                           fontfamily=x_ticks_font, fontsize=x_ticks_size)
+
+            plt.yticks(rotation=y_ticks_rot, fontfamily=y_ticks_font, fontsize=y_ticks_size)
+
         else:
-            mpld3.show(fig)
+            plt.yticks(rotation=x_ticks_rot, fontfamily=x_ticks_font, fontsize=x_ticks_size)
+
+            if y_ticks_rot == 0:
+                plt.xticks(rotation=y_ticks_rot, ha='center', va='top',
+                           fontfamily=y_ticks_font, fontsize=y_ticks_size)
+            elif y_ticks_rot == 90:
+                plt.xticks(rotation=y_ticks_rot, ha='right', va='center',
+                           fontfamily=y_ticks_font, fontsize=y_ticks_size)
+            else:
+                plt.xticks(rotation=y_ticks_rot, ha='right',
+                           fontfamily=y_ticks_font, fontsize=y_ticks_size)
+
+    def _set_legend(ax): # Format legend
+        if legend_mode == "none":
+            leg = ax.get_legend()
+            if leg is not None:
+                leg.remove()
+            return
+
+        _legend_title = legend_title
+        if _legend_title == '':
+            _legend_title = re_un_cap(cols) if space_capitalize else cols
+
+        legend_title_props = FontProperties(
+            weight=legend_title_weight,
+            size=legend_title_size
+        )
+
+        if is_html: # HTML
+            bbox = legend_bbox_to_anchor
+            if bbox == (1, 1):
+                bbox = (-0.1, -0.15)
+
+            ax.legend(
+                title=_legend_title,
+                title_fontproperties=legend_title_props,
+                fontsize=legend_size,
+                bbox_to_anchor=bbox,
+                loc=legend_loc,
+                ncol=legend_ncol,
+                columnspacing=legend_columnspacing,    # space between columns
+                handletextpad=legend_handletextpad,    # space between marker and text
+                labelspacing=legend_labelspacing,      # vertical space between entries
+                borderpad=legend_borderpad,            # padding inside legend box
+                handlelength=legend_handlelength       # marker length
+            )
+        else:
+            ax.legend(
+                title=_legend_title,
+                title_fontproperties=legend_title_props,
+                fontsize=legend_size,
+                bbox_to_anchor=legend_bbox_to_anchor,
+                loc=legend_loc,
+                ncol=legend_ncol
+            )
+
+    def _draw_panel(df_sub: pd.DataFrame, ax, *, c=None, r=None, i=0, j=0):
+        df_pivot, df_pivot_err = _make_pivots(df_sub)
+
+        panel_colors = [category_colors[col] for col in df_pivot.columns]
+
+        # Plotting method depends on orientation; horizontal bar plots swap x and y axes, so error bars need to be swapped as well
+        if vertical: # orientation
+            df_pivot.plot(
+                kind='bar',
+                yerr=df_pivot_err,
+                capsize=errcap,
+                color=panel_colors,
+                stacked=True,
+                ax=ax,
+                **kwargs
+            )
+        else: # horizontal orientation swaps x and y axes
+            df_pivot.plot(
+                kind='barh',
+                xerr=df_pivot_err,
+                capsize=errcap,
+                color=panel_colors,
+                stacked=True,
+                ax=ax,
+                **kwargs
+            )
+
+        x_axis_panel, y_axis_panel = _facet_axis_labels(
+            x_axis,
+            y_axis,
+            x_default=x,
+            y_default=y,
+            facetx=facetx,
+            facety=facety,
+            c=c,
+            r=r,
+            j=j,
+            i=i,
+            ncols=ncols,
+            nrows=nrows,
+            space_capitalize=space_capitalize
+        )
+
+        plt.sca(ax)
+
+        # Make axis labels and dimensions conditional on orientation
+        if vertical: # orientation
+            plt.xlabel(
+                x_axis_panel,
+                fontsize=x_axis_size,
+                fontweight=x_axis_weight,
+                fontfamily=x_axis_font,
+                labelpad=x_axis_pad
+            )
+            plt.ylabel(
+                y_axis_panel,
+                fontsize=y_axis_size,
+                fontweight=y_axis_weight,
+                fontfamily=y_axis_font,
+                labelpad=y_axis_pad
+            )
+
+            if y_axis_dims == (0, 0):
+                pass
+            else:
+                plt.ylim(y_axis_dims[0], y_axis_dims[1])
+
+        else: # horizontal orientation swaps x and y axes
+            plt.ylabel(
+                x_axis_panel,
+                fontsize=x_axis_size,
+                fontweight=x_axis_weight,
+                fontfamily=x_axis_font,
+                labelpad=x_axis_pad
+            )
+            plt.xlabel(
+                y_axis_panel,
+                fontsize=y_axis_size,
+                fontweight=y_axis_weight,
+                fontfamily=y_axis_font,
+                labelpad=y_axis_pad
+            )
+
+            if y_axis_dims == (0, 0):
+                pass
+            else:
+                plt.xlim(y_axis_dims[0], y_axis_dims[1])
+
+        _format_ticks(ax)
+        _set_legend(ax)
+
+    for i, r in enumerate(row_vals):
+        for j, c in enumerate(col_vals):
+            ax = axes[i, j]
+            df_sub = _subset_for_facet(df_cut, facetx=facetx, facety=facety, c=c, r=r)
+
+            if len(df_sub) == 0:
+                ax.set_visible(False)
+                continue
+
+            _draw_panel(df_sub, ax, c=c, r=r, i=i, j=j)
+
+            _handle_panel_legend(ax, legend_mode=legend_mode, i=i, j=j)
+            _hide_inner_axis_labels(ax, i=i, j=j, nrows=nrows, ncols=ncols)
+
+    if title == '' and file is not None:
+        title = re_un_cap(".".join(file.split(".")[:-1]))
+
+    if title != '' and faceting:
+        fig.suptitle(title, fontsize=title_size, fontweight=title_weight, family=title_font)
+    elif title != '' and not faceting:
+        axes[0, 0].set_title(title, fontsize=title_size, fontweight=title_weight, family=title_font)
+
+    # Set legend
+    if legend_mode == "figure":
+        _legend_title = legend_title
+        if _legend_title == '':
+            _legend_title = re_un_cap(cols) if space_capitalize else cols
+
+        _make_figure_legend(
+            fig,
+            axes,
+            legend_title=_legend_title,
+            legend_title_size=legend_title_size,
+            legend_title_weight=legend_title_weight,
+            legend_size=legend_size,
+            legend_bbox_to_anchor=legend_bbox_to_anchor,
+            legend_loc=legend_loc,
+            legend_items=(0, 0),
+            legend_ncol=legend_ncol
+        )
+
+    fig.tight_layout()
+
+    _final_save_show(
+        fig,
+        file=file,
+        dir=dir,
+        dpi=dpi,
+        transparent=transparent,
+        PDB_pt=PDB_pt,
+        icon='bar',
+        show=show
+    )
+
     plt.close()
+    return fig, axes
 
 def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = None, size_dims: tuple = None, label: str = None, stys_order: list = [], mark_order: list = [],
         x_threshold: float = 0, y_threshold: float = 0, bidirectional_x_threshold: bool = True, bidirectional_y_threshold: bool = False,

@@ -668,6 +668,7 @@ def add_subparser(subparsers, formatter_class=None):
 
     parser_fastq_trim_motifs.add_argument("-l", "--motif_length", type=int, help="Trim 'in_file' motifs to this length (Default: 21)", default=21)
     parser_fastq_trim_motifs.add_argument("-r", "--error_rate", type=float, help="Maximum error rate allowed in each motif (Default: 0.1 = 10%%)", default=0.1)
+    parser_fastq_trim_motifs.add_argument("-E", "--max_expected_errors", type=float, help="Maximum expected errors after trimming motifs (Default: None; 0.2 recommended)", default=argparse.SUPPRESS)
     parser_fastq_trim_motifs.add_argument("-e", "--env", help="Conda environment with cutadapt installed (Default: umi_tools)", default="umi_tools")
     parser_fastq_trim_motifs.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
 

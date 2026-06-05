@@ -2806,7 +2806,7 @@ def extract_umis(fastq_dir: str, out_dir: str='./extract_umis',
     
 def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs', 
                 config_key: str = None, in_file: pd.DataFrame | str = None, motif5: str=None, motif3: str=None, 
-                motif_length: int=21, error_rate: float=0.1,
+                motif_length: int=21, error_rate: float=0.1, max_expected_errors: float=None,
                 env: str='umi_tools', sh: bool=False):
     ''' 
     trim_motifs(): trimming motifs with cutadapt
@@ -2822,6 +2822,7 @@ def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs',
 
     motif_length (int, optional): trim 'in_file' motifs to this length (Default: 21)
     error_rate (float, optional): maximum error rate allowed in each motif (Default: 0.1)
+    max_expected_errors (float, optional): maximum expected errors after trimming motifs (Default: None; 0.2 recomended)
     env (str, optional): Conda environment with cutadapt installed (Default: umi_tools)
     sh (bool, optional): combine output log files into a single file in working directory (Default: False)
     '''
@@ -2866,7 +2867,10 @@ def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs',
             if result.stdout: print(f"output:\n{result.stdout}")
             if result.stderr: print(f"errors:\n{result.stderr}")
 
-            command = f'conda run -n {env} cutadapt -a {motif3} -e {error_rate} --trimmed-only -o {os.path.join(out_dir,file.replace(".gz",""))} {os.path.join(out_dir,".trim5",file.replace(".gz",""))} > {os.path.join(out_dir,".trim_motifs",file)}_trim53.log'
+            if max_expected_errors is None:
+                command = f'conda run -n {env} cutadapt -a {motif3} -e {error_rate} --trimmed-only -o {os.path.join(out_dir,file.replace(".gz",""))} {os.path.join(out_dir,".trim5",file.replace(".gz",""))} > {os.path.join(out_dir,".trim_motifs",file)}_trim53.log'
+            else: # Filter reads with too many expected errors after trimming motifs
+                command = f'conda run -n {env} cutadapt -a {motif3} -e {error_rate} --max-ee {max_expected_errors} --trimmed-only -o {os.path.join(out_dir,file.replace(".gz",""))} {os.path.join(out_dir,".trim5",file.replace(".gz",""))} > {os.path.join(out_dir,".trim_motifs",file)}_trim53.log'
             print(f"{command}")
             result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
 
@@ -3994,12 +3998,12 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list
           dpi=dpi,transparent=transparent,show=show,space_capitalize=space_capitalize,**kwargs)
 
 def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: str='Edit', cutoff_group: str='fastq_file', cutoff_value: float=0, cutoff_keep: bool=True, 
-          cols_ord: list=[], x_ord: list=[], PDB_pt: str=None,
+          cols_ord: list=[], x_ord: list=[], facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, PDB_pt: str=None,
           file: str=None, dir: str=None, palette_or_cmap: str='tab20', repeats: int=1, errcap: int=4, vertical: bool=True,
           figsize: tuple=(6,6), title: str='Editing Outcomes', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
           x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial',
           y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial',
-          legend_title: str='', legend_title_size: int=12, legend_title_weight: str='bold', legend_size: int=12,legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1, 
+          legend_title: str='', legend_title_size: int=12, legend_title_weight: str='bold', legend_size: int=12,legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1, legend_mode: str = "figure",
           legend_columnspacing: int=0, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=1, html_size_multiplier: float=1.5,
           dpi: int=0, transparent: bool=True, show: bool=True, space_capitalize: bool=True, **kwargs):
     ''' 
@@ -4015,6 +4019,10 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
     cutoff_keep (bool, optional): keep cutoff group even if below cutoff (Default: True)
     cols_ord (list, optional): color column values order
     x_ord (list, optional): x-axis column values order
+    facetx (str, optional): column name for x-axis faceting
+    facety (str, optional): column name for y-axis faceting
+    facetx_order (list, optional): order of x-axis facet values
+    facety_order (list, optional): order of y-axis facet values   
     PDB_pt (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
@@ -4051,6 +4059,7 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
     legend_bbox_to_anchor (tuple, optional): coordinates for bbox anchor
     legend_loc (str): legend location
     legend_ncol (tuple, optional): # of columns
+    legend_mode (str, optional): legend mode (options: "figure", "first", "none")
     legend_columnspacing (int, optional): space between columns (Default: 0; only for html plots)
     legend_handletextpad (float, optional): space between marker and text (Default: 0.5; only for html plots)
     legend_labelspacing (float, optional): vertical space between entries (Default: 0.5; only for html plots)
@@ -4102,12 +4111,12 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
         cols_ord = list(assign.sort_values(by='positions')['genotypes'])
 
     # Make stacked barplot
-    p.stack(df=df_cut,x=x,y=y,cols=cols,cutoff_group=cutoff_group,cutoff_value=0,cutoff_keep=cutoff_keep,cols_ord=cols_ord,x_ord=x_ord,
+    p.stack(df=df_cut,x=x,y=y,cols=cols,cutoff_group=cutoff_group,cutoff_value=0,cutoff_keep=cutoff_keep,cols_ord=cols_ord,x_ord=x_ord,facetx=facetx,facety=facety,facetx_order=facetx_order,facety_order=facety_order,
             file=file,dir=dir,palette_or_cmap=palette_or_cmap,repeats=repeats,errcap=errcap,vertical=vertical,
             figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
             x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_pad=x_axis_pad,x_ticks_size=x_ticks_size,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,
             y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_dims=y_axis_dims,y_axis_pad=y_axis_pad,y_ticks_size=y_ticks_size,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,
-            legend_title=legend_title,legend_title_size=legend_title_size,legend_title_weight=legend_title_weight,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_ncol=legend_ncol,
+            legend_title=legend_title,legend_title_size=legend_title_size,legend_title_weight=legend_title_weight,legend_size=legend_size,legend_bbox_to_anchor=legend_bbox_to_anchor,legend_loc=legend_loc,legend_ncol=legend_ncol,legend_mode=legend_mode,
             legend_columnspacing=legend_columnspacing, legend_handletextpad=legend_handletextpad, legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad, legend_handlelength=legend_handlelength,html_size_multiplier=html_size_multiplier,
             dpi=dpi,transparent=transparent,show=show,space_capitalize=space_capitalize,PDB_pt=PDB_pt,**kwargs)
 
