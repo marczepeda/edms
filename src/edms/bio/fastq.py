@@ -14,6 +14,7 @@ Usage:
 - revcom_fastqs(): write reverse complement of fastqs to a new directory
 - unzip_fastqs(): Unzip gzipped fastqs and write to a new directory
 - comb_fastqs(): Combines one or more (un)compressed fastqs files into a single (un)compressed fastq file
+- split_fastqs_by_expected_errors(): split fastq files by expected errors
 
 [Nanopore]
 - savemoney(): create savemoney samples.csv for nanopore mixed WPS
@@ -99,6 +100,7 @@ from typing import Literal, Iterable
 import math
 import subprocess
 import itertools
+from pathlib import Path
 
 from ..bio.signature import parse_signature_literal, signature_from_alignment, expand_signature_units, is_reference_match_with_n_extra_nt_or_less
 from ..gen import io, tidy as t, plot as p, stat as st
@@ -229,7 +231,7 @@ def savemoney(pt: str, fastq_dir: str='./fastq', fasta_dir: str='./fasta',
     if return_df: return df
 
 # Input/Output
-def revcom_fastqs(in_dir: str, out_dir: str):
+def revcom_fastqs(in_dir: str, out_dir: str= './revcom_fastqs'):
     ''' 
     revcom_fastqs(): write reverse complement of fastqs to a new directory
     
@@ -267,7 +269,7 @@ def revcom_fastqs(in_dir: str, out_dir: str):
                     SeqIO.write(reverse_complement_record, outfile, "fastq")
             print(f"Saved reverse complement to {output_fastq}")
 
-def unzip_fastqs(in_dir: str, out_dir: str):
+def unzip_fastqs(in_dir: str, out_dir: str= './unzip_fastqs'):
     ''' 
     unzip_fastqs(): Unzip gzipped fastqs and write to a new directory
 
@@ -287,7 +289,7 @@ def unzip_fastqs(in_dir: str, out_dir: str):
                     for line in handle:
                         out.write(line)
 
-def comb_fastqs(in_dir: str, out_dir: str, out_file: str | None = None,
+def comb_fastqs(in_dir: str, out_dir: str= './combine_fastqs', out_file: str | None = None,
                 recursive: bool = False, recursive_zip: bool = True):
     ''' 
     comb_fastqs(): Combines one or more (un)compressed fastq files into a single (un)compressed fastq file.
@@ -382,6 +384,198 @@ def comb_fastqs(in_dir: str, out_dir: str, out_file: str | None = None,
                     with open(in_path, "r") as handle:
                         for line in handle:
                             out.write(line)
+
+def split_fastqs_by_expected_errors(
+    indir: str | Path,
+    out_dir=None,
+    threshold=1.0,
+    recursive=False,
+    write_gzip=True,
+):
+    """
+    split_fastqs_by_expected_errors(): Search for FASTQ files in a directory and individually split each one by expected errors. 
+    Each FASTQ gets its own output subdirectory named after the original FASTQ file without suffix.
+    
+    Parameters:
+    indir: str | Path
+        Input directory containing FASTQ files
+    out_dir: str | Path, optional
+        Output directory
+    threshold: float, optional
+        Expected errors threshold for splitting reads (Default: 1.0)
+    recursive: bool, optional
+        Recursively split fastqs in immediate subdirectories (Default: False)
+    write_gzip: bool, optional
+        Whether to gzip output FASTQ file(s) (Default: True)
+
+    Supports: .fastq, .fq, .fastq.gz, .fq.gz
+    """
+    # Supporting methods
+    def strip_fastq_suffix(path):
+        """
+        Remove FASTQ-related suffixes from filename.
+        """
+        name = Path(path).name
+
+        for suffix in [".fastq.gz", ".fq.gz", ".fastq", ".fq"]:
+            if name.endswith(suffix):
+                return name[: -len(suffix)]
+
+        return Path(path).stem
+
+
+    def fastq_open(path, mode="rt"):
+        """
+        Open plain or gzipped FASTQ.
+        """
+        path = str(path)
+
+        if path.endswith(".gz"):
+            return gzip.open(path, mode)
+
+        return open(path, mode)
+
+
+    def split_fastq_by_expected_errors(
+        fastq_path,
+        output_ee0,
+        output_eeplus,
+        threshold=1.0,
+    ):
+        """
+        Split one FASTQ file into two FASTQ files based on expected errors.
+
+        Reads with expected_errors < threshold go to output_ee0.
+        Reads with expected_errors >= threshold go to output_eeplus.
+        """
+        n_total = 0
+        n_ee0 = 0
+        n_eeplus = 0
+
+        mkdir(os.path.dirname(output_ee0))
+        mkdir(os.path.dirname(output_eeplus))
+
+        with fastq_open(fastq_path, "rt") as fin, \
+            fastq_open(output_ee0, "wt") as fout_ee0, \
+            fastq_open(output_eeplus, "wt") as fout_eeplus:
+
+            while True:
+                header = fin.readline()
+                if not header:
+                    break
+
+                seq = fin.readline()
+                plus = fin.readline()
+                qual = fin.readline()
+
+                if not qual:
+                    raise ValueError(f"Incomplete FASTQ record in {fastq_path}")
+
+                n_total += 1
+
+                q = np.fromiter(
+                    (ord(c) - 33 for c in qual.rstrip()),
+                    dtype=float,
+                )
+
+                expected_errors = np.sum(10 ** (-q / 10))
+                record = header + seq + plus + qual
+
+                if expected_errors < threshold:
+                    fout_ee0.write(record)
+                    n_ee0 += 1
+                else:
+                    fout_eeplus.write(record)
+                    n_eeplus += 1
+
+                if n_total % 10000 == 0:
+                    print(
+                        f"{Path(fastq_path).name}: processed {n_total} reads | "
+                        f"{n_ee0} EE < {threshold} | "
+                        f"{n_eeplus} EE >= {threshold}",
+                        end="\r",
+                    )
+
+        print()
+
+        summary = pd.DataFrame({
+            "fastq": [str(fastq_path)],
+            "total_reads": [n_total],
+            "reads_expected_errors_lt_threshold": [n_ee0],
+            "reads_expected_errors_ge_threshold": [n_eeplus],
+            "threshold": [threshold],
+            "percent_lt_threshold": [
+                100 * n_ee0 / n_total if n_total else 0
+            ],
+            "percent_ge_threshold": [
+                100 * n_eeplus / n_total if n_total else 0
+            ],
+            "output_ee0": [str(output_ee0)],
+            "output_eeplus": [str(output_eeplus)],
+        })
+
+        summary.to_csv(
+            os.path.join(os.path.dirname(output_ee0), "split_fastq_summary.csv"),
+            index=False,
+        )
+
+        print(summary.to_string(index=False))
+
+        return summary
+
+
+    indir = Path(indir)
+
+    if out_dir is None:
+        out_dir = indir / "split_fastqs_by_expected_errors"
+    else:
+        out_dir = Path(out_dir)
+
+    patterns = ["*.fastq", "*.fq", "*.fastq.gz", "*.fq.gz"]
+
+    fastq_files = []
+    for pattern in patterns:
+        if recursive:
+            fastq_files.extend(indir.rglob(pattern))
+        else:
+            fastq_files.extend(indir.glob(pattern))
+
+    fastq_files = sorted(set(fastq_files))
+
+    if len(fastq_files) == 0:
+        raise FileNotFoundError(f"No FASTQ files found in {indir}")
+
+    summaries = []
+
+    for fastq_path in fastq_files:
+        fastq_name = strip_fastq_suffix(fastq_path)
+        sample_dir = out_dir / fastq_name
+
+        suffix = ".fastq.gz" if write_gzip else ".fastq"
+
+        output_ee0 = sample_dir / f"{fastq_name}_EE_lt_{threshold}{suffix}"
+        output_eeplus = sample_dir / f"{fastq_name}_EE_ge_{threshold}{suffix}"
+
+        summary = split_fastq_by_expected_errors(
+            fastq_path=fastq_path,
+            output_ee0=output_ee0,
+            output_eeplus=output_eeplus,
+            threshold=threshold,
+            write_gzip=write_gzip,
+        )
+
+        summaries.append(summary)
+
+    summary_all = pd.concat(summaries, ignore_index=True)
+
+    mkdir(out_dir)
+
+    summary_all.to_csv(
+        out_dir / "split_fastqs_summary_all.csv",
+        index=False,
+    )
+
+    return summary_all
 
 # Quantify epeg/ngRNA abundance
 ### Motif search: mU6,...
@@ -2546,7 +2740,7 @@ def outcomes(fastqs: dict, col: str='Edit', return_memories: bool=False) -> tupl
     else: return df
 
 def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=None,
-               out_dir: str=None, out_file_prefix: str=None, return_dc:bool=False, sh: bool=False, **kwargs) -> dict[pd.DataFrame]:
+               out_dir: str='./genotyping', out_file_prefix: str=None, return_dc:bool=False, sh: bool=False, **kwargs) -> dict[pd.DataFrame]:
     ''' 
     genotying(): quantify edit outcomes workflow
     

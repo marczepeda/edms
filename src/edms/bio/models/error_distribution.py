@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+from rich_argparse import RichHelpFormatter
 from collections import Counter
 
 import numpy as np
@@ -94,11 +95,26 @@ def plot_error_distribution(
 
 
 def main():
+    # Custom formatter for rich help messages
+    class MyFormatter(RichHelpFormatter):
+        styles = {
+            "argparse.prog": "green",           # program name
+            "argparse.args": "cyan",            # positional arguments
+            "argparse.option": "",              # options like --flag
+            "argparse.metavar": "dark_magenta", # meta variable (actual function argument name)
+            "argparse.help": "blue",            # help text
+            "argparse.text": "green",           # normal text in help message
+            "argparse.groups": "red",           # group titles
+            "argparse.description": "",         # description at the top
+            "argparse.epilog": "",              # ... -h; epilog at the bottom
+            "argparse.syntax": "white",         # []
+        }
     parser = argparse.ArgumentParser(
         description=(
             "Predict the percentage of reads with 0, 1, 2, ... errors "
             "from Phred+33 FASTQ quality scores."
-        )
+        ),
+        formatter_class=MyFormatter
     )
 
     parser.add_argument(
