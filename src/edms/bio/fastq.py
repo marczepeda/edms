@@ -5078,8 +5078,8 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, scores_col: str
     df2 = df[df[cond_col]==cond_vals[1]].copy()
 
     if size in df.columns: # include size column
-        df = pd.merge(df1[[f'scores_col',size,label,cond_col]], 
-                    df2[[f'scores_col',size,label,cond_col]], 
+        df = pd.merge(df1[[scores_col,size,label,cond_col]], 
+                    df2[[scores_col,size,label,cond_col]], 
                     on=label, how='inner',
                     suffixes=(f'_{cond_vals[0]}', f'_{cond_vals[1]}'))
         del df1, df2
@@ -5087,8 +5087,8 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, scores_col: str
         df[f'min({size})'] = df[[f'{size}_{cond_vals[0]}', f'{size}_{cond_vals[1]}']].min(axis=1)
 
     else: # no size column
-        df = pd.merge(df1[[f'scores_col',label,cond_col]], 
-                    df2[[f'scores_col',label,cond_col]], 
+        df = pd.merge(df1[[scores_col,label,cond_col]], 
+                    df2[[scores_col,label,cond_col]], 
                     on=label, how='inner',
                     suffixes=(f'_{cond_vals[0]}', f'_{cond_vals[1]}'))
         del df1, df2
