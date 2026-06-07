@@ -950,13 +950,12 @@ def _facet_axis_labels(x_axis, y_axis, *,
     y_axis_panel = _axis_label_for_panel(y_axis, i, expected_len=nrows if facety is not None else None)
 
     if _is_blank_label(x_axis):
-        base = _fmt_name(x_default, space_capitalize)
+        x_axis_panel = _fmt_name(x_default, space_capitalize)
 
     if _is_blank_label(y_axis):
-        base = _fmt_name(y_default, space_capitalize)
+        y_axis_panel = _fmt_name(y_default, space_capitalize)
 
     return x_axis_panel, y_axis_panel
-
 
 def _hide_inner_axis_labels(ax, i: int, j: int, nrows: int, ncols: int):
     """

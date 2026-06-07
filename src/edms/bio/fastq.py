@@ -5165,8 +5165,8 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, scores_col: str
                 size_norm = mcolors.Normalize(vmin=_vmin, vmax=_vmax)
 
     # Set dimensions
-    if x_axis_dims==(0,0): x_axis_dims=(min(df[f'log2({FC})_{cond_vals[0]}']),max(df[f'log2({FC})_{cond_vals[0]}']))
-    if y_axis_dims==(0,0): y_axis_dims=(min(df[f'log2({FC})_{cond_vals[1]}']),max(df[f'log2({FC})_{cond_vals[1]}']))
+    if x_axis_dims==(0,0): x_axis_dims=(min(df[f'{scores_col}_{cond_vals[0]}']),max(df[f'{scores_col}_{cond_vals[0]}']))
+    if y_axis_dims==(0,0): y_axis_dims=(min(df[f'{scores_col}_{cond_vals[1]}']),max(df[f'{scores_col}_{cond_vals[1]}']))
 
     # Generate figure
     fig, ax = plt.subplots(figsize=figsize)
@@ -5316,7 +5316,7 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, scores_col: str
                 )
     
     # Set x axis
-    if x_axis=='': x_axis=f'log2({FC})_{cond_vals[0]}'
+    if x_axis=='': x_axis=f'{scores_col}_{cond_vals[0]}'
     plt.xlabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight,fontfamily=x_axis_font, labelpad=x_axis_pad)
     if x_ticks==[]: 
         if x_ticks_rot==0: plt.xticks(rotation=x_ticks_rot,ha='center',va='top',fontfamily=x_ticks_font,fontsize=x_ticks_size)
@@ -5328,7 +5328,7 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, scores_col: str
         else: plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font,fontsize=x_ticks_size)
 
     # Set y axis
-    if y_axis=='': y_axis=f'log2({FC})_{cond_vals[1]}'
+    if y_axis=='': y_axis=f'{scores_col}_{cond_vals[1]}'
     plt.ylabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight,fontfamily=y_axis_font, labelpad=y_axis_pad)
 
     if y_ticks==[]: plt.yticks(rotation=y_ticks_rot,fontfamily=y_ticks_font,fontsize=y_ticks_size)
