@@ -81,16 +81,18 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
             subparser.add_argument("-nw", "--not_weighted", dest='weighted', action='store_false', help="Weighted correlation by size column (Default: True)", default=True)
 
     subparser.add_argument("-l", "--label", type=str, help="Column name for point labels; static text for images, interactive tooltips for HTML")
-    if fastq_torn_parser==False and fastq_corr_parser==False and pwes_torn_parser==False:
+    if fastq_corr_parser==False and pwes_torn_parser==False:
         subparser.add_argument("-fx", "--facetx", type=str, help="Column name for facet columns (creates one subplot per category in this column, arranged in separate columns)")
         subparser.add_argument("-fy", "--facety", type=str, help="Column name for facet rows (creates one subplot per category in this column, arranged in seperate rows)")
         subparser.add_argument("-fxo", "--facetx_order", nargs="+", help="Order of facet columns")
         subparser.add_argument("-fyo", "--facety_order", nargs="+", help="Order of facet rows")
-        subparser.add_argument("-xe", "--x_err", type=str, help="Column name for x error bars", default=argparse.SUPPRESS)
-        subparser.add_argument("-ye", "--y_err", type=str, help="Column name for y error bars", default=argparse.SUPPRESS)
-        subparser.add_argument("-ecap", "--err_capsize", type=float, help="Error bar cap size (Default: 0.2)", default=0.2)
-        subparser.add_argument("-ea", "--err_alpha", type=float, help="Error bar transparency (Default: 1)", default=1)
-        subparser.add_argument("-ecol", "--err_color", type=str, help="Error bar color (Default: black)", default="black")
+        subparser.add_argument("-spt", "--subplot_titles", type=str, nargs="+", default='facet_values', help="Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none")
+        if fastq_torn_parser == False:
+            subparser.add_argument("-xe", "--x_err", type=str, help="Column name for x error bars", default=argparse.SUPPRESS)
+            subparser.add_argument("-ye", "--y_err", type=str, help="Column name for y error bars", default=argparse.SUPPRESS)
+            subparser.add_argument("-ecap", "--err_capsize", type=float, help="Error bar cap size (Default: 0.2)", default=0.2)
+            subparser.add_argument("-ea", "--err_alpha", type=float, help="Error bar transparency (Default: 1)", default=1)
+            subparser.add_argument("-ecol", "--err_color", type=str, help="Error bar color (Default: black)", default="black")
     
     # Additional annotation data sources
     if fastq_torn_parser==True or fastq_corr_parser==True or pwes_torn_parser==True:
@@ -148,7 +150,7 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
     subparser.add_argument("-ll", "--legend_loc", type=str, default="upper left", help="Location of the legend in the plot")
     subparser.add_argument("-li", "--legend_items", type=parse_tuple_int, default=(0,0), help="Legend item count as a tuple (used for layout)")
     subparser.add_argument("-ln", "--legend_ncol", type=int, default=1, help="Number of columns in legend")
-    if fastq_torn_parser==False and fastq_corr_parser==False and pwes_torn_parser==False:
+    if fastq_corr_parser==False and pwes_torn_parser==False:
         subparser.add_argument("-lm", "--legend_mode", type=str, help='legend mode (options: "figure", "first", "none"); default: "figure")', default="figure", choices=["figure", "first", "none"])
     subparser.add_argument('-lcs', "--legend_columnspacing", type=int, default=argparse.SUPPRESS, help='space between columns in legend; only for html plots')
     subparser.add_argument('-lhtp', "--legend_handletextpad", type=float, default=argparse.SUPPRESS, help='space between marker and text in legend; only for html plots')
@@ -165,7 +167,7 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
     if fastq_torn_parser == True or fastq_corr_parser == True or pwes_torn_parser == True:
         subparser.add_argument("-ddlg", "--dont_display_legend", dest='display_legend', action="store_false", default=True, help="Don't display legend on plot")
         subparser.add_argument("-ddla", "--dont_display_labels", dest='display_labels', action="store_false", default=True, help="Don't display labels")
-        subparser.add_argument("-dda", "--dont_display_axis", dest='display_axis', action="store_false", default=True, help="on't display x- and y-axis lines")
+        subparser.add_argument("-dda", "--dont_display_axis", dest='display_axis', action="store_false", default=True, help="Don't display x- and y-axis lines")
     if fastq_corr_parser == True:
         subparser.add_argument("-cm", "--corr_method", default=argparse.SUPPRESS, help="Display correlation line of best fit (Default: None; options: 'pearson', 'spearman', 'kendall')", choices=['pearson', 'spearman', 'kendall'])
         subparser.add_argument("-cw", "--corr_weight", default=argparse.SUPPRESS, help="Weights column name for correlation line (Default: None; not weighted correlation)")
@@ -193,6 +195,7 @@ def add_common_plot_cat_args(subparser, fastq_parser=False, pwes_parsers=False):
         subparser.add_argument("-fy", "--facety", type=str, help="Column name for facet rows (creates one subplot per category in this column, arranged in seperate rows)")
         subparser.add_argument("-fxo", "--facetx_order", nargs="+", help="Order of facet columns")
         subparser.add_argument("-fyo", "--facety_order", nargs="+", help="Order of facet rows")
+        subparser.add_argument("-spt", "--subplot_titles", type=str, nargs="+", default='facet_values', help="Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none")
     if fastq_parser == True:
         subparser.add_argument("-PDB_pt", "--PDB_pt", type=str, help="PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information", default=argparse.SUPPRESS)
 
@@ -291,11 +294,11 @@ def add_common_plot_dist_args(subparser):
     subparser.add_argument("-pc", "--palette_or_cmap", type=str, default="colorblind", help="Seaborn color palette or matplotlib colormap")
     subparser.add_argument("-ec", "--edgecol", type=str, default="black", help="Edge color of histogram bars")
     subparser.add_argument("-lw", "--lw", type=int, default=1, help="Line width for edges")
-    subparser.add_argument("-ht", "--ht", type=float, default=1.5, help="Height of the plot")
-    subparser.add_argument("-asp", "--asp", type=int, default=5, help="Aspect ratio of the plot")
-    subparser.add_argument("-tp", "--tp", type=float, default=0.8, help="Top padding space")
-    subparser.add_argument("-hs", "--hs", type=int, default=0, help="Horizontal spacing between plots (if faceted)")
-    subparser.add_argument("-despine", "--despine", action="store_true", help="Remove plot spines (despine)", default=False)
+    subparser.add_argument("-fx", "--facetx", type=str, help="Column name for facet columns (creates one subplot per category in this column, arranged in separate columns)")
+    subparser.add_argument("-fy", "--facety", type=str, help="Column name for facet rows (creates one subplot per category in this column, arranged in seperate rows)")
+    subparser.add_argument("-fxo", "--facetx_order", nargs="+", help="Order of facet columns")
+    subparser.add_argument("-fyo", "--facety_order", nargs="+", help="Order of facet rows")
+    subparser.add_argument("-spt", "--subplot_titles", type=str, nargs="+", default='facet_values', help="Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none")
 
     # Figure appearance
     subparser.add_argument("-fs", "--figsize", type=parse_tuple_int, default=argparse.SUPPRESS, help="Figure size formatted as 'width,height'")
@@ -338,6 +341,7 @@ def add_common_plot_dist_args(subparser):
     subparser.add_argument("-ll", "--legend_loc", type=str, default="upper left", help="Legend location on the plot")
     subparser.add_argument("-li", "--legend_items", type=parse_tuple_int, default=(0, 0), help="Tuple for legend layout items")
     subparser.add_argument("-ln", "--legend_ncol", type=int, default=1, help="Number of columns in the legend")
+    subparser.add_argument("-lm", "--legend_mode", type=str, help='legend mode (options: "figure", "first", "none"); default: "figure")', default="figure", choices=["figure", "first", "none"])
 
     # Final display
     subparser.add_argument("-d", "--dpi", type=int, help="Figure dpi (Default: 1200 for non-HTML, 150 for HTML)", default=0)
@@ -357,17 +361,21 @@ def add_common_plot_heat_args(subparser, fastq_parser=False, stat_parser=False):
     if fastq_parser == False and stat_parser == False:
         subparser.add_argument("-x", "--x", type=str, help="X-axis column name to pivot tidy-formatted dataframe into matrix format")
         subparser.add_argument("-y", "--y", type=str, help="Y-axis column name to pivot tidy-formatted dataframe into matrix format")
-        subparser.add_argument("-vr", "--vars", type=str, help="Variable column name to split tidy-formatted dataframe into a dictionary of pivoted dataframes")
         subparser.add_argument("-vs", "--vals", type=str, help="Value column name to populate pivoted dataframes")
     if fastq_parser == False:    
         subparser.add_argument("-vd", "--vals_dims", type=parse_tuple_float, help="Value column limits formatted as 'vmin,vmax'")
+    if stat_parser == False:
+        subparser.add_argument("-fx", "--facetx", type=str, help="Column name for facet columns (creates one subplot per category in this column, arranged in separate columns)")
+        subparser.add_argument("-fy", "--facety", type=str, help="Column name for facet rows (creates one subplot per category in this column, arranged in seperate rows)")
+        subparser.add_argument("-fxo", "--facetx_order", nargs="+", help="Order of facet columns")
+        subparser.add_argument("-fyo", "--facety_order", nargs="+", help="Order of facet rows")
+        subparser.add_argument("-spt", "--subplot_titles", type=str, nargs="+", default='facet_values', help="Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none")
     if fastq_parser == True:
-        subparser.add_argument("-cc", "--cond_col", type=str, help="Condition column name", required=True)
-        subparser.add_argument("-c", "--cond", type=str, help="Condition value for filtering", required=True)
         subparser.add_argument("-scol", "--scores_col", type=str, help="Scores column name (e.g. 'log2(FC)')", required=True)
         subparser.add_argument("-wp", "--wt_prot", type=str, help="WT protein sequence", required=True)
         subparser.add_argument("-wr", "--wt_res", type=int, help="WT protein sequence residue start number", required=True)
-        subparser.add_argument("-co", "--cutoff", type=float, help="Comparison count mean cutoff for masking low-abundance values", default=argparse.SUPPRESS)
+        subparser.add_argument("-cc", "--cutoff_col", type=str, help="Cutoff column name for masking low-abundance values", default=argparse.SUPPRESS)
+        subparser.add_argument("-co", "--cutoff", type=float, help="Cutoff for masking low-abundance values", default=argparse.SUPPRESS)
         subparser.add_argument("-aa", "--aa", type=str, help="AA saturation mutagenesis. The 'aa' option [default] makes all amino acid substitutions ('aa_subs'), +1 amino acid insertions ('aa_ins'), and -1 amino acid deletions ('aa_dels').", choices=['aa', 'aa_subs', 'aa_ins', 'aa_dels'], default='aa')
         subparser.add_argument("-l", "--label", type=str, help="Label column name (Default: 'Edit'). Can't be None.", default='Edit')
     
@@ -395,6 +403,8 @@ def add_common_plot_heat_args(subparser, fastq_parser=False, stat_parser=False):
     subparser.add_argument("-ca", "--cbar_aspect", type=int, default=argparse.SUPPRESS, help="Aspect ratio for colorbar")
     subparser.add_argument("-cp", "--cbar_pad", type=float, default=argparse.SUPPRESS, help="Padding for colorbar")
     subparser.add_argument("-cor", "--cbar_orientation", type=str, default=argparse.SUPPRESS, help="Orientation of colorbar (Default: 'vertical')", choices=['vertical', 'horizontal'])
+    if stat_parser == False:
+         subparser.add_argument("-cbm", "--cbar_mode", type=str, default='figure', help="cbar_mode (str, optional): colorbar mode ('figure', 'each', 'none')")
 
     # Title and size
     subparser.add_argument("-t", "--title", type=str, default="", help="Plot title")
@@ -453,6 +463,7 @@ def add_common_plot_stack_args(subparser, fastq_parser=False):
     subparser.add_argument("-fy", "--facety", type=str, help="Column name for facet rows (creates one subplot per category in this column, arranged in seperate rows)")
     subparser.add_argument("-fxo", "--facetx_order", nargs="+", help="Order of facet columns")
     subparser.add_argument("-fyo", "--facety_order", nargs="+", help="Order of facet rows")
+    subparser.add_argument("-spt", "--subplot_titles", type=str, nargs="+", default='facet_values', help="Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none")
     subparser.add_argument("-pc", "--palette_or_cmap", type=str, default="Set2", help="Seaborn palette or Matplotlib colormap for stacked bars")
     subparser.add_argument("-ec", "--errcap", type=int, default=4, help="Width of error bar caps")
     subparser.add_argument("-v", "--vertical", action="store_true", help="Stack bars vertically (default True)", default=False)
@@ -536,6 +547,11 @@ def add_common_plot_vol_args(subparser, fastq_parser=False):
     subparser.add_argument("-ty","--y_threshold", type=float, default=argparse.SUPPRESS, help="y-value threshold")
     subparser.add_argument("-nbtx","--no_bidirectional_x_threshold", dest='bidirectional_x_threshold', action="store_false", help="both positive and negative x-axis thresholds (Default: True)", default=True)
     subparser.add_argument("-bty","--bidirectional_y_threshold", dest='bidirectional_y_threshold', action="store_true", help="both positive and negative y-axis thresholds (Default: False)", default=False)
+    subparser.add_argument("-fx", "--facetx", type=str, help="Column name for facet columns (creates one subplot per category in this column, arranged in separate columns)")
+    subparser.add_argument("-fy", "--facety", type=str, help="Column name for facet rows (creates one subplot per category in this column, arranged in seperate rows)")
+    subparser.add_argument("-fxo", "--facetx_order", nargs="+", help="Order of facet columns")
+    subparser.add_argument("-fyo", "--facety_order", nargs="+", help="Order of facet rows")
+    subparser.add_argument("-spt", "--subplot_titles", type=str, nargs="+", default='facet_values', help="Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none")
 
     # Output
     subparser.add_argument("-o", "--dir", type=str, help="Output directory path", default='./out')
@@ -585,6 +601,7 @@ def add_common_plot_vol_args(subparser, fastq_parser=False):
     subparser.add_argument("-lba","--legend_bbox_to_anchor", type=parse_tuple_float, default=(1, 1), help="Bounding box anchor for legend")
     subparser.add_argument("-ll","--legend_loc", type=str, default="upper left", help="Legend location on the plot")
     subparser.add_argument("-ln","--legend_ncol", type=int, default=1, help="Number of columns in the legend")
+    subparser.add_argument("-lm","--legend_mode", type=str, default="figure", help="Legend mode (options: 'figure', 'first', 'none')")
     subparser.add_argument("-lcs",'--legend_columnspacing', type=int, default=argparse.SUPPRESS, help='space between columns in legend; only for html plots')
     subparser.add_argument("-lht",'--legend_handletextpad', type=float, default=argparse.SUPPRESS, help='space between marker and text in legend; only for html plots')
     subparser.add_argument("-lls",'--legend_labelspacing', type=float, default=argparse.SUPPRESS, help='vertical space between entries in legend; only for html plots')
@@ -593,9 +610,9 @@ def add_common_plot_vol_args(subparser, fastq_parser=False):
     subparser.add_argument("-hsm",'--html_size_multiplier', type=float, default=argparse.SUPPRESS, help='size multiplier for html plots')
     
     # Boolean switches
-    subparser.add_argument("-ddl","--dont_display_legend", action="store_false", help="Don't display legend on plot", default=True)
+    subparser.add_argument("-ddl","--dont_display_legend", dest='display_legend', action="store_false", help="Don't display legend on plot", default=True)
     subparser.add_argument("-dl","--display_labels", type=str, nargs="+", help="Display labels for values if label column specified (Options: 'all', [], f'{x} & {y}', f'{x}', f'{y}', 'neither', 'True', 'False')", default=argparse.SUPPRESS)
-    subparser.add_argument("-dda","--dont_display_axis", dest='display_axis', action="store_false", default=True, help="Display x- and y-axis lines (Default: True)")
+    subparser.add_argument("-dda","--dont_display_axis", dest='display_axis', action="store_false", default=True, help="Don't display x- and y-axis lines")
     subparser.add_argument("-dli","--display_lines", action="store_true", help="Display lines for threshold (Default: False)", default=False)
     subparser.add_argument("-d","--dpi", type=int, help="Figure dpi (Default: 1200 for non-HTML, 150 for HTML)", default=0)
     subparser.add_argument("-nt", "--not_transparent", dest='transparent', action="store_false", help="Don't save plot with transparent background", default=True)
@@ -647,13 +664,12 @@ def add_subparser(subparsers, formatter_class=None):
         add_common_plot_cat_args(parser_plot_cat)
         parser_plot_cat.set_defaults(func=p.cat)
 
-    # dist(): Creates distribution graphs (hist, kde, hist_kde, rid)
+    # dist(): Creates distribution graphs (hist, kde, hist_kde, ridge)
     parser_plot_type_hist = subparsers_plot.add_parser("hist", help="Create histogram plot", description="Create histogram plot", formatter_class=formatter_class)
     parser_plot_type_kde = subparsers_plot.add_parser("kde", help="Create density plot", description="Create density plot", formatter_class=formatter_class)
     parser_plot_type_hist_kde = subparsers_plot.add_parser("hist_kde", help="Create histogram + density plot", description="Create histogram + density plot", formatter_class=formatter_class)
-    parser_plot_type_rid = subparsers_plot.add_parser("rid", help="Create ridge plot", description="Create ridge plot", formatter_class=formatter_class)
 
-    for parser_plot_dist in [parser_plot_type_hist, parser_plot_type_kde, parser_plot_type_hist_kde, parser_plot_type_rid]:
+    for parser_plot_dist in [parser_plot_type_hist, parser_plot_type_kde, parser_plot_type_hist_kde]:
         add_common_plot_dist_args(parser_plot_dist)
         parser_plot_dist.set_defaults(func=p.dist)
 

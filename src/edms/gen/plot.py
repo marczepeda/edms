@@ -9,27 +9,34 @@ Usage:
 - SafeHTMLTooltip: robust HTML tooltip that safely handles missing labels/targets.
 - ClickTooltip: persistent HTML tooltip that appears on point click.
 
-[Supporting methods]
+[General Supporting methods]
 - export_mpld3_molstar_html(): Create a standalone HTML file that combines:
     - an mpld3 interactive Matplotlib plot
     - a Mol* viewer panel for a PDB structure
 - save_fig(): save static image and optionally interactive HTML or JSON via mpld3.
 - re_un_cap(): replace underscores with spaces and capitalizes each word for a given string
+- _fmt_name(): Match your formatter default behavior for names
 - round_up_pow_10(): rounds up a given number to the nearest power of 10
 - round_down_pow_10: rounds down a given number to the nearest power of 10
 - log10: returns log10 of maximum value from series or 0
 - move_dis_legend(): moves legend for distribution graphs
 - extract_pivots(): returns a dictionary of pivot-formatted dataframes from tidy-formatted dataframe
-- formatter(): formats, displays, and saves plots
 - repeat_palette_cmap(): returns a list of a repeated seaborn palette or matplotlib color map
+- _category_color_map: a dictionary mapping category names to colors for categorical plots
+- _is_blank_label(): True when user did not explicitly set the axis label
+- formatter(): formats, displays, and saves plots
+
+[Facet Handling Methods]
+- _is_faceted(): True when the plot is faceted
+- _subset_for_facet(): Return the appropriate subset of data for a specific facet panel
+- _axis_label_for_panel(): Return the appropriate label for a specific panel based on its position
+- _facet_axis_labels(): Return a dictionary of axis labels for all panels in a faceted figure
+- _hide_inner_axis_labels(): Hide axis labels for inner panels in a faceted figure to reduce clutter
+- _handle_panel_legend(): Add legend to the appropriate panel in a faceted figure based on user-specified legend location
 - _facet_values(): Return ordered unique facet values
 - _final_save_show(): Save/show once for the whole figure using your conventions
 - _make_figure_legend(): Build a single shared legend for the entire figure using handles/labels from the first axis that has one
-- _is_blank_label(): True when user did not explicitly set the axis label
-- _fmt_name(): Match your formatter default behavior for names
-- _facet_default_xaxis(): Return default x-axis label for a facet panel, combining base x name and facet value when applicable
-- _facet_default_yaxis(): Return default y-axis label for a facet panel, combining base y name and facet value when applicable
-- _axis_label_for_panel(): Return the appropriate label for a specific panel based on its position
+- _subplot_titles(): Return appropriate subplot titles based on user input (facet values, facet labels with values, custom titles, or none)
 - _apply_formatter_on_ax(): Apply the formatter to a specific axis with the appropriate subset of data and parameters for that panel
 
 [Graph methods]
@@ -288,7 +295,7 @@ ClickTooltipPlugin.prototype.draw = function() {
             voffset=voffset,
         )
 
-# Supporting Methods
+# General Supporting Methods
 def export_mpld3_molstar_html(
     fig: plt.Figure,
     dir: str,
@@ -541,6 +548,18 @@ def re_un_cap(input: str) -> str:
             capitalize_next = (char == ' ')
     return result
 
+def _fmt_name(name: str, space_capitalize: bool) -> str:
+    """
+    _fmt_name(): Match your formatter default behavior for names.
+    
+    Parameters:
+    name (str): name to format
+    space_capitalize (bool): whether to apply re_un_cap() formatting (Default: True)
+    """
+    if name is None:
+        return ''
+    return re_un_cap(name) if space_capitalize else name
+
 def round_up_pow_10(number) -> int:
     ''' 
     round_up_pow_10(): rounds up a given number to the nearest power of 10
@@ -625,6 +644,64 @@ def extract_pivots(df: pd.DataFrame, x: str, y: str, vars: str='variable', vals:
         pivots[key]=pd.pivot(df[df[vars]==key],index=y,columns=x,values=vals)
     return pivots
 
+def repeat_palette_cmap(palette_or_cmap: str, repeats: int):
+    '''
+    repeat_palette_cmap(): returns a list of a repeated seaborn palette or matplotlib color map
+
+    Parameters:
+    palette_or_cmap (str): seaborn palette or matplotlib color map name
+    repeats (int): number of color map repeats
+    '''
+    # Check repeats is a positive integer
+    if not isinstance(repeats, int) or repeats <= 0:
+        raise ValueError(f"repeats={repeats} must be a positive integer.")
+    
+    if palette_or_cmap in sns.color_palette(): # Check if cmap is a valid seaborn color palette
+        cmap = sns.palettes.SEABORN_PALETTES[palette_or_cmap] # Get the color palette
+        return mcolors.ListedColormap(cmap * repeats) # Repeats the color palette
+    elif palette_or_cmap in plt.colormaps() or isinstance(palette_or_cmap, mcolors.Colormap): # Check if cmap is a valid matplotlib color map or custom colormap
+        cmap = cm.get_cmap(palette_or_cmap) # Get the color map
+        return mcolors.ListedColormap([cmap(i) for i in range(cmap.N)] * repeats) # Breaks the color map into a repeated list
+    else:
+        print(f'{cmap} is not a valid matplotlib color map and did not apply repeat.')
+        return cmap
+
+def _category_color_map(values, palette_or_cmap='colorblind', order=None):
+    if order is not None and len(order) > 0:
+        cats = list(order)
+    else:
+        cats = pd.Series(values).dropna().drop_duplicates().tolist()
+
+    color_palettes = [
+        "deep", "muted", "bright", "pastel", "dark", "colorblind",
+        "husl", "hsv", "Paired", "Set1", "Set2", "Set3", "tab10", "tab20"
+    ]
+
+    if palette_or_cmap in color_palettes:
+        colors = sns.color_palette(palette_or_cmap, n_colors=len(cats))
+    elif palette_or_cmap in plt.colormaps() or isinstance(palette_or_cmap, mcolors.Colormap):
+        cmap = cm.get_cmap(palette_or_cmap, len(cats))
+        colors = [cmap(i) for i in range(cmap.N)]
+    else:
+        colors = sns.color_palette("colorblind", n_colors=len(cats))
+
+    return dict(zip(cats, colors))
+
+def _is_blank_label(v: str | list | tuple) -> bool:
+    """
+    _is_blank_label(): True when user did not explicitly set the axis label.
+    
+    Parameters:
+    v (str | list | tuple): value to check (can be None, str, or list/tuple of str)
+    """
+    if v is None:
+        return True
+    if isinstance(v, str):
+        return v.strip() == ''
+    if isinstance(v, (list, tuple)):
+        return len(v) == 0 or all((isinstance(x, str) and x.strip() == '') for x in v)
+    return False
+
 def formatter(graph: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: str, dir: str,
               title: str, title_size: int, title_weight: str, title_font: str,
               x_axis: str, x_axis_size: int, x_axis_weight: str, x_axis_font: str, x_axis_scale: str, x_axis_dims: tuple, x_axis_pad: int, x_ticks_size: int, x_ticks_rot: int, x_ticks_font: str, x_ticks: list,
@@ -694,7 +771,7 @@ def formatter(graph: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file:
     # Define graph types
     scats = ['scat', 'line', 'line_scat']
     cats = ['bar', 'box', 'violin', 'swarm', 'strip', 'point', 'count', 'bar_strip', 'box_strip', 'violin_strip','bar_swarm', 'box_swarm', 'violin_swarm']
-    dists = ['hist', 'kde', 'hist_kde','rid']
+    dists = ['hist', 'kde', 'hist_kde','ridge']
     heats = ['ht']
 
     # Determine if file is html
@@ -809,28 +886,7 @@ def formatter(graph: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file:
         else: 
             mpld3.show()
 
-def repeat_palette_cmap(palette_or_cmap: str, repeats: int):
-    '''
-    repeat_palette_cmap(): returns a list of a repeated seaborn palette or matplotlib color map
-
-    Parameters:
-    palette_or_cmap (str): seaborn palette or matplotlib color map name
-    repeats (int): number of color map repeats
-    '''
-    # Check repeats is a positive integer
-    if not isinstance(repeats, int) or repeats <= 0:
-        raise ValueError(f"repeats={repeats} must be a positive integer.")
-    
-    if palette_or_cmap in sns.color_palette(): # Check if cmap is a valid seaborn color palette
-        cmap = sns.palettes.SEABORN_PALETTES[palette_or_cmap] # Get the color palette
-        return mcolors.ListedColormap(cmap * repeats) # Repeats the color palette
-    elif palette_or_cmap in plt.colormaps() or isinstance(palette_or_cmap, mcolors.Colormap): # Check if cmap is a valid matplotlib color map or custom colormap
-        cmap = cm.get_cmap(palette_or_cmap) # Get the color map
-        return mcolors.ListedColormap([cmap(i) for i in range(cmap.N)] * repeats) # Breaks the color map into a repeated list
-    else:
-        print(f'{cmap} is not a valid matplotlib color map and did not apply repeat.')
-        return cmap
-
+# Facet Handling Methods
 def _is_faceted(facetx: str=None, facety: str=None) -> bool:
     return facetx is not None or facety is not None
 
@@ -848,14 +904,45 @@ def _subset_for_facet(df: pd.DataFrame, facetx: str=None, facety: str=None, c=No
         return df[df[facety] == r].copy()
     return df.copy()
 
+def _axis_label_for_panel(axis_label: str | list | tuple, index: int, expected_len: int | None) -> str:
+    """
+    _axis_label_for_panel(): Return the appropriate label for a specific panel based on its position.
+
+    Parameters:
+    axis_label (str | list | tuple): The label(s) for the axis.
+    index (int): The column (j) or row (i) index for the panel.
+    expected_len (int | None): The number of columns (if axis_label maps to columns) or rows (if mapping to rows).
+    """
+    # scalar string -> use directly
+    if axis_label is None:
+        return ''
+    if isinstance(axis_label, str):
+        return axis_label
+    if isinstance(axis_label, (list, tuple)):
+        if expected_len is None:
+            # fallback to first element
+            return axis_label[0] if len(axis_label) > 0 else ''
+        # if lengths match expected, use matching element
+        if len(axis_label) == expected_len:
+            if index < len(axis_label):
+                return axis_label[index]
+            else:
+                return axis_label[0]
+        # if only one element present, use that
+        if len(axis_label) == 1:
+            return axis_label[0]
+        # otherwise fallback to first element
+        return axis_label[0]
+    # anything else -> string-cast
+    return str(axis_label)
 
 def _facet_axis_labels(x_axis, y_axis, *,
-                       x_default: str, y_default: str,
-                       facetx: str=None, facety: str=None,
-                       c=None, r=None,
-                       j: int=0, i: int=0,
-                       ncols: int=1, nrows: int=1,
-                       space_capitalize: bool=True):
+                    x_default: str, y_default: str,
+                    facetx: str=None, facety: str=None,
+                    c=None, r=None, # no longer needed since we handle all panels in one loop, but keeping for potential future use
+                    j: int=0, i: int=0,
+                    ncols: int=1, nrows: int=1,
+                    space_capitalize: bool=True):
     """
     Return panel-specific x/y axis labels using the same conventions as scat/cat.
     """
@@ -863,20 +950,10 @@ def _facet_axis_labels(x_axis, y_axis, *,
     y_axis_panel = _axis_label_for_panel(y_axis, i, expected_len=nrows if facety is not None else None)
 
     if _is_blank_label(x_axis):
-        x_axis_panel = _facet_default_xaxis(
-            x=x_default,
-            facetx=facetx,
-            facetx_val=c,
-            space_capitalize=space_capitalize
-        )
+        base = _fmt_name(x_default, space_capitalize)
 
     if _is_blank_label(y_axis):
-        y_axis_panel = _facet_default_yaxis(
-            y=y_default,
-            facety=facety,
-            facety_val=r,
-            space_capitalize=space_capitalize
-        )
+        base = _fmt_name(y_default, space_capitalize)
 
     return x_axis_panel, y_axis_panel
 
@@ -902,7 +979,6 @@ def _handle_panel_legend(ax, *, legend_mode: str, i: int, j: int):
     elif legend_mode == "first":
         if (i != 0 or j != 0) and leg is not None:
             leg.remove()
-### End New ###
 
 def _facet_values(df: pd.DataFrame, col: str, order: list=None):
     """
@@ -959,11 +1035,18 @@ def _make_figure_legend(fig, axes,
     labels_all = []
 
     for ax in np.array(axes).flatten():
-        handles, labels = ax.get_legend_handles_labels()
+        leg = ax.get_legend()
+
+        if leg is not None:
+            handles = leg.legend_handles
+            labels = [txt.get_text() for txt in leg.get_texts()]
+        else:
+            handles, labels = ax.get_legend_handles_labels()
 
         for h, l in zip(handles, labels):
             if l is None or l == "" or l.startswith("_"):
                 continue
+
             if l not in labels_all:
                 handles_all.append(h)
                 labels_all.append(l)
@@ -997,94 +1080,34 @@ def _make_figure_legend(fig, axes,
         ncol=legend_ncol
     )
 
-def _is_blank_label(v: str | list | tuple) -> bool:
-    """
-    _is_blank_label(): True when user did not explicitly set the axis label.
-    
-    Parameters:
-    v (str | list | tuple): value to check (can be None, str, or list/tuple of str)
-    """
-    if v is None:
-        return True
-    if isinstance(v, str):
-        return v.strip() == ''
-    if isinstance(v, (list, tuple)):
-        return len(v) == 0 or all((isinstance(x, str) and x.strip() == '') for x in v)
-    return False
+def _subplot_title(idx: int, c=None, r=None, 
+                facetx=None, facety=None, subplot_titles=None, title=None) -> str:
+    if facetx is None and facety is None:
+        return title
 
-def _fmt_name(name: str, space_capitalize: bool) -> str:
-    """
-    _fmt_name(): Match your formatter default behavior for names.
-    
-    Parameters:
-    name (str): name to format
-    space_capitalize (bool): whether to apply re_un_cap() formatting (Default: True)
-    """
-    if name is None:
+    if isinstance(subplot_titles, list):
+        return subplot_titles[idx] if idx < len(subplot_titles) else ''
+
+    if subplot_titles == 'facet_values':
+        parts = []
+        if facety is not None:
+            parts.append(f"{r}")
+        if facetx is not None:
+            parts.append(f"{c}")
+        return "\n".join(parts)
+
+    if subplot_titles == 'facet_labels':
+        parts = []
+        if facety is not None:
+            parts.append(f"{facety}={r}")
+        if facetx is not None:
+            parts.append(f"{facetx}={c}")
+        return "\n".join(parts)
+
+    if subplot_titles in [None, False, 'none', 'None', '']:
         return ''
-    return re_un_cap(name) if space_capitalize else name
 
-def _facet_default_xaxis(x: str, facetx: str | None, facetx_val: str, space_capitalize: bool) -> str:
-    """
-    _facet_default_xaxis(): Return default x-axis label for a facet panel, combining base x name and facet value when applicable.
-    
-    Parameters:
-    x (str): base x-axis name
-    facetx (str | None): facet column name for x-axis faceting (None if no faceting on x-axis)
-    facetx_val (str): value of the facet for this panel (e.g., "A")
-    space_capitalize (bool): whether to apply re_un_cap() formatting (Default: True)
-    """
-    base = _fmt_name(x, space_capitalize)
-    if facetx is None:
-        return base
-    return f"{base}; {facetx_val}"
-
-def _facet_default_yaxis(y: str, facety: str | None, facety_val: str, space_capitalize: bool) -> str:
-    """
-    _facet_default_yaxis(): Return default y-axis label for a facet panel, combining base y name and facet value when applicable.
-    
-    Parameters:
-    y (str): base y-axis name
-    facety (str | None): facet column name for y-axis faceting (None if no faceting on y-axis)
-    facety_val (str): value of the facet for this panel (e.g., "A")
-    space_capitalize (bool): whether to apply re_un_cap() formatting (Default: True)
-    """
-    base = _fmt_name(y, space_capitalize)
-    if facety is None:
-        return base
-    return f"{base}; {facety_val}"
-
-def _axis_label_for_panel(axis_label: str | list | tuple, index: int, expected_len: int | None) -> str:
-    """
-    _axis_label_for_panel(): Return the appropriate label for a specific panel based on its position.
-
-    Parameters:
-    axis_label (str | list | tuple): The label(s) for the axis.
-    index (int): The column (j) or row (i) index for the panel.
-    expected_len (int | None): The number of columns (if axis_label maps to columns) or rows (if mapping to rows).
-    """
-    # scalar string -> use directly
-    if axis_label is None:
-        return ''
-    if isinstance(axis_label, str):
-        return axis_label
-    if isinstance(axis_label, (list, tuple)):
-        if expected_len is None:
-            # fallback to first element
-            return axis_label[0] if len(axis_label) > 0 else ''
-        # if lengths match expected, use matching element
-        if len(axis_label) == expected_len:
-            if index < len(axis_label):
-                return axis_label[index]
-            else:
-                return axis_label[0]
-        # if only one element present, use that
-        if len(axis_label) == 1:
-            return axis_label[0]
-        # otherwise fallback to first element
-        return axis_label[0]
-    # anything else -> string-cast
-    return str(axis_label)
+    return str(subplot_titles)
 
 def _apply_formatter_on_ax(*, ax, df_sub: pd.DataFrame, graph: str,
                            x: str, y: str, cols: str, file: str | None, dir: str,
@@ -1136,7 +1159,7 @@ def _apply_formatter_on_ax(*, ax, df_sub: pd.DataFrame, graph: str,
 def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
         cols: str = None, cols_ord: list = None, cols_exclude: list | str = None,
         stys: str = None, stys_order: list = [], mark_order: list = [], label: str | None = None,
-        facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None,
+        facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
         file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', alpha: float = 1.0, edgecol: str = 'black',
         figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
         x_axis: str | list = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial',
@@ -1173,6 +1196,7 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
     facety (str, optional): column name for facet rows (creates one subplot per category in this column, arranged in separate rows)
     facetx_order (list, optional): order of facet columns
     facety_order (list, optional): order of facet rows
+    subplot_titles (str | list, optional): Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     palette_or_cmap (str, optional): seaborn color palette or matplotlib color map
@@ -1257,6 +1281,16 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
         legend_title_size=legend_title_size*html_size_multiplier
         legend_size=legend_size*html_size_multiplier*.75
 
+    # Set up color palette
+    if cols is not None:
+        palette = _category_color_map(
+            df[cols],
+            palette_or_cmap=palette_or_cmap,
+            order=cols_ord
+        )
+    else:
+        palette = palette_or_cmap
+
     # --- Build facet layout ---
     col_vals = _facet_values(df, facetx, order=facetx_order)
     row_vals = _facet_values(df, facety, order=facety_order)
@@ -1282,19 +1316,6 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
         df_sub (pd.DataFrame): subset of the data for this facet panel
         ax (plt.Axes): the specific axis to draw on
         '''
-        # color scheme setup (same as your scat)
-        color_palettes = ["deep","muted","bright","pastel","dark","colorblind","husl","hsv","Paired","Set1","Set2","Set3","tab10","tab20"]
-        if palette_or_cmap in color_palettes:
-            palette = palette_or_cmap
-        elif palette_or_cmap in plt.colormaps() or isinstance(palette_or_cmap, mcolors.Colormap):
-            if cols is not None:
-                cmap = cm.get_cmap(palette_or_cmap, len(df_sub[cols].value_counts()))
-                palette = sns.color_palette([cmap(i) for i in range(cmap.N)])
-            else:
-                palette = 'colorblind'
-        else:
-            palette = 'colorblind'
-
         # seaborn plots
         if cols is not None and stys is not None:
             if graph == 'scat':
@@ -1452,21 +1473,27 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
                 df_sub = df.copy()
             title_sub = _draw_panel(df_sub, ax)
 
-            # handle panel axis labels, which string or iterable
-            x_axis_panel = _axis_label_for_panel(x_axis, j, expected_len=ncols if facetx is not None else None)
-            y_axis_panel = _axis_label_for_panel(y_axis, i, expected_len=nrows if facety is not None else None)
+            x_axis_panel, y_axis_panel = _facet_axis_labels(
+                x_axis,
+                y_axis,
+                x_default=x,
+                y_default=y,
+                facetx=facetx,
+                facety=facety,
+                c=c,
+                r=r,
+                j=j,
+                i=i,
+                ncols=ncols,
+                nrows=nrows,
+                space_capitalize=True
+            )
 
-            # if user left axis label blank, use "axis; facet_val" for that axis
-            if _is_blank_label(x_axis):
-                x_axis_panel = _facet_default_xaxis(x=x, facetx=facetx, facetx_val=c, space_capitalize=space_capitalize)
-            if _is_blank_label(y_axis):
-                y_axis_panel = _facet_default_yaxis(y=y, facety=facety, facety_val=r, space_capitalize=space_capitalize)
-            
             # apply formatter with the appropriate subset of data and parameters for this panel
             _apply_formatter_on_ax(
                 ax=ax, df_sub=df_sub, graph=graph,
                 x=x, y=y, cols=cols, file=file, dir=dir,
-                title='' if (faceting and corr_method is None) else title_sub, title_size=title_size, title_weight=title_weight, title_font=title_font,
+                title=title_sub if corr_method is not None else '', title_size=title_size, title_weight=title_weight, title_font=title_font,
                 x_axis=x_axis_panel, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font,
                 x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad,
                 x_ticks_size=x_ticks_size, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
@@ -1483,19 +1510,27 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
                 PDB_pt=None, icon='scatter', cats_ord=None
             )
 
-            # legend handling
-            if cols is not None:
-                leg = ax.get_legend()
-                
-                if legend_mode == "none" or legend_mode == "figure":
-                    if leg is not None:
-                        leg.remove()
+            panel_title = _subplot_title(
+                idx=i * ncols + j,
+                c=c,
+                r=r,
+                facetx=facetx,
+                facety=facety,
+                subplot_titles=subplot_titles,
+                title=title
+            )
 
-                elif legend_mode == "first":
-                    if (i != 0 or j != 0) and leg is not None:
-                        leg.remove()
+            if panel_title != '':
+                ax.set_title(
+                    panel_title,
+                    fontsize=title_size,
+                    fontweight=title_weight,
+                    fontfamily=title_font
+                )
 
-            # reduce label clutter: only left column keeps y label; only bottom row keeps x label
+            if cols is not None and legend_mode != "figure":
+                _handle_panel_legend(ax, legend_mode=legend_mode, i=i, j=j)
+
             if j != 0:
                 ax.set_ylabel("")
             if i != nrows - 1:
@@ -1531,7 +1566,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
         cats_ord: list = None, cats_exclude: list|str = None,
         cols: str = None, cols_ord: list = None, cols_exclude: list | str = None,
         line: float = None, facetx: str = None, facety: str = None,
-        facetx_order: list = None, facety_order: list = None,
+        facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
         file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', alpha: float = 1.0,
         dodge: bool = False, jitter: bool = True, size: float = 5,
         edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
@@ -1568,6 +1603,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
     facety (str, optional): column name for facet rows (creates one subplot per category in this column, arranged in seperate rows)
     facetx_order (list, optional): order of facet columns
     facety_order (list, optional): order of facet rows
+    subplot_titles (str | list, optional): Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     palette_or_cmap (str, optional): seaborn color palette or matplotlib color map
@@ -1645,6 +1681,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
         legend_title_size=legend_title_size*html_size_multiplier
         legend_size=legend_size*html_size_multiplier*.75
 
+
     # Omit excluded data
     if type(cats_exclude) == list:
         for exclude in cats_exclude:
@@ -1659,6 +1696,16 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
             df = df[df[cols] != exclude]
     elif type(cols_exclude) == str and cols is not None:
         df = df[df[cols] != cols_exclude]
+
+    # Set up color palette
+    if cols is not None:
+        palette = _category_color_map(
+            df[cols],
+            palette_or_cmap=palette_or_cmap,
+            order=cols_ord
+        )
+    else:
+        palette = palette_or_cmap
 
     # --- Build facet layout ---
     col_vals = _facet_values(df, facetx, order=facetx_order)
@@ -1684,25 +1731,6 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
         df_sub (pd.DataFrame): subset of the data for this facet panel
         ax (plt.Axes): the specific axis to draw on
         """
-        # palette logic (same as your cat)
-        color_palettes = ["deep","muted","bright","pastel","dark","colorblind","husl","hsv","Paired","Set1","Set2","Set3","tab10","tab20"]
-        if palette_or_cmap in color_palettes:
-            palette = palette_or_cmap
-        elif palette_or_cmap in plt.colormaps() or isinstance(palette_or_cmap, mcolors.Colormap):
-            if cols is not None:
-                cmap = cm.get_cmap(palette_or_cmap, len(df_sub[cols].value_counts()))
-                palette = sns.color_palette([cmap(i) for i in range(cmap.N)])
-            elif (x != '') and df_sub[x].apply(lambda row: isinstance(row, str)).all():
-                cmap = cm.get_cmap(palette_or_cmap, len(df_sub[x].value_counts()))
-                palette = sns.color_palette([cmap(i) for i in range(cmap.N)])
-            elif (y != '') and df_sub[y].apply(lambda row: isinstance(row, str)).all():
-                cmap = cm.get_cmap(palette_or_cmap, len(df_sub[y].value_counts()))
-                palette = sns.color_palette([cmap(i) for i in range(cmap.N)])
-            else:
-                palette = 'colorblind'
-        else:
-            palette = 'colorblind'
-
         # seaborn plots
         if cols is not None:
             if graph == 'bar':
@@ -1876,21 +1904,27 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
                 df_sub = df.copy()
             _draw_panel(df_sub, ax)
 
-            # handle panel axis labels, which string or iterable
-            x_axis_panel = _axis_label_for_panel(x_axis, j, expected_len=ncols if facetx is not None else None)
-            y_axis_panel = _axis_label_for_panel(y_axis, i, expected_len=nrows if facety is not None else None)
+            x_axis_panel, y_axis_panel = _facet_axis_labels(
+                x_axis,
+                y_axis,
+                x_default=x,
+                y_default=y,
+                facetx=facetx,
+                facety=facety,
+                c=c,
+                r=r,
+                j=j,
+                i=i,
+                ncols=ncols,
+                nrows=nrows,
+                space_capitalize=True
+            )
 
-            # if user left axis label blank, use "axis; facet_val" for that axis
-            if _is_blank_label(x_axis):
-                x_axis_panel = _facet_default_xaxis(x=x, facetx=facetx, facetx_val=c, space_capitalize=space_capitalize)
-            if _is_blank_label(y_axis):
-                y_axis_panel = _facet_default_yaxis(y=y, facety=facety, facety_val=r, space_capitalize=space_capitalize)
-            
             # apply formatter with the appropriate subset of data and parameters for this panel
             _apply_formatter_on_ax(
                 ax=ax, df_sub=df_sub, graph=graph,
                 x=x, y=y, cols=cols, file=file, dir=dir,
-                title='' if faceting else title, title_size=title_size, title_weight=title_weight, title_font=title_font,
+                title='', title_size=title_size, title_weight=title_weight, title_font=title_font,
                 x_axis=x_axis_panel, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font,
                 x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad,
                 x_ticks_size=x_ticks_size, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
@@ -1907,19 +1941,27 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
                 PDB_pt=None, icon='cat', cats_ord=cats_ord
             )
 
-            # legend handling
-            if cols is not None:
-                leg = ax.get_legend()
+            panel_title = _subplot_title(
+                idx=i * ncols + j,
+                c=c,
+                r=r,
+                facetx=facetx,
+                facety=facety,
+                subplot_titles=subplot_titles,
+                title=title
+            )
 
-                if legend_mode == "none" or legend_mode == "figure":
-                    if leg is not None:
-                        leg.remove()
+            if panel_title != '':
+                ax.set_title(
+                    panel_title,
+                    fontsize=title_size,
+                    fontweight=title_weight,
+                    fontfamily=title_font
+                )
 
-                elif legend_mode == "first":
-                    if (i != 0 or j != 0) and leg is not None:
-                        leg.remove()
+            if cols is not None and legend_mode != "figure":
+                _handle_panel_legend(ax, legend_mode=legend_mode, i=i, j=j)
 
-            # reduce label clutter: only left column keeps y label; only bottom row keeps x label
             if j != 0:
                 ax.set_ylabel("")
             if i != nrows - 1:
@@ -1952,17 +1994,18 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
     return fig, axes
 
 def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord: list = None, cols_exclude: list | str = None, bins: int = 40, log10_low: int = 0,
-         file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', edgecol: str = 'black', lw: int = 1, ht: float = 1.5, asp: int = 5, tp: float = .8, hs: int = 0, despine: bool = False,
-         figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
-         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
-         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
-         legend_title: str = '', legend_title_size: int = 12, legend_title_weight: str = 'bold', legend_size: int = 12, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_items: tuple = (0, 0), legend_ncol: int = 1,
-         dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True, **kwargs):
+        file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', edgecol: str = 'black', lw: int = 1,
+        facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
+        figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
+        x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
+        y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
+        legend_title: str = '', legend_title_size: int = 12, legend_title_weight: str = 'bold', legend_size: int = 12, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_items: tuple = (0, 0), legend_ncol: int = 1, legend_mode: str = "figure",
+        dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True, **kwargs):
     ''' 
     dist(): creates distribution graphs
 
     Parameters:
-    graph (str): graph type (hist, kde, hist_kde, rid)
+    graph (str): graph type (hist, kde, hist_kde)
     df (dataframe | str): pandas dataframe (or file path)
     x (str): x-axis column name
     cols (str, optional): color column name
@@ -1975,11 +2018,11 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord:
     palette_or_cmap (str, optional): seaborn color palette or matplotlib color map
     edgecol (str, optional): point edge color
     lw (int, optional): line width
-    ht (float, optional): height
-    asp (int, optional): aspect
-    tp (float, optional): top
-    hs (int, optional): hspace
-    despine (bool, optional): despine
+    facetx (str, optional): column name for facet columns (creates one subplot per category in this column, arranged in separate columns)
+    facety (str, optional): column name for facet rows (creates one subplot per category in this column, arranged in seperate rows)
+    facetx_order (list, optional): order of facet columns
+    facety_order (list, optional): order of facet rows
+    subplot_titles (str | list, optional): Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none
     figsize (tuple, optional): figure size
     title (str, optional): plot title
     title_size (int, optional): plot title font size
@@ -2013,7 +2056,9 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord:
     legend_size (str, optional): legend font size
     legend_bbox_to_anchor (tuple, optional): coordinates for bbox anchor
     legend_loc (str): legend location
+    legends_items (tuple, optional): legend items to show (start, end)
     legend_ncol (tuple, optional): # of columns
+    legend_mode (str, optional): legend mode (options: "figure", "first",
     dpi (int, optional): figure dpi (Default: 1200 for non-HTML, 150 for HTML)
     transparent (bool, optional): whether to save static images with transparent background (default: True)
     show (bool, optional): show plot (Default: True)
@@ -2022,132 +2067,271 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord:
     Dependencies: os, matplotlib, seaborn, io, formatter(), re_un_cap(), & round_up_pow_10()
     '''
     # Get dataframe from file path if needed
-    if type(df)==str:
+    if type(df) == str:
         df = io.get(pt=df)
     else:
         df = df.copy()
-    
+
     # Omit excluded data
-    if type(cols_exclude)==list: 
-        for exclude in cols_exclude: df=df[df[cols]!=exclude]
-    elif type(cols_exclude)==str: df=df[df[cols]!=cols_exclude]
+    if type(cols_exclude) == list and cols is not None:
+        for exclude in cols_exclude:
+            df = df[df[cols] != exclude]
+    elif type(cols_exclude) == str and cols is not None:
+        df = df[df[cols] != cols_exclude]
 
-    # Set color scheme (Needs to be moved into individual plotting functions)
-    color_palettes = ["deep", "muted", "bright", "pastel", "dark", "colorblind", "husl", "hsv", "Paired", "Set1", "Set2", "Set3", "tab10", "tab20"] # List of common Seaborn palettes
-    if palette_or_cmap in color_palettes: palette = palette_or_cmap
-    elif palette_or_cmap in plt.colormaps() or isinstance(palette_or_cmap, mcolors.Colormap): 
-        if cols is not None: # Column specified
-            cmap = cm.get_cmap(palette_or_cmap,len(df[cols].value_counts()))
-            palette = sns.color_palette([cmap(i) for i in range(cmap.N)])
-        else:
-            print('Cols not specified. Used seaborn colorblind.')
-            palette = 'colorblind'
-    else: 
-        print('Seaborn color palette or matplotlib color map not specified. Used seaborn colorblind.')
-        palette = 'colorblind'
+    faceting = (facetx is not None) or (facety is not None)
 
-    if graph=='hist':
-        fig, ax = plt.subplots(figsize=figsize)
-        if isinstance(bins, int):
-            if x_axis_scale=='log': bins = np.logspace(log10(df[x]).min(), log10(df[x]).max(), bins + 1)
-            else: bins = np.linspace(df[x].min(), df[x].max(), bins + 1)
-        sns.histplot(data=df, x=x, kde=False, bins=bins, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
-        y=''
-        if y_axis=='': y_axis='Count'
-        ax.yaxis.set_major_locator(MaxNLocator(integer=True))
-        formatter(graph=graph, ax=ax, df=df, x=x, y=y, cols=cols, file=file, dir=dir,
-                  title=title, title_size=title_size, title_weight=title_weight, title_font=title_font,
-                  x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad, x_ticks_size=x_ticks_size, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
-                  y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_axis_pad=y_axis_pad, y_ticks_size=y_ticks_size, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
-                  legend_title=legend_title, legend_title_size=legend_title_size, legend_title_weight=legend_title_weight, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_items=legend_items, legend_ncol=legend_ncol,
-                  dpi=dpi, transparent=transparent, show=show, space_capitalize=space_capitalize, icon='histogram')
-    elif graph=='kde': 
-        fig, ax = plt.subplots(figsize=figsize)
-        if x_axis_scale=='log':
-            df[f'log10({x})']=np.maximum(np.log10(df[x]),log10_low)
-            sns.kdeplot(data=df, x=f'log10({x})', hue=cols, hue_order=cols_ord, linewidth=lw, palette=palette, ax=ax, **kwargs)
-            x_axis_scale='linear'
-            if x_axis=='': x_axis=f'log10({x})'
-        else: sns.kdeplot(data=df, x=x, hue=cols, hue_order=cols_ord, linewidth=lw, ax=ax, **kwargs)
-        y=''
-        if y_axis=='': y_axis='Density'
-        formatter(graph=graph, ax=ax, df=df, x=x, y=y, cols=cols, file=file, dir=dir, 
-                  title=title, title_size=title_size, title_weight=title_weight, title_font=title_font,
-                  x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad, x_ticks_size=x_ticks_size, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
-                  y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_axis_pad=y_axis_pad, y_ticks_size=y_ticks_size, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
-                  legend_title=legend_title, legend_title_size=legend_title_size, legend_title_weight=legend_title_weight, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_items=legend_items, legend_ncol=legend_ncol,
-                  dpi=dpi, transparent=transparent, show=show, space_capitalize=space_capitalize, icon='histogram')
-    elif graph=='hist_kde':
-        fig, ax = plt.subplots(figsize=figsize)
-        if x_axis_scale=='log':
-            df[f'log10({x})']=np.maximum(np.log10(df[x]),log10_low)
-            bins = np.logspace(log10(df[x]).min(), log10(df[x]).max(), bins + 1)
-            sns.histplot(data=df, x=f'log10({x})', kde=True, bins=bins, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
-            x_axis_scale='linear'
-            if x_axis=='': x_axis=f'log10({x})'
-        else:
-            bins = np.linspace(df[x].min(), df[x].max(), bins + 1) 
-            sns.histplot(data=df, x=x, kde=True, bins=bins, hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
-        y=''
-        if y_axis=='': y_axis='Count'
-        ax.yaxis.set_major_locator(MaxNLocator(integer=True))
-        formatter(graph=graph, ax=ax, df=df, x=x, y=y, cols=cols, file=file, dir=dir, 
-                  title=title, title_size=title_size, title_weight=title_weight, title_font=title_font,
-                  x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad, x_ticks_size=x_ticks_size, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
-                  y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_axis_pad=y_axis_pad, y_ticks_size=y_ticks_size, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
-                  legend_title=legend_title, legend_title_size=legend_title_size, legend_title_weight=legend_title_weight, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_items=legend_items, legend_ncol=legend_ncol,
-                  dpi=dpi, transparent=transparent, show=show, space_capitalize=space_capitalize, icon='histogram')
-    elif graph=='rid':
-        # Set color scheme
-        color_palettes = ["deep", "muted", "bright", "pastel", "dark", "colorblind", "husl", "hsv", "Paired", "Set1", "Set2", "Set3", "tab10", "tab20"] # List of common Seaborn palettes
-        if (palette_or_cmap in set(color_palettes))|(palette_or_cmap in set(plt.colormaps())): sns.color_palette(palette_or_cmap)
-        else: 
-            print('Seaborn color palette or matplotlib color map not specified. Used seaborn colorblind.')
-            sns.color_palette('colorblind')
-        if x_axis_scale=='log':
-            df[f'log10({x})']=np.maximum(np.log10(df[x]),log10_low)
-            g = sns.FacetGrid(df, row=cols, hue=cols, col_order=cols_ord, hue_order=cols_ord, height=ht, aspect=asp)
-            g.map(sns.kdeplot, f'log10({x})', linewidth=lw, **kwargs)
-            if x_axis=='': x_axis=f'log10({x})'
-        else:
-            g = sns.FacetGrid(df, row=cols, hue=cols, col_order=cols_ord, hue_order=cols_ord, height=ht, aspect=asp)
-            g.map(sns.kdeplot, x, linewidth=lw, **kwargs)
-            if x_axis=='': x_axis=x
-        for ax in g.axes.flatten():
-            if x_axis_dims!=(0,0): ax.set_xlim(x_axis_dims[0],x_axis_dims[1]) # This could be an issue with the (0,0) default (Figure out later...)
-            ax.set_xlabel(x_axis,fontsize=x_axis_size,fontweight=x_axis_weight,fontfamily=x_axis_font)
-        if y_axis=='': y_axis='Density'
-        g.set(yticks=y_ticks, ylabel=y_axis) # fontfamily only works on the ax level (Figure out later if I care...)
-        g.set_titles("")
-        if title=='' and file is not None: 
-            if space_capitalize: title=re_un_cap(".".join(file.split(".")[:-1]))
-            else: ".".join(file.split(".")[:-1])
-        g.figure.suptitle(title, fontsize=title_size, fontweight=title_weight,fontfamily=title_font)
-        g.figure.subplots_adjust(top=tp,hspace=hs)
-        if despine==False: g.despine(top=False,right=False)
-        else: g.despine(left=True)
-        if legend_title=='': legend_title=cols
-        leg = g.figure.legend(title=legend_title,title_fontsize=legend_title_size,fontsize=legend_size,
-                        loc=legend_loc,bbox_to_anchor=legend_bbox_to_anchor)
-        leg.get_title().set_weight(legend_title_weight) 
-        save_fig(file=file, dir=dir, fig=g.figure, dpi=dpi, transparent=transparent, icon='histogram')
-        if show:
-            ext = file.split('.')[-1].lower()  if file is not None else ''
-            if ext not in ('html', 'json'):
-                plt.show()
-            else: 
-                mpld3.show()
-        plt.close()
+    # Global hue palette so colors do not restart per subplot
+    if cols is not None:
+        palette = _category_color_map(
+            df[cols],
+            palette_or_cmap=palette_or_cmap,
+            order=cols_ord
+        )
     else:
-        print('Invalid graph! hist, kde, hist_kde, rid')
-        return
+        palette = palette_or_cmap
 
-def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vars: str = None, vals: str = None, vals_dims: tuple = None,
-         file: str = None, dir: str = None, edgecol: str = 'black', lw: int = 1, annot: bool = False, center: float = None, cmap: str = "Reds", sq: bool = True,
-         cbar: bool=True, cbar_label: str=None, cbar_label_size: int=None, cbar_label_weight: str='bold', cbar_tick_size: int=None, cbar_shrink: float=None, cbar_aspect: int=None, cbar_pad: float=None, cbar_orientation: str=None,
-         title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial', figsize: tuple=(6,6),
-         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 45, x_ticks_font: str = 'Arial',
-         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial',
+    # --- Build facet layout ---
+    col_vals = _facet_values(df, facetx, order=facetx_order)
+    row_vals = _facet_values(df, facety, order=facety_order)
+    ncols = len(col_vals)
+    nrows = len(row_vals)
+
+    fig, axes = plt.subplots(
+        nrows=nrows,
+        ncols=ncols,
+        figsize=figsize,
+        sharex=facety is not None,
+        sharey=facetx is not None
+    )
+    axes = np.array(axes).reshape(nrows, ncols)
+
+    # Helper to determine bins for histogram-based graphs
+    def _make_bins(df_sub):
+        if not isinstance(bins, int):
+            return bins
+
+        if x_axis_scale == 'log':
+            return np.logspace(
+                np.log10(df_sub[x]).min(),
+                np.log10(df_sub[x]).max(),
+                bins + 1
+            )
+        return np.linspace(df_sub[x].min(), df_sub[x].max(), bins + 1)
+
+
+    def _draw_panel(df_sub, ax, *, c=None, r=None, i=0, j=0):
+        plt.sca(ax)
+
+        x_plot = x
+        x_axis_scale_panel = x_axis_scale
+        x_axis_panel_default = x
+
+        if x_axis_scale == 'log' and graph in ['kde', 'hist_kde']:
+            x_plot = f'log10({x})'
+            df_sub = df_sub.copy()
+            df_sub[x_plot] = np.maximum(np.log10(df_sub[x]), log10_low)
+            x_axis_scale_panel = 'linear'
+            x_axis_panel_default = x_plot
+
+        if graph == 'hist':
+            sns.histplot(
+                data=df_sub,
+                x=x_plot,
+                kde=False,
+                bins=_make_bins(df_sub),
+                hue=cols,
+                hue_order=cols_ord,
+                edgecolor=edgecol,
+                linewidth=lw,
+                palette=palette,
+                ax=ax,
+                **kwargs
+            )
+            y_plot = ''
+            y_axis_default = 'Count'
+            ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+
+        elif graph == 'kde':
+            sns.kdeplot(
+                data=df_sub,
+                x=x_plot,
+                hue=cols,
+                hue_order=cols_ord,
+                linewidth=lw,
+                palette=palette,
+                cut=0,
+                common_norm=False,
+                ax=ax,
+                **kwargs
+            )
+            y_plot = ''
+            y_axis_default = 'Density'
+
+        elif graph == 'hist_kde':
+            sns.histplot(
+                data=df_sub,
+                x=x_plot,
+                kde=True,
+                bins=_make_bins(df_sub),
+                hue=cols,
+                hue_order=cols_ord,
+                edgecolor=edgecol,
+                linewidth=lw,
+                palette=palette,
+                ax=ax,
+                **kwargs
+            )
+            y_plot = ''
+            y_axis_default = 'Count'
+            ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+
+        else:
+            raise ValueError("Invalid graph! hist, kde, hist_kde")
+
+        x_axis_panel, y_axis_panel = _facet_axis_labels(
+            x_axis,
+            y_axis,
+            x_default=x_axis_panel_default,
+            y_default=y_axis_default,
+            facetx=facetx,
+            facety=facety,
+            c=c,
+            r=r,
+            j=j,
+            i=i,
+            ncols=ncols,
+            nrows=nrows,
+            space_capitalize=space_capitalize
+        )
+
+        _apply_formatter_on_ax(
+            ax=ax,
+            df_sub=df_sub,
+            graph=graph,
+            x=x_plot,
+            y=y_plot,
+            cols=cols,
+            file=file,
+            dir=dir,
+            title='' if faceting else title,
+            title_size=title_size,
+            title_weight=title_weight,
+            title_font=title_font,
+            x_axis=x_axis_panel,
+            x_axis_size=x_axis_size,
+            x_axis_weight=x_axis_weight,
+            x_axis_font=x_axis_font,
+            x_axis_scale=x_axis_scale_panel,
+            x_axis_dims=x_axis_dims,
+            x_axis_pad=x_axis_pad,
+            x_ticks_size=x_ticks_size,
+            x_ticks_rot=x_ticks_rot,
+            x_ticks_font=x_ticks_font,
+            x_ticks=x_ticks,
+            y_axis=y_axis_panel,
+            y_axis_size=y_axis_size,
+            y_axis_weight=y_axis_weight,
+            y_axis_font=y_axis_font,
+            y_axis_scale=y_axis_scale,
+            y_axis_dims=y_axis_dims,
+            y_axis_pad=y_axis_pad,
+            y_ticks_size=y_ticks_size,
+            y_ticks_rot=y_ticks_rot,
+            y_ticks_font=y_ticks_font,
+            y_ticks=y_ticks,
+            legend_title=legend_title,
+            legend_title_size=legend_title_size,
+            legend_title_weight=legend_title_weight,
+            legend_size=legend_size,
+            legend_bbox_to_anchor=legend_bbox_to_anchor,
+            legend_loc=legend_loc,
+            legend_items=legend_items,
+            legend_ncol=legend_ncol,
+            legend_columnspacing=0,
+            legend_handletextpad=0.5,
+            legend_labelspacing=0.5,
+            legend_borderpad=0.5,
+            legend_handlelength=1,
+            dpi=dpi,
+            transparent=transparent,
+            show=False,
+            space_capitalize=space_capitalize,
+            PDB_pt=None,
+            icon='histogram',
+            cats_ord=None
+        )
+
+    for i, r in enumerate(row_vals):
+        for j, c in enumerate(col_vals):
+            ax = axes[i, j]
+            df_sub = _subset_for_facet(df, facetx=facetx, facety=facety, c=c, r=r)
+
+            if len(df_sub) == 0:
+                ax.set_visible(False)
+                continue
+
+            _draw_panel(df_sub, ax, c=c, r=r, i=i, j=j)
+
+            panel_title = _subplot_title(idx=i * ncols + j, c=c, r=r, 
+                                        facetx=facetx, facety=facety, 
+                                        subplot_titles=subplot_titles, title=title)
+
+            if panel_title != '':
+                ax.set_title(
+                    panel_title,
+                    fontsize=title_size,
+                    fontweight=title_weight,
+                    fontfamily=title_font
+                )
+
+            if cols is not None and legend_mode != "figure":
+                _handle_panel_legend(ax, legend_mode=legend_mode, i=i, j=j)
+
+            _hide_inner_axis_labels(ax, i=i, j=j, nrows=nrows, ncols=ncols)
+
+    if title != '' and faceting:
+        fig.suptitle(title, fontsize=title_size, fontweight=title_weight, family=title_font)
+
+    if cols is not None and legend_mode == "figure":
+        _legend_title = legend_title if legend_title != '' else cols
+
+        _make_figure_legend(
+            fig,
+            axes,
+            legend_title=_legend_title,
+            legend_title_size=legend_title_size,
+            legend_title_weight=legend_title_weight,
+            legend_size=legend_size,
+            legend_bbox_to_anchor=legend_bbox_to_anchor,
+            legend_loc=legend_loc,
+            legend_items=legend_items,
+            legend_ncol=legend_ncol
+        )
+
+    fig.tight_layout()
+
+    _final_save_show(
+        fig,
+        file=file,
+        dir=dir,
+        dpi=dpi,
+        transparent=transparent,
+        PDB_pt=None,
+        icon='histogram',
+        show=show
+    )
+
+    plt.close()
+    return fig, axes
+
+def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vals: str = None, vals_dims: tuple = None,
+        facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
+        file: str = None, dir: str = None, edgecol: str = 'black', lw: int = 1, annot: bool = False, center: float = None, cmap: str = "Reds", sq: bool = True,
+        cbar: bool=True, cbar_label: str=None, cbar_label_size: int=None, cbar_label_weight: str='bold', cbar_tick_size: int=None, cbar_shrink: float=None, cbar_aspect: int=None, cbar_pad: float=None, cbar_orientation: str=None, cbar_mode: str = "figure",
+        title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial', figsize: tuple=(6,6),
+        x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 45, x_ticks_font: str = 'Arial',
+        y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial',
          dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True, **kwargs):
     '''
     heat(): creates heat plot related graphs
@@ -2156,9 +2340,13 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vars: str = None,
     df (dataframe | str): pandas dataframe (or file path)
     x (str, optional): x-axis column name to split tidy-formatted dataframe into a dictionary pivot-formatted dataframes (Default: None)
     y (str, optional): y-axis column name to split tidy-formatted dataframe into a dictionary pivot-formatted dataframes (Default: None)
-    vars (str, optional): variable column name to split tidy-formatted dataframe into a dictionary pivot-formatted dataframes (Default: None)
     vals (str, optional): value column name to split tidy-formatted dataframe into a dictionary pivot-formatted dataframes (Default: None)
     vals_dims (tuple, optional): value column minimum and maximum formatted (vmin, vmax; Default: None)
+    facetx (str, optional): column name for facet columns (creates one subplot per category in this column, arranged in separate columns)
+    facety (str, optional): column name for facet rows (creates one subplot per category in this column, arranged in seperate rows)
+    facetx_order (list, optional): order of facet columns
+    facety_order (list, optional): order of facet rows
+    subplot_titles (str | list, optional): Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     edgecol (str, optional): point edge color
@@ -2176,6 +2364,7 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vars: str = None,
     cbar_aspect (int, optional): colorbar aspect ratio
     cbar_pad (float, optional): colorbar padding
     cbar_orientation (str, optional): colorbar orientation ('vertical' | 'horizontal')
+    cbar_mode (str, optional): colorbar mode ('figure', 'each', 'none')
     title (str, optional): plot title
     title_size (int, optional): plot title font size
     title_weight (str, optional): plot title bold, italics, etc.
@@ -2205,101 +2394,314 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vars: str = None,
     Dependencies: os, matplotlib, seaborn, formatter(), re_un_cap(), & round_up_pow_10()
     '''
     # Get dataframe from file path if needed
-    if type(df)==str:
+    if type(df) == str:
         df = io.get(pt=df)
     else:
         df = df.copy()
-    
-    # cbar kwargs
-    cbar_kws = dict()
-    if cbar_label is not None: cbar_kws['label'] = cbar_label
-    if cbar_shrink is not None: cbar_kws['shrink'] = cbar_shrink
-    if cbar_aspect is not None: cbar_kws['aspect'] = cbar_aspect
-    if cbar_pad is not None: cbar_kws['pad'] = cbar_pad
-    if cbar_orientation is not None: cbar_kws['orientation'] = cbar_orientation
 
-    # Determine dataframe type
-    if x is None or y is None or vars is None or vals is None: # Pivot-formatted
+    faceting = (facetx is not None) or (facety is not None)
 
-        # Find min and max values in the dataset for normalization
-        if vals_dims is None:
+    if (x is None or y is None or vals is None) and faceting:
+        raise ValueError(
+            "facetx/facety require tidy-formatted input with x, y, and vals specified."
+        )
+
+    # colorbar kwargs
+    cbar_kws = {}
+    if cbar_label is not None:
+        cbar_kws['label'] = cbar_label
+    if cbar_shrink is not None:
+        cbar_kws['shrink'] = cbar_shrink
+    if cbar_aspect is not None:
+        cbar_kws['aspect'] = cbar_aspect
+    if cbar_pad is not None:
+        cbar_kws['pad'] = cbar_pad
+    if cbar_orientation is not None:
+        cbar_kws['orientation'] = cbar_orientation
+
+    # Global value normalization
+    if vals_dims is None:
+        if x is None or y is None or vals is None:
             vmin = df.min().min()
             vmax = df.max().max()
         else:
-            vmin = vals_dims[0]
-            vmax = vals_dims[1]
+            vmin = df[vals].min()
+            vmax = df[vals].max()
+    else:
+        vmin, vmax = vals_dims
 
-        # Create dictionary of pivot-formatted dataframes
+    # Single-pivot input path
+    if x is None or y is None or vals is None:
         dc = {'Pivot Table': df}
-        x = df.columns.name
-        y = df.index.name
+        x_default = df.columns.name if df.columns.name is not None else ''
+        y_default = df.index.name if df.index.name is not None else ''
 
-    else: # Tidy-formatted
-        
-        # Find min and max values in the dataset for normalization
-        if vals_dims is None:
-            vmin = df[vals].values.min()
-            vmax = df[vals].values.max()
+        fig, axes = plt.subplots(
+            nrows=1,
+            ncols=1,
+            figsize=figsize
+        )
+        axes = np.array(axes).reshape(1, 1)
+
+        facet_specs = [(0, 0, None, None, dc['Pivot Table'])]
+
+    else:
+        x_default = x
+        y_default = y
+
+        col_vals = _facet_values(df, facetx, order=facetx_order)
+        row_vals = _facet_values(df, facety, order=facety_order)
+
+        ncols = len(col_vals)
+        nrows = len(row_vals)
+
+        fig, axes = plt.subplots(
+            nrows=nrows,
+            ncols=ncols,
+            figsize=figsize,
+            sharex=facety is not None,
+            sharey=facetx is not None
+        )
+        axes = np.array(axes).reshape(nrows, ncols)
+
+        facet_specs = []
+        for i, r in enumerate(row_vals):
+            for j, c in enumerate(col_vals):
+                df_sub = _subset_for_facet(
+                    df,
+                    facetx=facetx,
+                    facety=facety,
+                    c=c,
+                    r=r
+                )
+
+                if len(df_sub) == 0:
+                    facet_specs.append((i, j, c, r, None))
+                    continue
+
+                pivot = pd.pivot_table(
+                    df_sub,
+                    index=y,
+                    columns=x,
+                    values=vals,
+                    aggfunc=np.mean
+                )
+
+                facet_specs.append((i, j, c, r, pivot))
+
+    # shared figure colorbar axis
+    cbar_ax = None
+    draw_fig_cbar = cbar and cbar_mode == "figure"
+
+    if draw_fig_cbar:
+        if cbar_orientation == "horizontal":
+            cbar_ax = fig.add_axes([0.25, 0.04, 0.5, 0.03])
         else:
-            vmin = vals_dims[0]
-            vmax = vals_dims[1]
+            cbar_ax = fig.add_axes([0.92, 0.15, 0.03, 0.7])
 
-        # Create dictionary of pivot-formatted dataframes
-        dc = extract_pivots(df=df,x=x,y=y,vars=vars,vals=vals)
+    def _format_heat_axis(ax, *, i=0, j=0, c=None, r=None, panel_title=''):
+        if x is None or y is None or vals is None:
+            x_axis_panel = x_axis if x_axis != '' else x_default
+            y_axis_panel = y_axis if y_axis != '' else y_default
+        else:
+            nrows_, ncols_ = axes.shape
 
-    # Create a single figure with multiple heatmap subplots
-    fig, axes = plt.subplots(nrows=len(list(dc.keys())),ncols=1,figsize=(figsize[0],figsize[1]*len(list(dc.keys()))),sharex=False,sharey=True)
-    if isinstance(axes, np.ndarray)==False: axes = np.array([axes]) # Make axes iterable if there is only 1 heatmap
-    for (ax, key) in zip(axes, list(dc.keys())):
-        sns.heatmap(dc[key],annot=annot,cmap=cmap,ax=ax,linecolor=edgecol,linewidths=lw,cbar=cbar,square=sq,vmin=vmin,vmax=vmax,cbar_kws=cbar_kws, **kwargs)
-        
-        # Title
-        if len(list(dc.keys()))>1: ax.set_title(key,fontsize=title_size,fontweight=title_weight,fontfamily=title_font)  # Add title to subplot
-        else: ax.set_title(title,fontsize=title_size,fontweight=title_weight,fontfamily=title_font)
-        
-        # X-axis
-        if x_axis=='': 
-            if space_capitalize: ax.set_xlabel(re_un_cap(x),fontsize=x_axis_size,fontweight=x_axis_weight,fontfamily=x_axis_font,labelpad=x_axis_pad) # Add x axis label
-            else: ax.set_xlabel(x,fontsize=x_axis_size,fontweight=x_axis_weight,fontfamily=x_axis_font,labelpad=x_axis_pad) # Add x axis label
-        else: ax.set_xlabel(x_axis,fontsize=x_axis_size,fontweight=x_axis_weight,fontfamily=x_axis_font,labelpad=x_axis_pad)
-        
-        # Y-axis
-        if y_axis=='': 
-            if space_capitalize: ax.set_ylabel(re_un_cap(y),fontsize=y_axis_size,fontweight=y_axis_weight,fontfamily=y_axis_font,labelpad=y_axis_pad) # Add y axis label
-            else: ax.set_ylabel(y,fontsize=y_axis_size,fontweight=y_axis_weight,fontfamily=y_axis_font,labelpad=y_axis_pad) # Add y axis label
-        else: ax.set_ylabel(y_axis,fontsize=y_axis_size,fontweight=y_axis_weight,fontfamily=y_axis_font,labelpad=y_axis_pad)
-        
-        # Format x ticks
-        if x_ticks_rot==0: plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, ha="center", va='top', rotation_mode="anchor",fontname=x_ticks_font,fontsize=x_ticks_size) 
-        elif x_ticks_rot==90: plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, ha="right", va='center', rotation_mode="anchor",fontname=x_ticks_font,fontsize=x_ticks_size) 
-        else: plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, ha="right", va='top', rotation_mode="anchor",fontname=x_ticks_font,fontsize=x_ticks_size) 
-        
-        # Format y ticks
-        plt.setp(ax.get_yticklabels(), rotation=y_ticks_rot, va='center', ha="right",rotation_mode="anchor",fontname=y_ticks_font,fontsize=y_ticks_size)
-        
-        # Format cbar
-        cbar = ax.collections[0].colorbar
-        vmin, vmax = cbar.vmin, cbar.vmax
-        if center is None: center = (vmin + vmax) / 2
-        cbar.set_label(cbar_label, fontsize=cbar_label_size, fontweight=cbar_label_weight)
-        cbar.set_ticks([vmin, center, vmax])
-        cbar.ax.tick_params(labelsize=cbar_tick_size)
+            x_axis_panel, y_axis_panel = _facet_axis_labels(
+                x_axis,
+                y_axis,
+                x_default=x_default,
+                y_default=y_default,
+                facetx=facetx,
+                facety=facety,
+                c=c,
+                r=r,
+                j=j,
+                i=i,
+                ncols=ncols_,
+                nrows=nrows_,
+                space_capitalize=space_capitalize
+            )
 
-        # Set white background
+        ax.set_xlabel(
+            x_axis_panel,
+            fontsize=x_axis_size,
+            fontweight=x_axis_weight,
+            fontfamily=x_axis_font,
+            labelpad=x_axis_pad
+        )
+        ax.set_ylabel(
+            y_axis_panel,
+            fontsize=y_axis_size,
+            fontweight=y_axis_weight,
+            fontfamily=y_axis_font,
+            labelpad=y_axis_pad
+        )
+
+        if x_ticks_rot == 0:
+            plt.setp(
+                ax.get_xticklabels(),
+                rotation=x_ticks_rot,
+                ha="center",
+                va='top',
+                rotation_mode="anchor",
+                fontname=x_ticks_font,
+                fontsize=x_ticks_size
+            )
+        elif x_ticks_rot == 90:
+            plt.setp(
+                ax.get_xticklabels(),
+                rotation=x_ticks_rot,
+                ha="right",
+                va='center',
+                rotation_mode="anchor",
+                fontname=x_ticks_font,
+                fontsize=x_ticks_size
+            )
+        else:
+            plt.setp(
+                ax.get_xticklabels(),
+                rotation=x_ticks_rot,
+                ha="right",
+                va='top',
+                rotation_mode="anchor",
+                fontname=x_ticks_font,
+                fontsize=x_ticks_size
+            )
+
+        plt.setp(
+            ax.get_yticklabels(),
+            rotation=y_ticks_rot,
+            va='center',
+            ha="right",
+            rotation_mode="anchor",
+            fontname=y_ticks_font,
+            fontsize=y_ticks_size
+        )
+
+        if panel_title != '':
+            ax.set_title(
+                panel_title,
+                fontsize=title_size,
+                fontweight=title_weight,
+                fontfamily=title_font
+            )
+
         ax.set_facecolor('white')
-    
-    # Save & show fig
-    save_fig(file=file, dir=dir, fig=fig, dpi=dpi, transparent=transparent, icon='heat')
+
+    def _format_cbar(ax):
+        if len(ax.collections) == 0:
+            return
+
+        cb = ax.collections[0].colorbar
+        if cb is None:
+            return
+
+        _center = center
+        if _center is None:
+            _center = (vmin + vmax) / 2
+
+        if cbar_label is not None:
+            cb.set_label(
+                cbar_label,
+                fontsize=cbar_label_size,
+                fontweight=cbar_label_weight
+            )
+
+        cb.set_ticks([vmin, _center, vmax])
+
+        if cbar_tick_size is not None:
+            cb.ax.tick_params(labelsize=cbar_tick_size)
+
+    # draw panels
+    for idx, (i, j, c, r, pivot) in enumerate(facet_specs):
+        ax = axes[i, j]
+
+        if pivot is None or pivot.empty:
+            ax.set_visible(False)
+            continue
+
+        panel_cbar = cbar and (
+            cbar_mode == "each" or
+            (cbar_mode == "figure" and idx == 0)
+        )
+
+        panel_cbar_ax = cbar_ax if (cbar_mode == "figure" and idx == 0) else None
+
+        sns.heatmap(
+            pivot,
+            annot=annot,
+            cmap=cmap,
+            ax=ax,
+            linecolor=edgecol,
+            linewidths=lw,
+            cbar=panel_cbar,
+            cbar_ax=panel_cbar_ax,
+            square=sq,
+            vmin=vmin,
+            vmax=vmax,
+            center=center,
+            cbar_kws=cbar_kws,
+            **kwargs
+        )
+
+        panel_title = _subplot_title(idx=i * ncols + j, c=c, r=r, 
+                                    facetx=facetx, facety=facety, subplot_titles=subplot_titles, title=title)
+
+        _format_heat_axis(ax, i=i, j=j, c=c, r=r, panel_title=panel_title)
+
+        if panel_cbar:
+            _format_cbar(ax)
+
+        if faceting:
+            _hide_inner_axis_labels(ax, i=i, j=j, nrows=axes.shape[0], ncols=axes.shape[1])
+
+    if title != '' and faceting:
+        fig.suptitle(
+            title,
+            fontsize=title_size,
+            fontweight=title_weight,
+            family=title_font
+        )
+
+    if title == '' and file is not None and not faceting:
+        _title = re_un_cap(".".join(file.split(".")[:-1])) if space_capitalize else ".".join(file.split(".")[:-1])
+        axes[0, 0].set_title(
+            _title,
+            fontsize=title_size,
+            fontweight=title_weight,
+            fontfamily=title_font
+        )
+
+    if draw_fig_cbar:
+        # leave room for shared cbar
+        if cbar_orientation == "horizontal":
+            fig.tight_layout(rect=[0, 0.08, 1, 1])
+        else:
+            fig.tight_layout(rect=[0, 0, 0.9, 1])
+    else:
+        fig.tight_layout()
+
+    save_fig(
+        file=file,
+        dir=dir,
+        fig=fig,
+        dpi=dpi,
+        transparent=transparent,
+        icon='heat'
+    )
+
     if show:
-        ext = file.split('.')[-1].lower()  if file is not None else ''
+        ext = file.split('.')[-1].lower() if file is not None else ''
         if ext not in ('html', 'json'):
             plt.show()
-        else: 
+        else:
             mpld3.show()
+
     plt.close()
+    return fig, axes
 
 def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str = '', cutoff_value: float = 0, cutoff_keep: bool = True, cols_ord: list = [], x_ord: list = [],
-        facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None,
+        facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
         file: str = None, dir: str = None, palette_or_cmap: str = 'tab20', repeats: int = 1, errcap: int = 4, vertical: bool = True,
         figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial',
@@ -2324,6 +2726,7 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
     facety (str, optional): column name for y-axis faceting
     facetx_order (list, optional): order of x-axis facet values
     facety_order (list, optional): order of y-axis facet values
+    subplot_titles (str | list, optional): Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     palette_or_cmap (str, optional): seaborn palette or matplotlib color map
@@ -2656,7 +3059,27 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
 
             _draw_panel(df_sub, ax, c=c, r=r, i=i, j=j)
 
-            _handle_panel_legend(ax, legend_mode=legend_mode, i=i, j=j)
+            panel_title = _subplot_title(
+                idx=i * ncols + j,
+                c=c,
+                r=r,
+                facetx=facetx,
+                facety=facety,
+                subplot_titles=subplot_titles,
+                title=title
+            )
+
+            if panel_title != '':
+                ax.set_title(
+                    panel_title,
+                    fontsize=title_size,
+                    fontweight=title_weight,
+                    fontfamily=title_font
+                )
+
+            if legend_mode != "figure":
+                _handle_panel_legend(ax, legend_mode=legend_mode, i=i, j=j)
+
             _hide_inner_axis_labels(ax, i=i, j=j, nrows=nrows, ncols=ncols)
 
     if title == '' and file is not None:
@@ -2664,8 +3087,6 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
 
     if title != '' and faceting:
         fig.suptitle(title, fontsize=title_size, fontweight=title_weight, family=title_font)
-    elif title != '' and not faceting:
-        axes[0, 0].set_title(title, fontsize=title_size, fontweight=title_weight, family=title_font)
 
     # Set legend
     if legend_mode == "figure":
@@ -2703,12 +3124,13 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
     return fig, axes
 
 def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = None, size_dims: tuple = None, label: str = None, stys_order: list = [], mark_order: list = [],
-        x_threshold: float = 0, y_threshold: float = 0, bidirectional_x_threshold: bool = True, bidirectional_y_threshold: bool = False,
+        x_threshold: float = 0, y_threshold: float = 0, bidirectional_x_threshold: bool = True, bidirectional_y_threshold: bool = False, 
+        facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
         file: str = None, dir: str = None, color: str = 'lightgray', alpha: float = 0.5, edgecol: str = 'black', vertical: bool = True,
         figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
-        legend_title: str = '', legend_title_size: int = 12, legend_title_weight: str = 'bold', legend_size: int = 12, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_ncol: int = 1, 
+        legend_title: str = '', legend_title_size: int = 12, legend_title_weight: str = 'bold', legend_size: int = 12, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_ncol: int = 1, legend_mode: str = "figure",
         legend_columnspacing: int=-4, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, html_size_multiplier: float=1.5,
         display_legend: bool = True, display_labels: str | list | bool = None, display_lines: bool = False, display_axis: bool = True, return_df: bool = True, dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True,
         PDB_pt: str = None,
@@ -2730,6 +3152,11 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
     y_threshold (float, optional): y-axis threshold (Default: 0)
     bidirectional_x_threshold (float, optional): both positive and negative x-axis thresholds (Default: True)
     bidirectional_y_threshold (float, optional): both positive and negative y-axis thresholds (Default: False)
+    facetx (str, optional): column name for facet columns (creates one subplot per category in this column, arranged in separate columns)
+    facety (str, optional): column name for facet rows (creates one subplot per category in this column, arranged in separate rows)
+    facetx_order (list, optional): order of facet columns
+    facety_order (list, optional): order of facet rows
+    subplot_titles (str | list, optional): Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     color (str, optional): matplotlib color for nonsignificant values
@@ -2768,6 +3195,7 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
     legend_bbox_to_anchor (tuple, optional): coordinates for bbox anchor
     legend_loc (str): legend location
     legend_ncol (tuple, optional): # of columns
+    legend_mode (str, optional): legend mode (options: "figure", "first", "none")
     legend_columnspacing (int, optional): space between columns (Default: -4; only for html plots)
     legend_handletextpad (float, optional): space between marker and text (Default: 0.5; only for html plots)
     legend_labelspacing (float, optional): vertical space between entries (Default: 0.5; only for html plots)
@@ -2788,361 +3216,575 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
     Dependencies: os, matplotlib, seaborn, & pandas
     '''
     # Get dataframe from file path if needed
-    if type(df)==str:
+    if type(df) == str:
         df = io.get(pt=df)
     else:
         df = df.copy()
-    
-    # Determine if we are saving to HTML (for interactive behavior)
-    if file is not None:
-        is_html = file.endswith('.html')
-    else:
-        is_html = False
-    
-    # Increase fontsize for html plots
-    if is_html==True:
-        title_size=title_size*html_size_multiplier
-        x_axis_size=x_axis_size*html_size_multiplier
-        y_axis_size=y_axis_size*html_size_multiplier
-        x_ticks_size=x_ticks_size*html_size_multiplier
-        y_ticks_size=y_ticks_size*html_size_multiplier
-        legend_title_size=legend_title_size*html_size_multiplier
-        legend_size=legend_size*html_size_multiplier*.75
 
-    # Organize data by thresholds
+    # Determine if we are saving to HTML (for interactive behavior)
+    is_html = file is not None and file.endswith('.html')
+
+    # Increase fontsize for html plots
+    if is_html:
+        title_size = title_size * html_size_multiplier
+        x_axis_size = x_axis_size * html_size_multiplier
+        y_axis_size = y_axis_size * html_size_multiplier
+        x_ticks_size = x_ticks_size * html_size_multiplier
+        y_ticks_size = y_ticks_size * html_size_multiplier
+        legend_title_size = legend_title_size * html_size_multiplier
+        legend_size = legend_size * html_size_multiplier * 0.75
+
+    # ----------------------------
+    # Threshold classification
+    # ----------------------------
     threshold = []
+
     if isinstance(display_labels, list) and label is not None: # Threshold based on labels specified
         for l in df[label].values:
-            if l in display_labels: threshold.append(f'{x} & {y}')
-            else: threshold.append('neither')
+            if l in display_labels:
+                threshold.append(f'{x} & {y}')
+            else:
+                threshold.append('neither')
 
     else: # Threshold based on x and y values
-        for (x_val,y_val) in zip(df[x],df[y]):
+        for x_val, y_val in zip(df[x], df[y]):
             if bidirectional_x_threshold and bidirectional_y_threshold: # Both positive and negative values greater than thresholds
-                if (np.abs(x_val)>=x_threshold)&(np.abs(y_val)>=y_threshold): threshold.append(f'{x} & {y}')
-                elif (np.abs(x_val)<x_threshold)&(np.abs(y_val)>=y_threshold): threshold.append(f'{y}')
-                elif (np.abs(x_val)>=x_threshold)&(np.abs(y_val)<y_threshold): threshold.append(f'{x}')
-                else: threshold.append('neither')
+                if (np.abs(x_val) >= x_threshold) and (np.abs(y_val) >= y_threshold):
+                    threshold.append(f'{x} & {y}')
+                elif (np.abs(x_val) < x_threshold) and (np.abs(y_val) >= y_threshold):
+                    threshold.append(f'{y}')
+                elif (np.abs(x_val) >= x_threshold) and (np.abs(y_val) < y_threshold):
+                    threshold.append(f'{x}')
+                else:
+                    threshold.append('neither')
 
             elif bidirectional_x_threshold and not bidirectional_y_threshold: # Only x-axis has both positive and negative values greater than threshold
-                if (np.abs(x_val)>=x_threshold)&(y_val>=y_threshold): threshold.append(f'{x} & {y}')
-                elif (np.abs(x_val)<x_threshold)&(y_val>=y_threshold): threshold.append(f'{y}')
-                elif (np.abs(x_val)>=x_threshold)&(y_val<y_threshold): threshold.append(f'{x}')
-                else: threshold.append('neither')
-            
+                if (np.abs(x_val) >= x_threshold) and (y_val >= y_threshold):
+                    threshold.append(f'{x} & {y}')
+                elif (np.abs(x_val) < x_threshold) and (y_val >= y_threshold):
+                    threshold.append(f'{y}')
+                elif (np.abs(x_val) >= x_threshold) and (y_val < y_threshold):
+                    threshold.append(f'{x}')
+                else:
+                    threshold.append('neither')
+
             elif not bidirectional_x_threshold and bidirectional_y_threshold: # Only y-axis has both positive and negative values greater than threshold
-                if (x_val>=x_threshold)&(np.abs(y_val)>=y_threshold): threshold.append(f'{x} & {y}')
-                elif (x_val<x_threshold)&(np.abs(y_val)>=y_threshold): threshold.append(f'{y}')
-                elif (x_val>=x_threshold)&(np.abs(y_val)<y_threshold): threshold.append(f'{x}')
-                else: threshold.append('neither')
+                if (x_val >= x_threshold) and (np.abs(y_val) >= y_threshold):
+                    threshold.append(f'{x} & {y}')
+                elif (x_val < x_threshold) and (np.abs(y_val) >= y_threshold):
+                    threshold.append(f'{y}')
+                elif (x_val >= x_threshold) and (np.abs(y_val) < y_threshold):
+                    threshold.append(f'{x}')
+                else:
+                    threshold.append('neither')
 
             else: # Neither x- nor y-axis has both positive and negative values greater than threshold
-                if (x_val>=x_threshold)&(y_val>y_threshold): threshold.append(f'{x} & {y}')
-                elif (x_val<x_threshold)&(y_val>=y_threshold): threshold.append(f'{y}')
-                elif (x_val>=x_threshold)&(y_val<y_threshold): threshold.append(f'{x}')
-                else: threshold.append('neither')
+                if (x_val >= x_threshold) and (y_val > y_threshold):
+                    threshold.append(f'{x} & {y}')
+                elif (x_val < x_threshold) and (y_val >= y_threshold):
+                    threshold.append(f'{y}')
+                elif (x_val >= x_threshold) and (y_val < y_threshold):
+                    threshold.append(f'{x}')
+                else:
+                    threshold.append('neither')
 
-    df['Threshold']=threshold
-    
-    # Organize data by specified 'size' column, typically input abundance
-    sizes=(1,100)
+    df['Threshold'] = threshold
+
+    # ----------------------------
+    # Size handling, global norm
+    # ----------------------------
+    sizes = (1, 100)
     size_norm = None
-    if size in [False,'False','false',None]: # No size
-        size = None 
+    _vmin, _vmax = None, None
 
+    if size in [False, 'False', 'false', None]:
+        size = None
     else:
         if size is not None and size in df.columns:
             # Filter by size dimensions
-            if size_dims is not None: 
-                df = df[(df[size]>=size_dims[0])&(df[size]<=size_dims[1])]
+            if size_dims is not None:
+                df = df[(df[size] >= size_dims[0]) & (df[size] <= size_dims[1])].copy()
 
-            # Shared size normalization across all scatter calls so marker areas are consistent
-            _vmin, _vmax = None, None
             if display_legend:
                 if size_dims is None:
                     _vmin = df[size].min()
                     _vmax = df[size].max()
                 else:
-                    _vmin = size_dims[0]
-                    _vmax = size_dims[1]
+                    _vmin, _vmax = size_dims
+
                 # Guard against degenerate case where all values are equal
                 if _vmin == _vmax:
                     _vmax = _vmin + 1e-12
+
                 size_norm = mcolors.Normalize(vmin=_vmin, vmax=_vmax)
-    
-    # Set dimensions
-    if x_axis_dims==(0,0): x_axis_dims=(min(df[x]),max(df[x]))
-    if y_axis_dims==(0,0): y_axis_dims=(0,max(df[y]))
 
-    # Generate figure
-    fig, ax = plt.subplots(figsize=figsize)
-    
-    if vertical: # orientation
-        # with significance boundraries
-        if display_lines:
-            plt.vlines(x=x_threshold, ymin=y_axis_dims[0], ymax=y_axis_dims[1], colors='k', linestyles='dashed', linewidth=1)
-            if bidirectional_x_threshold and x_threshold > 0:
-                plt.vlines(x=-x_threshold, ymin=y_axis_dims[0], ymax=y_axis_dims[1], colors='k', linestyles='dashed', linewidth=1)
-            plt.hlines(y=y_threshold, xmin=x_axis_dims[0], xmax=x_axis_dims[1], colors='k', linestyles='dashed', linewidth=1)
-            if bidirectional_y_threshold and y_threshold > 0:
-                plt.hlines(y=-y_threshold, xmin=x_axis_dims[0], xmax=x_axis_dims[1], colors='k', linestyles='dashed', linewidth=1)
+    # ----------------------------
+    # Global dims
+    # ----------------------------
+    if x_axis_dims == (0, 0):
+        x_axis_dims = (min(df[x]), max(df[x]))
+    if y_axis_dims == (0, 0):
+        y_axis_dims = (0, max(df[y]))
 
-        # with data
-        if display_legend==False: size=None
-        sns.scatterplot(
-            data=df[df['Threshold']!=f'{x} & {y}'],
-            x=x, y=y,
-            color=color, alpha=alpha, edgecolor=edgecol, 
-            style=stys, style_order=stys_order if stys_order else None, markers=mark_order if mark_order else None, 
-            size=size if display_legend else None, sizes=sizes, size_norm=size_norm,
-            legend=False,
-            ax=ax, **kwargs)
-        sns.scatterplot(
-            data=df[(df['Threshold']==f'{x} & {y}')&(df[x]<0)],
-            x=x, y=y,
-            hue=x, edgecolor=edgecol, palette='Blues_r', 
-            style=stys, style_order=stys_order if stys_order else None, markers=mark_order if mark_order else None,
-            size=size if display_legend else None, sizes=sizes, size_norm=size_norm,
-            legend=False,
-            ax=ax, **kwargs)
-        sns.scatterplot(
-            data=df[(df['Threshold']==f'{x} & {y}')&(df[x]>0)],
-            x=x, y=y,
-            hue=x, edgecolor=edgecol, palette='Reds', 
-            style=stys, style_order=stys_order if stys_order else None, markers=mark_order if mark_order else None,
-            size=size if display_legend else None, sizes=sizes, size_norm=size_norm, 
-            legend=False,
-            ax=ax, **kwargs)
-        
-        # with x- & y-axis lines
-        if display_axis == True:
-            ax.plot([x_axis_dims[0], x_axis_dims[1]], [0,0], color='black', linestyle='-', linewidth=1)
-            ax.plot([0,0], [y_axis_dims[0], y_axis_dims[1]], color='black', linestyle='-', linewidth=1)
+    # ----------------------------
+    # Facet layout
+    # ----------------------------
+    col_vals = _facet_values(df, facetx, order=facetx_order)
+    row_vals = _facet_values(df, facety, order=facety_order)
+    ncols = len(col_vals)
+    nrows = len(row_vals)
+    faceting = _is_faceted(facetx, facety)
 
-        
-        # with legend
-        if display_legend == True:
-            if size_norm is not None and size is not None: # Add consistent size legend with 5 representative values
-                legend_title_props = FontProperties(weight=legend_title_weight, size=legend_title_size)
-                if stys is not None and mark_order is not None and stys_order is not None: # Add stys legend too
-                    legend_vals = np.linspace(_vmin, _vmax, len(mark_order))
-                    for lv,mark,sty in zip(legend_vals,mark_order,stys_order):
-                        plt.scatter([], [], s=np.interp(lv, [_vmin, _vmax], sizes), color=color, label=f'{lv:.2g}; {sty}', marker=mark)
-                    if is_html:
-                        if legend_bbox_to_anchor == (1,1): legend_bbox_to_anchor = (-0.1,-0.15)
-                        plt.legend(title=legend_title if legend_title!='' else f'{size}; {stys}', 
-                                    title_fontproperties=legend_title_props, fontsize=legend_size,
-                                    bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol,
-                                    columnspacing=legend_columnspacing,    # space between columns
-                                    handletextpad=legend_handletextpad,    # space between marker and text
-                                    labelspacing=legend_labelspacing,      # vertical space between entries
-                                    borderpad=legend_borderpad,            # padding inside legend box
-                                    handlelength=legend_handlelength)      # marker length
-                    else:
-                        plt.legend(title=legend_title if legend_title!='' else f'{size}; {stys}', 
-                                    title_fontproperties=legend_title_props, fontsize=legend_size,
-                                    bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol)
-                else:
-                    legend_vals = np.linspace(_vmin, _vmax, 5)
-                    for lv in legend_vals:
-                        plt.scatter([], [], s=np.interp(lv, [_vmin, _vmax], sizes), color=color, label=f'{lv:.2g}')
-                    plt.legend(title=legend_title if legend_title!='' else size, 
-                                title_fontproperties=legend_title_props, fontsize=legend_size,
-                                bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol)
-        
-        # with labels
-        if label is not None and display_labels not in [None, 'False', 'false', False]:
-            if display_labels in [f'{x} & {y}', f'{x}', f'{y}', 'neither']:
-                df_signif = df[df['Threshold'] == display_labels]
-            elif display_labels == 'all':
-                df_signif = df
-            elif isinstance(display_labels, list):
-                df_signif = df[df[label].isin(display_labels)]
-            else:
-                df_signif = df[df['Threshold'] == f'{x} & {y}']
-                print(f'Warning: defaulting to \"{x} & {y}\" thresholds for label display.')
+    fig, axes = plt.subplots(
+        nrows=nrows,
+        ncols=ncols,
+        figsize=figsize,
+        sharex=facety is not None,
+        sharey=facetx is not None,
+    )
+    axes = np.array(axes).reshape(nrows, ncols)
 
-            if is_html:
-                # For HTML, show labels interactively as tooltips instead of static text
-                pts = ax.scatter(
-                    x=df_signif[x],
-                    y=df_signif[y],
-                    s=20,
-                    alpha=0
+    # ----------------------------
+    # Legend helper
+    # ----------------------------
+    def _add_vol_legend(ax):
+        if not display_legend:
+            return
+        if size_norm is None or size is None:
+            return
+
+        legend_title_props = FontProperties(
+            weight=legend_title_weight,
+            size=legend_title_size
+        )
+
+        if stys is not None and mark_order is not None and stys_order is not None and len(mark_order) > 0 and len(stys_order) > 0:
+            legend_vals = np.linspace(_vmin, _vmax, len(mark_order))
+
+            for lv, mark, sty in zip(legend_vals, mark_order, stys_order):
+                ax.scatter(
+                    [], [],
+                    s=np.interp(lv, [_vmin, _vmax], sizes),
+                    color=color,
+                    label=f'{lv:.2g}; {sty}',
+                    marker=mark
                 )
-                labels_list = df_signif[label].fillna("").astype(str).tolist()
-                tooltip = SafeHTMLTooltip(pts, labels_list)
-                clicker = ClickTooltip(pts, labels_list)
-                mpld3.plugins.connect(fig, tooltip, clicker)
-            else:
-                # For static images, keep labels as always-visible text
-                for i, l in enumerate(df_signif[label]):
-                    plt.text(
-                        x=df_signif.iloc[i][x],
-                        y=df_signif.iloc[i][y],
-                        s=l
-                    )
-        
-        # Set x axis
-        if x_axis=='': x_axis=x
-        plt.xlabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight,fontfamily=x_axis_font, labelpad=x_axis_pad)
-        if x_ticks==[]: 
-            if x_ticks_rot==0: plt.xticks(rotation=x_ticks_rot,ha='center',va='top',fontfamily=x_ticks_font,fontsize=x_ticks_size)
-            elif x_ticks_rot == 90: plt.xticks(rotation=x_ticks_rot,ha='right',va='center',fontfamily=x_ticks_font,fontsize=x_ticks_size)
-            else: plt.xticks(rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font,fontsize=x_ticks_size)
-        else: 
-            if x_ticks_rot==0: plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot, ha='center',va='top',fontfamily=x_ticks_font,fontsize=x_ticks_size)
-            elif x_ticks_rot == 90: plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot,ha='right',va='center',fontfamily=x_ticks_font,fontsize=x_ticks_size)
-            else: plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font,fontsize=x_ticks_size)
-        
-        # Set y axis
-        if y_axis=='': y_axis=y
-        plt.ylabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight,fontfamily=y_axis_font,labelpad=y_axis_pad)
 
-        if y_ticks==[]: plt.yticks(rotation=y_ticks_rot,fontfamily=y_ticks_font, fontsize=y_ticks_size)
-        else: plt.yticks(ticks=y_ticks,labels=y_ticks,rotation=y_ticks_rot,fontfamily=y_ticks_font, fontsize=y_ticks_size)
+            _legend_title = legend_title if legend_title != '' else f'{size}; {stys}'
 
-    else: # Horizontal orientation
-        # with significance boundraries
-        if display_lines:
-            plt.hlines(y=x_threshold, xmin=y_axis_dims[0], xmax=y_axis_dims[1], colors='k', linestyles='dashed', linewidth=1)
-            if bidirectional_x_threshold and x_threshold > 0:
-                plt.hlines(y=-x_threshold, xmin=y_axis_dims[0], xmax=y_axis_dims[1], colors='k', linestyles='dashed', linewidth=1)
-            plt.vlines(x=y_threshold, ymin=x_axis_dims[0], ymax=x_axis_dims[1], colors='k', linestyles='dashed', linewidth=1)
-            if bidirectional_y_threshold and y_threshold > 0:
-                plt.vlines(x=-y_threshold, ymin=x_axis_dims[0], ymax=x_axis_dims[1], colors='k', linestyles='dashed', linewidth=1)
-
-        # with data
-        if display_legend==False: size=None
-        sns.scatterplot(
-            data=df[df['Threshold']!=f'{x} & {y}'],
-            y=x, x=y,
-            color=color, alpha=alpha, edgecolor=edgecol, 
-            style=stys, style_order=stys_order if stys_order else None, markers=mark_order if mark_order else None,
-            size=size if display_legend else None, sizes=sizes, size_norm=size_norm,
-            legend=False,
-            ax=ax, **kwargs)
-        sns.scatterplot(
-            data=df[(df['Threshold']==f'{x} & {y}')&(df[x]<0)],
-            y=x, x=y,
-            hue=x,edgecolor=edgecol, palette='Blues_r', 
-            style=stys, style_order=stys_order if stys_order else None, markers=mark_order if mark_order else None,
-            size=size if display_legend else None, sizes=sizes, size_norm=size_norm, 
-            legend=False,
-            ax=ax, **kwargs)
-        sns.scatterplot(
-            data=df[(df['Threshold']==f'{x} & {y}')&(df[x]>0)],
-            y=x, x=y,
-            hue=x, edgecolor=edgecol, palette='Reds', 
-            style=stys, style_order=stys_order if stys_order else None, markers=mark_order if mark_order else None,
-            size=size if display_legend else None, sizes=sizes, size_norm=size_norm, 
-            legend=False,
-            ax=ax, **kwargs)
-        
-        # with x- & y-axis lines
-        if display_axis == True:
-            ax.plot([y_axis_dims[0], y_axis_dims[1]], [0,0], color='black', linestyle='-', linewidth=1)
-            ax.plot([0,0], [x_axis_dims[0], x_axis_dims[1]], color='black', linestyle='-', linewidth=1)
-
-        # with legend
-        if display_legend == True:
-            if size_norm is not None and size is not None: # Add consistent size legend with 5 representative values
-                legend_title_props = FontProperties(weight=legend_title_weight, size=legend_title_size)
-                if stys is not None and mark_order is not None and stys_order is not None: # Add stys legend too
-                    legend_vals = np.linspace(_vmin, _vmax, len(mark_order))
-                    for lv,mark,sty in zip(legend_vals,mark_order,stys_order):
-                        plt.scatter([], [], s=np.interp(lv, [_vmin, _vmax], sizes), color=color, label=f'{lv:.2g}; {sty}', marker=mark)
-                    if is_html:
-                        if legend_bbox_to_anchor == (1,1): legend_bbox_to_anchor = (-0.1,-0.15)
-                        plt.legend(title=legend_title if legend_title!='' else f'{size}; {stys}', 
-                                    title_fontproperties=legend_title_props, fontsize=legend_size,
-                                    bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol,
-                                    columnspacing=legend_columnspacing,    # space between columns
-                                    handletextpad=legend_handletextpad,    # space between marker and text
-                                    labelspacing=legend_labelspacing,      # vertical space between entries
-                                    borderpad=legend_borderpad,            # padding inside legend box
-                                    handlelength=legend_handlelength)      # marker length
-                    else:
-                        plt.legend(title=legend_title if legend_title!='' else f'{size}; {stys}', 
-                                title_fontproperties=legend_title_props, fontsize=legend_size,
-                                bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol)
-                else:
-                    legend_vals = np.linspace(_vmin, _vmax, 5)
-                    for lv in legend_vals:
-                        plt.scatter([], [], s=np.interp(lv, [_vmin, _vmax], sizes), color=color, label=f'{lv:.2g}')
-                    plt.legend(title=legend_title if legend_title!='' else size, 
-                                title_fontproperties=legend_title_props, fontsize=legend_size,
-                                bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol)
-        
-        # with labels
-        if label is not None and display_labels in [None, 'False', 'false', False]:
-            if display_labels in [f'{x} & {y}', f'{x}', f'{y}', 'neither']:
-                df_signif = df[df['Threshold'] == display_labels]
-            elif display_labels == 'all':
-                df_signif = df
-            elif isinstance(display_labels, list):
-                df_signif = df[df[label].isin(display_labels)]
-            else:
-                df_signif = df[df['Threshold'] == f'{x} & {y}']
-                print(f'Warning: defaulting to \"{x} & {y}\" thresholds for label display.')
-
-            if is_html:
-                # For HTML, show labels interactively as tooltips instead of static text
-                pts = ax.scatter(
-                    y=df_signif[x],
-                    x=df_signif[y],
-                    s=20,
-                    alpha=0
-                )
-                labels_list = df_signif[label].fillna("").astype(str).tolist()
-                tooltip = SafeHTMLTooltip(pts, labels_list)
-                clicker = ClickTooltip(pts, labels_list)
-                mpld3.plugins.connect(fig, tooltip, clicker)
-            else:
-                # For static images, keep labels as always-visible text
-                for i, l in enumerate(df_signif[label]):
-                    plt.text(
-                        y=df_signif.iloc[i][x],
-                        x=df_signif.iloc[i][y],
-                        s=l
-                    )
-        
-        # Set x axis
-        if y_axis=='': y_axis=y
-        plt.xlabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight,fontfamily=y_axis_font,labelpad=y_axis_pad)
-        if y_ticks==[]: 
-            if y_ticks_rot == 0: plt.xticks(rotation=y_ticks_rot,ha='center',va='top',fontfamily=y_ticks_font, fontsize=y_ticks_size)
-            elif y_ticks_rot == 90: plt.xticks(rotation=y_ticks_rot,ha='right',va='center',fontfamily=y_ticks_font, fontsize=y_ticks_size)
-            else: plt.xticks(rotation=y_ticks_rot,ha='right',fontfamily=y_ticks_font, fontsize=y_ticks_size)
-        else: 
-            if y_ticks_rot == 0: plt.xticks(ticks=y_ticks,labels=y_ticks,rotation=y_ticks_rot, ha='center',va='top',fontfamily=y_ticks_font, fontsize=y_ticks_size)
-            elif y_ticks_rot == 90: plt.xticks(ticks=y_ticks,labels=y_ticks,rotation=y_ticks_rot,ha='right',va='center',fontfamily=y_ticks_font, fontsize=y_ticks_size)
-            else: plt.xticks(ticks=y_ticks,labels=y_ticks,rotation=y_ticks_rot,ha='right',fontfamily=y_ticks_font, fontsize=y_ticks_size)
-        
-        # Set y axis
-        if x_axis=='': x_axis=x
-        plt.ylabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight,fontfamily=x_axis_font,labelpad=x_axis_pad)
-
-        if x_ticks==[]: plt.yticks(rotation=x_ticks_rot,fontfamily=x_ticks_font, fontsize=x_ticks_size)
-        else: plt.yticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot,fontfamily=x_ticks_font, fontsize=x_ticks_size)
-
-    # Set title
-    if title=='' and file is not None: 
-        if space_capitalize: title=re_un_cap(".".join(file.split(".")[:-1]))
-        else: ".".join(file.split(".")[:-1])
-    plt.title(title, fontsize=title_size, fontweight=title_weight, family=title_font)
-
-    # Save & show fig; return dataframe
-    save_fig(file=file, dir=dir, fig=fig, dpi=dpi, transparent=transparent, PDB_pt=PDB_pt, icon='volcano')
-    if show:
-        ext = file.split('.')[-1].lower() if file is not None else ''
-        if ext not in ('html', 'json'):
-            plt.show()
         else:
-            mpld3.show(fig)
+            legend_vals = np.linspace(_vmin, _vmax, 5)
+
+            for lv in legend_vals:
+                ax.scatter(
+                    [], [],
+                    s=np.interp(lv, [_vmin, _vmax], sizes),
+                    color=color,
+                    label=f'{lv:.2g}'
+                )
+
+            _legend_title = legend_title if legend_title != '' else size
+
+        if is_html:
+            bbox = legend_bbox_to_anchor
+            if bbox == (1, 1):
+                bbox = (-0.1, -0.15)
+
+            ax.legend(
+                title=_legend_title,
+                title_fontproperties=legend_title_props,
+                fontsize=legend_size,
+                bbox_to_anchor=bbox,
+                loc=legend_loc,
+                ncol=legend_ncol,
+                columnspacing=legend_columnspacing,    # space between columns
+                handletextpad=legend_handletextpad,    # space between marker and text
+                labelspacing=legend_labelspacing,      # vertical space between entries
+                borderpad=legend_borderpad,            # padding inside legend box
+                handlelength=legend_handlelength       # marker length
+            )
+        else:
+            ax.legend(
+                title=_legend_title,
+                title_fontproperties=legend_title_props,
+                fontsize=legend_size,
+                bbox_to_anchor=legend_bbox_to_anchor,
+                loc=legend_loc,
+                ncol=legend_ncol
+            )
+
+    # ----------------------------
+    # Tick helper
+    # ----------------------------
+    def _format_ticks(ax):
+        plt.sca(ax)
+
+        if vertical: # orientation
+            if x_ticks == []:
+                if x_ticks_rot == 0:
+                    plt.xticks(rotation=x_ticks_rot, ha='center', va='top', fontfamily=x_ticks_font, fontsize=x_ticks_size)
+                elif x_ticks_rot == 90:
+                    plt.xticks(rotation=x_ticks_rot, ha='right', va='center', fontfamily=x_ticks_font, fontsize=x_ticks_size)
+                else:
+                    plt.xticks(rotation=x_ticks_rot, ha='right', fontfamily=x_ticks_font, fontsize=x_ticks_size)
+            else:
+                if x_ticks_rot == 0:
+                    plt.xticks(ticks=x_ticks, labels=x_ticks, rotation=x_ticks_rot, ha='center', va='top', fontfamily=x_ticks_font, fontsize=x_ticks_size)
+                elif x_ticks_rot == 90:
+                    plt.xticks(ticks=x_ticks, labels=x_ticks, rotation=x_ticks_rot, ha='right', va='center', fontfamily=x_ticks_font, fontsize=x_ticks_size)
+                else:
+                    plt.xticks(ticks=x_ticks, labels=x_ticks, rotation=x_ticks_rot, ha='right', fontfamily=x_ticks_font, fontsize=x_ticks_size)
+
+            if y_ticks == []:
+                plt.yticks(rotation=y_ticks_rot, fontfamily=y_ticks_font, fontsize=y_ticks_size)
+            else:
+                plt.yticks(ticks=y_ticks, labels=y_ticks, rotation=y_ticks_rot, fontfamily=y_ticks_font, fontsize=y_ticks_size)
+
+        else: # horizontal orientation swaps x and y axes, so x_ticks formatting applies to y-axis and vice versa
+            if y_ticks == []:
+                if y_ticks_rot == 0:
+                    plt.xticks(rotation=y_ticks_rot, ha='center', va='top', fontfamily=y_ticks_font, fontsize=y_ticks_size)
+                elif y_ticks_rot == 90:
+                    plt.xticks(rotation=y_ticks_rot, ha='right', va='center', fontfamily=y_ticks_font, fontsize=y_ticks_size)
+                else:
+                    plt.xticks(rotation=y_ticks_rot, ha='right', fontfamily=y_ticks_font, fontsize=y_ticks_size)
+            else:
+                if y_ticks_rot == 0:
+                    plt.xticks(ticks=y_ticks, labels=y_ticks, rotation=y_ticks_rot, ha='center', va='top', fontfamily=y_ticks_font, fontsize=y_ticks_size)
+                elif y_ticks_rot == 90:
+                    plt.xticks(ticks=y_ticks, labels=y_ticks, rotation=y_ticks_rot, ha='right', va='center', fontfamily=y_ticks_font, fontsize=y_ticks_size)
+                else:
+                    plt.xticks(ticks=y_ticks, labels=y_ticks, rotation=y_ticks_rot, ha='right', fontfamily=y_ticks_font, fontsize=y_ticks_size)
+
+            if x_ticks == []:
+                plt.yticks(rotation=x_ticks_rot, fontfamily=x_ticks_font, fontsize=x_ticks_size)
+            else:
+                plt.yticks(ticks=x_ticks, labels=x_ticks, rotation=x_ticks_rot, fontfamily=x_ticks_font, fontsize=x_ticks_size)
+
+    # ----------------------------
+    # Label helper
+    # ----------------------------
+    def _label_subset(df_sub):
+        if label is None or display_labels in [None, 'False', 'false', False]:
+            return None
+
+        if display_labels in [f'{x} & {y}', f'{x}', f'{y}', 'neither']:
+            return df_sub[df_sub['Threshold'] == display_labels]
+        elif display_labels == 'all' or display_labels is True:
+            return df_sub
+        elif isinstance(display_labels, list):
+            return df_sub[df_sub[label].isin(display_labels)]
+        else:
+            print(f'Warning: defaulting to "{x} & {y}" thresholds for label display.')
+            return df_sub[df_sub['Threshold'] == f'{x} & {y}']
+
+    # ----------------------------
+    # Draw one panel
+    # ----------------------------
+    def _draw_panel(df_sub: pd.DataFrame, ax, *, c=None, r=None, i=0, j=0):
+        plt.sca(ax)
+
+        if vertical: # orientation
+            if display_lines:
+                ax.vlines(x=x_threshold, ymin=y_axis_dims[0], ymax=y_axis_dims[1],
+                          colors='k', linestyles='dashed', linewidth=1)
+                if bidirectional_x_threshold and x_threshold > 0:
+                    ax.vlines(x=-x_threshold, ymin=y_axis_dims[0], ymax=y_axis_dims[1],
+                              colors='k', linestyles='dashed', linewidth=1)
+
+                ax.hlines(y=y_threshold, xmin=x_axis_dims[0], xmax=x_axis_dims[1],
+                          colors='k', linestyles='dashed', linewidth=1)
+                if bidirectional_y_threshold and y_threshold > 0:
+                    ax.hlines(y=-y_threshold, xmin=x_axis_dims[0], xmax=x_axis_dims[1],
+                              colors='k', linestyles='dashed', linewidth=1)
+
+            _size = size if display_legend else None
+
+            sns.scatterplot(
+                data=df_sub[df_sub['Threshold'] != f'{x} & {y}'],
+                x=x, y=y,
+                color=color, alpha=alpha, edgecolor=edgecol,
+                style=stys, style_order=stys_order if stys_order else None,
+                markers=mark_order if mark_order else None,
+                size=_size, sizes=sizes, size_norm=size_norm,
+                legend=False,
+                ax=ax,
+                **kwargs
+            )
+
+            sns.scatterplot(
+                data=df_sub[(df_sub['Threshold'] == f'{x} & {y}') & (df_sub[x] < 0)],
+                x=x, y=y,
+                hue=x, edgecolor=edgecol, palette='Blues_r',
+                style=stys, style_order=stys_order if stys_order else None,
+                markers=mark_order if mark_order else None,
+                size=_size, sizes=sizes, size_norm=size_norm,
+                legend=False,
+                ax=ax,
+                **kwargs
+            )
+
+            sns.scatterplot(
+                data=df_sub[(df_sub['Threshold'] == f'{x} & {y}') & (df_sub[x] > 0)],
+                x=x, y=y,
+                hue=x, edgecolor=edgecol, palette='Reds',
+                style=stys, style_order=stys_order if stys_order else None,
+                markers=mark_order if mark_order else None,
+                size=_size, sizes=sizes, size_norm=size_norm,
+                legend=False,
+                ax=ax,
+                **kwargs
+            )
+
+            if display_axis:
+                ax.plot([x_axis_dims[0], x_axis_dims[1]], [0, 0], color='black', linestyle='-', linewidth=1)
+                ax.plot([0, 0], [y_axis_dims[0], y_axis_dims[1]], color='black', linestyle='-', linewidth=1)
+
+            x_axis_panel, y_axis_panel = _facet_axis_labels(
+                x_axis, y_axis,
+                x_default=x,
+                y_default=y,
+                facetx=facetx,
+                facety=facety,
+                c=c,
+                r=r,
+                j=j,
+                i=i,
+                ncols=ncols,
+                nrows=nrows,
+                space_capitalize=space_capitalize
+            )
+
+            ax.set_xlabel(
+                x_axis_panel,
+                fontsize=x_axis_size,
+                fontweight=x_axis_weight,
+                fontfamily=x_axis_font,
+                labelpad=x_axis_pad
+            )
+            ax.set_ylabel(
+                y_axis_panel,
+                fontsize=y_axis_size,
+                fontweight=y_axis_weight,
+                fontfamily=y_axis_font,
+                labelpad=y_axis_pad
+            )
+
+            ax.set_xlim(x_axis_dims[0], x_axis_dims[1])
+            ax.set_ylim(y_axis_dims[0], y_axis_dims[1])
+
+        else: # horizontal orientation swaps visual axes, so x and y are switched in the code, but axis labels and dimensions are still applied according to their original x/y designation
+            if display_lines:
+                ax.hlines(y=x_threshold, xmin=y_axis_dims[0], xmax=y_axis_dims[1],
+                          colors='k', linestyles='dashed', linewidth=1)
+                if bidirectional_x_threshold and x_threshold > 0:
+                    ax.hlines(y=-x_threshold, xmin=y_axis_dims[0], xmax=y_axis_dims[1],
+                              colors='k', linestyles='dashed', linewidth=1)
+
+                ax.vlines(x=y_threshold, ymin=x_axis_dims[0], ymax=x_axis_dims[1],
+                          colors='k', linestyles='dashed', linewidth=1)
+                if bidirectional_y_threshold and y_threshold > 0:
+                    ax.vlines(x=-y_threshold, ymin=x_axis_dims[0], ymax=x_axis_dims[1],
+                              colors='k', linestyles='dashed', linewidth=1)
+
+            _size = size if display_legend else None
+
+            sns.scatterplot(
+                data=df_sub[df_sub['Threshold'] != f'{x} & {y}'],
+                y=x, x=y,
+                color=color, alpha=alpha, edgecolor=edgecol,
+                style=stys, style_order=stys_order if stys_order else None,
+                markers=mark_order if mark_order else None,
+                size=_size, sizes=sizes, size_norm=size_norm,
+                legend=False,
+                ax=ax,
+                **kwargs
+            )
+
+            sns.scatterplot(
+                data=df_sub[(df_sub['Threshold'] == f'{x} & {y}') & (df_sub[x] < 0)],
+                y=x, x=y,
+                hue=x, edgecolor=edgecol, palette='Blues_r',
+                style=stys, style_order=stys_order if stys_order else None,
+                markers=mark_order if mark_order else None,
+                size=_size, sizes=sizes, size_norm=size_norm,
+                legend=False,
+                ax=ax,
+                **kwargs
+            )
+
+            sns.scatterplot(
+                data=df_sub[(df_sub['Threshold'] == f'{x} & {y}') & (df_sub[x] > 0)],
+                y=x, x=y,
+                hue=x, edgecolor=edgecol, palette='Reds',
+                style=stys, style_order=stys_order if stys_order else None,
+                markers=mark_order if mark_order else None,
+                size=_size, sizes=sizes, size_norm=size_norm,
+                legend=False,
+                ax=ax,
+                **kwargs
+            )
+
+            if display_axis:
+                ax.plot([y_axis_dims[0], y_axis_dims[1]], [0, 0], color='black', linestyle='-', linewidth=1)
+                ax.plot([0, 0], [x_axis_dims[0], x_axis_dims[1]], color='black', linestyle='-', linewidth=1)
+
+            x_axis_panel, y_axis_panel = _facet_axis_labels(
+                x_axis, y_axis,
+                x_default=x,
+                y_default=y,
+                facetx=facetx,
+                facety=facety,
+                c=c,
+                r=r,
+                j=j,
+                i=i,
+                ncols=ncols,
+                nrows=nrows,
+                space_capitalize=space_capitalize
+            )
+
+            # horizontal orientation swaps visual axes
+            ax.set_xlabel(
+                y_axis_panel,
+                fontsize=y_axis_size,
+                fontweight=y_axis_weight,
+                fontfamily=y_axis_font,
+                labelpad=y_axis_pad
+            )
+            ax.set_ylabel(
+                x_axis_panel,
+                fontsize=x_axis_size,
+                fontweight=x_axis_weight,
+                fontfamily=x_axis_font,
+                labelpad=x_axis_pad
+            )
+
+            ax.set_xlim(y_axis_dims[0], y_axis_dims[1])
+            ax.set_ylim(x_axis_dims[0], x_axis_dims[1])
+
+        _format_ticks(ax)
+        _add_vol_legend(ax)
+
+        df_signif = _label_subset(df_sub)
+        if df_signif is not None and len(df_signif) > 0:
+            if is_html:
+                if vertical:
+                    pts = ax.scatter(x=df_signif[x], y=df_signif[y], s=20, alpha=0)
+                else:
+                    pts = ax.scatter(x=df_signif[y], y=df_signif[x], s=20, alpha=0)
+
+                labels_list = df_signif[label].fillna("").astype(str).tolist()
+                tooltip = SafeHTMLTooltip(pts, labels_list)
+                clicker = ClickTooltip(pts, labels_list)
+                mpld3.plugins.connect(fig, tooltip, clicker)
+            else:
+                for ii, lab in enumerate(df_signif[label]):
+                    if vertical:
+                        ax.text(
+                            x=df_signif.iloc[ii][x],
+                            y=df_signif.iloc[ii][y],
+                            s=lab
+                        )
+                    else:
+                        ax.text(
+                            x=df_signif.iloc[ii][y],
+                            y=df_signif.iloc[ii][x],
+                            s=lab
+                        )
+
+    # ----------------------------
+    # Draw facets
+    # ----------------------------
+    for i, r in enumerate(row_vals):
+        for j, c in enumerate(col_vals):
+            ax = axes[i, j]
+            df_sub = _subset_for_facet(df, facetx=facetx, facety=facety, c=c, r=r)
+
+            if len(df_sub) == 0:
+                ax.set_visible(False)
+                continue
+
+            _draw_panel(df_sub, ax, c=c, r=r, i=i, j=j)
+
+            panel_title = _subplot_title(
+                idx=i * ncols + j,
+                c=c,
+                r=r,
+                facetx=facetx,
+                facety=facety,
+                subplot_titles=subplot_titles,
+                title=title
+            )
+
+            if panel_title != '':
+                ax.set_title(
+                    panel_title,
+                    fontsize=title_size,
+                    fontweight=title_weight,
+                    fontfamily=title_font
+                )
+
+            if legend_mode != "figure":
+                _handle_panel_legend(ax, legend_mode=legend_mode, i=i, j=j)
+
+            _hide_inner_axis_labels(ax, i=i, j=j, nrows=nrows, ncols=ncols)
+
+    # ----------------------------
+    # Title
+    # ----------------------------
+    if title == '' and file is not None:
+        title = re_un_cap(".".join(file.split(".")[:-1])) if space_capitalize else ".".join(file.split(".")[:-1])
+
+    if title != '' and faceting:
+        fig.suptitle(title, fontsize=title_size, fontweight=title_weight, family=title_font)
+
+    # ----------------------------
+    # Figure legend
+    # ----------------------------
+    if display_legend and legend_mode == "figure":
+        if legend_title != '':
+            _legend_title = legend_title
+        elif size is not None and stys is not None:
+            _legend_title = f'{size}; {stys}'
+        elif size is not None:
+            _legend_title = size
+        elif stys is not None:
+            _legend_title = stys
+        else:
+            _legend_title = ''
+
+        _make_figure_legend(
+            fig,
+            axes,
+            legend_title=_legend_title,
+            legend_title_size=legend_title_size,
+            legend_title_weight=legend_title_weight,
+            legend_size=legend_size,
+            legend_bbox_to_anchor=legend_bbox_to_anchor,
+            legend_loc=legend_loc,
+            legend_items=(0, 0),
+            legend_ncol=legend_ncol
+        )
+
+    fig.tight_layout()
+
+    _final_save_show(
+        fig,
+        file=file,
+        dir=dir,
+        dpi=dpi,
+        transparent=transparent,
+        PDB_pt=PDB_pt,
+        icon='volcano',
+        show=show
+    )
+
     plt.close()
+
     if return_df:
         return df
+    return fig, axes
 
 # Color display methods
 def matplotlib_cmaps():

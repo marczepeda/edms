@@ -105,6 +105,7 @@ from ..gen import io, tidy as t, plot as p, stat as st
 from ..data import uniprot, pdb, dssp
 from ..utils import memory_timer, mkdir, load_resource_csv
 from .. import config
+from ..gen.plot import _facet_values, _facet_values, _subset_for_facet, _is_faceted, _facet_axis_labels, _handle_panel_legend, _hide_inner_axis_labels, _make_figure_legend, _final_save_show, re_un_cap, _subplot_title
 
 # Supporting methods
 def fuzzy_substring_search(text: str, pattern: str, max_distance: int):
@@ -3865,7 +3866,7 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
 
 # Plot methods
 def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list = None, cats_exclude: list|str = None, cols: str=None, cols_ord: list=None, cols_exclude: list|str=None, PDB_pt: str=None, line: float = None,
-        facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None,
+        facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
         file: str=None, dir: str=None, palette_or_cmap: str='colorblind', alpha: float=1.0, dodge: bool=True, jitter: bool=True, size: float=5, edgecol: str='black', lw: int=1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
         figsize: tuple=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_scale: str='linear', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
@@ -3893,6 +3894,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list
     facety (str, optional): column name for facet rows (creates one subplot per category in this column, arranged in separate rows)
     facetx_order (list, optional): order of facet columns
     facety_order (list, optional): order of facet rows
+    subplot_titles (str | list, optional): Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     palette_or_cmap (str, optional): seaborn color palette or matplotlib color map
@@ -3988,7 +3990,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list
         cols_ord = list(assign.sort_values(by='positions')['genotypes'])
 
     p.cat(graph=graph,df=df,x=x,y=y,cats_ord=cats_ord,cats_exclude=cats_exclude,cols=cols,cols_ord=cols_ord,cols_exclude=cols_exclude,PDB_pt=PDB_pt,line=line,
-          facetx=facetx,facety=facety,facetx_order=facetx_order,facety_order=facety_order,
+          facetx=facetx,facety=facety,facetx_order=facetx_order,facety_order=facety_order,subplot_titles=subplot_titles,
           file=file,dir=dir,palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
           figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
           x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_axis_pad=x_axis_pad,x_ticks_size=x_ticks_size,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,x_ticks=x_ticks,
@@ -3998,7 +4000,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list
           dpi=dpi,transparent=transparent,show=show,space_capitalize=space_capitalize,**kwargs)
 
 def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: str='Edit', cutoff_group: str='fastq_file', cutoff_value: float=0, cutoff_keep: bool=True, 
-          cols_ord: list=[], x_ord: list=[], facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, PDB_pt: str=None,
+          cols_ord: list=[], x_ord: list=[], facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values', PDB_pt: str=None,
           file: str=None, dir: str=None, palette_or_cmap: str='tab20', repeats: int=1, errcap: int=4, vertical: bool=True,
           figsize: tuple=(6,6), title: str='Editing Outcomes', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
           x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial',
@@ -4022,7 +4024,8 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
     facetx (str, optional): column name for x-axis faceting
     facety (str, optional): column name for y-axis faceting
     facetx_order (list, optional): order of x-axis facet values
-    facety_order (list, optional): order of y-axis facet values   
+    facety_order (list, optional): order of y-axis facet values
+    subplot_titles (str | list, optional): Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none
     PDB_pt (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
@@ -4111,7 +4114,7 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
         cols_ord = list(assign.sort_values(by='positions')['genotypes'])
 
     # Make stacked barplot
-    p.stack(df=df_cut,x=x,y=y,cols=cols,cutoff_group=cutoff_group,cutoff_value=0,cutoff_keep=cutoff_keep,cols_ord=cols_ord,x_ord=x_ord,facetx=facetx,facety=facety,facetx_order=facetx_order,facety_order=facety_order,
+    p.stack(df=df_cut,x=x,y=y,cols=cols,cutoff_group=cutoff_group,cutoff_value=0,cutoff_keep=cutoff_keep,cols_ord=cols_ord,x_ord=x_ord,facetx=facetx,facety=facety,facetx_order=facetx_order,facety_order=facety_order,subplot_titles=subplot_titles,
             file=file,dir=dir,palette_or_cmap=palette_or_cmap,repeats=repeats,errcap=errcap,vertical=vertical,
             figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
             x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_pad=x_axis_pad,x_ticks_size=x_ticks_size,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,
@@ -4123,11 +4126,12 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
 def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple=None, label: str='Edit', label_size: int=16,
         label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None, DSSP: str=None, chain_id: str=None,
         x_threshold: float = 0, y_threshold: float = 0, bidirectional_x_threshold: bool = True, bidirectional_y_threshold: bool = False,
+        facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
         file: str=None, dir: str=None, color: str='lightgray', alpha: float=0.5, edgecol: str='black', vertical: bool=True,
         figsize: tuple=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
-        legend_title: str='',legend_title_size: int=12, legend_title_weight: str='bold', legend_size: int = 12, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1,
+        legend_title: str='',legend_title_size: int=12, legend_title_weight: str='bold', legend_size: int = 12, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1, legend_mode = "figure",
         legend_columnspacing: int=-4, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, html_size_multiplier: float=1.5, 
         display_legend: bool=True, display_labels: str | list | bool = None, display_lines: bool=False, display_axis: bool=True, return_df: bool=True, dpi: int = 0, transparent: bool=True, show: bool=True, space_capitalize: bool=True,
         **kwargs) -> pd.DataFrame:
@@ -4157,6 +4161,11 @@ def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple
     y_threshold (float, optional): y-axis threshold (Default: 0)
     bidirectional_x_threshold (float, optional): both positive and negative x-axis thresholds (Default: True)
     bidirectional_y_threshold (float, optional): both positive and negative y-axis thresholds (Default: False)
+    facetx (str, optional): column name for facet columns (creates one subplot per category in this column, arranged in separate columns)
+    facety (str, optional): column name for facet rows (creates one subplot per category in this column, arranged in separate rows)
+    facetx_order (list, optional): order of facet columns
+    facety_order (list, optional): order of facet rows
+    subplot_titles (str | list, optional): Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     color (str, optional): matplotlib color for nonsignificant values
@@ -4195,6 +4204,7 @@ def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple
     legend_bbox_to_anchor (tuple, optional): coordinates for bbox anchor
     legend_loc (str): legend location
     legend_ncol (tuple, optional): # of columns
+    legend_mode (str, optional): legend mode (options: "figure", "first", "none")
     legend_columnspacing (int, optional): space between columns (Default: -4; only for html plots)
     legend_handletextpad (float, optional): space between marker and text (Default: 0.5; only for html plots)
     legend_labelspacing (float, optional): vertical space between entries (Default: 0.5; only for html plots)
@@ -4245,11 +4255,12 @@ def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple
     # Volcano plot
     p.vol(df=df, x=x, y=y, size=size, stys='Change', size_dims=size_dims, label=label, stys_order=stys_order, mark_order=mark_order,
           x_threshold=x_threshold, y_threshold=y_threshold, bidirectional_x_threshold=bidirectional_x_threshold, bidirectional_y_threshold=bidirectional_y_threshold,
+          facetx=facetx, facety=facety, facetx_order=facetx_order, facety_order=facety_order, subplot_titles=subplot_titles,
           file=file, dir=dir, color=color, alpha=alpha, edgecol=edgecol, vertical=vertical,
           figsize=figsize, title=title, title_size=title_size, title_weight=title_weight, title_font=title_font, 
           x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad, x_ticks_size = x_ticks_size, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
           y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_dims=y_axis_dims, y_axis_pad=y_axis_pad, y_ticks_size=y_ticks_size, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
-          legend_title=legend_title, legend_title_size=legend_title_size, legend_title_weight=legend_title_weight, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_ncol=legend_ncol, 
+          legend_title=legend_title, legend_title_size=legend_title_size, legend_title_weight=legend_title_weight, legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_ncol=legend_ncol, legend_mode=legend_mode,
           legend_columnspacing=legend_columnspacing, legend_handletextpad=legend_handletextpad, legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad, legend_handlelength=legend_handlelength, html_size_multiplier=html_size_multiplier,
           display_legend=display_legend, display_labels=display_labels, display_lines=display_lines, display_axis=display_axis, return_df=return_df, dpi=dpi, show=show, transparent=transparent, space_capitalize=space_capitalize,
           PDB_pt=PDB_pt,
@@ -4257,10 +4268,11 @@ def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple
 
 def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, size_dims: tuple=None, label: str='Edit', label_size: int=16,
         label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None, DSSP: str=None, chain_id: str=None, ss_h: int=None, ss_y: int=None,
+        facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
         file: str=None, dir: str=None, edgecol: str='black', figsize: tuple=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
-        legend_title: str='',legend_title_size: int=12, legend_title_weight: str='bold', legend_size: int = 12, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1, 
+        legend_title: str='',legend_title_size: int=12, legend_title_weight: str='bold', legend_size: int = 12, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1, legend_mode: str = "figure",
         legend_columnspacing: int=-3, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, html_size_multiplier: float=1.5,
         display_legend: bool=True, display_labels: bool = False, display_axis: bool=True, return_df: bool=True, dpi: int = 0, transparent: bool=True, show: bool=True, space_capitalize: bool=True,
         **kwargs) -> pd.DataFrame:
@@ -4287,6 +4299,11 @@ def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, siz
     chain_id (str, optional): Chain identifier to isolate for secondary structure analysis (Default: None)
     ss_h (int, optional): height for secondary structure in the plot (Default: autogenerate)
     ss_y (int, optional): y position for secondary structure in the plot (Default: autogenerate)
+    facetx (str, optional): column name for facet columns (creates one subplot per category in this column, arranged in separate columns)
+    facety (str, optional): column name for facet rows (creates one subplot per category in this column, arranged in seperate rows)
+    facetx_order (list, optional): order of facet columns
+    facety_order (list, optional): order of facet rows
+    subplot_titles (str | list, optional): Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     edgecol (str, optional): point edge color
@@ -4322,6 +4339,7 @@ def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, siz
     legend_bbox_to_anchor (tuple, optional): coordinates for bbox anchor
     legend_loc (str): legend location
     legend_ncol (tuple, optional): # of columns
+    legend_mode (str, optional): legend mode (options: "figure", "first", "none")
     legend_columnspacing (int, optional): space between columns (Default: -3; only for html plots)
     legend_handletextpad (float, optional): space between marker and text (Default: 0.5; only for html plots)
     legend_labelspacing (float, optional): vertical space between entries (Default: 0.5; only for html plots)
@@ -4340,223 +4358,431 @@ def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, siz
     Dependencies: os, matplotlib, seaborn, pandas, & edit_change()
     '''
     # Get dataframe from file path if needed
-    if type(df)==str:
+    if type(df) == str:
         df = io.get(pt=df)
     else:
         df = df.copy()
-    
+
     # Organize data by conservation (changed to)
-    stys_order = ['Conserved','Basic','Acidic','Polar','Nonpolar','Complex']
-    mark_order = ['D','^','v','<','>','o']
+    stys = 'Change'
+    stys_order = ['Conserved', 'Basic', 'Acidic', 'Polar', 'Nonpolar', 'Complex']
+    mark_order = ['D', '^', 'v', '<', '>', 'o']
 
     # Add label info: AA properties for conservation (change to); plus additional info from cBioPortal, UniProt, PhosphoSitePlus, PDB, and DSSP if specified
     secondary_structure = None
     if DSSP is not None and chain_id is not None:
-        df, secondary_structure = add_label_info(df=df, label=label, label_size=label_size, label_info=label_info,
-                            aa_properties=aa_properties, cBioPortal=cBioPortal, only_clinical=only_clinical, UniProt=UniProt, 
-                            PhosphoSitePlus=PhosphoSitePlus, PDB_contacts=PDB_contacts, PDB_neighbors=PDB_neighbors, DSSP=DSSP, chain_id=chain_id)
+        df, secondary_structure = add_label_info(
+            df=df, label=label, label_size=label_size, label_info=label_info,
+            aa_properties=aa_properties, cBioPortal=cBioPortal,
+            only_clinical=only_clinical, UniProt=UniProt,
+            PhosphoSitePlus=PhosphoSitePlus,
+            PDB_contacts=PDB_contacts, PDB_neighbors=PDB_neighbors,
+            DSSP=DSSP, chain_id=chain_id
+        )
     else:
-        df = add_label_info(df=df, label=label, label_size=label_size, label_info=label_info,
-                            aa_properties=aa_properties, cBioPortal=cBioPortal, only_clinical=only_clinical, UniProt=UniProt, 
-                            PhosphoSitePlus=PhosphoSitePlus, PDB_contacts=PDB_contacts, PDB_neighbors=PDB_neighbors)
+        df = add_label_info(
+            df=df, label=label, label_size=label_size, label_info=label_info,
+            aa_properties=aa_properties, cBioPortal=cBioPortal,
+            only_clinical=only_clinical, UniProt=UniProt,
+            PhosphoSitePlus=PhosphoSitePlus,
+            PDB_contacts=PDB_contacts, PDB_neighbors=PDB_neighbors
+        )
 
     PDB_pt = None if PDB_contacts is None else PDB_contacts
     PDB_pt = PDB_pt if PDB_pt is not None else PDB_neighbors
 
     # Determine if we are saving to HTML (for interactive behavior)
-    if file is not None:
-        is_html = file.endswith('.html')
+    is_html = file is not None and file.endswith('.html')
+    if is_html: # Match title fontsize for html plots
+        title_size = title_size * html_size_multiplier
+        x_axis_size = x_axis_size * html_size_multiplier
+        y_axis_size = y_axis_size * html_size_multiplier
+        x_ticks_size = x_ticks_size * html_size_multiplier
+        y_ticks_size = y_ticks_size * html_size_multiplier
+        legend_title_size = legend_title_size * html_size_multiplier
+        legend_size = legend_size * html_size_multiplier * 0.75
 
-        if is_html == True:
-            # Match title fontsize for html plots
-            title_size=title_size*html_size_multiplier
-            x_axis_size=x_axis_size*html_size_multiplier
-            y_axis_size=y_axis_size*html_size_multiplier
-            x_ticks_size=x_ticks_size*html_size_multiplier
-            y_ticks_size=y_ticks_size*html_size_multiplier
-            legend_title_size=legend_title_size*html_size_multiplier
-            legend_size=legend_size*html_size_multiplier*.75
-
-            # Detailed labels for html plots
-            if label_info == True:
-                label = f'{label}_info'
-
-    else:
-        is_html = False
+        if label_info: # Detailed labels for html plots
+            label = f'{label}_info'
 
     # Organize data by specified 'size' column, typically input abundance
-    sizes=(1,100)
+    sizes = (1, 100)
     size_norm = None
-    if size in [False,'False','false', None]: # No size
-        size = None 
+    _vmin, _vmax = None, None
 
+    if size in [False, 'False', 'false', None]:
+        size = None
     else:
         if size is not None and size in df.columns:
-            # Filter by size dimensions
-            if size_dims is not None: 
-                df = df[(df[size]>=size_dims[0])&(df[size]<=size_dims[1])]
+            if size_dims is not None: # Filter by size dimensions
+                df = df[(df[size] >= size_dims[0]) & (df[size] <= size_dims[1])].copy()
 
-            # Shared size normalization across all scatter calls so marker areas are consistent
-            _vmin, _vmax = None, None
-            if display_legend:
+            if display_legend: # Shared size normalization across all scatter calls so marker areas are consistent
                 if size_dims is None:
                     _vmin = df[size].min()
                     _vmax = df[size].max()
                 else:
-                    _vmin = size_dims[0]
-                    _vmax = size_dims[1]
-                # Guard against degenerate case where all values are equal
-                if _vmin == _vmax:
+                    _vmin, _vmax = size_dims
+
+                if _vmin == _vmax: # Guard against degenerate case where all values are equal
                     _vmax = _vmin + 1e-12
+
                 size_norm = mcolors.Normalize(vmin=_vmin, vmax=_vmax)
-    
+
     # Set dimensions
-    if x_axis_dims==(0,0): x_axis_dims=(min(df[x]),max(df[x]))
-    if y_axis_dims==(0,0): y_axis_dims=(min(df[y]),max(df[y]))
+    if x_axis_dims == (0, 0):
+        x_axis_dims = (min(df[x]), max(df[x]))
+    if y_axis_dims == (0, 0):
+        y_axis_dims = (min(df[y]), max(df[y]))
 
     # Generate figure
-    fig, ax = plt.subplots(figsize=figsize)
+    col_vals = _facet_values(df, facetx, order=facetx_order)
+    row_vals = _facet_values(df, facety, order=facety_order)
+    ncols = len(col_vals)
+    nrows = len(row_vals)
+    faceting = _is_faceted(facetx, facety)
 
-    # with data
-    if display_legend==False: size=None
-    stys='Change'
-    sns.scatterplot(
-        data=df[df[y]<0],
-        x=x, y=y,
-        hue=y, edgecolor=edgecol, palette='Blues_r', 
-        style=stys, style_order=stys_order if stys_order else None, markers=mark_order if mark_order else None,
-        size=size if display_legend else None, sizes=sizes, size_norm=size_norm,
-        legend=False,
-        ax=ax, **kwargs)
-    sns.scatterplot(
-        data=df[df[y]>=0],
-        x=x, y=y,
-        hue=y, edgecolor=edgecol, palette='Reds', 
-        style=stys, style_order=stys_order if stys_order else None, markers=mark_order if mark_order else None,
-        size=size if display_legend else None, sizes=sizes, size_norm=size_norm, 
-        legend=False,
-        ax=ax, **kwargs)
-    
-    # with x-axis line
-    if display_axis == True:
-        ax.plot([x_axis_dims[0], x_axis_dims[1]], [0,0], color='black', linestyle='-', linewidth=1)
-        
-    # with legend
-    if display_legend == True:
-        if size_norm is not None and size is not None: # Add consistent size legend with 5 representative values
-            legend_title_props = FontProperties(weight=legend_title_weight, size=legend_title_size)
-            if stys is not None and mark_order is not None and stys_order is not None: # Add stys legend too
-                legend_vals = np.linspace(_vmin, _vmax, len(mark_order))
-                for lv,mark,sty in zip(legend_vals,mark_order,stys_order):
-                    plt.scatter([], [], s=np.interp(lv, [_vmin, _vmax], sizes), color='lightgray', label=f'{lv:.2g}; {sty}', marker=mark)
-                if is_html:
-                    if legend_bbox_to_anchor == (1,1): legend_bbox_to_anchor = (-0.1,-0.2)
-                    if legend_ncol == 1: legend_ncol = 3
-                    plt.legend(title=legend_title if legend_title!='' else f'{size}; {stys}', 
-                                title_fontproperties=legend_title_props, fontsize=legend_size,
-                                bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol,
-                                columnspacing=legend_columnspacing,    # space between columns
-                                handletextpad=legend_handletextpad,    # space between marker and text
-                                labelspacing=legend_labelspacing,      # vertical space between entries
-                                borderpad=legend_borderpad,            # padding inside legend box
-                                handlelength=legend_handlelength)      # marker length
-                else:
-                    plt.legend(title=legend_title if legend_title!='' else f'{size}; {stys}', 
-                            title_fontproperties=legend_title_props, fontsize=legend_size,
-                            bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol)
-            else:
-                legend_vals = np.linspace(_vmin, _vmax, 5)
-                for lv in legend_vals:
-                    plt.scatter([], [], s=np.interp(lv, [_vmin, _vmax], sizes), color='lightgray', label=f'{lv:.2g}')
-                plt.legend(title=legend_title if legend_title!='' else size, 
-                            title_fontproperties=legend_title_props, fontsize=legend_size,
-                            bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc, ncol=legend_ncol)
-    
-    # with secondary structure
-    if secondary_structure is not None:
-        # parameters for the secondary-structure "track"
-        if ss_h is None:
-            ss_h  = 0.5 # height of secondary structure track
-        if ss_y is None:
-            ss_y  = min(df[y])-2*0.5 # position below min y value
+    fig, axes = plt.subplots(
+        nrows=nrows,
+        ncols=ncols,
+        figsize=figsize,
+        sharex=facety is not None,
+        sharey=facetx is not None,
+    )
+    axes = np.array(axes).reshape(nrows, ncols)
 
-        # secondary structure
-        for ss_description in secondary_structure['ss_description'].unique():
-            ss_df = secondary_structure[secondary_structure['ss_description']==ss_description]
-            
-            if is_html:
-                ss_spans = [(row.start-1, row.end - row.start+1) for _, row in ss_df.iterrows()]
-                ax.broken_barh(ss_spans, (ss_y, ss_h), label=ss_description, facecolors=ss_df['ss_color'].iloc[0])
-            else:
-                for xmin, xmax in t.zip_cols(df=ss_df, cols=['start','end']):
-                    ax.axvspan(
-                        xmin-0.5,
-                        xmax+0.5,
-                        facecolor=ss_df['ss_color'].iloc[0],
-                    alpha=0.15,
-                    edgecolor='none',
-                    zorder=0)  # put behind scatter points
+    # Plotting function for torn() to allow for shared legend across facets and consistent formatting
+    def _add_torn_legend(ax):
+        if not display_legend or size_norm is None or size is None:
+            return
 
-    # with labels
-    if display_labels == True:
+        legend_title_props = FontProperties(
+            weight=legend_title_weight,
+            size=legend_title_size
+        )
+
+        if stys is not None and mark_order is not None and stys_order is not None:
+            legend_vals = np.linspace(_vmin, _vmax, len(mark_order))
+
+            for lv, mark, sty in zip(legend_vals, mark_order, stys_order):
+                ax.scatter(
+                    [], [],
+                    s=np.interp(lv, [_vmin, _vmax], sizes),
+                    color='lightgray',
+                    label=f'{lv:.2g}; {sty}',
+                    marker=mark
+                )
+
+            _legend_title = legend_title if legend_title != '' else f'{size}; {stys}'
+
+        else:
+            legend_vals = np.linspace(_vmin, _vmax, 5)
+
+            for lv in legend_vals:
+                ax.scatter(
+                    [], [],
+                    s=np.interp(lv, [_vmin, _vmax], sizes),
+                    color='lightgray',
+                    label=f'{lv:.2g}'
+                )
+
+            _legend_title = legend_title if legend_title != '' else size
+
         if is_html:
-            # For HTML, show labels interactively as tooltips instead of static text
+            bbox = legend_bbox_to_anchor
+            ncol = legend_ncol
+
+            if bbox == (1, 1):
+                bbox = (-0.1, -0.2)
+            if ncol == 1:
+                ncol = 3
+
+            ax.legend(
+                title=_legend_title,
+                title_fontproperties=legend_title_props,
+                fontsize=legend_size,
+                bbox_to_anchor=bbox,
+                loc=legend_loc,
+                ncol=ncol,
+                columnspacing=legend_columnspacing,
+                handletextpad=legend_handletextpad,
+                labelspacing=legend_labelspacing,
+                borderpad=legend_borderpad,
+                handlelength=legend_handlelength
+            )
+        else:
+            ax.legend(
+                title=_legend_title,
+                title_fontproperties=legend_title_props,
+                fontsize=legend_size,
+                bbox_to_anchor=legend_bbox_to_anchor,
+                loc=legend_loc,
+                ncol=legend_ncol
+            )
+
+    def _format_ticks(ax):
+        plt.sca(ax)
+
+        if x_ticks == []:
+            if x_ticks_rot == 0:
+                plt.xticks(rotation=x_ticks_rot, ha='center', va='top',
+                           fontfamily=x_ticks_font, fontsize=x_ticks_size)
+            elif x_ticks_rot == 90:
+                plt.xticks(rotation=x_ticks_rot, ha='right', va='center',
+                           fontfamily=x_ticks_font, fontsize=x_ticks_size)
+            else:
+                plt.xticks(rotation=x_ticks_rot, ha='right',
+                           fontfamily=x_ticks_font, fontsize=x_ticks_size)
+        else:
+            if x_ticks_rot == 0:
+                plt.xticks(ticks=x_ticks, labels=x_ticks, rotation=x_ticks_rot,
+                           ha='center', va='top',
+                           fontfamily=x_ticks_font, fontsize=x_ticks_size)
+            elif x_ticks_rot == 90:
+                plt.xticks(ticks=x_ticks, labels=x_ticks, rotation=x_ticks_rot,
+                           ha='right', va='center',
+                           fontfamily=x_ticks_font, fontsize=x_ticks_size)
+            else:
+                plt.xticks(ticks=x_ticks, labels=x_ticks, rotation=x_ticks_rot,
+                           ha='right',
+                           fontfamily=x_ticks_font, fontsize=x_ticks_size)
+
+        if y_ticks == []:
+            plt.yticks(rotation=y_ticks_rot, fontfamily=y_ticks_font, fontsize=y_ticks_size)
+        else:
+            plt.yticks(ticks=y_ticks, labels=y_ticks, rotation=y_ticks_rot,
+                       fontfamily=y_ticks_font, fontsize=y_ticks_size)
+
+    def _draw_secondary_structure(ax, df_sub):
+        if secondary_structure is None:
+            return
+
+        _ss_h = ss_h if ss_h is not None else 0.5
+        _ss_y = ss_y if ss_y is not None else min(df_sub[y]) - 1.0
+
+        for ss_description in secondary_structure['ss_description'].unique():
+            ss_df = secondary_structure[secondary_structure['ss_description'] == ss_description]
+
+            if is_html:
+                ss_spans = [
+                    (row.start - 1, row.end - row.start + 1)
+                    for _, row in ss_df.iterrows()
+                ]
+                ax.broken_barh(
+                    ss_spans,
+                    (_ss_y, _ss_h),
+                    label=ss_description,
+                    facecolors=ss_df['ss_color'].iloc[0]
+                )
+            else:
+                for xmin, xmax in t.zip_cols(df=ss_df, cols=['start', 'end']):
+                    ax.axvspan(
+                        xmin - 0.5,
+                        xmax + 0.5,
+                        facecolor=ss_df['ss_color'].iloc[0],
+                        alpha=0.15,
+                        edgecolor='none',
+                        zorder=0
+                    )
+
+    def _draw_labels(ax, df_sub):
+        if not display_labels:
+            return
+
+        if is_html:
             pts = ax.scatter(
-                x=df[x],
-                y=df[y],
+                x=df_sub[x],
+                y=df_sub[y],
                 s=20,
                 alpha=0
             )
-            labels_list = df[label].fillna("").astype(str).tolist()
+            labels_list = df_sub[label].fillna("").astype(str).tolist()
             tooltip = p.SafeHTMLTooltip(pts, labels_list)
             clicker = p.ClickTooltip(pts, labels_list)
             mpld3.plugins.connect(fig, tooltip, clicker)
         else:
-            # For static images, keep labels as always-visible text
-            for i, l in enumerate(df[label]):
-                plt.text(
-                    x=df.iloc[i][x],
-                    y=df.iloc[i][y],
-                    s=l
+            for ii, lab in enumerate(df_sub[label]):
+                ax.text(
+                    x=df_sub.iloc[ii][x],
+                    y=df_sub.iloc[ii][y],
+                    s=lab
                 )
+
+    def _draw_panel(df_sub: pd.DataFrame, ax, *, c=None, r=None, i=0, j=0):
+        plt.sca(ax)
+
+        _size = size if display_legend else None
+
+        sns.scatterplot(
+            data=df_sub[df_sub[y] < 0],
+            x=x,
+            y=y,
+            hue=y,
+            edgecolor=edgecol,
+            palette='Blues_r',
+            style=stys,
+            style_order=stys_order if stys_order else None,
+            markers=mark_order if mark_order else None,
+            size=_size,
+            sizes=sizes,
+            size_norm=size_norm,
+            legend=False,
+            ax=ax,
+            **kwargs
+        )
+
+        sns.scatterplot(
+            data=df_sub[df_sub[y] >= 0],
+            x=x,
+            y=y,
+            hue=y,
+            edgecolor=edgecol,
+            palette='Reds',
+            style=stys,
+            style_order=stys_order if stys_order else None,
+            markers=mark_order if mark_order else None,
+            size=_size,
+            sizes=sizes,
+            size_norm=size_norm,
+            legend=False,
+            ax=ax,
+            **kwargs
+        )
+
+        if display_axis:
+            ax.plot(
+                [x_axis_dims[0], x_axis_dims[1]],
+                [0, 0],
+                color='black',
+                linestyle='-',
+                linewidth=1
+            )
+
+        _draw_secondary_structure(ax, df_sub)
+        _add_torn_legend(ax)
+        _draw_labels(ax, df_sub)
+
+        x_axis_panel, y_axis_panel = _facet_axis_labels(
+            x_axis,
+            y_axis,
+            x_default=x,
+            y_default=y,
+            facetx=facetx,
+            facety=facety,
+            c=c,
+            r=r,
+            j=j,
+            i=i,
+            ncols=ncols,
+            nrows=nrows,
+            space_capitalize=space_capitalize
+        )
+
+        ax.set_xlabel(
+            x_axis_panel,
+            fontsize=x_axis_size,
+            fontweight=x_axis_weight,
+            fontfamily=x_axis_font,
+            labelpad=x_axis_pad
+        )
+        ax.set_ylabel(
+            y_axis_panel,
+            fontsize=y_axis_size,
+            fontweight=y_axis_weight,
+            fontfamily=y_axis_font,
+            labelpad=y_axis_pad
+        )
+
+        ax.set_xlim(x_axis_dims[0], x_axis_dims[1])
+        ax.set_ylim(y_axis_dims[0], y_axis_dims[1])
+
+        _format_ticks(ax)
+
+    for i, r in enumerate(row_vals):
+        for j, c in enumerate(col_vals):
+            ax = axes[i, j]
+            df_sub = _subset_for_facet(df, facetx=facetx, facety=facety, c=c, r=r)
+
+            if len(df_sub) == 0:
+                ax.set_visible(False)
+                continue
+
+            _draw_panel(df_sub, ax, c=c, r=r, i=i, j=j)
+
+            panel_title = _subplot_title(
+                idx=i * ncols + j,
+                c=c,
+                r=r,
+                facetx=facetx,
+                facety=facety,
+                subplot_titles=subplot_titles,
+                title=title
+            )
+
+            if panel_title != '':
+                ax.set_title(
+                    panel_title,
+                    fontsize=title_size,
+                    fontweight=title_weight,
+                    fontfamily=title_font
+                )
+
+            if legend_mode != "figure":
+                _handle_panel_legend(
+                    ax,
+                    legend_mode=legend_mode,
+                    i=i,
+                    j=j
+                )
+            _hide_inner_axis_labels(ax, i=i, j=j, nrows=nrows, ncols=ncols)
+
+    if title == '' and file is not None:
+        title = re_un_cap(".".join(file.split(".")[:-1])) if space_capitalize else ".".join(file.split(".")[:-1])
+
+    if title != '' and faceting:
+        fig.suptitle(title, fontsize=title_size, fontweight=title_weight, family=title_font)
     
-    # Set x axis
-    if x_axis=='': x_axis=x
-    plt.xlabel(x_axis, fontsize=x_axis_size, fontweight=x_axis_weight,fontfamily=x_axis_font, labelpad=x_axis_pad)
-    if x_ticks==[]: 
-        if x_ticks_rot==0: plt.xticks(rotation=x_ticks_rot,ha='center',va='top',fontfamily=x_ticks_font,fontsize=x_ticks_size)
-        elif x_ticks_rot == 90: plt.xticks(rotation=x_ticks_rot,ha='right',va='center',fontfamily=x_ticks_font,fontsize=x_ticks_size)
-        else: plt.xticks(rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font,fontsize=x_ticks_size)
-    else: 
-        if x_ticks_rot==0: plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot, ha='center',va='top',fontfamily=x_ticks_font,fontsize=x_ticks_size)
-        elif x_ticks_rot == 90: plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot,ha='right',va='center',fontfamily=x_ticks_font,fontsize=x_ticks_size)
-        else: plt.xticks(ticks=x_ticks,labels=x_ticks,rotation=x_ticks_rot,ha='right',fontfamily=x_ticks_font,fontsize=x_ticks_size)
-    
-    # Set y axis
-    if y_axis=='': y_axis=y
-    plt.ylabel(y_axis, fontsize=y_axis_size, fontweight=y_axis_weight,fontfamily=y_axis_font, labelpad=y_axis_pad)
-
-    if y_ticks==[]: plt.yticks(rotation=y_ticks_rot,fontfamily=y_ticks_font,fontsize=y_ticks_size)
-    else: plt.yticks(ticks=y_ticks,labels=y_ticks,rotation=y_ticks_rot,fontfamily=y_ticks_font,fontsize=y_ticks_size)
-
-    # Set title
-    if title=='' and file is not None: 
-        if space_capitalize: title=p.re_un_cap(".".join(file.split(".")[:-1]))
-        else: title=".".join(file.split(".")[:-1])
-    plt.title(title, fontsize=title_size, fontweight=title_weight, family=title_font)
-
-    # Save & show fig; return dataframe
-    p.save_fig(file=file, dir=dir, fig=fig, dpi=dpi, transparent=transparent, PDB_pt=PDB_pt, icon='tornado')
-    if show:
-        ext = file.split('.')[-1].lower() if file is not None else ''
-        if ext not in ('html', 'json'):
-            plt.show()
+    if display_legend and legend_mode == "figure":
+        if legend_title != '':
+            _legend_title = legend_title
+        elif size is not None:
+            _legend_title = f'{size}; {stys}'
         else:
-            mpld3.show(fig)
+            _legend_title = stys
+
+        _make_figure_legend(
+            fig,
+            axes,
+            legend_title=_legend_title,
+            legend_title_size=legend_title_size,
+            legend_title_weight=legend_title_weight,
+            legend_size=legend_size,
+            legend_bbox_to_anchor=legend_bbox_to_anchor,
+            legend_loc=legend_loc,
+            legend_items=(0, 0),
+            legend_ncol=legend_ncol
+        )
+
+    fig.tight_layout()
+
+    _final_save_show(
+        fig,
+        file=file,
+        dir=dir,
+        dpi=dpi,
+        transparent=transparent,
+        PDB_pt=PDB_pt,
+        icon='tornado',
+        show=show
+    )
+
+    plt.close()
+
     if return_df:
         return df
+    return fig, axes
 
-def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, scores_col: str, size: str =None, size_dims: tuple=None, z_col: str=None, z_var: str=None,
+def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, scores_col: str, size: str =None, size_dims: tuple=None,
         conservative: bool=True, method: str='pearson', weighted: bool=True, label: str='Edit', label_size: int=16,
         label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None, DSSP: str=None, chain_id: str=None,
         file: str=None, dir: str=None, edgecol: str='black', figsize: tuple=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
@@ -4576,8 +4802,6 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, scores_col: str
     scores_col (str): column name for values to correlate (e.g. log2(FC))
     size (str, optional): size column name (Default: None)
     size_dims (tuple, optional): (minimum,maximum) values in size column (Default: None)
-    z_col (str, optional): find rows with 'z_var' in this column for log2(FC) z-score normalization (Default: None)
-    z_var (str, optional): use rows with 'z_var' for log2(FC) z-score normalization (Default: None)
     conservative (bool, optional): use conservative approach for p-value and size column (minimum value, default: True); alternatively, use combined evidence approach (sum values)
     method (str, optional): correlation method (Default: 'pearson'). Options: 'pearson', 'spearman', 'kendall'
     weighted (bool, optional): weighted correlation by size column (Default: True)
@@ -4918,7 +5142,7 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, scores_col: str
 
     # Set title
     if title=='' and file is not None: 
-        if space_capitalize: title=p.re_un_cap(".".join(file.split(".")[:-1]))
+        if space_capitalize: title=re_un_cap(".".join(file.split(".")[:-1]))
         else: ".".join(file.split(".")[:-1])
     title += corr_eq
     plt.title(title, fontsize=title_size, fontweight=title_weight, family=title_font)
@@ -4934,9 +5158,10 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, scores_col: str
     if return_df:
         return df
 
-def heat(df: pd.DataFrame | str, cond_col: str, cond: str, scores_col: str, wt_prot: str, wt_res: int, cutoff_col: str=None, cutoff: float=0, aa: str='aa', label: str='Edit',
+def heat(df: pd.DataFrame | str, scores_col: str, wt_prot: str, wt_res: int, cutoff_col: str=None, cutoff: float=0, aa: str='aa', label: str='Edit',
+        facetx: str=None, facety: str=None, facetx_order: list=None, facety_order: list=None, subplot_titles: str="facet_values",
         file: str=None, dir: str=None, edgecol: str='black', lw: int=1, center: float=0, cmap: str="seismic", cmap_WT: str='forestgreen', cmap_not_WT: str='lightgray', sq: bool=False, 
-        cbar: bool=True, cbar_label: str=None, cbar_label_size: int=None, cbar_label_weight: str='bold', cbar_tick_size: int=None, cbar_shrink: float=None, cbar_aspect: int=None, cbar_pad: float=None, cbar_orientation: str=None,
+        cbar: bool=True, cbar_label: str=None, cbar_label_size: int=None, cbar_label_weight: str='bold', cbar_tick_size: int=None, cbar_shrink: float=None, cbar_aspect: int=None, cbar_pad: float=None, cbar_orientation: str=None, cbar_mode: str = "figure",
         title: str='', title_size: int=12, title_weight: str='bold', title_font: str='Arial',  figsize: tuple=(6,6), vertical: bool=True,
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=None, x_ticks_font: str='Arial',
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=None, y_ticks_font: str='Arial',
@@ -4946,15 +5171,18 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, scores_col: str, wt_p
     
     Parameters:
     df (dataframe | str): pandas dataframe (or file path) from st.compare()
-    cond_col (str): Condition column name
-    cond (str): Condition column value for filtering
     scores_col (str): scores column name (e.g. 'log2(FC)')
     wt_prot (str): WT protein sequence
     wt_res (int): WT protein sequence residue start number
-    cutoff_col (str, optional): comparison count mean column for masking low-abundance values
-    cutoff (float, optional): comparison count mean cutoff for masking low-abundance values
+    cutoff_col (str, optional): Cutoff column name for masking low-abundance values
+    cutoff (float, optional): Cutoff for masking low-abundance values
     aa (str, optional): AA saturation mutagenesis (Options: 'aa' [default], 'aa_subs', 'aa_ins', 'aa_dels'). The 'aa' option makes all amino acid substitutions ('aa_subs'), +1 amino acid insertions ('aa_ins'), and -1 amino acid deletions ('aa_dels').
     label (str, optional): label column name (Default: 'Edit'). Can't be None.
+    facetx (str, optional): column name for facet columns (creates one subplot per category in this column, arranged in separate columns)
+    facety (str, optional): column name for facet rows (creates one subplot per category in this column, arranged in seperate rows)
+    facetx_order (list, optional): order of facet columns
+    facety_order (list, optional): order of facet rows
+    subplot_titles (str, optional): Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none
     file (str, optional): save plot to filename
     dir (str, optional): save plot to directory
     edgecol (str, optional): point edge color
@@ -4973,6 +5201,7 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, scores_col: str, wt_p
     cbar_aspect (int, optional): colorbar aspect ratio
     cbar_pad (float, optional): colorbar padding
     cbar_orientation (str, optional): colorbar orientation ('vertical' | 'horizontal')
+    cbar_mode (str, optional): colorbar mode ('figure', 'each', 'none')
     title (str, optional): plot title
     title_size (int, optional): plot title font size
     title_weight (str, optional): plot title bold, italics, etc.
@@ -5015,9 +5244,6 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, scores_col: str, wt_p
     if cbar_aspect is not None: cbar_kws['aspect'] = cbar_aspect
     if cbar_pad is not None: cbar_kws['pad'] = cbar_pad
     if cbar_orientation is not None: cbar_kws['orientation'] = cbar_orientation
-    
-    # Isolate condition dataframe
-    df = df[df[cond_col]==cond]
 
     # Add label info: Before, Number, After, AA properties
     df = add_label_info(df=df, label=label)
@@ -5112,7 +5338,7 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, scores_col: str, wt_p
                     cutoff_ls.append(df_temp3[cutoff_col].to_list()[0])
 
                     if df_temp3.shape[0]>1:
-                        print(f"Warning: Multiple entries found for {wt_prot[num-wt_res]}{num}{DMS_after} in condition {cond}. Using first entry.")
+                        print(f"Warning: Multiple entries found for {wt_prot[num-wt_res]}{num}{DMS_after}. Using first entry.")
 
                 else: # Absent
                     scores_ls.append(None)
@@ -5125,159 +5351,367 @@ def heat(df: pd.DataFrame | str, cond_col: str, cond: str, scores_col: str, wt_p
             df_ls.append(pd.DataFrame(vals))
 
         return pd.concat(df_ls, ignore_index=True)
-
-    # Restrict to specified aa mutations
-    df2 = pd.DataFrame()
-
-    if aa == 'aa_subs' or aa == 'aa': # Substitutions
-        df2 = pd.concat([df2, 
-                        dms_region(df_temp = df[(df['DMS_Before'].str.len()==1) & (df['DMS_After'].str.len()==1)],
-                                    aa_='aa_subs')], ignore_index=True)
     
-    if aa == 'aa_ins' or aa == 'aa': # +1 Insertions
-        df2 = pd.concat([df2, 
-                        dms_region(df_temp = df[df['DMS_After'].str.startswith('ins')],
-                                    aa_='aa_ins')], ignore_index=True)
-    
-    if aa == 'aa_dels' or aa == 'aa': # -1 Deletions
-        df2 = pd.concat([df2, 
-                        dms_region(df_temp = df[df['DMS_After']=='del'],
-                                    aa_='aa_dels')], ignore_index=True)
+    # Global value normalization
+    vmin = df[scores_col].min()
+    vmax = df[scores_col].max()
 
-    # Make DMS grid
-    if aa == 'aa': index = list(aa_props.keys()) + ['del'] + [f"ins{key}" for key in aa_props.keys() if key != '*']
-    elif aa == 'aa_subs': index = list(aa_props.keys())
-    elif aa == 'aa_ins': index = [f"ins{key}" for key in aa_props.keys() if key != '*']
-    elif aa == 'aa_dels': index = ['del']
+    # Build facet layout
+    col_vals = _facet_values(df, facetx, order=facetx_order)
+    row_vals = _facet_values(df, facety, order=facety_order)
+    ncols = len(col_vals)
+    nrows = len(row_vals)
+    faceting = (facetx is not None) or (facety is not None)
 
-    df2_scores = pd.pivot(df2, columns='AA Number', index='DMS_After', values=scores_col).astype(float).reindex(index)
-    #df2_label = pd.pivot(df2, columns='AA Number', index='DMS_After', values=label).astype(str).reindex(index)
-    df2_compare_count_mean = pd.pivot(df2, columns='AA Number', index='DMS_After', values=cutoff_col).astype(float).reindex(index)
+    fig, axes = plt.subplots(
+        nrows=nrows,
+        ncols=ncols,
+        figsize=figsize,
+        sharex=facety is not None,
+        sharey=facetx is not None
+    )
+    axes = np.array(axes).reshape(nrows, ncols)
 
-    # Mask values below cutoff & WT
-    mask_not_WT = np.zeros(df2_scores.shape, dtype=bool)
-    mask_WT = np.zeros(df2_scores.shape, dtype=bool)
+    # Figure-level colorbar
+    cbar_ax = None
+    draw_fig_cbar = cbar and cbar_mode == "figure"
 
-    # Iterate through dataframe to set masks
-    nrows, ncols = df2_scores.shape
-    for i in range(nrows):
-        for j in range(ncols):
-            if df2_scores.index[i] == df2[(df2['AA Number'] == df2_scores.columns[j])].reset_index(drop=True).iloc[0,0]:
-                mask_WT[i, j] = True # WT
-            elif np.isnan(df2_scores.iat[i, j]) or df2_compare_count_mean.iat[i, j] < cutoff:
-                mask_not_WT[i, j] = True # NaN value or comparison count mean below cutoff
+    if draw_fig_cbar:
+        if cbar_orientation == "horizontal":
+            cbar_ax = fig.add_axes([0.25, 0.04, 0.5, 0.03])
+        else:
+            cbar_ax = fig.add_axes([0.92, 0.15, 0.03, 0.7])
 
-    if vertical==True: # Vertical orientation
 
-        # Create figure
-        fig, ax = plt.subplots(figsize=(figsize[0],figsize[1]))
-        
-        sns.heatmap(df2_scores, mask=mask_not_WT | mask_WT, # Data heatmap
-                    cbar_kws=cbar_kws,
-                    cmap=cmap, center=center,
-                    ax=ax, linecolor=edgecol, linewidths=lw, 
-                    cbar=cbar, square=sq, 
-                    **kwargs)
-        
-        sns.heatmap(mask_not_WT, mask=~mask_not_WT, # Masked low-abundance values
-                    cmap=[cmap_not_WT], center=center,
-                    ax=ax, linecolor=edgecol, linewidths=lw, 
-                    cbar=False, square=sq, 
-                    **kwargs)
+    def _build_dms_grid(df_temp: pd.DataFrame):
+        df2 = pd.DataFrame()
 
-        sns.heatmap(mask_WT, mask=~mask_WT, # Masked WT values
-                    cmap=[cmap_WT], center=center,
-                    ax=ax, linecolor=edgecol, linewidths=lw, 
-                    cbar=False, square=sq, 
-                    **kwargs)
-        
-        # Format x axis
-        if x_axis=='': ax.set_xlabel("AA",fontsize=x_axis_size,fontweight=x_axis_weight,fontfamily=x_axis_font, labelpad=x_axis_pad)
-        else: ax.set_xlabel(x_axis,fontsize=x_axis_size,fontweight=x_axis_weight,fontfamily=x_axis_font, labelpad=x_axis_pad)
-        
-        # Format y axis
-        if y_axis=='': ax.set_ylabel("Change",fontsize=y_axis_size,fontweight=y_axis_weight,fontfamily=y_axis_font, labelpad=y_axis_pad) # Add y axis label
-        else: ax.set_ylabel(y_axis,fontsize=y_axis_size,fontweight=y_axis_weight,fontfamily=y_axis_font, labelpad=y_axis_pad)
-        
-        # Format x ticks
-        ax.set_xticks(np.arange(df2_scores.shape[1]) + 0.5)
-        ax.set_xticklabels(df2['DMS_Before_Number'].unique())
-        if x_ticks_rot is None: x_ticks_rot=45
-        if x_ticks_rot==0: plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, ha="center", va="top", rotation_mode="anchor",fontname=x_ticks_font,fontsize=x_ticks_size) 
-        elif x_ticks_rot == 90: plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, ha="right", va="center", rotation_mode="anchor",fontname=x_ticks_font,fontsize=x_ticks_size)
-        else: plt.setp(ax.get_xticklabels(), rotation=x_ticks_rot, ha="right",rotation_mode="anchor",fontname=x_ticks_font,fontsize=x_ticks_size) 
-        
-        # Format y ticks
-        ax.set_yticks(np.arange(df2_scores.shape[0]) + 0.5)
-        ax.set_yticklabels(df2_scores.index)
-        if y_ticks_rot is None: y_ticks_rot=0
-        plt.setp(ax.get_yticklabels(), rotation=y_ticks_rot, va='center', ha="right",rotation_mode="anchor",fontname=y_ticks_font,fontsize=y_ticks_size)
-    
-    else: # Horizontal orientation (Transpose)
+        if aa == 'aa_subs' or aa == 'aa':
+            df2 = pd.concat([
+                df2,
+                dms_region(
+                    df_temp=df_temp[
+                        (df_temp['DMS_Before'].str.len() == 1) &
+                        (df_temp['DMS_After'].str.len() == 1)
+                    ],
+                    aa_='aa_subs'
+                )
+            ], ignore_index=True)
 
-        # Create figure
-        fig, ax = plt.subplots(figsize=(figsize[0],figsize[1]))
-        
-        sns.heatmap(df2_scores.T, mask=mask_not_WT.T | mask_WT.T, # Data heatmap
-                    cbar_kws=cbar_kws,
-                    cmap=cmap, center=center,
-                    ax=ax, linecolor=edgecol, linewidths=lw, 
-                    cbar=cbar, square=sq, 
-                    **kwargs)
-        
-        sns.heatmap(mask_not_WT.T, mask=~mask_not_WT.T, # Masked low-abundance values
-                    cmap=[cmap_not_WT], center=center,
-                    ax=ax, linecolor=edgecol, linewidths=lw, 
-                    cbar=False, square=sq, 
-                    **kwargs)
+        if aa == 'aa_ins' or aa == 'aa':
+            df2 = pd.concat([
+                df2,
+                dms_region(
+                    df_temp=df_temp[df_temp['DMS_After'].str.startswith('ins')],
+                    aa_='aa_ins'
+                )
+            ], ignore_index=True)
 
-        sns.heatmap(mask_WT.T, mask=~mask_WT.T, # Masked WT values
-                    cmap=[cmap_WT], center=center,
-                    ax=ax, linecolor=edgecol, linewidths=lw, 
-                    cbar=False, square=sq, 
-                    **kwargs)
+        if aa == 'aa_dels' or aa == 'aa':
+            df2 = pd.concat([
+                df2,
+                dms_region(
+                    df_temp=df_temp[df_temp['DMS_After'] == 'del'],
+                    aa_='aa_dels'
+                )
+            ], ignore_index=True)
 
-        # Format y axis
-        if x_axis=='': ax.set_ylabel("AA",fontsize=x_axis_size,fontweight=x_axis_weight,fontfamily=x_axis_font, labelpad=x_axis_pad)
-        else: ax.set_ylabel(x_axis,fontsize=x_axis_size,fontweight=x_axis_weight,fontfamily=x_axis_font, labelpad=x_axis_pad)
-        
-        # Format x axis
-        if y_axis=='': ax.set_xlabel("Change",fontsize=y_axis_size,fontweight=y_axis_weight,fontfamily=y_axis_font, labelpad=y_axis_pad) # Add y axis label
-        else: ax.set_xlabel(y_axis,fontsize=y_axis_size,fontweight=y_axis_weight,fontfamily=y_axis_font, labelpad=y_axis_pad)
-        
-        # Format y ticks
-        ax.set_yticks(np.arange(df2_scores.shape[1]) + 0.5)
-        ax.set_yticklabels(df2['DMS_Before_Number'].unique())
-        if x_ticks_rot is None: x_ticks_rot=0
-        plt.setp(ax.get_yticklabels(), rotation=x_ticks_rot, va="center", ha="right",rotation_mode="anchor",fontname=x_ticks_font,fontsize=x_ticks_size) 
-        
-        # Format x ticks
-        ax.set_xticks(np.arange(df2_scores.shape[0]) + 0.5)
-        ax.set_xticklabels(df2_scores.index)
-        if y_ticks_rot is None: y_ticks_rot=45
-        if y_ticks_rot==0: plt.setp(ax.get_xticklabels(), rotation=y_ticks_rot, ha="center", va="top", rotation_mode="anchor",fontname=y_ticks_font,fontsize=y_ticks_size)
-        elif y_ticks_rot == 90: plt.setp(ax.get_xticklabels(), rotation=y_ticks_rot, ha="right", va="center", rotation_mode="anchor",fontname=y_ticks_font,fontsize=y_ticks_size)
-        else: plt.setp(ax.get_xticklabels(), rotation=y_ticks_rot, ha="right",rotation_mode="anchor",fontname=y_ticks_font,fontsize=y_ticks_size)
+        if aa == 'aa':
+            index = list(aa_props.keys()) + ['del'] + [f"ins{key}" for key in aa_props.keys() if key != '*']
+        elif aa == 'aa_subs':
+            index = list(aa_props.keys())
+        elif aa == 'aa_ins':
+            index = [f"ins{key}" for key in aa_props.keys() if key != '*']
+        elif aa == 'aa_dels':
+            index = ['del']
+        else:
+            raise ValueError("aa must be one of: 'aa', 'aa_subs', 'aa_ins', 'aa_dels'")
 
-    # Format title
-    ax.set_title(title,fontsize=title_size,fontweight=title_weight,fontfamily=title_font)
+        df2_scores = (
+            pd.pivot(df2, columns='AA Number', index='DMS_After', values=scores_col)
+            .astype(float)
+            .reindex(index)
+        )
 
-    # Format cbar
-    cbar = ax.collections[0].colorbar
-    vmin, vmax = cbar.vmin, cbar.vmax
-    if center is None: center = (vmin + vmax) / 2
-    cbar.set_label(f"log2({FC})" if cbar_label is None else cbar_label, fontsize=cbar_label_size, fontweight=cbar_label_weight)
-    cbar.set_ticks([vmin, center, vmax])
-    cbar.ax.tick_params(labelsize=cbar_tick_size)
-        
-    # Set background to transparent
-    ax.set_facecolor('white')
+        df2_cutoff = (
+            pd.pivot(df2, columns='AA Number', index='DMS_After', values=cutoff_col)
+            .astype(float)
+            .reindex(index)
+        )
 
-    # Save & show fig; return dataframe
+        mask_not_WT = np.zeros(df2_scores.shape, dtype=bool)
+        mask_WT = np.zeros(df2_scores.shape, dtype=bool)
+
+        nrows_, ncols_ = df2_scores.shape
+        for ii in range(nrows_):
+            for jj in range(ncols_):
+                aa_num = df2_scores.columns[jj]
+                ref_row = df2[df2['AA Number'] == aa_num].reset_index(drop=True)
+
+                if ref_row.empty:
+                    mask_not_WT[ii, jj] = True
+                    continue
+
+                wt_after = ref_row.iloc[0]['DMS_Before']
+
+                if df2_scores.index[ii] == wt_after:
+                    mask_WT[ii, jj] = True
+                elif np.isnan(df2_scores.iat[ii, jj]) or df2_cutoff.iat[ii, jj] < cutoff:
+                    mask_not_WT[ii, jj] = True
+
+        return df2, df2_scores, mask_not_WT, mask_WT
+
+
+    def _format_cbar(ax):
+        if len(ax.collections) == 0:
+            return
+
+        cb = ax.collections[0].colorbar
+        if cb is None:
+            return
+
+        _center = center
+        if _center is None:
+            _center = (vmin + vmax) / 2
+
+        cb.set_label(
+            cbar_label if cbar_label is not None else scores_col,
+            fontsize=cbar_label_size,
+            fontweight=cbar_label_weight
+        )
+        cb.set_ticks([vmin, _center, vmax])
+
+        if cbar_tick_size is not None:
+            cb.ax.tick_params(labelsize=cbar_tick_size)
+
+    def _draw_panel(df_sub: pd.DataFrame, ax, *, c=None, r=None, i=0, j=0, draw_cbar=False):
+        df2, df2_scores, mask_not_WT, mask_WT = _build_dms_grid(df_sub)
+
+        panel_cbar_ax = cbar_ax if draw_fig_cbar and draw_cbar else None
+
+        if vertical:
+            sns.heatmap(
+                df2_scores,
+                mask=mask_not_WT | mask_WT,
+                cbar_kws=cbar_kws,
+                cmap=cmap,
+                center=center,
+                vmin=vmin,
+                vmax=vmax,
+                ax=ax,
+                linecolor=edgecol,
+                linewidths=lw,
+                cbar=draw_cbar,
+                cbar_ax=panel_cbar_ax,
+                square=sq,
+                **kwargs
+            )
+
+            sns.heatmap(
+                mask_not_WT,
+                mask=~mask_not_WT,
+                cmap=[cmap_not_WT],
+                ax=ax,
+                linecolor=edgecol,
+                linewidths=lw,
+                cbar=False,
+                square=sq,
+                **kwargs
+            )
+
+            sns.heatmap(
+                mask_WT,
+                mask=~mask_WT,
+                cmap=[cmap_WT],
+                ax=ax,
+                linecolor=edgecol,
+                linewidths=lw,
+                cbar=False,
+                square=sq,
+                **kwargs
+            )
+
+            x_axis_panel, y_axis_panel = _facet_axis_labels(
+                x_axis,
+                y_axis,
+                x_default="AA",
+                y_default="Change",
+                facetx=facetx,
+                facety=facety,
+                c=c,
+                r=r,
+                j=j,
+                i=i,
+                ncols=ncols,
+                nrows=nrows,
+                space_capitalize=True
+            )
+
+            ax.set_xlabel(x_axis_panel, fontsize=x_axis_size, fontweight=x_axis_weight, fontfamily=x_axis_font, labelpad=x_axis_pad)
+            ax.set_ylabel(y_axis_panel, fontsize=y_axis_size, fontweight=y_axis_weight, fontfamily=y_axis_font, labelpad=y_axis_pad)
+
+            ax.set_xticks(np.arange(df2_scores.shape[1]) + 0.5)
+            ax.set_xticklabels(df2['DMS_Before_Number'].unique())
+
+            _xrot = 45 if x_ticks_rot is None else x_ticks_rot
+            _yrot = 0 if y_ticks_rot is None else y_ticks_rot
+
+            if _xrot == 0:
+                plt.setp(ax.get_xticklabels(), rotation=_xrot, ha="center", va="top", rotation_mode="anchor", fontname=x_ticks_font, fontsize=x_ticks_size)
+            elif _xrot == 90:
+                plt.setp(ax.get_xticklabels(), rotation=_xrot, ha="right", va="center", rotation_mode="anchor", fontname=x_ticks_font, fontsize=x_ticks_size)
+            else:
+                plt.setp(ax.get_xticklabels(), rotation=_xrot, ha="right", rotation_mode="anchor", fontname=x_ticks_font, fontsize=x_ticks_size)
+
+            ax.set_yticks(np.arange(df2_scores.shape[0]) + 0.5)
+            ax.set_yticklabels(df2_scores.index)
+            plt.setp(ax.get_yticklabels(), rotation=_yrot, va="center", ha="right", rotation_mode="anchor", fontname=y_ticks_font, fontsize=y_ticks_size)
+
+        else:
+            sns.heatmap(
+                df2_scores.T,
+                mask=(mask_not_WT | mask_WT).T,
+                cbar_kws=cbar_kws,
+                cmap=cmap,
+                center=center,
+                vmin=vmin,
+                vmax=vmax,
+                ax=ax,
+                linecolor=edgecol,
+                linewidths=lw,
+                cbar=draw_cbar,
+                cbar_ax=panel_cbar_ax,
+                square=sq,
+                **kwargs
+            )
+
+            sns.heatmap(
+                mask_not_WT.T,
+                mask=~mask_not_WT.T,
+                cmap=[cmap_not_WT],
+                ax=ax,
+                linecolor=edgecol,
+                linewidths=lw,
+                cbar=False,
+                square=sq,
+                **kwargs
+            )
+
+            sns.heatmap(
+                mask_WT.T,
+                mask=~mask_WT.T,
+                cmap=[cmap_WT],
+                ax=ax,
+                linecolor=edgecol,
+                linewidths=lw,
+                cbar=False,
+                square=sq,
+                **kwargs
+            )
+
+            x_axis_panel, y_axis_panel = _facet_axis_labels(
+                x_axis,
+                y_axis,
+                x_default="AA",
+                y_default="Change",
+                facetx=facetx,
+                facety=facety,
+                c=c,
+                r=r,
+                j=j,
+                i=i,
+                ncols=ncols,
+                nrows=nrows,
+                space_capitalize=True
+            )
+
+            ax.set_ylabel(x_axis_panel, fontsize=x_axis_size, fontweight=x_axis_weight, fontfamily=x_axis_font, labelpad=x_axis_pad)
+            ax.set_xlabel(y_axis_panel, fontsize=y_axis_size, fontweight=y_axis_weight, fontfamily=y_axis_font, labelpad=y_axis_pad)
+
+            ax.set_yticks(np.arange(df2_scores.shape[1]) + 0.5)
+            ax.set_yticklabels(df2['DMS_Before_Number'].unique())
+
+            _xrot = 0 if x_ticks_rot is None else x_ticks_rot
+            _yrot = 45 if y_ticks_rot is None else y_ticks_rot
+
+            plt.setp(ax.get_yticklabels(), rotation=_xrot, va="center", ha="right", rotation_mode="anchor", fontname=x_ticks_font, fontsize=x_ticks_size)
+
+            ax.set_xticks(np.arange(df2_scores.shape[0]) + 0.5)
+            ax.set_xticklabels(df2_scores.index)
+
+            if _yrot == 0:
+                plt.setp(ax.get_xticklabels(), rotation=_yrot, ha="center", va="top", rotation_mode="anchor", fontname=y_ticks_font, fontsize=y_ticks_size)
+            elif _yrot == 90:
+                plt.setp(ax.get_xticklabels(), rotation=_yrot, ha="right", va="center", rotation_mode="anchor", fontname=y_ticks_font, fontsize=y_ticks_size)
+            else:
+                plt.setp(ax.get_xticklabels(), rotation=_yrot, ha="right", rotation_mode="anchor", fontname=y_ticks_font, fontsize=y_ticks_size)
+
+        if draw_cbar:
+            _format_cbar(ax)
+
+        ax.set_facecolor("white")
+
+    first_cbar_drawn = False
+
+    for i, r in enumerate(row_vals):
+        for j, c in enumerate(col_vals):
+            ax = axes[i, j]
+
+            df_sub = _subset_for_facet(df, facetx=facetx, facety=facety, c=c, r=r)
+
+            if len(df_sub) == 0:
+                ax.set_visible(False)
+                continue
+
+            draw_cbar = False
+            if cbar:
+                if cbar_mode == "each":
+                    draw_cbar = True
+                elif cbar_mode == "figure" and not first_cbar_drawn:
+                    draw_cbar = True
+                    first_cbar_drawn = True
+
+            _draw_panel(df_sub, ax, c=c, r=r, i=i, j=j, draw_cbar=draw_cbar)
+
+            panel_title = _subplot_title(idx=i * ncols + j, c=c, r=r, 
+                                        facetx=facetx, facety=facety, subplot_titles=subplot_titles, title=title)
+
+            if panel_title != '':
+                ax.set_title(
+                    panel_title,
+                    fontsize=title_size,
+                    fontweight=title_weight,
+                    fontfamily=title_font
+                )
+
+            if faceting:
+                _hide_inner_axis_labels(ax, i=i, j=j, nrows=nrows, ncols=ncols)
+
+    if title == '' and file is not None:
+        title = p.re_un_cap(".".join(file.split(".")[:-1]))
+
+    if title != '' and faceting:
+        fig.suptitle(title, fontsize=title_size, fontweight=title_weight, fontfamily=title_font)
+    elif title != '' and not faceting:
+        axes[0, 0].set_title(title, fontsize=title_size, fontweight=title_weight, fontfamily=title_font)
+
+    if draw_fig_cbar:
+        if cbar_orientation == "horizontal":
+            fig.tight_layout(rect=[0, 0.08, 1, 1])
+        else:
+            fig.tight_layout(rect=[0, 0, 0.9, 1])
+    else:
+        fig.tight_layout()
+
     p.save_fig(file=file, dir=dir, fig=fig, dpi=dpi, transparent=transparent, icon='heat')
+
     if show:
         ext = file.split('.')[-1].lower() if file is not None else ''
         if ext not in ('html', 'json'):
             plt.show()
         else:
             mpld3.show(fig)
+
+    plt.close()
+
+    return fig, axes
