@@ -166,7 +166,10 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
     subparser.add_argument("-sc", "--space_capitalize", action="store_true", help="Capitalize label/legend strings and replace underscores with spaces")
     if fastq_torn_parser == True or fastq_corr_parser == True or pwes_torn_parser == True:
         subparser.add_argument("-ddlg", "--dont_display_legend", dest='display_legend', action="store_false", default=True, help="Don't display legend on plot")
-        subparser.add_argument("-ddla", "--dont_display_labels", dest='display_labels', action="store_false", default=True, help="Don't display labels")
+        if fastq_torn_parser == True:
+            subparser.add_argument("-dl","--display_labels", type=str, nargs="+", help="Display labels for values if label column specified (Options: 'True', 'False', [])", default=argparse.SUPPRESS)
+        else:
+            subparser.add_argument("-ddla", "--dont_display_labels", dest='display_labels', action="store_false", default=True, help="Don't display labels")
         subparser.add_argument("-dda", "--dont_display_axis", dest='display_axis', action="store_false", default=True, help="Don't display x- and y-axis lines")
     if fastq_corr_parser == True:
         subparser.add_argument("-cm", "--corr_method", default=argparse.SUPPRESS, help="Display correlation line of best fit (Default: None; options: 'pearson', 'spearman', 'kendall')", choices=['pearson', 'spearman', 'kendall'])

@@ -4468,7 +4468,7 @@ def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, siz
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
         legend_title: str='',legend_title_size: int=12, legend_title_weight: str='bold', legend_size: int = 12, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1, legend_mode: str = "figure",
         legend_columnspacing: int=-3, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, html_size_multiplier: float=1.5,
-        display_legend: bool=True, display_labels: bool = False, display_axis: bool=True, return_df: bool=True, dpi: int = 0, transparent: bool=True, show: bool=True, space_capitalize: bool=True,
+        display_legend: bool=True, display_labels: bool | list = False, display_axis: bool=True, return_df: bool=True, dpi: int = 0, transparent: bool=True, show: bool=True, space_capitalize: bool=True,
         **kwargs) -> pd.DataFrame:
     ''' 
     torn(): creates tornado plot
@@ -4541,7 +4541,7 @@ def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, siz
     legend_handlelength (float, optional): marker length (Default: 0.5; only for html plots)
     html_size_multiplier (float, optional): size multiplier for html plots (Default: 1.5)
     display_legend (bool, optional): display legend on plot (Default: True)
-    display_labels (bool, optional): display labels (Default: False)
+    display_labels (bool | list, optional): display labels (Default: False); specify true or list of labels
     display_axis (bool, optional): display x-axis line (Default: True)
     dpi (int, optional): figure dpi (Default: 1200 for non-HTML, 150 for HTML)
     return_df (bool, optional): return dataframe (Default: True)
@@ -4780,27 +4780,57 @@ def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, siz
                     )
 
     def _draw_labels(ax, df_sub):
-        if not display_labels:
+        if display_labels == False or not isinstance(display_labels, list | str): # Explicitly set to false or unrecognized type, so don't display labels
             return
-
-        if is_html:
-            pts = ax.scatter(
-                x=df_sub[x],
-                y=df_sub[y],
-                s=20,
-                alpha=0
-            )
-            labels_list = df_sub[label].fillna("").astype(str).tolist()
-            tooltip = p.SafeHTMLTooltip(pts, labels_list)
-            clicker = p.ClickTooltip(pts, labels_list)
-            mpld3.plugins.connect(fig, tooltip, clicker)
-        else:
-            for ii, lab in enumerate(df_sub[label]):
-                ax.text(
-                    x=df_sub.iloc[ii][x],
-                    y=df_sub.iloc[ii][y],
-                    s=lab
+        
+        elif display_labels in ['false', 'False']: # Explicitly set to false, so don't display labels
+            return
+        
+        elif display_labels == True or display_labels in ['True', 'true']: # Display all labels
+            if is_html:
+                pts = ax.scatter(
+                    x=df_sub[x],
+                    y=df_sub[y],
+                    s=20,
+                    alpha=0
                 )
+                labels_list = df_sub[label].fillna("").astype(str).tolist()
+                tooltip = p.SafeHTMLTooltip(pts, labels_list)
+                clicker = p.ClickTooltip(pts, labels_list)
+                mpld3.plugins.connect(fig, tooltip, clicker)
+            else:
+                for ii, lab in enumerate(df_sub[label]):
+                    ax.text(
+                        x=df_sub.iloc[ii][x],
+                        y=df_sub.iloc[ii][y],
+                        s=lab
+                    )
+        
+        elif isinstance(display_labels, list): # Display specific labels
+            
+            df_sub_labels = df_sub[df_sub[label].isin(display_labels)]
+
+            if is_html:
+                pts = ax.scatter(
+                    x=df_sub_labels[x],
+                    y=df_sub_labels[y],
+                    s=20,
+                    alpha=0
+                )
+                labels_list = df_sub_labels[label].fillna("").astype(str).tolist()
+                tooltip = p.SafeHTMLTooltip(pts, labels_list)
+                clicker = p.ClickTooltip(pts, labels_list)
+                mpld3.plugins.connect(fig, tooltip, clicker)
+            else:
+                for ii, lab in enumerate(df_sub_labels[label]):
+                    ax.text(
+                        x=df_sub_labels.iloc[ii][x],
+                        y=df_sub_labels.iloc[ii][y],
+                        s=lab
+                    )
+
+        else: # Unrecognized display_labels option
+            raise(ValueError("display_labels must be a boolean or a list. Set to True to display all labels, False to display no labels, or a list of specific labels to display."))
 
     def _draw_panel(df_sub: pd.DataFrame, ax, *, c=None, r=None, i=0, j=0):
         plt.sca(ax)

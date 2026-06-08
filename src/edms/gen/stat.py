@@ -553,7 +553,7 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str,
             )
         # Include mean, list, variance, and count of values for transparency and downstream analyses
         agg_dict[f'{column_prefix}{count}'] = list
-        agg_dict[f'{column_prefix}FPM_pc'] = ['mean', list, 'var', 'count']
+        agg_dict[f'{column_prefix}FPM_pc'] = [list, 'mean', 'var', 'count']
 
         # Join samples back into 1 dataframe and split by condition
         for c, df_cond in t.split(df=t.join(dc=dc, col=sample), key=cond).items():
@@ -597,7 +597,22 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str,
             
             # Carry through comparison counts for transparency
             df_other_edit[f'{column_prefix}{count}_list_{cond_comp}'] = [df_comp_edit.iloc[0][f'{column_prefix}{count}_list']] * df_other_edit.shape[0]
-            
+            df_other_edit[f'{column_prefix}FPM_pc_list_{cond_comp}'] = [df_comp_edit.iloc[0][f'{column_prefix}FPM_pc_list']] * df_other_edit.shape[0]
+            df_other_edit[f'{column_prefix}FPM_pc_mean_{cond_comp}'] = [df_comp_edit.iloc[0][f'{column_prefix}FPM_pc_mean']] * df_other_edit.shape[0]
+            df_other_edit[f'{column_prefix}FPM_pc_var_{cond_comp}'] = [df_comp_edit.iloc[0][f'{column_prefix}FPM_pc_var']] * df_other_edit.shape[0]
+            df_other_edit[f'{column_prefix}FPM_pc_count_{cond_comp}'] = [df_comp_edit.iloc[0][f'{column_prefix}FPM_pc_count']] * df_other_edit.shape[0]
+
+            # Combined variability for this variable
+            df_other_edit[f'{column_prefix}FPM_pc_combined_relative_variability'] = [
+                np.sqrt( 
+                    (other_FPM_pc_var) / (other_FPM_pc_mean ** 2 * other_FPM_pc_count) + # Other group variability
+                    (df_comp_edit.iloc[0][f'{column_prefix}FPM_pc_var']) / (df_comp_edit.iloc[0][f'{column_prefix}FPM_pc_mean'] ** 2 * df_comp_edit.iloc[0][f'{column_prefix}FPM_pc_count']) # Comparison group variability
+                    ) 
+                for other_FPM_pc_var, other_FPM_pc_mean, other_FPM_pc_count in t.zip_cols(
+                    df=df_other_edit,
+                    cols=[f'{column_prefix}FPM_pc_var', f'{column_prefix}FPM_pc_mean', f'{column_prefix}FPM_pc_count'])
+                ]
+
             # Pseudocount-adjusted FPM
             df_other_edit[f'{column_prefix}FC'] = df_other_edit[f'{column_prefix}FPM_pc_mean'] / df_comp_edit.iloc[0][f'{column_prefix}FPM_pc_mean']
             df_other_edit[f'{column_prefix}log2(FC)'] = np.log2(df_other_edit[f'{column_prefix}FC'])
