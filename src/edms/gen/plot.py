@@ -1156,7 +1156,7 @@ def _apply_formatter_on_ax(*, ax, df_sub: pd.DataFrame, graph: str,
 
 # Graph methods
 def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
-        cols: str = None, cols_ord: list = None, cols_exclude: list | str = None,
+        cols: str = None, cols_order: list = None, cols_exclude: list | str = None,
         stys: str = None, stys_order: list = [], mark_order: list = [], label: str | None = None,
         facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
         file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', alpha: float = 1.0, edgecol: str = 'black',
@@ -1185,7 +1185,7 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
     x (str): x-axis column name
     y (str): y-axis column name
     cols (str, optional): color column name
-    cols_ord (list, optional): color column values order
+    cols_order (list, optional): color column values order
     cols_exclude (list | str, optional): color column values exclude
     stys (str, optional): styles column name
     stys_order (list, optional): styles order
@@ -1285,7 +1285,7 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
         palette = _category_color_map(
             df[cols],
             palette_or_cmap=palette_or_cmap,
-            order=cols_ord
+            order=cols_order
         )
     else:
         palette = palette_or_cmap
@@ -1318,18 +1318,18 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
         # seaborn plots
         if cols is not None and stys is not None:
             if graph == 'scat':
-                sns.scatterplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_ord,
+                sns.scatterplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_order,
                                 style=stys, style_order=stys_order, markers=mark_order,
                                 edgecolor=edgecol, alpha=alpha, palette=palette, ax=ax, **kwargs)
             elif graph == 'line':
-                sns.lineplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_ord,
+                sns.lineplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_order,
                              style=stys, style_order=stys_order, markers=mark_order,
                              palette=palette, ax=ax, **kwargs)
             elif graph == 'line_scat':
-                sns.lineplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_ord,
+                sns.lineplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_order,
                              style=stys, style_order=stys_order, markers=mark_order,
                              palette=palette, ax=ax, **kwargs)
-                sns.scatterplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_ord,
+                sns.scatterplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_order,
                                 style=stys, style_order=stys_order, markers=mark_order,
                                 edgecolor=edgecol, alpha=alpha, palette=palette, ax=ax, **kwargs)
             else:
@@ -1337,15 +1337,15 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
 
         elif cols is not None:
             if graph == 'scat':
-                sns.scatterplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_ord,
+                sns.scatterplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_order,
                                 edgecolor=edgecol, alpha=alpha, palette=palette, ax=ax, **kwargs)
             elif graph == 'line':
-                sns.lineplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_ord,
+                sns.lineplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_order,
                              ax=ax, palette=palette, **kwargs)
             elif graph == 'line_scat':
-                sns.lineplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_ord,
+                sns.lineplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_order,
                              palette=palette, ax=ax, **kwargs)
-                sns.scatterplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_ord,
+                sns.scatterplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_order,
                                 edgecolor=edgecol, alpha=alpha, palette=palette, ax=ax, **kwargs)
             else:
                 raise ValueError("Invalid graph! scat, line, or line_scat")
@@ -1563,7 +1563,7 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
 
 def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
         cats_ord: list = None, cats_exclude: list|str = None,
-        cols: str = None, cols_ord: list = None, cols_exclude: list | str = None,
+        cols: str = None, cols_order: list = None, cols_exclude: list | str = None,
         line: float = None, facetx: str = None, facety: str = None,
         facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
         file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', alpha: float = 1.0,
@@ -1595,7 +1595,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
     cats_ord (list, optional): category column values order (x- or y-axis)
     cats_exclude (list | str, optional): category column values exclude (x- or y-axis)
     cols (str, optional): color column name
-    cols_ord (list, optional): color column values order
+    cols_order (list, optional): color column values order
     cols_exclude (list | str, optional): color column values exclude
     line (float, optional): add horizontal line at y value or vertical line at x value
     facetx (str, optional): column name for facet columns (creates one subplot per category in this column, arranged in separate columns)
@@ -1701,7 +1701,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
         palette = _category_color_map(
             df[cols],
             palette_or_cmap=palette_or_cmap,
-            order=cols_ord
+            order=cols_order
         )
     else:
         palette = palette_or_cmap
@@ -1735,86 +1735,86 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
             if graph == 'bar':
                 sns.barplot(data=df_sub, x=x, y=y, order=cats_ord, errorbar=errorbar,
                             err_kws={'color': edgecol, 'linewidth': errwid}, capsize=errcap,
-                            hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw,
+                            hue=cols, hue_order=cols_order, edgecolor=edgecol, linewidth=lw,
                             palette=palette, ax=ax, **kwargs)
             elif graph == 'box':
                 sns.boxplot(data=df_sub, x=x, y=y, order=cats_ord,
-                            hue=cols, hue_order=cols_ord, linewidth=lw, palette=palette, ax=ax, **kwargs)
+                            hue=cols, hue_order=cols_order, linewidth=lw, palette=palette, ax=ax, **kwargs)
             elif graph == 'violin':
                 sns.violinplot(data=df_sub, x=x, y=y, order=cats_ord,
-                               hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw,
+                               hue=cols, hue_order=cols_order, edgecolor=edgecol, linewidth=lw,
                                palette=palette, ax=ax, **kwargs)
             elif graph == 'swarm':
                 sns.swarmplot(data=df_sub, x=x, y=y, order=cats_ord,
-                              hue=cols, hue_order=cols_ord, edgecolor=edgecol,
+                              hue=cols, hue_order=cols_order, edgecolor=edgecol,
                               alpha=alpha, linewidth=lw, dodge=dodge, size=size,
                               palette=palette, ax=ax, **kwargs)
             elif graph == 'strip':
                 sns.stripplot(data=df_sub, x=x, y=y, order=cats_ord,
-                              hue=cols, hue_order=cols_ord, edgecolor=edgecol,
+                              hue=cols, hue_order=cols_order, edgecolor=edgecol,
                               alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter,
                               size=size, palette=palette, ax=ax, **kwargs)
             elif graph == 'point':
                 sns.pointplot(data=df_sub, x=x, y=y, order=cats_ord,
                               errorbar=errorbar, err_kws={'linewidth': errwid}, capsize=errcap,
-                              hue=cols, hue_order=cols_ord, palette=palette, ax=ax, **kwargs)
+                              hue=cols, hue_order=cols_order, palette=palette, ax=ax, **kwargs)
             elif graph == 'count':
                 if (x != '') and (y != ''):
                     raise ValueError("Cannot make countplot with both x and y specified.")
                 elif x != '':
-                    sns.countplot(data=df_sub, x=x, order=cats_ord, hue=cols, hue_order=cols_ord, palette=palette, ax=ax, **kwargs)
+                    sns.countplot(data=df_sub, x=x, order=cats_ord, hue=cols, hue_order=cols_order, palette=palette, ax=ax, **kwargs)
                 elif y != '':
-                    sns.countplot(data=df_sub, y=y, order=cats_ord, hue=cols, hue_order=cols_ord, palette=palette, ax=ax, **kwargs)
+                    sns.countplot(data=df_sub, y=y, order=cats_ord, hue=cols, hue_order=cols_order, palette=palette, ax=ax, **kwargs)
                 else:
                     raise ValueError("Cannot make countplot without x or y specified.")
             elif graph=='bar_strip':
                 sns.barplot(data=df_sub, x=x, y=y, order=cats_ord, errorbar=errorbar, 
                             err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, 
-                            hue=cols, hue_order=cols_ord, edgecolor=edgecol, linewidth=lw, 
+                            hue=cols, hue_order=cols_order, edgecolor=edgecol, linewidth=lw, 
                             palette=palette, ax=ax, **kwargs)
                 sns.stripplot(data=df_sub, x=x, y=y, order=cats_ord, 
-                            hue=cols, hue_order=cols_ord, edgecolor=edgecol, 
+                            hue=cols, hue_order=cols_order, edgecolor=edgecol, 
                             alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, 
                             size=size, palette=palette, ax=ax, **kwargs)
             elif graph=='box_strip':
                 sns.boxplot(data=df_sub, x=x, y=y, order=cats_ord, 
-                            hue=cols, hue_order=cols_ord, linewidth=lw, 
+                            hue=cols, hue_order=cols_order, linewidth=lw, 
                             palette=palette, ax=ax, fill=False, fliersize=0, color=edgecol, **kwargs)
                 sns.stripplot(data=df_sub, x=x, y=y, order=cats_ord, 
-                              hue=cols, hue_order=cols_ord, edgecolor=edgecol, 
+                              hue=cols, hue_order=cols_order, edgecolor=edgecol, 
                               alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, 
                               size=size, palette=palette, ax=ax, **kwargs)
             elif graph=='violin_strip':
                 sns.violinplot(data=df_sub, x=x, y=y, order=cats_ord, 
-                               hue=cols, hue_order=cols_ord, edgecolor=edgecol, 
+                               hue=cols, hue_order=cols_order, edgecolor=edgecol, 
                                linewidth=lw, palette=palette, ax=ax, **kwargs)
                 sns.stripplot(data=df_sub, x=x, y=y, order=cats_ord, 
-                              hue=cols, hue_order=cols_ord, edgecolor=edgecol, 
+                              hue=cols, hue_order=cols_order, edgecolor=edgecol, 
                               alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, 
                               size=size, palette=palette, ax=ax, **kwargs)
             elif graph=='bar_swarm':
                 sns.barplot(data=df_sub, x=x, y=y, order=cats_ord, errorbar=errorbar, 
                             err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, 
-                            hue=cols, hue_order=cols_ord, edgecolor=edgecol, 
+                            hue=cols, hue_order=cols_order, edgecolor=edgecol, 
                             linewidth=lw, palette=palette, ax=ax, **kwargs)
                 sns.swarmplot(data=df_sub, x=x, y=y, order=cats_ord, 
-                            hue=cols, hue_order=cols_ord, edgecolor=edgecol, 
+                            hue=cols, hue_order=cols_order, edgecolor=edgecol, 
                             alpha=alpha, linewidth=lw, dodge=dodge, 
                             size=size, palette=palette, ax=ax, **kwargs)
             elif graph=='box_swarm':
                 sns.boxplot(data=df_sub, x=x, y=y, order=cats_ord, 
-                            hue=cols, hue_order=cols_ord, linewidth=lw, 
+                            hue=cols, hue_order=cols_order, linewidth=lw, 
                             palette=palette, ax=ax, fill=False, fliersize=0, color=edgecol, **kwargs)
                 sns.swarmplot(data=df_sub, x=x, y=y, order=cats_ord, 
-                            hue=cols, hue_order=cols_ord, edgecolor=edgecol, 
+                            hue=cols, hue_order=cols_order, edgecolor=edgecol, 
                             alpha=alpha, linewidth=lw, dodge=dodge, size=size, 
                             palette=palette, ax=ax, **kwargs)
             elif graph=='violin_swarm':
                 sns.violinplot(data=df_sub, x=x, y=y, order=cats_ord, 
-                               hue=cols, hue_order=cols_ord, edgecolor=edgecol, 
+                               hue=cols, hue_order=cols_order, edgecolor=edgecol, 
                                linewidth=lw, palette=palette, ax=ax, **kwargs)
                 sns.swarmplot(data=df_sub, x=x, y=y, order=cats_ord, 
-                            hue=cols, hue_order=cols_ord, edgecolor=edgecol, 
+                            hue=cols, hue_order=cols_order, edgecolor=edgecol, 
                             alpha=alpha, linewidth=lw, dodge=dodge, size=size, 
                             palette=palette, ax=ax, **kwargs)
             else:
@@ -1992,7 +1992,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
     _final_save_show(fig, file=file, dir=dir, dpi=dpi, transparent=transparent, PDB_pt=PDB_pt, icon='cat', show=show)
     return fig, axes
 
-def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord: list = None, cols_exclude: list | str = None, bins: int = 40, log10_low: int = 0,
+def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_order: list = None, cols_exclude: list | str = None, bins: int = 40, log10_low: int = 0,
         file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', edgecol: str = 'black', lw: int = 1,
         facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
         figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
@@ -2008,7 +2008,7 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord:
     df (dataframe | str): pandas dataframe (or file path)
     x (str): x-axis column name
     cols (str, optional): color column name
-    cols_ord (list, optional): color column values order
+    cols_order (list, optional): color column values order
     cols_exclude (list | str, optional): color column values exclude
     bins (int, optional): # of bins for histogram
     log10_low (int, optional): log scale lower bound
@@ -2085,7 +2085,7 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord:
         palette = _category_color_map(
             df[cols],
             palette_or_cmap=palette_or_cmap,
-            order=cols_ord
+            order=cols_order
         )
     else:
         palette = palette_or_cmap
@@ -2140,7 +2140,7 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord:
                 kde=False,
                 bins=_make_bins(df_sub),
                 hue=cols,
-                hue_order=cols_ord,
+                hue_order=cols_order,
                 edgecolor=edgecol,
                 linewidth=lw,
                 palette=palette,
@@ -2156,7 +2156,7 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord:
                 data=df_sub,
                 x=x_plot,
                 hue=cols,
-                hue_order=cols_ord,
+                hue_order=cols_order,
                 linewidth=lw,
                 palette=palette,
                 cut=0,
@@ -2174,7 +2174,7 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_ord:
                 kde=True,
                 bins=_make_bins(df_sub),
                 hue=cols,
-                hue_order=cols_ord,
+                hue_order=cols_order,
                 edgecolor=edgecol,
                 linewidth=lw,
                 palette=palette,
@@ -2699,7 +2699,7 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vals: str = None,
     plt.close()
     return fig, axes
 
-def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str = '', cutoff_value: float = 0, cutoff_keep: bool = True, cols_ord: list = [], x_ord: list = [],
+def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str = '', cutoff_value: float = 0, cutoff_keep: bool = True, cols_order: list = [], x_ord: list = [],
         facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
         file: str = None, dir: str = None, palette_or_cmap: str = 'tab20', repeats: int = 1, errcap: int = 4, vertical: bool = True,
         figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
@@ -2719,7 +2719,7 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
     cutoff_group (str, optional): column name to group by when applying cutoff
     cutoff_value (float, optional): y-axis values needs be greater than (e.g. 0)
     cutoff_keep (bool, optional): keep cutoff group even if below cutoff (Default: True)
-    cols_ord (list, optional): color column values order
+    cols_order (list, optional): color column values order
     x_ord (list, optional): x-axis column values order
     facetx (str, optional): column name for x-axis faceting
     facety (str, optional): column name for y-axis faceting
@@ -2829,8 +2829,8 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
     axes = np.array(axes).reshape(nrows, ncols)
 
     # global category ordering
-    if cols_ord != []:
-        all_categories = cols_ord
+    if cols_order != []:
+        all_categories = cols_order
     else:
         all_categories = (
             df_cut[cols]
@@ -2873,9 +2873,9 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
             aggfunc=np.std
         )
 
-        if cols_ord != []:
-            df_pivot = df_pivot.reindex(columns=cols_ord)
-            df_pivot_err = df_pivot_err.reindex(columns=cols_ord)
+        if cols_order != []:
+            df_pivot = df_pivot.reindex(columns=cols_order)
+            df_pivot_err = df_pivot_err.reindex(columns=cols_order)
 
         if x_ord != []:
             df_pivot = df_pivot.reindex(index=x_ord)

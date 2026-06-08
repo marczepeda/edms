@@ -68,7 +68,7 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
     # Optional core arguments
     if fastq_torn_parser == False and fastq_corr_parser == False and pwes_torn_parser == False:
         subparser.add_argument("-c", "--cols", type=str, help="Color column name")
-        subparser.add_argument("-co", "--cols_ord", nargs="+", help="Column order (list of values)")
+        subparser.add_argument("-co", "--cols_order", nargs="+", help="Column order (list of values)")
         subparser.add_argument("-ce", "--cols_exclude", nargs="+", help="Columns to exclude from coloring")
         subparser.add_argument("-st", "--stys", type=str, help="Style column name")
         subparser.add_argument("-so", "--stys_order", nargs="+", help="Style order (list of values)")
@@ -189,7 +189,7 @@ def add_common_plot_cat_args(subparser, fastq_parser=False, pwes_parsers=False):
         subparser.add_argument("-co", "--cats_ord", nargs="+", help="Category column values order (x- or y-axis)")
         subparser.add_argument("-ce", "--cats_exclude", nargs="+", help="Category column values exclude (x- or y-axis)")
         subparser.add_argument("-cl", "--cols", type=str, help="Color column name for grouping")
-        subparser.add_argument("-clo", "--cols_ord", nargs="+", help="Color column values order")
+        subparser.add_argument("-clo", "--cols_order", nargs="+", help="Color column values order")
         subparser.add_argument("-cle", "--cols_exclude", nargs="+", help="Color column values to exclude")
         subparser.add_argument("-fx", "--facetx", type=str, help="Column name for facet columns (creates one subplot per category in this column, arranged in separate columns)")
         subparser.add_argument("-fy", "--facety", type=str, help="Column name for facet rows (creates one subplot per category in this column, arranged in seperate rows)")
@@ -285,7 +285,7 @@ def add_common_plot_dist_args(subparser):
 
     # Optional core arguments
     subparser.add_argument("-c", "--cols", type=str, help="Color column name for grouping")
-    subparser.add_argument("-co", "--cols_ord", nargs="+", help="Custom order for color column values")
+    subparser.add_argument("-co", "--cols_order", nargs="+", help="Custom order for color column values")
     subparser.add_argument("-ce", "--cols_exclude", nargs="+", help="Color column values to exclude")
 
     # Plot customization
@@ -457,7 +457,7 @@ def add_common_plot_stack_args(subparser, fastq_parser=False):
     subparser.add_argument("-cg", "--cutoff_group", type=str, default=argparse.SUPPRESS, help="Column name to group by when applying cutoff")
     subparser.add_argument("-cv", "--cutoff_value", type=float, default=0, help="Y-axis values needs be greater than (e.g. 0)")
     subparser.add_argument("-cr", "--cutoff_remove", dest="cutoff_keep",action="store_false", help="Remove values below cutoff", default=True)
-    subparser.add_argument("-co", "--cols_ord", nargs="+", help="Order of values in the color column")
+    subparser.add_argument("-co", "--cols_order", nargs="+", help="Order of values in the color column")
     subparser.add_argument("-xo", "--x_ord", nargs="+", help="Custom order of X-axis categories")
     subparser.add_argument("-fx", "--facetx", type=str, help="Column name for facet columns (creates one subplot per category in this column, arranged in separate columns)")
     subparser.add_argument("-fy", "--facety", type=str, help="Column name for facet rows (creates one subplot per category in this column, arranged in seperate rows)")

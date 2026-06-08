@@ -1449,7 +1449,7 @@ def plot_paired(df: pd.DataFrame | str, title: str, out_dir: str,
     io.save(obj=paired_regions_alignment_status_df, dir=os.path.join(out_dir, title), file='alignment_status.csv')
     
     p.stack(df=paired_regions_alignment_status_df,x='alignment_status',y=y,
-            cols=desired_col,cols_ord=[True,False],vertical=False,figsize=(6,2),
+            cols=desired_col,cols_order=[True,False],vertical=False,figsize=(6,2),
             title=title,dir=os.path.join(out_dir, title),file=f'alignment_status{plot_suf}',show=show,**plot_kwargs)
 
     # Create, save & plot alignment distribution
@@ -1470,7 +1470,7 @@ def plot_paired(df: pd.DataFrame | str, title: str, out_dir: str,
 
     p.stack(df=paired_regions_alignment_distribution_df,
             x=desired_col,y=y,cols=id_col,palette_or_cmap='Spectral',x_ord=[True,False],vertical=False,
-            cols_ord=list(paired_regions_alignment_distribution_df[id_col]),
+            cols_order=list(paired_regions_alignment_distribution_df[id_col]),
             legend_ncol=4,legend_bbox_to_anchor=(0,-.3),figsize=(10,2),
             title=title,dir=os.path.join(out_dir, title),file=f'alignment_distribution{plot_suf}',show=show,**plot_kwargs)
 
@@ -4059,7 +4059,7 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
         return df,secondary_structure
 
 # Plot methods
-def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list = None, cats_exclude: list|str = None, cols: str=None, cols_ord: list=None, cols_exclude: list|str=None, PDB_pt: str=None, line: float = None,
+def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list = None, cats_exclude: list|str = None, cols: str=None, cols_order: list=None, cols_exclude: list|str=None, PDB_pt: str=None, line: float = None,
         facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
         file: str=None, dir: str=None, palette_or_cmap: str='colorblind', alpha: float=1.0, dodge: bool=True, jitter: bool=True, size: float=5, edgecol: str='black', lw: int=1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
         figsize: tuple=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
@@ -4080,7 +4080,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list
     cats_ord (list, optional): category column values order (x- or y-axis)
     cats_exclude (list | str, optional): category column values exclude (x- or y-axis)
     cols (str, optional): color column name
-    cols_ord (list, optional): color column values order
+    cols_order (list, optional): color column values order
     cols_exclude (list | str, optional): color column values exclude
     PDB_pt (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
     line (float, optional): add horizontal line at y value or vertical line at x value
@@ -4181,9 +4181,9 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list
                 positions.append(sum([int(n) for n in numbers])/len(numbers))
         assign = pd.DataFrame({'positions':positions,
                                'genotypes':genotypes})
-        cols_ord = list(assign.sort_values(by='positions')['genotypes'])
+        cols_order = list(assign.sort_values(by='positions')['genotypes'])
 
-    p.cat(graph=graph,df=df,x=x,y=y,cats_ord=cats_ord,cats_exclude=cats_exclude,cols=cols,cols_ord=cols_ord,cols_exclude=cols_exclude,PDB_pt=PDB_pt,line=line,
+    p.cat(graph=graph,df=df,x=x,y=y,cats_ord=cats_ord,cats_exclude=cats_exclude,cols=cols,cols_order=cols_order,cols_exclude=cols_exclude,PDB_pt=PDB_pt,line=line,
           facetx=facetx,facety=facety,facetx_order=facetx_order,facety_order=facety_order,subplot_titles=subplot_titles,
           file=file,dir=dir,palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
           figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
@@ -4194,7 +4194,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list
           dpi=dpi,transparent=transparent,show=show,space_capitalize=space_capitalize,**kwargs)
 
 def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: str='Edit', cutoff_group: str='fastq_file', cutoff_value: float=0, cutoff_keep: bool=True, 
-          cols_ord: list=[], x_ord: list=[], facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values', PDB_pt: str=None,
+          cols_order: list=[], x_ord: list=[], facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values', PDB_pt: str=None,
           file: str=None, dir: str=None, palette_or_cmap: str='tab20', repeats: int=1, errcap: int=4, vertical: bool=True,
           figsize: tuple=(6,6), title: str='Editing Outcomes', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
           x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial',
@@ -4213,7 +4213,7 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
     cutoff_group (str, optional): column name to group by when applying cutoff (Default: 'fastq_file')
     cutoff_value (float, optional): y-axis values needs be greater than (Default: 0)
     cutoff_keep (bool, optional): keep cutoff group even if below cutoff (Default: True)
-    cols_ord (list, optional): color column values order
+    cols_order (list, optional): color column values order
     x_ord (list, optional): x-axis column values order
     facetx (str, optional): column name for x-axis faceting
     facety (str, optional): column name for y-axis faceting
@@ -4290,7 +4290,7 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
         df_cut=df
 
     # Sort pivot table columns by genotype position
-    if cols_ord==[]:
+    if cols_order==[]:
         genotypes = list(df_cut[cols].value_counts().keys())
         positions = list()
         for geno in genotypes:
@@ -4305,10 +4305,10 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
                 positions.append(sum([int(n) for n in numbers])/len(numbers))
         assign = pd.DataFrame({'positions':positions,
                                'genotypes':genotypes})
-        cols_ord = list(assign.sort_values(by='positions')['genotypes'])
+        cols_order = list(assign.sort_values(by='positions')['genotypes'])
 
     # Make stacked barplot
-    p.stack(df=df_cut,x=x,y=y,cols=cols,cutoff_group=cutoff_group,cutoff_value=0,cutoff_keep=cutoff_keep,cols_ord=cols_ord,x_ord=x_ord,facetx=facetx,facety=facety,facetx_order=facetx_order,facety_order=facety_order,subplot_titles=subplot_titles,
+    p.stack(df=df_cut,x=x,y=y,cols=cols,cutoff_group=cutoff_group,cutoff_value=0,cutoff_keep=cutoff_keep,cols_order=cols_order,x_ord=x_ord,facetx=facetx,facety=facety,facetx_order=facetx_order,facety_order=facety_order,subplot_titles=subplot_titles,
             file=file,dir=dir,palette_or_cmap=palette_or_cmap,repeats=repeats,errcap=errcap,vertical=vertical,
             figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
             x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_pad=x_axis_pad,x_ticks_size=x_ticks_size,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,
