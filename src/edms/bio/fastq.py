@@ -5020,41 +5020,98 @@ def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, siz
 
         _size = size if display_legend else None
 
-        sns.scatterplot(
-            data=df_sub[df_sub[y] < 0],
-            x=x,
-            y=y,
-            hue=y,
-            edgecolor=edgecol,
-            palette='Blues_r',
-            style=stys,
-            style_order=stys_order if stys_order else None,
-            markers=mark_order if mark_order else None,
-            size=_size,
-            sizes=sizes,
-            size_norm=size_norm,
-            legend=False,
-            ax=ax,
-            **kwargs
-        )
+        if not isinstance(display_labels, list): # Normal Plotting behavior, not displaying specific labels
+            sns.scatterplot(
+                data=df_sub[df_sub[y] < 0],
+                x=x,
+                y=y,
+                hue=y,
+                edgecolor=edgecol,
+                palette='Blues_r',
+                style=stys,
+                style_order=stys_order if stys_order else None,
+                markers=mark_order if mark_order else None,
+                size=_size,
+                sizes=sizes,
+                size_norm=size_norm,
+                legend=False,
+                ax=ax,
+                **kwargs
+            )
 
-        sns.scatterplot(
-            data=df_sub[df_sub[y] >= 0],
-            x=x,
-            y=y,
-            hue=y,
-            edgecolor=edgecol,
-            palette='Reds',
-            style=stys,
-            style_order=stys_order if stys_order else None,
-            markers=mark_order if mark_order else None,
-            size=_size,
-            sizes=sizes,
-            size_norm=size_norm,
-            legend=False,
-            ax=ax,
-            **kwargs
-        )
+            sns.scatterplot(
+                data=df_sub[df_sub[y] >= 0],
+                x=x,
+                y=y,
+                hue=y,
+                edgecolor=edgecol,
+                palette='Reds',
+                style=stys,
+                style_order=stys_order if stys_order else None,
+                markers=mark_order if mark_order else None,
+                size=_size,
+                sizes=sizes,
+                size_norm=size_norm,
+                legend=False,
+                ax=ax,
+                **kwargs
+            )
+        
+        else: # Displaying specific labels, so plot non-labeled points in light gray and then points with specific labels in color
+            sns.scatterplot(
+                data=df_sub[df_sub[label].isin(display_labels) == False],
+                x=x,
+                y=y,
+                color='lightgray',
+                edgecolor=edgecol,
+                style=stys,
+                style_order=stys_order if stys_order else None,
+                markers=mark_order if mark_order else None,
+                size=_size,
+                sizes=sizes,
+                size_norm=size_norm,
+                legend=False,
+                ax=ax,
+                **kwargs
+            )
+
+            df_sub_labels = df_sub[df_sub[label].isin(display_labels)]
+
+            sns.scatterplot(
+                data=df_sub_labels[df_sub_labels[y] < 0],
+                x=x,
+                y=y,
+                hue=y,
+                edgecolor=edgecol,
+                palette='Blues_r',
+                style=stys,
+                style_order=stys_order if stys_order else None,
+                markers=mark_order if mark_order else None,
+                size=_size,
+                sizes=sizes,
+                size_norm=size_norm,
+                legend=False,
+                ax=ax,
+                **kwargs
+            )
+
+            sns.scatterplot(
+                data=df_sub_labels[df_sub_labels[y] >= 0],
+                x=x,
+                y=y,
+                hue=y,
+                edgecolor=edgecol,
+                palette='Reds',
+                style=stys,
+                style_order=stys_order if stys_order else None,
+                markers=mark_order if mark_order else None,
+                size=_size,
+                sizes=sizes,
+                size_norm=size_norm,
+                legend=False,
+                ax=ax,
+                **kwargs
+            )
 
         if display_axis:
             ax.plot(
