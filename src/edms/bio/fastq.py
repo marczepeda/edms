@@ -1653,12 +1653,12 @@ def _signature_phred_summary(signature, alignment, read_quals, include_insertion
                     break
 
     if len(query_positions) == 0:
-        return np.nan, np.nan, np.nan, np.nan
+        return np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
 
     vals = [read_quals[i] for i in query_positions if i < len(read_quals)]
 
     if len(vals) == 0:
-        return np.nan, np.nan, np.nan, np.nan
+        return np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
 
     return min(vals), float(np.median(vals)), float(np.mean(vals)), max(vals), min(read_quals), float(np.median(read_quals)), float(np.mean(read_quals)), max(read_quals)
 
