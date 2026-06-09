@@ -32,6 +32,7 @@ Usage:
     - plot_paired(): generate stacked bar plots from paired_regions() dataframe
     - paired_regions(): quantify, plot, & return (un)paired regions that aligned to the annotated library
 - [Signature]
+    - _signature_phred_summary() Return min/median/max Phred+33 qualities for bases changed in `signature`.
     - count_signatures(): generate signatures from fastq read region alignments to WT sequence; count signatures, plot and return fastq signatures dataframe
 
 [Quantify edit outcomes]
@@ -1600,7 +1601,67 @@ def paired_regions(meta_dir: str, region1_dir: str, region2_dir: str, out_dir: s
     if sh == True: io.combine(in_dir=os.path.join(out_dir,'.paired_regions'), out_dir='./paired_regions', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
     if return_dc: return paired_regions_dc  
 
-### Signature 
+### Signature
+def _signature_phred_summary(signature, alignment, read_quals, include_insertions=True, include_deletions=True):
+    """
+    _signature_phred_summary() Return min/median/max Phred+33 qualities for bases changed in `signature`.
+
+    SNVs use the read base aligned to the reference position.
+    Insertions use inserted read bases.
+    Deletions read bases immediately 3' of deleted ref bases (i.e. where the read advanced but the reference did not) since there is no read base aligned to the deleted reference base.
+    """
+    query_positions = []
+
+    ref_blocks = alignment.aligned[0]
+    query_blocks = alignment.aligned[1]
+
+    # SNVs: map ref position -> query position from aligned blocks
+    for snv in signature.snvs:
+        for (rs, re), (qs, qe) in zip(ref_blocks, query_blocks):
+            if rs <= snv.pos < re:
+                query_positions.append(qs + (snv.pos - rs))
+                break
+
+    for indel in signature.indels:
+        # Insertions: inserted query bases between aligned blocks
+        if include_insertions and indel.ins and indel.dellen == 0:
+            for i in range(1, len(ref_blocks)):
+                prev_re = ref_blocks[i - 1][1]
+                curr_rs = ref_blocks[i][0]
+                prev_qe = query_blocks[i - 1][1]
+                curr_qs = query_blocks[i][0]
+
+                if curr_rs == prev_re and curr_rs == indel.pos:
+                    query_positions.extend(range(prev_qe, curr_qs))
+                    break
+
+        # Deletions: score read bases immediately 3' of deleted ref bases
+        elif include_deletions and indel.dellen > 0:
+            del_start = indel.pos
+            del_end = indel.pos + indel.dellen
+
+            for i in range(1, len(ref_blocks)):
+                prev_re = ref_blocks[i - 1][1]
+                curr_rs = ref_blocks[i][0]
+                curr_qs = query_blocks[i][0]
+
+                # Reference advanced, query did not: deletion in read
+                if prev_re == del_start and curr_rs == del_end:
+                    query_positions.extend(
+                        range(curr_qs, min(curr_qs + indel.dellen, len(read_quals)))
+                    )
+                    break
+
+    if len(query_positions) == 0:
+        return np.nan, np.nan, np.nan, np.nan
+
+    vals = [read_quals[i] for i in query_positions if i < len(read_quals)]
+
+    if len(vals) == 0:
+        return np.nan, np.nan, np.nan, np.nan
+
+    return min(vals), float(np.median(vals)), float(np.mean(vals)), max(vals), min(read_quals), float(np.median(read_quals)), float(np.mean(read_quals)), max(read_quals)
+
 def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str, edit_col: str, fastq_dir: str, 
                      out_dir: str, out_file: str, config_key: str = None, in_file: pd.DataFrame | str=None, sequence: str=None, n_extra_nt: int=0,
                      df_motif5: pd.DataFrame | str=None, df_motif3: pd.DataFrame | str=None, fastq_col: str=None,  meta: pd.DataFrame | str=None, 
@@ -1683,6 +1744,8 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
             raise(ValueError("'config_key', 'sequence' or 'in_file' are required. If multiple are provided, 'sequence' (1st) or 'config_key' (2nd) will be used."))
     
     ref_seq = sequence
+    if ref_seq is None or len(ref_seq) == 0:
+        raise ValueError("ref_seq has zero length. Check sequence/config_key/in_file.")
     
     # Get & check motif dataframes from file path if needed
     if df_motif5 is not None:
@@ -1737,6 +1800,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
         missing3 = 0
         overlap53 = 0
         seqs = [] # Store region sequences from reads with motifs
+        quals = [] # Store region qualities from reads with motifs
         
         if fastq_file.endswith(".fastq.gz"): # Compressed fastq
             fastq_name = fastq_file[:-len(".fastq.gz")] # Get fastq name
@@ -1766,6 +1830,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                         # Use entire read as region
                         regions += 1
                         seqs.append(str(record.seq))
+                        quals.append(record.letter_annotations["phred_quality"])
 
                     elif df_motif5 is not None and df_motif3 is None: # df_motif5 is provided
                         start_i = fastq_motif5.iloc[i]["end_i"] # Obtain motif5 boundary that define region
@@ -1773,10 +1838,12 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                         if start_i==-1: # motif5 is present
                             regions += 1
                             seqs.append(str(record.seq[start_i:])) 
-                            
+                            quals.append(record.letter_annotations["phred_quality"][start_i:])
+
                         else: # 5' motif is missing
                             missing5 += 1 
                             seqs.append(None)
+                            quals.append(None)
 
                     elif df_motif5 is None and df_motif3 is not None: # df_motif3 is provided
                         end_i = fastq_motif3.iloc[i]["start_i"] # Obtain motif3 boundary that define region
@@ -1784,10 +1851,12 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                         if end_i==-1: # motif3 is present
                             regions += 1
                             seqs.append(str(record.seq[:end_i])) 
-                            
+                            quals.append(record.letter_annotations["phred_quality"][:end_i])
+
                         else: # 5' motif is missing
                             missing3 += 1 
                             seqs.append(None)
+                            quals.append(None)
 
                     else: # Both motifs are provided
                         # Obtain motif boundaries that define region
@@ -1797,20 +1866,29 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                         if (start_i!=-1) & (end_i!=-1): # Both motifs are present
                             if start_i<end_i: # Motifs do not overlap
                                 regions += 1
-                                seqs.append(str(record.seq[start_i:end_i])) 
+                                seqs.append(str(record.seq[start_i:end_i]))
+                                quals.append(record.letter_annotations["phred_quality"][start_i:end_i])
+
                             else: # Motifs overlap
                                 overlap53 += 1
                                 seqs.append(None)
+                                quals.append(None)
+
                         elif (start_i==-1) & (end_i==-1): # Both motifs are missing
                             missing5 += 1
                             missing3 += 1
                             seqs.append(None)
+                            quals.append(None)
+
                         elif start_i==-1: # 5' motif is missing
                             missing5 += 1 
                             seqs.append(None)
+                            quals.append(None)
+
                         else: # 3' motif is missing
                             missing3 += 1 
                             seqs.append(None)
+                            quals.append(None)
 
                     # Processing status
                     if len(seqs)%align_ckpt==0: 
@@ -1844,6 +1922,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                         # Use entire read as region
                         regions += 1
                         seqs.append(str(record.seq))
+                        quals.append(record.letter_annotations["phred_quality"])
 
                     elif df_motif5 is not None and df_motif3 is None: # df_motif5 is provided
                         start_i = fastq_motif5.iloc[i]["end_i"] # Obtain motif5 boundary that define region
@@ -1851,10 +1930,12 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                         if start_i==-1: # motif5 is present
                             regions += 1
                             seqs.append(str(record.seq[start_i:])) 
+                            quals.append(record.letter_annotations["phred_quality"][start_i:])
                             
                         else: # 5' motif is missing
                             missing5 += 1 
                             seqs.append(None)
+                            quals.append(None)
 
                     elif df_motif5 is None and df_motif3 is not None: # df_motif3 is provided
                         end_i = fastq_motif3.iloc[i]["start_i"] # Obtain motif3 boundary that define region
@@ -1862,10 +1943,12 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                         if end_i==-1: # motif3 is present
                             regions += 1
                             seqs.append(str(record.seq[:end_i])) 
+                            quals.append(record.letter_annotations["phred_quality"][:end_i])
                             
                         else: # 5' motif is missing
                             missing3 += 1 
                             seqs.append(None)
+                            quals.append(None)
 
                     else: # Both motifs are provided
                         # Obtain motif boundaries that define region
@@ -1875,20 +1958,29 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                         if (start_i!=-1) & (end_i!=-1): # Both motifs are present
                             if start_i<end_i: # Motifs do not overlap
                                 regions += 1
-                                seqs.append(str(record.seq[start_i:end_i])) 
+                                seqs.append(str(record.seq[start_i:end_i]))
+                                quals.append(record.letter_annotations["phred_quality"][start_i:end_i])
+
                             else: # Motifs overlap
                                 overlap53 += 1
                                 seqs.append(None)
+                                quals.append(None)
+
                         elif (start_i==-1) & (end_i==-1): # Both motifs are missing
                             missing5 += 1
                             missing3 += 1
                             seqs.append(None)
+                            quals.append(None)
+
                         elif start_i==-1: # 5' motif is missing
                             missing5 += 1 
                             seqs.append(None)
+                            quals.append(None)
+
                         else: # 3' motif is missing
                             missing3 += 1 
                             seqs.append(None)
+                            quals.append(None)
 
                     # Processing status
                     if len(seqs)%align_ckpt==0: 
@@ -1944,7 +2036,16 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
         id_ls = []
         edit_ls = []
         exact_ls = []
-        for s,read_seq in enumerate(seqs): # Iterate though sequences
+        read_phred_min_ls = []
+        read_phred_median_ls = []
+        read_phred_mean_ls = []
+        read_phred_max_ls = []
+        signature_phred_min_ls = []
+        signature_phred_median_ls = []
+        signature_phred_mean_ls = []
+        signature_phred_max_ls = []
+
+        for s, (read_seq, read_quals) in enumerate(zip(seqs,quals)): # Iterate though sequences
             
             # Alignment Status
             if s==0: # Initial
@@ -1970,74 +2071,129 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                 memories.append(memory_timer(task=f"{fastq_name} (alignment/signature {s+1} out of {len(seqs)})"))
 
             # Alignment -> Signature -> Genotype ID
-            if read_seq is None: # Missing region
-                if save_alignments==True: alignment_ls.append(None)
+            if read_seq is None or len(read_seq) == 0: # Missing region
+                if save_alignments==True: 
+                    alignment_ls.append(None)
                 signature_ls.append(None)
                 id_ls.append(None)
                 edit_ls.append(None)
                 exact_ls.append(None)
+                read_phred_min_ls.append(None)
+                read_phred_median_ls.append(None)
+                read_phred_mean_ls.append(None)
+                read_phred_max_ls.append(None)
+                signature_phred_min_ls.append(None)
+                signature_phred_median_ls.append(None)
+                signature_phred_mean_ls.append(None)
+                signature_phred_max_ls.append(None)
+                continue
 
-            else: # Found region
-                # Alignment & Signature
-                alignment = aligner.align(Seq(ref_seq.upper()),Seq(read_seq.upper()))[0]
-                signature = signature_from_alignment(ref_seq=ref_seq.upper(),
-                                                     query_seq=read_seq.upper(),
-                                                     alignment=alignment)
-                if save_alignments==True: alignment_ls.append(alignment)
-                signature_ls.append(signature)
-                
-                # WT: no SNVs or indels
-                if not signature.snvs and not signature.indels:
-                    id_ls.append('WT')
-                    edit_ls.append('WT')
-                    exact_ls.append('WT')
-                    continue
-                
-                # Edit: search for exact signature match in reference dataframe
-                found = False
-                for edit, id, id_signature in t.zip_cols(df=fastq_df_ref,cols=[edit_col, id_col, signature_col]):
-                    if signature == id_signature: # Found exact match
-                        id_ls.append(id)
-                        edit_ls.append(edit)
-                        exact_ls.append(id)
-                        found = True
-                        break
+            # Found region
+            # Alignment & Signature
+            alignment = aligner.align(Seq(ref_seq.upper()),Seq(read_seq.upper()))[0]
+            signature = signature_from_alignment(ref_seq=ref_seq.upper(),
+                                                    query_seq=read_seq.upper(),
+                                                    alignment=alignment)
+            if save_alignments==True: alignment_ls.append(alignment)
+            signature_ls.append(signature)
+            
+            # WT: no SNVs or indels
+            if not signature.snvs and not signature.indels:
+                id_ls.append('WT')
+                edit_ls.append('WT')
+                exact_ls.append('WT')
+                read_phred_min_ls.append(min(read_quals))
+                read_phred_median_ls.append(float(np.median(read_quals)))
+                read_phred_mean_ls.append(float(np.mean(read_quals)))
+                read_phred_max_ls.append(max(read_quals))
+                signature_phred_min_ls.append(min(read_quals))
+                signature_phred_median_ls.append(float(np.median(read_quals)))
+                signature_phred_mean_ls.append(float(np.mean(read_quals)))
+                signature_phred_max_ls.append(max(read_quals))
+                continue
+            
+            # Phred quality summary for bases involved in edit (SNV or indel)
+            signature_phred_min, signature_phred_median, signature_phred_mean, signature_phred_max, read_phred_min, read_phred_median, read_phred_mean, read_phred_max = _signature_phred_summary(
+                signature=signature,
+                alignment=alignment,
+                read_quals=read_quals,
+            )
 
-                # Edit: search for near-match (n extra nt) in reference dataframe or declare Not WT
-                if found == False:
-                    found_w_error = False
-                    if n_extra_nt>0: # Search for near match
-                        signature_units = expand_signature_units(signature) # Expand Signature Units
-                        for edit, id, id_signature_units in t.zip_cols(df=fastq_df_ref[(fastq_df_ref[id_col]!='WT') & (fastq_df_ref[id_col]!='Not WT')],
-                                                                       cols=[edit_col, id_col, f"{signature_col}_units"]):
-                            if is_reference_match_with_n_extra_nt_or_less(query=signature_units, 
-                                                                          reference=id_signature_units, 
-                                                                          n_extra_nt=n_extra_nt): # Found near match
-                                id_ls.append(id)
-                                edit_ls.append(edit)
-                                exact_ls.append("Not WT")
-                                found_w_error = True
-                                break
+            read_phred_min_ls.append(read_phred_min)
+            read_phred_median_ls.append(read_phred_median)
+            read_phred_mean_ls.append(read_phred_mean)
+            read_phred_max_ls.append(read_phred_max)
+            signature_phred_min_ls.append(signature_phred_min)
+            signature_phred_median_ls.append(signature_phred_median)
+            signature_phred_mean_ls.append(signature_phred_mean)
+            signature_phred_max_ls.append(signature_phred_max)
+            
+            # Edit: search for exact signature match in reference dataframe
+            found = False
+            for edit, id, id_signature in t.zip_cols(df=fastq_df_ref,cols=[edit_col, id_col, signature_col]):
+                if signature == id_signature: # Found exact match
+                    id_ls.append(id)
+                    edit_ls.append(edit)
+                    exact_ls.append(id)
+                    found = True
+                    break
 
-                    # Not WT: no exact or near match found
-                    if found_w_error == False:
-                        id_ls.append("Not WT")
-                        edit_ls.append("Not WT")
-                        exact_ls.append("Not WT")
+            # Edit: search for near-match (n extra nt) in reference dataframe or declare Not WT
+            if found == False:
+                found_w_error = False
+                if n_extra_nt>0: # Search for near match
+                    signature_units = expand_signature_units(signature) # Expand Signature Units
+                    for edit, id, id_signature_units in t.zip_cols(df=fastq_df_ref[(fastq_df_ref[id_col]!='WT') & (fastq_df_ref[id_col]!='Not WT')],
+                                                                    cols=[edit_col, id_col, f"{signature_col}_units"]):
+                        if is_reference_match_with_n_extra_nt_or_less(query=signature_units, 
+                                                                        reference=id_signature_units, 
+                                                                        n_extra_nt=n_extra_nt): # Found near match
+                            id_ls.append(id)
+                            edit_ls.append(edit)
+                            exact_ls.append("Not WT")
+                            found_w_error = True
+                            break
 
+                # Not WT: no exact or near match found
+                if found_w_error == False:
+                    id_ls.append("Not WT")
+                    edit_ls.append("Not WT")
+                    exact_ls.append("Not WT")
+
+        # Create and save fastq_file dataframe w or w/o aligntments
         if save_alignments==True: 
-            df_fastq = pd.DataFrame({'Read_i': np.arange(0,len(signature_ls)),
-                                    'Alignment': alignment_ls,
-                                    'Signature': signature_ls,
-                                    id_col: id_ls,
-                                    edit_col: edit_ls,
-                                    'Exact_match': exact_ls}) 
+            df_fastq = pd.DataFrame({
+                'Read_i': np.arange(0,len(signature_ls)),
+                'Alignment': alignment_ls,
+                'Signature': signature_ls,
+                id_col: id_ls,
+                edit_col: edit_ls,
+                'Exact_match': exact_ls,
+                'Read_Phred_min': read_phred_min_ls,
+                'Read_Phred_median': read_phred_median_ls,
+                'Read_Phred_mean': read_phred_mean_ls,
+                'Read_Phred_max': read_phred_max_ls,
+                'Signature_Phred_min': signature_phred_min_ls,
+                'Signature_Phred_median': signature_phred_median_ls,
+                'Signature_Phred_mean': signature_phred_mean_ls,
+                'Signature_Phred_max': signature_phred_max_ls
+            }) 
         else:
-            df_fastq = pd.DataFrame({'Read_i': np.arange(0,len(signature_ls)),
-                                     'Signature': signature_ls,
-                                     id_col: id_ls,
-                                     edit_col: edit_ls,
-                                     'Exact_match': exact_ls}) 
+            df_fastq = pd.DataFrame({
+                'Read_i': np.arange(0,len(signature_ls)),
+                'Signature': signature_ls,
+                id_col: id_ls,
+                edit_col: edit_ls,
+                'Exact_match': exact_ls,
+                'Read_Phred_min': read_phred_min_ls,
+                'Read_Phred_median': read_phred_median_ls,
+                'Read_Phred_mean': read_phred_mean_ls,
+                'Read_Phred_max': read_phred_max_ls,
+                'Signature_Phred_min': signature_phred_min_ls,
+                'Signature_Phred_median': signature_phred_median_ls,
+                'Signature_Phred_mean': signature_phred_mean_ls,
+                'Signature_Phred_max': signature_phred_max_ls
+            }) 
         
         io.save(obj=df_fastq,
                 dir=os.path.join(out_dir,'Signature'), 
@@ -2047,12 +2203,39 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
         # Remove None
         df_fastq.dropna(subset=[signature_col], inplace=True, ignore_index=True)
 
-        # Merge ID counts with reference dataframe [ID column], calculate fraction, & append to out dataframe
-        fastq_df_ref_by_id = pd.merge(left=fastq_df_ref,right=df_fastq[id_col].value_counts().reset_index(), on=id_col, how='left')
-        fastq_df_ref_by_id[edit_col] = [id if isinstance(edit, float) else edit for edit,id in t.zip_cols(df=fastq_df_ref_by_id, cols=[edit_col, id_col])]
+        # Calculate Phred+33 quality summary statistics by genotype ID
+        phred_by_id = (
+            df_fastq
+            .groupby(id_col, dropna=False)
+            .agg(
+                Read_Phred_min_median=("Read_Phred_min", "median"),
+                Read_Phred_mean_median=("Read_Phred_mean", "median"),
+                Read_Phred_median_median=("Read_Phred_median", "median"),
+                Read_Phred_max_median=("Read_Phred_max", "median"),
+                Signature_Phred_min_median=("Signature_Phred_min", "median"),
+                Signature_Phred_mean_median=("Signature_Phred_mean", "median"),
+                Signature_Phred_median_median=("Signature_Phred_median", "median"),
+                Signature_Phred_max_median=("Signature_Phred_max", "median"),
+            )
+            .reset_index()
+        )
+
+        # Merge ID counts with reference dataframe [ID column], calculate fraction, include phred stats & append to out dataframe
+        fastq_df_ref_by_id = pd.merge(
+            left=fastq_df_ref,
+            right=df_fastq[id_col].value_counts().reset_index(), 
+            on=id_col, 
+            how='left')
+        fastq_df_ref_by_id[edit_col] = [id if isinstance(edit, float) else edit for edit,id in t.zip_cols(
+            df=fastq_df_ref_by_id, cols=[edit_col, id_col])]
         fastq_df_ref_by_id.fillna(value={'count': 0},inplace=True)
         total_count = sum(fastq_df_ref_by_id['count'])
         fastq_df_ref_by_id['fraction'] = [cts/total_count for cts in fastq_df_ref_by_id['count']]
+        fastq_df_ref_by_id = pd.merge(
+            left=fastq_df_ref_by_id,
+            right=phred_by_id,
+            on=id_col,
+            how="left",)
         fastq_df_ref_by_id['fastq_file'] = [fastq_file]*len(fastq_df_ref_by_id)
         out_df = pd.concat([out_df,fastq_df_ref_by_id], ignore_index=True)
 
