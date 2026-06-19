@@ -12,6 +12,9 @@ Usage:
 - merge(): adds metadata columns to data dataframe using metadata dataframe
 - shared_group(): group rows with shared values in a column, consolidate unique values from other columns into lists, & append to the original dataframe.
 - unique_tuples(): returns a list of unique tuples of value(s) from a dataframe column(s) in order
+- vcs_ordered(): returns dataframe.value_counts() in order
+- unpack_singleton_iterables(): Replace list/set/tuple values containing exactly one item with that item.
+- drop_duplicates_n(): Keep the first n occurrences of duplicated rows.
 
 [Dictionary methods]
 - filter_kwargs(): filter **kwargs by specified keywords
@@ -168,6 +171,28 @@ def unpack_singleton_iterables(df: pd.DataFrame, inplace: bool = False) -> pd.Da
         df[col] = df[col].map(unpack_value)
 
     return df
+
+def drop_duplicates_n(df, subset=None, n=1):
+    """
+    drop_duplicates_n(): Keep the first n occurrences of duplicated rows.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+    subset : str | list[str] | None
+        Columns used to define duplicates.
+        If None, uses all columns.
+    n : int
+        Number of duplicate occurrences to keep.
+
+    Returns
+    -------
+    pd.DataFrame
+    """
+    return df[
+        df.groupby(subset if subset is not None else list(df.columns))
+          .cumcount() < n
+    ]
 
 # Dictionary methods
 def filter_kwargs(keywords: list, **kwargs) -> dict:

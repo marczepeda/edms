@@ -200,8 +200,7 @@ def parse_csv_to_tidy(
     else:
         df["replicate"] = df.groupby("value").cumcount() + 1
 
-    if dir is not None and file is not None:
-        io.save(obj=df, dir=dir, file=file)
+    io.save(obj=df, dir=dir, file=file)
 
     return df
 
@@ -247,8 +246,7 @@ def make(
     plate_df = pd.pivot(df, index=index, columns=columns, values=values)
     
     # Save to file if directory and filename are provided
-    if dir is not None and file is not None:
-        io.save(obj=plate_df, dir=dir, file=file)
+    io.save(obj=plate_df, dir=dir, file=file)
 
     # Return the resulting DataFrame if requested
     if return_df:

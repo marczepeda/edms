@@ -21,7 +21,7 @@ import sys
 from rich import print as rprint
 import json
 
-from . import ngs, sanger, clone as cl, fastq as fq, pe, qPCR, transfect as tf, plate as pt, pwes
+from . import ngs, pe_old, sanger, clone as cl, fastq as fq, qPCR, transfect as tf, plate as pt, pwes
 from ..utils import parse_tuple_int, parse_tuple_float
 from ..gen.cli import add_common_plot_cat_args, add_common_plot_heat_args, add_common_plot_scat_args, add_common_plot_stack_args, add_common_plot_vol_args
 
@@ -239,23 +239,29 @@ def add_subparser(subparsers, formatter_class=None):
     parser_clone_epegRNA_pool = subparsers_clone.add_parser("epegRNA_pool", help="Design GG oligos for pooled epegRNAs", description="Design GG oligos for pooled epegRNAs", formatter_class=formatter_class)
     
     parser_clone_epegRNA_pool.add_argument("-i", "--df", type=str, help="Input file path", required=True)
-
+    parser_clone_epegRNA_pool.add_argument("-b", "--barcode", type=str, help="subpool barcode column name", required=True)
+    
     parser_clone_epegRNA_pool.add_argument("-o", "--dir", type=str, help="Output directory", default='../out')
     parser_clone_epegRNA_pool.add_argument("-f", "--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_epegRNA_pool.csv')
 
-    parser_clone_epegRNA_pool.add_argument("-tG", "--tG", action="store_true", help="Add 5' G to spacers if needed")
+    parser_clone_epegRNA_pool.add_argument("-tG", "--tG", action="store_true", help="Add 5' G(s) to spacers if needed; leading G yields optimal expression and G(s) may be added to avoid creating an Esp3I site at promoter-spacer junction")
     parser_clone_epegRNA_pool.add_argument("-me", "--make_extension", action="store_true", help="Build extension from RTT, PBS, and linker")
     parser_clone_epegRNA_pool.add_argument("-U", "--UMI_df", type=str, help="UMI sequences file path", default=argparse.SUPPRESS)
     parser_clone_epegRNA_pool.add_argument("-P", "--PCR_df", type=str, help="PCR primer and subpool barcode file path", default=argparse.SUPPRESS)
     parser_clone_epegRNA_pool.add_argument("-R", "--RE_type_IIS_df", type=str, help="RE Type IIS file path", default=argparse.SUPPRESS)
     parser_clone_epegRNA_pool.add_argument("-Ui", "--UMI_i", type=int, help="UMI start index (Default: 0)", default=0)
     parser_clone_epegRNA_pool.add_argument("-e", "--enzymes", type=str, nargs="+", help="List of Type IIS restriction enzymes to check for (Default: Esp3I)", default='Esp3I')
-    parser_clone_epegRNA_pool.add_argument("-b", "--barcode", type=str, help="subpool barcode column name (Default: Barcode)", default='Barcode')
     parser_clone_epegRNA_pool.add_argument("-bi", "--barcode_i", type=int, help="subpool barcode start index (Default: 0)", default=0)
     parser_clone_epegRNA_pool.add_argument("-fbt5", "--fwd_barcode_t5", type=str, default="Forward Barcode", help="Forward barcode column name")
     parser_clone_epegRNA_pool.add_argument("-rbt3", "--rev_barcode_t3", type=str, default="Reverse Barcode", help="Reverse barcode column name")
-    parser_clone_epegRNA_pool.add_argument("-eu", "--Esp3I_hU6", type=str, default="Esp3I_hU6", help="Esp3I_hU6 column name")
-    parser_clone_epegRNA_pool.add_argument("-te", "--tevopreQ1_Esp3I", type=str, default="tevopreQ1_Esp3I", help="tevopreQ1_Esp3I column name")
+    parser_clone_epegRNA_pool.add_argument("-frt5", "--fwd_RE_t5", type=str, default="Forward RE Name", help="Forward restriction enzyme column name")
+    parser_clone_epegRNA_pool.add_argument("-rrt3", "--rev_RE_t3", type=str, default="Reverse RE Name", help="Reverse restriction enzyme column name")
+    parser_clone_epegRNA_pool.add_argument("-fht5", "--fwd_homology_t5", type=str, default="Forward Homology Name", help="Forward homology column name")
+    parser_clone_epegRNA_pool.add_argument("-rht3", "--rev_homology_t3", type=str, default="Reverse Homology Name", help="Reverse homology column name")
+    parser_clone_epegRNA_pool.add_argument("-frt5v", "--fwd_RE_t5_val", type=str, default="Esp3I", help="Forward restriction enzyme value to check for")
+    parser_clone_epegRNA_pool.add_argument("-rrt3v", "--rev_RE_t3_val", type=str, default="Esp3I", help="Reverse restriction enzyme value to check for")
+    parser_clone_epegRNA_pool.add_argument("-fht5v", "--fwd_homology_t5_val", type=str, default="7SK", help="Forward homology value to check for")
+    parser_clone_epegRNA_pool.add_argument("-rht3v", "--rev_homology_t3_val", type=str, default="tevopreQ1", help="Reverse homology value to check for")
     parser_clone_epegRNA_pool.add_argument("-es", "--epegRNA_spacer", type=str, default="Spacer_sequence", help="epegRNA spacer column")
     parser_clone_epegRNA_pool.add_argument("-esc", "--epegRNA_scaffold", type=str, default="Scaffold_sequence", help="epegRNA scaffold column")
     parser_clone_epegRNA_pool.add_argument("-ee", "--epegRNA_extension", type=str, default="Extension_sequence", help="epegRNA extension column")
@@ -827,7 +833,7 @@ def add_subparser(subparsers, formatter_class=None):
                         help="Disable silent mutation", default=True)
     parser_pe_prime_designer.add_argument("-gwd", "--genome_wide_design", action="store_true",
                         help="Whether this is a genome-wide pooled design. This option designs a set of pegRNAs per input without ranging PBS and RTT parameters", default=False)
-    parser_pe_prime_designer.add_argument("-sm", "--saturation_mutagenesis", type=str, choices=['aa', 'aa_subs', 'aa_ins', 'aa_dels', 'base'], help="Saturation mutagenesis design with prime editing. The 'aa' option makes all amino acid substitutions ('aa_subs'), +1 amino acid insertions ('aa_ins'), and -1 amino acid deletions ('aa_dels'). The 'base' option makes DNA base changes.", default=None)
+    parser_pe_prime_designer.add_argument("-sm", "--saturation_mutagenesis", type=str, choices=['aa', 'aa_subs', 'aa_ins', 'aa_dels', 'aa_silent', 'base'], help="Saturation mutagenesis design with prime editing. The 'aa' option makes all amino acid substitutions ('aa_subs'), +1 amino acid insertions ('aa_ins'), and -1 amino acid deletions ('aa_dels'). The 'aa_silent' option makes all possible silent codon changes. The 'base' option makes DNA base changes.", default=None)
     parser_pe_prime_designer.add_argument("-npe", "--number_of_pegrnas", type=int, default=3,
                         help="Max number of pegRNAs to design (Default: 3)")
     parser_pe_prime_designer.add_argument("-nng", "--number_of_ngrnas", type=int, default=3,
@@ -946,13 +952,9 @@ Examples:[/red]
     parser_pe_pegRNA_outcome.add_argument("-in", "--in_file", type=str, help="Path to PrimeDesign input file (required columns: target_name, target_sequence, index). Verify all expected edits are present in pegRNA library (for saturation mutagenesis only)")
     parser_pe_pegRNA_outcome.add_argument("-o", "--out_dir", type=str, help="Output directory (Default: ../pegRNA_outcome)", default='../pegRNA_outcome')
     parser_pe_pegRNA_outcome.add_argument("-f", "--out_file", type=str, help="Name of the output file (Default: pegRNAs.csv)", default='pegRNAs.csv')
+    parser_pe_pegRNA_outcome.add_argument("-d", "--detailed", action='store_true', help="Return detailed geometry checks", default=False)
     parser_pe_pegRNA_outcome.add_argument("-nl", "--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
 
-    parser_pe_pegRNA_outcome.add_argument("-ms", "--match_score", type=float, help="Match score for pairwise alignment", default=argparse.SUPPRESS)
-    parser_pe_pegRNA_outcome.add_argument("-mms", "--mismatch_score", type=float, help="Mismatch score for pairwise alignment", default=argparse.SUPPRESS)
-    parser_pe_pegRNA_outcome.add_argument("-ogs", "--open_gap_score", type=float, help="Open gap score for pairwise alignment", default=argparse.SUPPRESS)
-    parser_pe_pegRNA_outcome.add_argument("-egs", "--extend_gap_score", type=float, help="Extend gap score for pairwise alignment", default=argparse.SUPPRESS)
-    
     # pegRNA_signature() [signature]:
     parser_pe_pegRNA_signature.add_argument("-i", "--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
 
@@ -990,14 +992,14 @@ Examples:[/red]
     parser_pe_epegRNA_fasta.add_argument("-nl", "--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
 
     # Set defaults
-    parser_pe_prime_designer.set_defaults(func=pe.prime_designer)
-    parser_pe_pilot_screen.set_defaults(func=pe.pilot_screen)
-    parser_pe_epegRNA_linkers.set_defaults(func=pe.epegRNA_linkers)
-    parser_pe_merge.set_defaults(func=pe.merge)
-    parser_pe_sensor_designer.set_defaults(func=pe.sensor_designer)
-    parser_pe_pegRNA_outcome.set_defaults(func=pe.pegRNA_outcome)
-    parser_pe_pegRNA_signature.set_defaults(func=pe.pegRNA_signature)
-    parser_pe_epegRNA_fasta.set_defaults(func=pe.epegRNA_fasta)
+    parser_pe_prime_designer.set_defaults(func=pe_old.prime_designer)
+    parser_pe_pilot_screen.set_defaults(func=pe_old.pilot_screen)
+    parser_pe_epegRNA_linkers.set_defaults(func=pe_old.epegRNA_linkers)
+    parser_pe_merge.set_defaults(func=pe_old.merge)
+    parser_pe_sensor_designer.set_defaults(func=pe_old.sensor_designer)
+    parser_pe_pegRNA_outcome.set_defaults(func=pe_old.pegRNA_outcome)
+    parser_pe_pegRNA_signature.set_defaults(func=pe_old.pegRNA_signature)
+    parser_pe_epegRNA_fasta.set_defaults(func=pe_old.epegRNA_fasta)
 
     '''
     edms.bio.plate:

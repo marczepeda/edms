@@ -24,6 +24,8 @@ Usage:
 - repeat_palette_cmap(): returns a list of a repeated seaborn palette or matplotlib color map
 - _category_color_map: a dictionary mapping category names to colors for categorical plots
 - _is_blank_label(): True when user did not explicitly set the axis label
+- autoscale_limits(): Compute axis limits from data with proportional padding.
+- autoscale_xy(): Compute x and y axis limits with proportional padding.
 - formatter(): formats, displays, and saves plots
 
 [Facet Handling Methods]
@@ -69,7 +71,7 @@ from pathlib import Path
 import shutil
 import importlib.resources as pkg_resources
 
-from ..utils import mkdir
+from ..utils import mkdir, check_outpath
 from . import io, stat as st
 import edms.resources.molstar as molstar_pkg
 import edms.resources.icon as icon_pkg
@@ -424,7 +426,7 @@ document.addEventListener('DOMContentLoaded', function () {{
 
     return output_html
 
-def save_fig(file: str | None, dir: str | None, fig=None, dpi: int = 0, transparent: bool = True, PDB_pt: str = None, icon: str = 'python') -> None:
+def save_fig(file: str | None, dir: str | None = None, fig=None, dpi: int = 0, transparent: bool = True, PDB_pt: str = None, icon: str = 'python') -> None:
     """
     save_fig(): save static image and optionally interactive HTML or JSON via mpld3.
 
@@ -437,10 +439,9 @@ def save_fig(file: str | None, dir: str | None, fig=None, dpi: int = 0, transpar
     PDB_pt (str, optional): File path to PDB file for Mol* visualization (Default: None)
     icon (str, optional): html file icon (Default: python logo)
     """
+    file, dir = check_outpath(file=file, dir=dir)  # Ensure output directory exists and get validated paths
     if file is None or dir is None:
         return
-
-    mkdir(dir)  # Ensure output directory exists
 
     if fig is None:
         fig = plt.gcf()
@@ -701,6 +702,60 @@ def _is_blank_label(v: str | list | tuple) -> bool:
     if isinstance(v, (list, tuple)):
         return len(v) == 0 or all((isinstance(x, str) and x.strip() == '') for x in v)
     return False
+
+def autoscale_limits(values, buffer=0.1, min_range=1.0):
+    """
+    autoscale_limits(): Compute axis limits from data with proportional padding.
+
+    Parameters
+    ----------
+    values : array-like
+        Data values for one axis.
+    buffer : float
+        Fractional padding added to both sides of the data range.
+        Example: 0.05 adds 5% of the range to each side.
+    min_range : float
+        Fallback range when all values are identical.
+
+    Returns
+    -------
+    tuple
+        (lower_limit, upper_limit)
+    """
+    values = np.asarray(values, dtype=float)
+    values = values[np.isfinite(values)]
+
+    if len(values) == 0:
+        return (-min_range / 2, min_range / 2)
+
+    vmin = values.min()
+    vmax = values.max()
+    vrange = vmax - vmin
+
+    if vrange == 0:
+        pad = min_range / 2
+    else:
+        pad = buffer * vrange
+
+    return vmin - pad, vmax + pad
+
+def autoscale_xy(df, x, y, x_axis_dims, y_axis_dims, x_axis_scale, y_axis_scale, buffer=0.1, min_range=1.0):
+    """
+    autoscale_xy(): Compute x and y axis limits with proportional padding.
+    """
+    if x_axis_dims==(0,0):
+        if df[x].apply(lambda row: isinstance(row, (int, float))).all()==True: # Check that x column is numeric
+            print('Autoscaling x axis dimensions.')
+            if x_axis_scale=='log': x_axis_dims = (round_down_pow_10(min(df[x])), round_up_pow_10(max(df[x])))
+            else: x_axis_dims = autoscale_limits(df[x], buffer=buffer, min_range=min_range)
+    
+    if y_axis_dims==(0,0):
+        if df[y].apply(lambda row: isinstance(row, (int, float))).all()==True: # Check that y column is numeric
+            print('Autoscaling y axis dimensions.')
+            if y_axis_scale=='log': y_axis_dims = (round_down_pow_10(min(df[y])), round_up_pow_10(max(df[y])))
+            else: y_axis_dims = autoscale_limits(df[y], buffer=buffer, min_range=min_range)
+
+    return x_axis_dims, y_axis_dims
 
 def formatter(graph: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: str, dir: str,
               title: str, title_size: int, title_weight: str, title_font: str,
@@ -1290,6 +1345,12 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
     else:
         palette = palette_or_cmap
 
+    # Set global autoscale limits if not provided
+    x_axis_dims, y_axis_dims = autoscale_xy(
+        df=df, x=x, y=y, x_axis_dims=x_axis_dims, y_axis_dims=y_axis_dims,
+        x_axis_scale=x_axis_scale, y_axis_scale=y_axis_scale
+    )
+
     # --- Build facet layout ---
     col_vals = _facet_values(df, facetx, order=facetx_order)
     row_vals = _facet_values(df, facety, order=facety_order)
@@ -1680,7 +1741,6 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
         legend_title_size=legend_title_size*html_size_multiplier
         legend_size=legend_size*html_size_multiplier*.75
 
-
     # Omit excluded data
     if type(cats_exclude) == list:
         for exclude in cats_exclude:
@@ -1705,6 +1765,12 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
         )
     else:
         palette = palette_or_cmap
+
+    # Set global autoscale limits if not provided
+    x_axis_dims, y_axis_dims = autoscale_xy(
+        df=df, x=x, y=y, x_axis_dims=x_axis_dims, y_axis_dims=y_axis_dims,
+        x_axis_scale=x_axis_scale, y_axis_scale=y_axis_scale
+    )
 
     # --- Build facet layout ---
     col_vals = _facet_values(df, facetx, order=facetx_order)
@@ -2089,6 +2155,12 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
         )
     else:
         palette = palette_or_cmap
+
+    # Set global autoscale limits if not provided
+    x_axis_dims, y_axis_dims = autoscale_xy(
+        df=df, x=x, y=y, x_axis_dims=x_axis_dims, y_axis_dims=y_axis_dims,
+        x_axis_scale=x_axis_scale, y_axis_scale=y_axis_scale
+    )
 
     # --- Build facet layout ---
     col_vals = _facet_values(df, facetx, order=facetx_order)
@@ -2810,6 +2882,12 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
     else: # Otherwise use full dataframe
         df_cut = df.copy()
 
+    # Set global autoscale limits if not provided
+    x_axis_dims, y_axis_dims = autoscale_xy(
+        df=df, x=x, y=y, x_axis_dims=None, y_axis_dims=y_axis_dims,
+        x_axis_scale='linear', y_axis_scale='linear'
+    )
+
     # Get facet values and number of rows and columns for subplots
     col_vals = _facet_values(df_cut, facetx, order=facetx_order)
     row_vals = _facet_values(df_cut, facety, order=facety_order)
@@ -3232,6 +3310,12 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
         y_ticks_size = y_ticks_size * html_size_multiplier
         legend_title_size = legend_title_size * html_size_multiplier
         legend_size = legend_size * html_size_multiplier * 0.75
+
+    # Set global autoscale limits if not provided
+    x_axis_dims, y_axis_dims = autoscale_xy(
+        df=df, x=x, y=y, x_axis_dims=x_axis_dims, y_axis_dims=y_axis_dims,
+        x_axis_scale='linear', y_axis_scale='linear'
+    )
 
     # ----------------------------
     # Threshold classification

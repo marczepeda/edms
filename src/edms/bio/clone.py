@@ -126,7 +126,7 @@ def sgRNAs(df:pd.DataFrame | str,id:str, spacer: str='Spacer_sequence',
     tG (bool): add 5' G to spacer if needed (Default: True)
     order (bool): order format
     dir (str, optional): save directory
-    file (str, optional): save file
+    file (str, optional): save file or full path if dir is None
     
     Dependencies: pandas, io, top_bot(), & ord_form()
     '''
@@ -139,8 +139,7 @@ def sgRNAs(df:pd.DataFrame | str,id:str, spacer: str='Spacer_sequence',
                         ord_form(df=df,id=id,seq=spacer,suf='_bot',pre='o')]).reset_index(drop=True)
     
     # Save & return dataframe
-    if dir is not None and file is not None:
-        io.save(obj=df, dir=dir, file=file)  
+    io.save(obj=df, dir=dir, file=file)  
     return df
 
 def epegRNAs(df: pd.DataFrame | str, id: str, tG: str=True, order: bool=True, make_extension: bool=True,
@@ -173,7 +172,7 @@ def epegRNAs(df: pd.DataFrame | str, id: str, tG: str=True, order: bool=True, ma
     linker (str, optional): epegRNA linker column name(Default: Linker_sequence)
     order_scaffold (bool, optional): order top and bottom oligonucleotide for scaffold sequence (Default: False)
     dir (str, optional): save directory
-    file (str, optional): save file
+    file (str, optional): save file or full path if dir is None
     
     Assumptions:
     1. epegRNA scaffold: GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC
@@ -210,8 +209,7 @@ def epegRNAs(df: pd.DataFrame | str, id: str, tG: str=True, order: bool=True, ma
                             ]).reset_index(drop=True)
 
     # Save & return dataframe
-    if dir is not None and file is not None:
-        io.save(obj=df, dir=dir, file=file)  
+    io.save(obj=df, dir=dir, file=file)  
     return df
 
 def ngRNAs(df: pd.DataFrame | str, id: str, tG: bool=True, order: bool=True,
@@ -259,75 +257,86 @@ def ngRNAs(df: pd.DataFrame | str, id: str, tG: bool=True, order: bool=True,
                             ]).reset_index(drop=True)
 
     # Save & return dataframe
-    if dir is not None and file is not None:
-        io.save(obj=df, dir=dir, file=file)  
+    io.save(obj=df, dir=dir, file=file)  
     return df
 
 # Library GG cloning
-def epegRNA_pool(df: pd.DataFrame | str, tG:bool=True, make_extension:bool=True,
-                 UMI_df: pd.DataFrame | str=None,
-                 PCR_df: pd.DataFrame| str=None,
-                 RE_type_IIS_df: pd.DataFrame| str=None,
-                 UMI_i: int=0, enzymes: list=['Esp3I'], barcode:str='Barcode', barcode_i:int=0, 
-                 fwd_barcode_t5:str='Forward Barcode', rev_barcode_t3:str='Reverse Barcode',
-                 Esp3I_hU6:str='Esp3I_hU6', tevopreQ1_Esp3I:str='tevopreQ1_Esp3I',
-                 epegRNA_spacer:str='Spacer_sequence', epegRNA_scaffold:str='Scaffold_sequence',
-                 epegRNA_extension:str='Extension_sequence', epegRNA_RTT:str='RTT_sequence',
-                 epegRNA_PBS:str='PBS_sequence', epegRNA_linker:str='Linker_sequence',
-                 dir:str=None, file:str=None, return_df:bool=True) -> pd.DataFrame:
+def epegRNA_pool(
+    df: pd.DataFrame | str, barcode: str, 
+    tG:bool=True,
+    make_extension:bool=True,
+    UMI_df: pd.DataFrame | str=None,
+    PCR_df: pd.DataFrame| str=None,
+    RE_type_IIS_df: pd.DataFrame| str=None,
+    UMI_i: int=0, enzymes: list=['Esp3I'], barcode_i:int=0, 
+    fwd_barcode_t5:str='Forward Barcode', rev_barcode_t3:str='Reverse Barcode',
+    fwd_RE_t5:str='Forward RE Name', rev_RE_t3:str='Reverse RE Name',
+    fwd_homology_t5:str='Forward Homology Name', rev_homology_t3:str='Reverse Homology Name',
+    fwd_RE_t5_val:str='Esp3I', rev_RE_t3_val:str='Esp3I',
+    fwd_homology_t5_val:str='7SK', rev_homology_t3_val:str='tevopreQ1',
+    epegRNA_spacer:str='Spacer_sequence', epegRNA_scaffold:str='Scaffold_sequence',
+    epegRNA_extension:str='Extension_sequence', epegRNA_RTT:str='RTT_sequence',
+    epegRNA_PBS:str='PBS_sequence', epegRNA_linker:str='Linker_sequence',
+    dir:str=None, file:str=None, return_df:bool=True) -> pd.DataFrame:
     ''' 
     epegRNA_pool(): design GG cloning oligonucleotides for pooled prime editing epegRNAs
     
     Parameters:
-    df (dataframe | str): Dataframe with sequence information for epegRNAs & corresponding ngRNAs (or file path)
-    tG (bool, optional): add 5' G to spacer if needed (Default: True)
+    df (dataframe | str): Dataframe with sequence information for epegRNAs (or file path)
+    barcode (str): subpool barcode column name in df
+    tG (bool, optional): add 5' G(s) to spacer if needed (Default: True); leading G yields optimal expression and G(s) may be added to avoid creating an Esp3I site at promoter-spacer junction
     make_extension (bool, optional): concatenate RTT, PBS, and linker to make extension sequence (Default: True)
     UMI_df (dataframe | str, optional): Dataframe with UMI sequences (or file path)
     PCR_df (dataframe | str, optional): Dataframe with PCR primer and subpool barcode information (or file path)
     RE_type_IIS_df (dataframe | str, optional): Dataframe with Type IIS restriction enzyme information (or file path)
     UMI_i (int, optional): UMI start index (Default: 0)
     enzymes (list, optional): list of Type IIS restriction enzymes to check for (Default: ['Esp3I'])
-    barcode (str, optional): subpool barcode column name (Default: Barcode)
     barcode_i (int, optional): subpool barcode start index (Default: 0)
-    fwd_barcode_t5 (bool, optional): forward barcode column name (Default: Forward Barcode)
-    rev_barcode_t3 (bool, optional): reverse barcode column name (Default: Reverse Barcode)
-    Esp3I_hU6 (bool, optional): Esp3I_hU6 column name (Default: Esp3I_hU6)
-    tevopreQ1_Esp3I (bool, optional): tevopreQ1_Esp3I column name (Default: tevopreQ1_Esp3I)
-    epegRNA_spacer (str, optional): epegRNA spacer column name (Default: Spacer_sequence)
-    epegRNA_scaffold (str, optional): epegRNA scaffold sequence column name (Default: Scaffold_sequence)
-    epegRNA_extension (str, optional): epegRNA extension name (Default: Extension_sequence)
-    epegRNA_RTT (str, optional): epegRNA reverse transcripase template column name (Default: RTT_sequence)
-    epegRNA_PBS (str, optional): epegRNA primer binding site column name (Default: PBS_sequence)
-    epegRNA_linker (str, optional): epegRNA linker column name (Default: Linker_sequence)
+    fwd_barcode_t5 (str, optional): forward barcode column name (Default: 'Forward Barcode')
+    rev_barcode_t3 (str, optional): reverse barcode column name (Default: 'Reverse Barcode')
+    fwd_RE_t5 (str, optional): forward restriction enzyme column name (Default: 'Forward RE Name')
+    rev_RE_t3 (str, optional): reverse restriction enzyme column name (Default: 'Reverse RE Name')
+    fwd_homology_t5 (str, optional): forward homology column name (Default: 'Forward Homology Name')
+    rev_homology_t3 (str, optional): reverse homology column name (Default: 'Reverse Homology Name')
+    fwd_RE_t5_val (str, optional): forward restriction enzyme column value (Default: 'Esp3I')
+    rev_RE_t3_val (str, optional): reverse restriction enzyme column value (Default: 'Esp3I')
+    fwd_homology_t5_val (str, optional): forward homology column value (Default: '7SK')
+    rev_homology_t3_val (str, optional): reverse homology column value (Default: 'tevopreQ1')
+    epegRNA_spacer (str, optional): epegRNA spacer column name (Default: 'Spacer_sequence')
+    epegRNA_scaffold (str, optional): epegRNA scaffold sequence column name (Default: 'Scaffold_sequence')
+    epegRNA_extension (str, optional): epegRNA extension name (Default: 'Extension_sequence')
+    epegRNA_RTT (str, optional): epegRNA reverse transcripase template column name (Default: 'RTT_sequence')
+    epegRNA_PBS (str, optional): epegRNA primer binding site column name (Default: 'PBS_sequence')
+    epegRNA_linker (str, optional): epegRNA linker column name (Default: 'Linker_sequence')
     dir (str, optional): save directory (Default: None)
     file (str, optional): save file (Default: None)
     return_df (bool, optional): return dataframe (Default: True)
 
     Assumptions:
-    1. Oligo Template: FWD UMI - FWD Barcode - Esp3I(F) - hU6 - epegRNA_spacer - epegRNA_scaffold - epegRNA_extension - tevopreQ1 motif - Esp3I(R) - REV Barcode - REV UMI
+    1. Oligo Template: FWD UMI - FWD Barcode - FWD RE - FWD Homology - epegRNA_spacer - epegRNA_scaffold - epegRNA_extension - RE Homology - REV RE - REV Barcode - REV UMI
     2. epegRNA motif: tevoPreQ1 (CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA)
     
     Dependencies: pandas,
     '''
     # Get dataframes from file paths if needed
-    if type(df)==str:
+    if isinstance(df, str):
         df = io.get(pt=df)
     else:
         df = df.copy()
 
-    if type(UMI_df)==str:
+    if isinstance(UMI_df, str):
         UMI_df = io.get(pt=UMI_df)
-    else:
+    elif isinstance(UMI_df, pd.DataFrame):
         UMI_df = UMI_df.copy()
 
-    if type(PCR_df)==str:
+    if isinstance(PCR_df, str):
         PCR_df = io.get(pt=PCR_df)
-    else:
+    elif isinstance(PCR_df, pd.DataFrame):
         PCR_df = PCR_df.copy()
 
-    if type(RE_type_IIS_df)==str:
+    if isinstance(RE_type_IIS_df, str):
         RE_type_IIS_df = io.get(pt=RE_type_IIS_df)
-    else:
+    elif isinstance(RE_type_IIS_df, pd.DataFrame):
         RE_type_IIS_df = RE_type_IIS_df.copy()
     
     # Load UMI and PCR dataframes from resources if not provided
@@ -341,14 +350,28 @@ def epegRNA_pool(df: pd.DataFrame | str, tG:bool=True, make_extension:bool=True,
     else: # Not default (checking for RE sites)
         if UMI_df is None: # Get UMI dataframe from resources if not provided
             UMI_df = load_resource_csv(filename='UMI_15_hamming_4_yield_19356.csv')
+        
         if PCR_df is None: # Get PCR dataframe from resources if not provided
             PCR_df = load_resource_csv(filename='edms_pcr.csv')
+        else:
+            PCR_df = PCR_df.copy() # Make copy of provided PCR dataframe to avoid modifying original
+            if not all(col in PCR_df.columns for col in [fwd_barcode_t5, rev_barcode_t3, fwd_RE_t5, rev_RE_t3, fwd_homology_t5, rev_homology_t3, fwd_RE_t5.replace("Name", "Sequence"), rev_RE_t3.replace("Name", "Sequence"), fwd_homology_t5.replace("Name", "Sequence"), rev_homology_t3.replace("Name", "Sequence")]):
+                raise ValueError(f'PCR dataframe must include columns: {fwd_barcode_t5}, {rev_barcode_t3}, {fwd_RE_t5}, {rev_RE_t3}, {fwd_homology_t5}, and {rev_homology_t3} to filter for specific RE and homology sequences!\nAlso, need columns with RE and homology sequences: {fwd_RE_t5.replace("Name", "Sequence")}, {rev_RE_t3.replace("Name", "Sequence")}, {fwd_homology_t5.replace("Name", "Sequence")}, and {rev_homology_t3.replace("Name", "Sequence")}!')
+        
         if RE_type_IIS_df is None: # Get from resources if not provided
             RE_type_IIS_df = load_resource_csv(filename='RE_type_IIS.csv')
 
     # Make extension by concatenating RTT, PBS, and linker
     if make_extension==True: df[epegRNA_extension] = df[epegRNA_RTT]+df[epegRNA_PBS]+df[epegRNA_linker]
     else: print(f'Warning: Did not make extension sequence!\nMake sure "{epegRNA_extension}" column includes RTT+PBS+linker for epegRNAs.')
+
+    # Filter PCR_df for specific RE and homology sequences
+    PCR_df = PCR_df[
+        (PCR_df[fwd_RE_t5] == fwd_RE_t5_val) &
+        (PCR_df[rev_RE_t3] == rev_RE_t3_val) &
+        (PCR_df[fwd_homology_t5] == fwd_homology_t5_val) &
+        (PCR_df[rev_homology_t3] == rev_homology_t3_val)
+    ]
 
     # Assign subpool barcodes
     barcodes = sorted(df[barcode].unique())
@@ -415,14 +438,25 @@ def epegRNA_pool(df: pd.DataFrame | str, tG:bool=True, make_extension:bool=True,
     df[f'{epegRNA_spacer}_nt1']=[s[0] for s in df[epegRNA_spacer]]
     oligos = []
     for i,(epegRNA_spacer_nt1) in enumerate(df[f'{epegRNA_spacer}_nt1']):
-        if (tG==True) & (epegRNA_spacer_nt1!='G'): # Append 5'G to spacer if not already present
-            oligo = df.iloc[i]['Forward UMI']+df.iloc[i][fwd_barcode_t5]+df.iloc[i][Esp3I_hU6]+'G'+ \
-                    df.iloc[i][epegRNA_spacer]+df.iloc[i][epegRNA_scaffold]+df.iloc[i][epegRNA_extension]+ \
-                    df.iloc[i][tevopreQ1_Esp3I]+df.iloc[i][rev_barcode_t3]+df.iloc[i]['Reverse UMI']
-        else: # Do not append 5'G to spacer if not already present or not wanted
-            oligo = df.iloc[i]['Forward UMI']+df.iloc[i][fwd_barcode_t5]+df.iloc[i][Esp3I_hU6]+ \
-                    df.iloc[i][epegRNA_spacer]+df.iloc[i][epegRNA_scaffold]+df.iloc[i][epegRNA_extension]+ \
-                    df.iloc[i][tevopreQ1_Esp3I]+df.iloc[i][rev_barcode_t3]+df.iloc[i]['Reverse UMI']
+        if tG==True: # Add 5'G(s) to spacer if needed for optimal expression or to avoid creating an Esp3I site at promoter-spacer junction
+            if (epegRNA_spacer_nt1!='G'): # Spacer does not start with G, add 5'G(s)
+                promoter_spacer_junction = df.iloc[i][fwd_homology_t5.replace("Name", "Sequence")]+'G'+df.iloc[i][epegRNA_spacer] # Check if adding 5'G creates an RE site at promoter-spacer junction
+                if any(recognition in promoter_spacer_junction for recognition in RE_type_IIS_df[RE_type_IIS_df['Name'].isin(enzymes)]['Recognition'].tolist()) or any(recognition_rc in promoter_spacer_junction for recognition_rc in RE_type_IIS_df[RE_type_IIS_df['Name'].isin(enzymes)]['Recognition_rc'].tolist()): # It does, add 2 Gs
+                    add_G = 'GG'
+                else: # It does not, add 1 G
+                    add_G = 'G'
+            else: # Spacer already starts with G; still need to check if it creates an RE site at promoter-spacer junction
+                promoter_spacer_junction = df.iloc[i][fwd_homology_t5.replace("Name", "Sequence")]+df.iloc[i][epegRNA_spacer] # Check if promoter-spacer junction creates an RE site
+                if any(recognition in promoter_spacer_junction for recognition in RE_type_IIS_df[RE_type_IIS_df['Name'].isin(enzymes)]['Recognition'].tolist()) or any(recognition_rc in promoter_spacer_junction for recognition_rc in RE_type_IIS_df[RE_type_IIS_df['Name'].isin(enzymes)]['Recognition_rc'].tolist()): # It does, add 1 G
+                    add_G = 'G'
+                else: # It does not, do not add G
+                    add_G = ''
+        else: # Do not append 5'G to spacer
+            add_G = ''
+        # Make final oligonucleotide sequence based on template: FWD UMI - FWD Barcode - FWD RE - FWD Homology - epegRNA_spacer - epegRNA_scaffold - epegRNA_extension - RE Homology - REV RE - REV Barcode - REV UMI
+        oligo = df.iloc[i]['Forward UMI']+df.iloc[i][fwd_barcode_t5]+df.iloc[i][fwd_RE_t5.replace("Name", "Sequence")]+df.iloc[i][fwd_homology_t5.replace("Name", "Sequence")]+add_G+ \
+                        df.iloc[i][epegRNA_spacer]+df.iloc[i][epegRNA_scaffold]+df.iloc[i][epegRNA_extension]+ \
+                        df.iloc[i][rev_RE_t3.replace("Name", "Sequence")]+df.iloc[i][rev_homology_t3.replace("Name", "Sequence")]+df.iloc[i][rev_barcode_t3]+df.iloc[i]['Reverse UMI']
         oligos.append(oligo.upper()) # Make sure oligos are uppercase
             
     df['Oligonucleotide'] = oligos
@@ -445,8 +479,7 @@ def epegRNA_pool(df: pd.DataFrame | str, tG:bool=True, make_extension:bool=True,
         df[f'{enzyme}_rc_i'] = enzyme_sites_rc
     
     # Save & return dataframe
-    if dir is not None and file is not None:
-        io.save(obj=df, dir=dir, file=file)
+    io.save(obj=df, file=file, dir=dir)
     if return_df:
         return df
 
@@ -708,8 +741,7 @@ def pcr_sim(df: pd.DataFrame | str,template_col: str, fwd_bind_col: str, rev_bin
     df[product_col]=pcr_product_ls
 
     # Save & return dataframe
-    if dir is not None and file is not None:
-        io.save(obj=df, dir=dir, file=file) 
+    io.save(obj=df, dir=dir, file=file) 
     return df
 
 def off_targets(df: pd.DataFrame | str, col: str, match_score: float = 2, mismatch_score: float = -1, 

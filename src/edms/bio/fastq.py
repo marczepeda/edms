@@ -108,7 +108,7 @@ from ..gen import io, tidy as t, plot as p, stat as st
 from ..data import uniprot, pdb, dssp
 from ..utils import memory_timer, mkdir, load_resource_csv
 from .. import config
-from ..gen.plot import _facet_values, _facet_values, _subset_for_facet, _is_faceted, _facet_axis_labels, _handle_panel_legend, _hide_inner_axis_labels, _make_figure_legend, _final_save_show, re_un_cap, _subplot_title
+from ..gen.plot import _facet_values, _facet_values, _subset_for_facet, _is_faceted, _facet_axis_labels, _handle_panel_legend, _hide_inner_axis_labels, _make_figure_legend, _final_save_show, re_un_cap, _subplot_title, autoscale_xy
 
 # Supporting methods
 def fuzzy_substring_search(text: str, pattern: str, max_distance: int):
@@ -228,7 +228,7 @@ def savemoney(pt: str, fastq_dir: str='./fastq', fasta_dir: str='./fasta',
     df = pd.DataFrame({'group_name':group_name_ls,
                        'fastq_fname':fastq_fname_ls,
                        'ref_fname':ref_fname_ls})
-    if out_dir is not None and out_file is not None: io.save(obj=df, dir=out_dir, file=out_file)
+    io.save(obj=df, dir=out_dir, file=out_file)
     if return_df: return df
 
 # Input/Output
@@ -1663,11 +1663,11 @@ def _signature_phred_summary(signature, alignment, read_quals, include_insertion
     return min(vals), float(np.median(vals)), float(np.mean(vals)), max(vals), min(read_quals), float(np.median(read_quals)), float(np.mean(read_quals)), max(read_quals)
 
 def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str, edit_col: str, fastq_dir: str, 
-                     out_dir: str, out_file: str, config_key: str = None, in_file: pd.DataFrame | str=None, sequence: str=None, n_extra_nt: int=0,
-                     df_motif5: pd.DataFrame | str=None, df_motif3: pd.DataFrame | str=None, fastq_col: str=None,  meta: pd.DataFrame | str=None, 
-                     match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, extend_gap_score: float = -0.1, 
-                     align_dims: tuple=(0,0), align_ckpt: int=10000, save_alignments: bool=False, return_df: bool=False, 
-                     literal_eval: bool=True, plot_suf: str=None, show: bool=False, sh: bool=False, **plot_kwargs) -> pd.DataFrame:
+                    out_dir: str, out_file: str, config_key: str = None, in_file: pd.DataFrame | str=None, sequence: str=None, n_extra_nt: int=0,
+                    df_motif5: pd.DataFrame | str=None, df_motif3: pd.DataFrame | str=None, fastq_col: str=None,  meta: pd.DataFrame | str=None, 
+                    match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, extend_gap_score: float = -0.1, 
+                    align_dims: tuple=(0,0), align_ckpt: int=10000, save_alignments: bool=False, return_df: bool=False, 
+                    literal_eval: bool=True, plot_suf: str=None, show: bool=False, sh: bool=False, **plot_kwargs) -> pd.DataFrame:
     ''' 
     count_signatures(): generate signatures from fastq read region alignments to WT sequence; count signatures, plot and return fastq signatures dataframe
 
@@ -3032,15 +3032,16 @@ def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=N
 
     # Save and return edit outcomes dataframe
     memories.append(memory_timer(task='genotyping()'))
-    if out_dir is not None and out_file_prefix is not None: # Save dataframes (optional)
-        io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
-                dir=os.path.join(out_dir,'.genotyping'),
-                file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
+    if out_file_prefix is None: 
+        out_file_prefix = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
+            dir=os.path.join(out_dir,'.genotyping'),
+            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
 
-        io.save(obj=df_edits, dir=out_dir, file=f'{out_file_prefix}_edit_outcomes.csv') # Edit outcomes
-        io.save(obj=df_categories, dir=out_dir, file=f'{out_file_prefix}_category_outcomes.csv') # Edit categoy outcomes
+    io.save(obj=df_edits, dir=out_dir, file=f'{out_file_prefix}_edit_outcomes.csv') # Edit outcomes
+    io.save(obj=df_categories, dir=out_dir, file=f'{out_file_prefix}_category_outcomes.csv') # Edit categoy outcomes
 
-        if sh == True: io.combine(in_dir=os.path.join(out_dir,'.genotyping'), out_dir='./genotyping', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
+    if sh == True: io.combine(in_dir=os.path.join(out_dir,'.genotyping'), out_dir='./genotyping', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
     
     if return_dc: 
         return {'Edit': df_edits,
@@ -4758,6 +4759,12 @@ def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, siz
     else:
         df = df.copy()
 
+    # Set global autoscale limits if not provided
+    x_axis_dims, y_axis_dims = autoscale_xy(
+        df=df, x=x, y=y, x_axis_dims=x_axis_dims, y_axis_dims=y_axis_dims,
+        x_axis_scale='linear', y_axis_scale='linear'
+    )
+
     # Organize data by conservation (changed to)
     stys = 'Change'
     stys_order = ['Conserved', 'Basic', 'Acidic', 'Polar', 'Nonpolar', 'Complex']
@@ -5356,7 +5363,7 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, scores_col: str
         df = io.get(pt=df)
     else:
         df = df.copy()
-    
+
     # Organize data by conservation (changed to)
     stys_order = ['Conserved','Basic','Acidic','Polar','Nonpolar','Complex']
     mark_order = ['D','^','v','<','>','o']
@@ -5382,6 +5389,13 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, scores_col: str
         del df1, df2
     
     df[f'magnitude({scores_col})'] = [np.sqrt(scores_0**2 + scores_1**2) for scores_0, scores_1 in t.zip_cols(df=df, cols=[f'{scores_col}_{cond_vals[0]}',f'{scores_col}_{cond_vals[1]}'])]
+
+    # Set global autoscale limits if not provided
+    x_axis_dims, y_axis_dims = autoscale_xy(
+        df=df, x=f'{scores_col}_{cond_vals[0]}', y=f'{scores_col}_{cond_vals[1]}', 
+        x_axis_dims=x_axis_dims, y_axis_dims=y_axis_dims,
+        x_axis_scale='linear', y_axis_scale='linear'
+    )
 
     # Use min or sum based on conservative
     if conservative==True:

@@ -501,14 +501,13 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str,
             raise ValueError(f"Unequal number of replicates per condition in replicate column '{replicate}'")    
 
     
-    # Add pseudocount to avoid log(0) & compute fraction per million (FPM)
+    # Add pseudocount to avoid log(0) & compute scaled counts
     if verbose: 
-        print(f'Add pseudocount ({pseudocount}) to avoid log(0) & compute fraction per million (FPM)')
+        print(f'Add pseudocount ({pseudocount}) to avoid log(0) & compute scaled counts')
     if pseudocount < 0:
         raise ValueError("pseudocount must be a non-negative integer")
     elif pseudocount == 0:
         print("Warning: pseudocount of 0 may lead to log(0) and divide-by-zero errors")
-    df[f'{column_prefix}{count}+{pseudocount}'] = df[f'{column_prefix}{count}'] + pseudocount
     df[f'{column_prefix}pc'] = pseudocount
 
     # Get metadata
@@ -517,27 +516,46 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str,
         raise ValueError(f"count column '{column_prefix}{count}' not found in df")
     meta_cols.remove(f'{column_prefix}{count}')
 
-    exclude_meta = set()
+    exclude_meta = {sample, cond, var}
+    if replicate is not None:
+        exclude_meta.add(replicate)
+
     meta_cols = [c for c in meta_cols if c not in exclude_meta]    
 
     # Compute per-sample library-normalized values
     dc = t.split(df=df, key=sample)
+
+    # Find largest sample depth
+    sample_totals = {
+        s: float(df_sample[f'{column_prefix}{count}'].sum())
+        for s, df_sample in dc.items()
+    }
+    max_count_total = max(sample_totals.values())
+
+    if max_count_total <= 0:
+        raise ValueError("All samples have total count of 0")
+
+    df[f'{column_prefix}pc'] = pseudocount
+    df[f'{column_prefix}max_count_total'] = max_count_total
+
     for s, df_sample in dc.items():
-        count_total = float(df_sample[f'{column_prefix}{count}'].sum())
+        count_total = sample_totals[s]
         n_rows = int(df_sample.shape[0])
-        count_total_pc = count_total + pseudocount * n_rows
 
-        # Classic FPM; avoid divide-by-zero
         if count_total > 0:
-            dc[s][f'{column_prefix}FPM'] = [c / count_total * 1_000_000 for c in df_sample[f'{column_prefix}{count}']]
+            # Normalize counts to the largest library size
+            dc[s][f'{column_prefix}{count}_scaled'] = [
+                c / count_total * max_count_total
+                for c in df_sample[f'{column_prefix}{count}']
+            ]
         else:
-            dc[s][f'{column_prefix}FPM'] = [0.0] * n_rows
+            dc[s][f'{column_prefix}{count}_scaled'] = [0.0] * n_rows
 
-        # Pseudocount-adjusted FPM for robust FC (adds pseudocount to each observation and to the library size)
-        if count_total_pc > 0:
-            dc[s][f'{column_prefix}FPM_pc'] = [(c + pseudocount) / count_total_pc * 1_000_000 for c in df_sample[f'{column_prefix}{count}']]
-        else:
-            dc[s][f'{column_prefix}FPM_pc'] = [0.0] * n_rows
+        # Add pseudocount after scaling to common library size
+        dc[s][f'{column_prefix}{count}_scaled_pc'] = [
+            c_scaled + pseudocount
+            for c_scaled in dc[s][f'{column_prefix}{count}_scaled']
+        ]
 
     if replicate is None: # Aggregate version
 
@@ -553,7 +571,7 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str,
             )
         # Include mean, list, variance, and count of values for transparency and downstream analyses
         agg_dict[f'{column_prefix}{count}'] = list
-        agg_dict[f'{column_prefix}FPM_pc'] = [list, 'mean', 'var', 'count']
+        agg_dict[f'{column_prefix}{count}_scaled_pc'] = [list, 'mean', 'var', 'count']
 
         # Join samples back into 1 dataframe and split by condition
         for c, df_cond in t.split(df=t.join(dc=dc, col=sample), key=cond).items():
@@ -597,35 +615,40 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str,
             
             # Carry through comparison counts for transparency
             df_other_edit[f'{column_prefix}{count}_list_{cond_comp}'] = [df_comp_edit.iloc[0][f'{column_prefix}{count}_list']] * df_other_edit.shape[0]
-            df_other_edit[f'{column_prefix}FPM_pc_list_{cond_comp}'] = [df_comp_edit.iloc[0][f'{column_prefix}FPM_pc_list']] * df_other_edit.shape[0]
-            df_other_edit[f'{column_prefix}FPM_pc_mean_{cond_comp}'] = [df_comp_edit.iloc[0][f'{column_prefix}FPM_pc_mean']] * df_other_edit.shape[0]
-            df_other_edit[f'{column_prefix}FPM_pc_var_{cond_comp}'] = [df_comp_edit.iloc[0][f'{column_prefix}FPM_pc_var']] * df_other_edit.shape[0]
-            df_other_edit[f'{column_prefix}FPM_pc_count_{cond_comp}'] = [df_comp_edit.iloc[0][f'{column_prefix}FPM_pc_count']] * df_other_edit.shape[0]
+            df_other_edit[f'{column_prefix}{count}_scaled_pc_list_{cond_comp}'] = [df_comp_edit.iloc[0][f'{column_prefix}{count}_scaled_pc_list']] * df_other_edit.shape[0]
+            df_other_edit[f'{column_prefix}{count}_scaled_pc_mean_{cond_comp}'] = [df_comp_edit.iloc[0][f'{column_prefix}{count}_scaled_pc_mean']] * df_other_edit.shape[0]
+            df_other_edit[f'{column_prefix}{count}_scaled_pc_var_{cond_comp}'] = [df_comp_edit.iloc[0][f'{column_prefix}{count}_scaled_pc_var']] * df_other_edit.shape[0]
+            df_other_edit[f'{column_prefix}{count}_scaled_pc_count_{cond_comp}'] = [df_comp_edit.iloc[0][f'{column_prefix}{count}_scaled_pc_count']] * df_other_edit.shape[0]
 
             # Combined variability for this variable
-            df_other_edit[f'{column_prefix}FPM_pc_combined_relative_variability'] = [
+            df_other_edit[f'{column_prefix}{count}_scaled_pc_combined_relative_variability'] = [
                 np.sqrt( 
-                    (other_FPM_pc_var) / (other_FPM_pc_mean ** 2 * other_FPM_pc_count) + # Other group variability
-                    (df_comp_edit.iloc[0][f'{column_prefix}FPM_pc_var']) / (df_comp_edit.iloc[0][f'{column_prefix}FPM_pc_mean'] ** 2 * df_comp_edit.iloc[0][f'{column_prefix}FPM_pc_count']) # Comparison group variability
+                    (other_scaled_pc_var) / (other_scaled_pc_mean ** 2 * other_scaled_pc_count) + # Other group variability
+                    (df_comp_edit.iloc[0][f'{column_prefix}{count}_scaled_pc_var']) / (df_comp_edit.iloc[0][f'{column_prefix}{count}_scaled_pc_mean'] ** 2 * df_comp_edit.iloc[0][f'{column_prefix}{count}_scaled_pc_count']) # Comparison group variability
                     ) 
-                for other_FPM_pc_var, other_FPM_pc_mean, other_FPM_pc_count in t.zip_cols(
+                for other_scaled_pc_var, other_scaled_pc_mean, other_scaled_pc_count in t.zip_cols(
                     df=df_other_edit,
-                    cols=[f'{column_prefix}FPM_pc_var', f'{column_prefix}FPM_pc_mean', f'{column_prefix}FPM_pc_count'])
+                    cols=[f'{column_prefix}{count}_scaled_pc_var', f'{column_prefix}{count}_scaled_pc_mean', f'{column_prefix}{count}_scaled_pc_count'])
                 ]
 
-            # Pseudocount-adjusted FPM
-            df_other_edit[f'{column_prefix}FC'] = df_other_edit[f'{column_prefix}FPM_pc_mean'] / df_comp_edit.iloc[0][f'{column_prefix}FPM_pc_mean']
+            # Pseudocount-adjusted scaled
+            df_other_edit[f'{column_prefix}FC'] = df_other_edit[f'{column_prefix}{count}_scaled_pc_mean'] / df_comp_edit.iloc[0][f'{column_prefix}{count}_scaled_pc_mean']
             df_other_edit[f'{column_prefix}log2(FC)'] = np.log2(df_other_edit[f'{column_prefix}FC'])
 
             # Two-sample t-tests using the adjusted per-sample values
-            comp_FPM_pc_list = list(df_comp_edit.iloc[0][f'{column_prefix}FPM_pc_list'])
+            comp_scaled_pc_list = list(df_comp_edit.iloc[0][f'{column_prefix}{count}_scaled_pc_list'])
             ttests = [
-                ttest_ind(list(other_vals), comp_FPM_pc_list, alternative=alternative)
-                for other_vals in df_other_edit[f'{column_prefix}FPM_pc_list']
+                ttest_ind(list(other_vals), comp_scaled_pc_list, alternative=alternative)
+                for other_vals in df_other_edit[f'{column_prefix}{count}_scaled_pc_list']
             ]
             df_other_edit[f'{column_prefix}pval'] = [ttest[1] for ttest in ttests]
             df_other_edit[f'{column_prefix}-log10(pval)'] = -np.log10(df_other_edit[f'{column_prefix}pval'])
             df_other_edit[f'{column_prefix}tstat'] = [ttest[0] for ttest in ttests]
+
+            # Fill in NaN p-values for cases where both groups have zero variability (i.e., all values are the same), since t-test cannot be performed
+            df_other_edit[f'{column_prefix}pval'] = df_other_edit[f'{column_prefix}pval'].fillna(value=1)
+            df_other_edit[f'{column_prefix}-log10(pval)'] = df_other_edit[f'{column_prefix}-log10(pval)'].fillna(value=0)
+            df_other_edit[f'{column_prefix}tstat'] = df_other_edit[f'{column_prefix}tstat'].fillna(value=0)
             
             df_stat = pd.concat([df_stat, df_other_edit])
 
@@ -644,15 +667,15 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str,
 
         # Pair within replicate: match on (var, replicate)
         paired = df_other.merge(
-            df_comp[[var, replicate, f'{column_prefix}FPM_pc', f'{column_prefix}FPM']],
+            df_comp[[var, replicate, f'{column_prefix}{count}_scaled_pc', f'{column_prefix}scaled']],
             on=[var, replicate],
             how='inner',
             suffixes=('', f'_{cond_comp}')
         )
 
         def paired_ttest(g):
-            x = g[f'{column_prefix}FPM_pc'].astype(float)
-            y = g[f'{column_prefix}FPM_pc_{cond_comp}'].astype(float)
+            x = g[f'{column_prefix}{count}_scaled_pc'].astype(float)
+            y = g[f'{column_prefix}{count}_scaled_pc_{cond_comp}'].astype(float)
 
             if len(g) < 2:
                 return pd.Series({
@@ -671,8 +694,8 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str,
         # Compute FC within replicate
         eps = np.finfo(float).eps
         paired[f'{column_prefix}compare'] = cond_comp
-        paired[f'{column_prefix}FPM_pc_{cond_comp}'] = paired[f'{column_prefix}FPM_pc_{cond_comp}'].astype(float)
-        paired[f'{column_prefix}FC'] = paired[f'{column_prefix}FPM_pc'].astype(float) / np.maximum(paired[f'{column_prefix}FPM_pc_{cond_comp}'], eps)
+        paired[f'{column_prefix}{count}_scaled_pc_{cond_comp}'] = paired[f'{column_prefix}{count}_scaled_pc_{cond_comp}'].astype(float)
+        paired[f'{column_prefix}FC'] = paired[f'{column_prefix}{count}_scaled_pc'].astype(float) / np.maximum(paired[f'{column_prefix}{count}_scaled_pc_{cond_comp}'], eps)
         paired[f'{column_prefix}log2(FC)'] = np.log2(np.maximum(paired[f'{column_prefix}FC'].astype(float), eps))
         df_stat = paired.sort_values(by=[cond, var, replicate]).reset_index(drop=True)
 
@@ -680,9 +703,9 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str,
         grp = (
             df_stat.groupby([cond, var], as_index=False)
             .agg(
-                FPM_pc_mean=(f'{column_prefix}FPM_pc', 'mean'),
-                FPM_pc_var=(f'{column_prefix}FPM_pc', 'var'),
-                FPM_pc_count=(f'{column_prefix}FPM_pc', 'count'),
+                scaled_pc_mean=(f'{column_prefix}{count}_scaled_pc', 'mean'),
+                scaled_pc_var=(f'{column_prefix}{count}_scaled_pc', 'var'),
+                scaled_pc_count=(f'{column_prefix}{count}_scaled_pc', 'count'),
                 FC_mean=(f'{column_prefix}FC', 'mean'),
                 log2FC_mean=(f'{column_prefix}log2(FC)', 'mean'),
             )
@@ -695,11 +718,11 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str,
             .reset_index()
         )
 
-        grp_comp = grp[grp[cond] == cond_comp][[var, f'{column_prefix}FPM_pc_mean', f'{column_prefix}FPM_pc_var', f'{column_prefix}FPM_pc_count']]
+        grp_comp = grp[grp[cond] == cond_comp][[var, f'{column_prefix}{count}_scaled_pc_mean', f'{column_prefix}{count}_scaled_pc_var', f'{column_prefix}{count}_scaled_pc_count']]
         grp_comp = grp_comp.rename(columns={
-            f'{column_prefix}FPM_pc_mean': f'{column_prefix}FPM_pc_mean_{cond_comp}',
-            f'{column_prefix}FPM_pc_var': f'{column_prefix}FPM_pc_var_{cond_comp}',
-            f'{column_prefix}FPM_pc_count': f'{column_prefix}FPM_pc_n_{cond_comp}',
+            f'{column_prefix}{count}_scaled_pc_mean': f'{column_prefix}{count}_scaled_pc_mean_{cond_comp}',
+            f'{column_prefix}{count}_scaled_pc_var': f'{column_prefix}{count}_scaled_pc_var_{cond_comp}',
+            f'{column_prefix}{count}_scaled_pc_count': f'{column_prefix}{count}_scaled_pc_n_{cond_comp}',
         })
 
         df_stat = grp[grp[cond] != cond_comp].merge(grp_comp, on=var, how='left').merge(ttest_df, on=[cond, var], how='left')

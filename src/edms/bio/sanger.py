@@ -20,13 +20,9 @@ import math
 from typing import Literal
 import numpy as np
 import pandas as pd
-from Bio.Seq import Seq
 import os
-from ..gen import io
-from ..gen import tidy as t
-from ..utils import mkdir
-import warnings
-warnings.filterwarnings("ignore")
+from ..gen import io, tidy as t
+from ..utils import check_outpath
 
 # Sanger Thermocycler
 def group_boundaries(nums: list[int]) -> list[tuple[int,int]]:
@@ -339,9 +335,10 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col: str='
         
     # Create thermocycler objects for PCR1 and PCR2
     pcr1_thermo = thermocycler(df=df, n=1, cycles=cycles, pcr_fwd_col=pcr1_fwd_col, pcr_rev_col=pcr1_rev_col)
-        
-    if dir is not None and file is not None: # Save file if dir & file are specified
-        mkdir(dir=dir)
+    
+    # Save pivots, PCR master mix calculations, and thermocycler objects to Excel file if file and dir are specified
+    file, dir = check_outpath(file=file, dir=dir)
+    if dir is not None and file is not None:
         with pd.ExcelWriter(os.path.join(dir,file)) as writer:
             sr = 0 # starting row
             for key,pivot in pivots.items():

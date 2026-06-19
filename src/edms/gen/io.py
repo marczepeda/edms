@@ -44,7 +44,7 @@ from typing import Literal, Iterable
 from pathlib import Path 
 
 
-from ..utils import try_parse, mkdir
+from ..utils import try_parse, mkdir, check_outpath
 from ..config import get_info
 from ..gen import tidy as t
 
@@ -150,29 +150,24 @@ def get_dir(dir: str, suf: str='.csv', literal_eval: bool=False, **kwargs) -> di
     return dc
 
 # Output
-def save(obj, dir: str, file: str=None, cols: list=[], id: bool=False, sort: bool=True, **kwargs):
+def save(obj, file: str, dir: str | None = None, cols: list=[], id: bool=False, sort: bool=True, **kwargs):
     ''' 
     save(): save .csv file to a specified output directory from obj
     
     Parameters:
     obj: dataframe, series, set, or list
-    dir (str): output directory or full path including file name if file is None
-    file (str, optional): file name
+    file (str, optional): file name or full path if dir is None
+    dir (str | None, optional): output directory
     cols (str, list, optional): isolate dataframe column(s)
     id (bool, optional): include dataframe index (False)
     sort (bool, optional): sort set, list, or series before saving (True)
     
     Dependencies: pandas, os, csv & utils.mkdir()
     '''
-    if file is None: # dir is full file path
-        if '/' in dir: # Get directory and file name
-            file = dir.split('/')[-1]
-            dir = '/'.join(dir.split('/')[:-1])
-        else: # Current directory
-            file = dir
-            dir = '.'
-
-    mkdir(dir) # Make output directory if it does not exist
+    file, dir = check_outpath(file=file, dir=dir) # Check save path
+    if file is None or dir is None:
+        print(f"Warning: Invalid file or directory path; file not saved.\nFile: {file}\nDirectory: {dir}")
+        return
 
     if type(obj)==pd.DataFrame:
         for col in cols: # Check if each element in the list is a string

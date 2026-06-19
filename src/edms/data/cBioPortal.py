@@ -120,6 +120,5 @@ def mutations(df: pd.DataFrame | str, wt: str, config: bool=True, dir: str=None,
     
     # Concatenate all genes; save & return
     df_cts = pd.concat(dc_df_cts.values(), ignore_index=True)
-    if dir is not None and file is not None:
-        io.save(obj=df_cts, dir=dir, file=file)
+    io.save(obj=df_cts, dir=dir, file=file)
     return df_cts

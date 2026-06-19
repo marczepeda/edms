@@ -29,7 +29,7 @@ from Bio.Seq import Seq
 import os
 from ..gen import io
 from ..gen import tidy as t
-from ..utils import mkdir
+from ..utils import check_outpath
 
 # NGS Thermocycler
 def group_boundaries(nums: list[int]) -> list[tuple[int, int]]:
@@ -506,8 +506,9 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col: str='
         pcr1_thermo = thermocycler(df=df, n='1', cycles=pcr1_cycles, pcr_fwd_col=pcr1_fwd_col, pcr_rev_col=pcr1_rev_col)
         pcr2_thermo = thermocycler(df=df, n='2', cycles=pcr2_cycles, pcr_fwd_col=pcr2_fwd_col, pcr_rev_col=pcr2_rev_col)
 
-        if dir is not None and file is not None: # Save file if dir & file are specified
-            mkdir(dir=dir)
+        # Save all tables to Excel file if save path provided
+        file, dir = check_outpath(file=file, dir=dir)
+        if dir is not None and file is not None:
             with pd.ExcelWriter(os.path.join(dir,file)) as writer:
                 sr = 0 # starting row
                 for key,pivot in pivots.items():
@@ -589,8 +590,9 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col: str='
         # Common for UMI and non-UMI
         pcr2_thermo = thermocycler(df=df, n='2', cycles=pcr2_cycles, pcr_fwd_col=pcr2_fwd_col, pcr_rev_col=pcr2_rev_col)
 
-        if dir is not None and file is not None: # Save file if dir & file are specified
-            mkdir(dir=dir)
+        # Save all tables to Excel file if save path provided
+        file, dir = check_outpath(file=file, dir=dir)
+        if dir is not None and file is not None:
             with pd.ExcelWriter(os.path.join(dir,file)) as writer:
                 sr = 0 # starting row
                 for key,pivot in pivots.items():
@@ -703,6 +705,5 @@ def hamming_distance_matrix(df: pd.DataFrame | str, id: str, seqs: str, dir:str=
     
     # Save & return hamming distance matrix
     df_matrix = pd.DataFrame(matrix,columns=df[id],index=df[seqs])
-    if dir is not None and file is not None:
-        io.save(obj=df_matrix.reset_index(drop=False), dir=dir, file=file)  
+    io.save(obj=df_matrix.reset_index(drop=False), dir=dir, file=file)  
     return df_matrix

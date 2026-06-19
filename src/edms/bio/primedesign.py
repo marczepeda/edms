@@ -60,7 +60,7 @@ parser.add_argument('-filter_c1', '--filter_c1_extension', action='store_true', 
 parser.add_argument('-filter_homopolymer_ts', '--filter_homopolymer_ts', action='store_true', help = '***** Option to filter out spacer sequences with homopolymer Ts (>3). *****\n\n')
 parser.add_argument('-silent_mut', '--silent_mutation', action='store_true', help = '***** Introduce silent mutation into or around the PAM assuming the sequence is in-frame. Currently only available with SpCas9 PE (i.e., pe_format = NNNNNNNNNNNNNNNNN/NNN[NGG]). *****\n\n')
 parser.add_argument('-genome_wide', '--genome_wide_design', action='store_true', help = '***** Whether or not this is a genome-wide pooled design. This option designs a set of pegRNAs per input without ranging PBS and RTT parameters. (Default: False) *****\n\n')
-parser.add_argument('-sat_mut', '--saturation_mutagenesis', default = False, choices = ['aa', 'aa_subs', 'aa_ins', 'aa_dels', 'base'], type = str, help = '***** Saturation mutagenesis design with prime editing. The \'aa\' option makes all amino acid substitutions (\'aa_subs\'),  +1 amino acid insertions (\'aa_ins\'), and -1 amino acid deletions (\'aa_dels\'). The \'base\' option makes DNA base changes. (Default: False) *****\n\n')
+parser.add_argument('-sat_mut', '--saturation_mutagenesis', default = False, choices = ['aa', 'aa_subs', 'aa_ins', 'aa_dels', 'aa_silent', 'base'], type = str, help = '***** Saturation mutagenesis design with prime editing. The \'aa\' option makes all amino acid substitutions (\'aa_subs\'),  +1 amino acid insertions (\'aa_ins\'), and -1 amino acid deletions (\'aa_dels\'). The \'aa_silent\' option makes all possible silent codon changes. The \'base\' option makes DNA base changes. (Default: False) *****\n\n')
 parser.add_argument('-n_pegrnas', '--number_of_pegrnas', default = 3, type = int, help = '***** The maximum number of pegRNAs to design for each input sequence. The pegRNAs are ranked by 1) PAM disrupted > PAM intact then 2) distance to edit. (Default: 3) *****\n\n')
 parser.add_argument('-n_ngrnas', '--number_of_ngrnas', default = 3, type = int, help = '***** The maximum number of ngRNAs to design for each input sequence. The ngRNAs are ranked by 1) PE3b-seed > PE3b-nonseed > PE3 then 2) deviation from nicking_distance_pooled. (Default: 3) *****\n\n')
 parser.add_argument('-nick_dist_pooled', '--nicking_distance_pooled', default = 75, type = int, help = '***** The nicking distance between pegRNAs and ngRNAs for pooled designs. PE3b annotation is priority, followed by nicking distance closest to this parameter. (Default: 75 bp) *****\n\n')
@@ -218,6 +218,9 @@ for codon in codon_dict:
 for codon in aa2codon:
 	aa2codon[codon] = sorted(aa2codon[codon], key = lambda x: x[1], reverse = True)
 
+def codon_nt_difference(codon_ref, codon_edit):
+	return(sum([1 if ref_base != edit_base else 0 for ref_base, edit_base in zip(codon_ref.upper(), codon_edit.upper())]))
+
 ##### Extract reference and edited sequence information
 def process_sequence(input_sequence):
 
@@ -360,6 +363,35 @@ def saturating_mutagenesis_input_sequences(target_name, target_sequence, sm_type
 
 	sm_target_sequence_list = []
 	sm_target_name_list = []
+	sm_output_target_name_list = []
+
+	def append_sm_target(output_target_name, sm_target_sequence, internal_suffix = None):
+		"""Append a saturation-mutagenesis target.
+
+		For non-base saturation mutagenesis modes, keep an internal target
+		name that is unique so target_design entries do not overwrite each
+		other. The output target name is recovered later by splitting at
+		__internal_.
+		"""
+		if sm_type == 'base':
+			internal_target_name = output_target_name
+		else:
+			internal_index = len(sm_target_name_list) + 1
+			if internal_suffix is None:
+				internal_suffix = str(internal_index)
+			internal_target_name = '%s__internal_%s_%s' % (output_target_name, str(internal_index), internal_suffix)
+
+		sm_target_name_list.append(internal_target_name)
+		sm_target_sequence_list.append(sm_target_sequence)
+		sm_output_target_name_list.append(output_target_name)
+
+	def sorted_codons_by_difference(codon_ref, codon_edit_entry_list):
+		"""Return all codons ranked by max nt difference, then codon usage."""
+		return sorted(codon_edit_entry_list, key = lambda x: (-codon_nt_difference(codon_ref, x[0]), -x[1], x[0]))
+
+	def sorted_codons_by_usage(codon_edit_entry_list):
+		"""Return all codons ranked by codon usage."""
+		return sorted(codon_edit_entry_list, key = lambda x: (-x[1], x[0]))
 
 	if (sm_type == 'aa') | (sm_type == 'aa_subs'): # All Substitutions
 
@@ -376,9 +408,12 @@ def saturating_mutagenesis_input_sequences(target_name, target_sequence, sm_type
 				aa_edit_list = [x for x in aa2codon if x != aa_ref]
 				for aa_edit in aa_edit_list:
 
-					codon_edit = aa2codon[aa_edit][0][0]
-					sm_target_name_list.append('%s_%s_%sto%s' % (target_name, str(int(base_index/3 + 1)), aa_ref, aa_edit))
-					sm_target_sequence_list.append(sequence_left + inner_sequence_left + '(%s/%s)' % (codon_ref, codon_edit) + inner_sequence_right + sequence_right)
+					codon_edit_list = sorted_codons_by_difference(codon_ref, aa2codon[aa_edit])
+					for codon_edit_entry in codon_edit_list:
+
+						codon_edit = codon_edit_entry[0]
+						output_target_name = '%s_%s_%sto%s' % (target_name, str(int(base_index/3 + 1)), aa_ref, aa_edit)
+						append_sm_target(output_target_name, sequence_left + inner_sequence_left + '(%s/%s)' % (codon_ref, codon_edit) + inner_sequence_right + sequence_right, '%s_%s' % (aa_edit, codon_edit))
 	
 	if (sm_type == 'aa') | (sm_type == 'aa_ins'): # All +1 Insertions
 		
@@ -395,9 +430,12 @@ def saturating_mutagenesis_input_sequences(target_name, target_sequence, sm_type
 				aa_edit_list = [x for x in aa2codon if x != 'X']
 				for aa_edit in aa_edit_list:
 
-					codon_edit = aa2codon[aa_edit][0][0]
-					sm_target_name_list.append('%s_%s_%sto%s%s' % (target_name, str(int(base_index/3 + 1)), aa_ref, aa_ref, aa_edit))
-					sm_target_sequence_list.append(sequence_left + inner_sequence_left + codon_ref + '(+%s)' % (codon_edit) + inner_sequence_right + sequence_right)
+					codon_edit_list = sorted_codons_by_usage(aa2codon[aa_edit])
+					for codon_edit_entry in codon_edit_list:
+
+						codon_edit = codon_edit_entry[0]
+						output_target_name = '%s_%s_%sto%s%s' % (target_name, str(int(base_index/3 + 1)), aa_ref, aa_ref, aa_edit)
+						append_sm_target(output_target_name, sequence_left + inner_sequence_left + codon_ref + '(+%s)' % (codon_edit) + inner_sequence_right + sequence_right, '%s_%s' % (aa_edit, codon_edit))
 	
 	if (sm_type == 'aa') | (sm_type == 'aa_dels'): # All -1 Deletions
 		
@@ -414,8 +452,28 @@ def saturating_mutagenesis_input_sequences(target_name, target_sequence, sm_type
 				inner_sequence_left = sequence_to_edit[:base_index]
 				inner_sequence_right = sequence_to_edit[base_index + 3:]
 
-				sm_target_name_list.append('%s_%s_%s%sto%s' % (target_name, str(int(base_index/3 + 1)), aa_ref, aa2_ref, aa2_ref))
-				sm_target_sequence_list.append(sequence_left + inner_sequence_left + '(-%s)' % (codon_ref) + inner_sequence_right + sequence_right)
+				output_target_name = '%s_%s_%s%sto%s' % (target_name, str(int(base_index/3 + 1)), aa_ref, aa2_ref, aa2_ref)
+				append_sm_target(output_target_name, sequence_left + inner_sequence_left + '(-%s)' % (codon_ref) + inner_sequence_right + sequence_right, codon_ref)
+
+	if sm_type == 'aa_silent': # All Silent Codon Substitutions
+
+		for base_index in range(0, len(sequence_to_edit), 3):
+
+			codon_ref = sequence_to_edit[base_index:base_index + 3]
+
+			if len(codon_ref) == 3:
+
+				aa_ref = codon_dict[codon_ref][1]
+				inner_sequence_left = sequence_to_edit[:base_index]
+				inner_sequence_right = sequence_to_edit[base_index + 3:]
+
+				codon_edit_list = [x for x in aa2codon[aa_ref] if x[0] != codon_ref]
+				codon_edit_list = sorted_codons_by_difference(codon_ref, codon_edit_list)
+				for codon_edit_entry in codon_edit_list:
+
+					codon_edit = codon_edit_entry[0]
+					output_target_name = '%s_%s_%sto%s' % (target_name, str(int(base_index/3 + 1)), aa_ref, aa_ref)
+					append_sm_target(output_target_name, sequence_left + inner_sequence_left + '(%s/%s)' % (codon_ref, codon_edit) + inner_sequence_right + sequence_right, codon_edit)
 
 	if sm_type == 'base': # All Base Substitutions
 
@@ -429,10 +487,10 @@ def saturating_mutagenesis_input_sequences(target_name, target_sequence, sm_type
 			base_edit_list = [x for x in base_list if x != base_ref.upper()]
 			for base_edit in base_edit_list:
 
-				sm_target_name_list.append('%s_%s_%sto%s' % (target_name, str(base_index+1), base_ref, base_edit))
-				sm_target_sequence_list.append(sequence_left + inner_sequence_left + '(%s/%s)' % (base_ref, base_edit) + inner_sequence_right + sequence_right)
+				output_target_name = '%s_%s_%sto%s' % (target_name, str(base_index+1), base_ref, base_edit)
+				append_sm_target(output_target_name, sequence_left + inner_sequence_left + '(%s/%s)' % (base_ref, base_edit) + inner_sequence_right + sequence_right)
 
-	return(sm_target_name_list, sm_target_sequence_list)
+	return(sm_target_name_list, sm_target_sequence_list, sm_output_target_name_list)
 
 ##### Dictionary for to organize different DNA targets
 target_design = {}
@@ -469,20 +527,20 @@ with open(file_in, 'r') as f:
 		
 		if saturation_mutagenesis:
 
-			sm_target_name_list, sm_target_sequence_list = saturating_mutagenesis_input_sequences(target_name, target_sequence, saturation_mutagenesis)
+			sm_target_name_list, sm_target_sequence_list, sm_output_target_name_list = saturating_mutagenesis_input_sequences(target_name, target_sequence, saturation_mutagenesis)
 			
-			for sm_target_name, sm_target_sequence in zip(sm_target_name_list, sm_target_sequence_list):
+			for sm_target_name, sm_target_sequence, sm_output_target_name in zip(sm_target_name_list, sm_target_sequence_list, sm_output_target_name_list):
 
 				editformat2sequence, editnumber2sequence, reference_sequence, edit_sequence, editnumber_sequence, edit_span_length_w_ref, edit_span_length_w_edit, edit_start_in_ref, edit_stop_in_ref_rev = process_sequence(sm_target_sequence)
 
 				# Initialize dictionary for the design of pegRNA spacers for each target sequence and intended edit(s)
-				target_design[sm_target_name] = {'target_sequence':sm_target_sequence, 'editformat2sequence': editformat2sequence, 'editnumber2sequence': editnumber2sequence, 'reference_sequence': reference_sequence, 'edit_sequence': edit_sequence, 'editnumber_sequence': editnumber_sequence, 'edit_span_length': [edit_span_length_w_ref, edit_span_length_w_edit], 'edit_start_in_ref': edit_start_in_ref, 'edit_stop_in_ref_rev': edit_stop_in_ref_rev, 'pegRNA':{'+':[], '-':[]}, 'ngRNA':{'+':[], '-':[]}}
+				target_design[sm_target_name] = {'target_sequence':sm_target_sequence, 'editformat2sequence': editformat2sequence, 'editnumber2sequence': editnumber2sequence, 'reference_sequence': reference_sequence, 'edit_sequence': edit_sequence, 'editnumber_sequence': editnumber_sequence, 'edit_span_length': [edit_span_length_w_ref, edit_span_length_w_edit], 'edit_start_in_ref': edit_start_in_ref, 'edit_stop_in_ref_rev': edit_stop_in_ref_rev, 'pegRNA':{'+':[], '-':[]}, 'ngRNA':{'+':[], '-':[]}, 'output_target_name': sm_output_target_name, 'internal_target_name': sm_target_name}
 
 		else:
 			editformat2sequence, editnumber2sequence, reference_sequence, edit_sequence, editnumber_sequence, edit_span_length_w_ref, edit_span_length_w_edit, edit_start_in_ref, edit_stop_in_ref_rev = process_sequence(target_sequence)
 
 			# Initialize dictionary for the design of pegRNA spacers for each target sequence and intended edit(s)
-			target_design[target_name] = {'target_sequence':target_sequence, 'editformat2sequence': editformat2sequence, 'editnumber2sequence': editnumber2sequence, 'reference_sequence': reference_sequence, 'edit_sequence': edit_sequence, 'editnumber_sequence': editnumber_sequence, 'edit_span_length': [edit_span_length_w_ref, edit_span_length_w_edit], 'edit_start_in_ref': edit_start_in_ref, 'edit_stop_in_ref_rev': edit_stop_in_ref_rev, 'pegRNA':{'+':[], '-':[]}, 'ngRNA':{'+':[], '-':[]}}
+			target_design[target_name] = {'target_sequence':target_sequence, 'editformat2sequence': editformat2sequence, 'editnumber2sequence': editnumber2sequence, 'reference_sequence': reference_sequence, 'edit_sequence': edit_sequence, 'editnumber_sequence': editnumber_sequence, 'edit_span_length': [edit_span_length_w_ref, edit_span_length_w_edit], 'edit_start_in_ref': edit_start_in_ref, 'edit_stop_in_ref_rev': edit_stop_in_ref_rev, 'pegRNA':{'+':[], '-':[]}, 'ngRNA':{'+':[], '-':[]}, 'output_target_name': target_name, 'internal_target_name': target_name}
 
 if len(target_design) == 0:
 	logger.error('Input file %s does not have any entries. Make sure a column header is included (target_name,target_sequence) ...' % str(file_in))
@@ -2436,7 +2494,7 @@ with open(out_dir + '/%s' % pegRNAs_summary_f, 'w') as f:
 								if filter_homopolymer_ts:
 
 									if 'TTTT' not in pe_spacer_sequence:
-										f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit])) + '\n')
+										f.write(','.join(map(str, [target_design[target_name].get('output_target_name', target_name), target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit])) + '\n')
 										peg_count += 1
 
 									else:
@@ -2444,7 +2502,7 @@ with open(out_dir + '/%s' % pegRNAs_summary_f, 'w') as f:
 
 								else:
 
-									f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit])) + '\n')
+									f.write(','.join(map(str, [target_design[target_name].get('output_target_name', target_name), target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit])) + '\n')
 									peg_count += 1
 
 						else:
@@ -2463,7 +2521,7 @@ with open(out_dir + '/%s' % pegRNAs_summary_f, 'w') as f:
 							if filter_homopolymer_ts:
 
 								if 'TTTT' not in pe_spacer_sequence:
-									f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit])) + '\n')
+									f.write(','.join(map(str, [target_design[target_name].get('output_target_name', target_name), target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit])) + '\n')
 									peg_count += 1
 									
 								else:
@@ -2471,7 +2529,7 @@ with open(out_dir + '/%s' % pegRNAs_summary_f, 'w') as f:
 
 							else:
 
-								f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit])) + '\n')
+								f.write(','.join(map(str, [target_design[target_name].get('output_target_name', target_name), target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit])) + '\n')
 								peg_count += 1
 
 						# Write ngRNAs
@@ -2492,10 +2550,10 @@ with open(out_dir + '/%s' % pegRNAs_summary_f, 'w') as f:
 								if filter_homopolymer_ts:
 
 									if 'TTTT' not in ng_spacer_sequence_edit:
-										f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', '', '', reference_sequence, edit_sequence, silent_mutation_relative_to_edit])) + '\n')
+										f.write(','.join(map(str, [target_design[target_name].get('output_target_name', target_name), target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', '', '', reference_sequence, edit_sequence, silent_mutation_relative_to_edit])) + '\n')
 
 								else:
-									f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', '', '', reference_sequence, edit_sequence, silent_mutation_relative_to_edit])) + '\n')
+									f.write(','.join(map(str, [target_design[target_name].get('output_target_name', target_name), target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', '', '', reference_sequence, edit_sequence, silent_mutation_relative_to_edit])) + '\n')
 
 						counter += 1
 
@@ -2529,11 +2587,11 @@ with open(out_dir + '/%s' % pegRNAs_summary_f, 'w') as f:
 						if filter_homopolymer_ts:
 
 							if 'TTTT' not in pe_spacer_sequence:
-								f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit])) + '\n')
+								f.write(','.join(map(str, [target_design[target_name].get('output_target_name', target_name), target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit])) + '\n')
 
 						else:
 
-							f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit])) + '\n')
+							f.write(','.join(map(str, [target_design[target_name].get('output_target_name', target_name), target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit])) + '\n')
 
 						# Sort ngRNAs
 
@@ -2554,10 +2612,10 @@ with open(out_dir + '/%s' % pegRNAs_summary_f, 'w') as f:
 							if filter_homopolymer_ts:
 
 								if 'TTTT' not in ng_spacer_sequence_edit:
-									f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', '', '', reference_sequence, edit_sequence, silent_mutation_relative_to_edit])) + '\n')
+									f.write(','.join(map(str, [target_design[target_name].get('output_target_name', target_name), target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', '', '', reference_sequence, edit_sequence, silent_mutation_relative_to_edit])) + '\n')
 
 							else:
-								f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', '', '', reference_sequence, edit_sequence, silent_mutation_relative_to_edit])) + '\n')
+								f.write(','.join(map(str, [target_design[target_name].get('output_target_name', target_name), target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', '', '', reference_sequence, edit_sequence, silent_mutation_relative_to_edit])) + '\n')
 
 						counter += 1
 
@@ -2590,14 +2648,14 @@ with open(out_dir + '/%s' % pegRNAs_summary_f, 'w') as f:
 					if filter_homopolymer_ts:
 
 						if 'TTTT' not in pe_spacer_sequence:
-							f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit])) + '\n')
+							f.write(','.join(map(str, [target_design[target_name].get('output_target_name', target_name), target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit])) + '\n')
 
 						else:
 							ng_continue = False
 
 					else:
 
-						f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit])) + '\n')
+						f.write(','.join(map(str, [target_design[target_name].get('output_target_name', target_name), target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit])) + '\n')
 
 				# Write ngRNAs
 				if ng_continue:
@@ -2617,10 +2675,10 @@ with open(out_dir + '/%s' % pegRNAs_summary_f, 'w') as f:
 						if filter_homopolymer_ts:
 
 							if 'TTTT' not in ng_spacer_sequence_edit:
-								f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', '', '', reference_sequence, edit_sequence, silent_mutation_relative_to_edit])) + '\n')
+								f.write(','.join(map(str, [target_design[target_name].get('output_target_name', target_name), target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', '', '', reference_sequence, edit_sequence, silent_mutation_relative_to_edit])) + '\n')
 
 						else:
 
-							f.write(','.join(map(str, [target_name, target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', '', '', reference_sequence, edit_sequence, silent_mutation_relative_to_edit])) + '\n')
+							f.write(','.join(map(str, [target_design[target_name].get('output_target_name', target_name), target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', '', '', reference_sequence, edit_sequence, silent_mutation_relative_to_edit])) + '\n')
 
 				counter += 1

@@ -204,6 +204,27 @@ def mkdir(dir: str | Path, sep: str='/'):
             os.mkdir(check_dir)
             print(f'Created {check_dir}')
 
+def check_outpath(file: str | None, dir: str | None):
+    '''
+    check_outpath(): determine output file path and ensure output directory exists
+    
+    Parameters:
+    file (str | None): output file path (if None, no output will be saved)
+    dir (str | None): output directory (if None, will be determined from file path or default to current directory)
+    '''
+    if file is None or isinstance(file, str)==False:
+        return None, None
+    elif dir is None or isinstance(dir, str)==False:
+        dir = os.path.dirname(os.path.normpath(file))
+        file = os.path.basename(os.path.normpath(file))
+        if dir == '':
+            print(f"No directory specified in file path; saving to current directory.\ndir = {dir}\nfile = {file}")
+            dir = '.'
+
+    mkdir(dir)  # Ensure output directory exists
+
+    return file, dir
+
 # Supporting argument methods
 def parse_tuple_int(arg):
     '''
