@@ -7,6 +7,7 @@
 ├── genbank.py                  GenBank module
 ├── ngs.py                      Next-generation Sequencing module
 ├── pe.py                       Prime Editing module
+├── dms.py                      Deep Mutational Scan module
 ├── pegLIT.py                   pegRNA Linker module
 ├── plate.py                    Plate  module
 ├── primedesign.py              PrimeDesign module
@@ -21,7 +22,7 @@ import sys
 from rich import print as rprint
 import json
 
-from . import ngs, pe_old, sanger, clone as cl, fastq as fq, qPCR, transfect as tf, plate as pt, pwes
+from . import ngs, pe, sanger, clone as cl, fastq as fq, qPCR, transfect as tf, plate as pt, pwes, dms
 from ..utils import parse_tuple_int, parse_tuple_float
 from ..gen.cli import add_common_plot_cat_args, add_common_plot_heat_args, add_common_plot_scat_args, add_common_plot_stack_args, add_common_plot_vol_args
 
@@ -647,7 +648,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_count_signatures.add_argument("-ad", "--align_dims", type=parse_tuple_int, default=(0, 0), help="Alignment range formatted as 'start,end' (Default: 0,0 = all reads)")
     parser_fastq_count_signatures.add_argument("-ac", "--align_ckpt", type=int, default=10000, help="Checkpoint frequency (Default: 10000)")
     parser_fastq_count_signatures.add_argument("-sa", "--save_alignments", action="store_true", help="Save alignments (Default: False, save memory)", default=False)
-    parser_fastq_count_signatures.add_argument("-nl", "--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
+    parser_fastq_count_signatures.add_argument("-l", "--literal_eval", action='store_true', dest='literal_eval', help="Convert string representations", default=False)
     parser_fastq_count_signatures.add_argument("-p", "--plot_suf", type=str, help="Plot file suffix (Default: None => no plot, '.all' => .png, .pdf, & .svg)", default=argparse.SUPPRESS)
     parser_fastq_count_signatures.add_argument("-s", "--show", action="store_true", help="Display plots interactively", default=False)
     parser_fastq_count_signatures.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
@@ -847,12 +848,15 @@ def add_subparser(subparsers, formatter_class=None):
     parser_pe_prime_designer.add_argument("-rmp", "--rtt_max_length_pooled", type=int, default=50,
                         help="Maximum RTT length to design pegRNAs for pooled design applications (Default: 50 nt)")
     parser_pe_prime_designer.add_argument("-sc", "--scaffold_sequence", type=str, default="GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC",
-                        help="sgRNA scaffold sequence (Default: SpCas9 flip + extend")
+                        help="sgRNA scaffold sequence (Default: SpCas9 flip + extend)")
     parser_pe_prime_designer.add_argument("-e", "--enzymes", type=str, nargs="+", help="list of type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to check for in pegRNAs and ngRNAs (Default: ['Esp3I'])", default=['Esp3I'])
     parser_pe_prime_designer.add_argument("-dr", "--dont_replace", action='store_false',dest='replace', help="Do not replace pegRNAs and remove ngRNAs with RE enzyme sites", default=True)
+    parser_pe_prime_designer.add_argument("-o", "--out_dir", type=str, help="Name of output directory (Default: ./PrimeDesign/DATETIMESTAMP_PrimeDesign)", default='./PrimeDesign/DATETIMESTAMP_PrimeDesign')
+    parser_pe_prime_designer.add_argument("-pd", '--pegRNAs_dir', type=str, help='Directory to save pegRNAs with RE sites before and after codon swap (Default: ./pegRNAs)', default='./pegRNAs')
+    parser_pe_prime_designer.add_argument("-nd", '--ngRNAs_dir', type=str, help='Directory to save ngRNAs with RE sites before removal (Default: ./ngRNAs)', default='./ngRNAs')
 
     # Help message for edms pe prime_designer because input file format can't be captured as block text by Myformatter(RichHelpFormatter):
-    if any(["edms" in argv for argv in sys.argv]) and "pe" in sys.argv and "prime_designer" in sys.argv and ("--help" in sys.argv or "-h" in sys.argv):
+    if any(["edms" in argv for argv in sys.argv]) and "pe" in sys.argv and "designer" in sys.argv and ("--help" in sys.argv or "-h" in sys.argv):
         parser_pe_prime_designer.print_help()
         rprint("""[red]
 Examples:[/red]
@@ -910,7 +914,7 @@ Examples:[/red]
     parser_pe_pilot_screen.add_argument("-m", "--mutations", type=str, dest='mutations_pt', help="Path to mutations file (COSMIC or ClinVar)", required=True)
     
     parser_pe_pilot_screen.add_argument("-d", "--database", type=str, choices=['COSMIC', 'ClinVar'], default='COSMIC', help="Database to use for priority mutations (Default: 'COSMIC')")
-    parser_pe_pilot_screen.add_argument("-nl", "--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
+    parser_pe_pilot_screen.add_argument("-l", "--literal_eval", action='store_false', dest='literal_eval', help="Convert string representations", default=False)
 
     # epegRNA_linkers() [linkers]:
     parser_pe_epegRNA_linkers.add_argument("-i", "--pegRNAs", help='Path to pegRNAs file',required=True)
@@ -923,7 +927,7 @@ Examples:[/red]
     parser_pe_epegRNA_linkers.add_argument("-cp", '--ckpt_pt', type=str, default='', help='Previous checkpoint full path (Example: ../epegRNAs/ckpt/YYMMDD_HHMMSS_epegRNA_linkers.csv)')
     parser_pe_epegRNA_linkers.add_argument("-o", "--out_dir", type=str, help="Output directory (Default: ../epegRNAs)", default='../epegRNAs')
     parser_pe_epegRNA_linkers.add_argument("-f", "--out_file", type=str, help="Name of the output file (Default: epegRNAs.csv)", default='epegRNAs.csv')
-    parser_pe_epegRNA_linkers.add_argument("-nl", "--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
+    parser_pe_epegRNA_linkers.add_argument("-l", "--literal_eval", action='store_true', dest='literal_eval', help="Convert string representations", default=False)
 
     # merge():
     parser_pe_merge.add_argument("-e", "--epegRNAs", type=str, help="Directory or file with epegRNAs", required=True)
@@ -934,7 +938,7 @@ Examples:[/red]
     parser_pe_merge.add_argument("-ns", "--ngRNA_suffix", type=str, help="Suffix for ngRNAs columns (Default: _ngRNA)", default='_ngRNA')
     parser_pe_merge.add_argument("-o", "--out_dir", type=str, dest='dir', help="Output directory (Default: ../epeg_ngRNAs)", default='../epeg_ngRNAs')
     parser_pe_merge.add_argument("-f", "--out_file", type=str, dest='file', help="Name of the output file (Default: epeg_ngRNAs.csv)", default='epeg_ngRNAs.csv')
-    parser_pe_merge.add_argument("-nl", "--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
+    parser_pe_merge.add_argument("-l", "--literal_eval", action='store_true', dest='literal_eval', help="Convert string representations", default=False)
 
     # sensor_designer() [sensor]:
     parser_pe_sensor_designer.add_argument("-i", "--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
@@ -944,7 +948,7 @@ Examples:[/red]
     parser_pe_sensor_designer.add_argument("-so", "--sensor_orientation", type=str, default='revcom', help="Orientation of the sensor relative to the protospacer (Options: 'revcom' [Default b/c minimize recombination] or ’forward’")
     parser_pe_sensor_designer.add_argument("-o", "--out_dir", type=str, help="Output directory (Default: ../pegRNAs_tester)", default='../sensor_designer')
     parser_pe_sensor_designer.add_argument("-f", "--out_file", type=str, help="Name of the output file (Default: pegRNAs.csv)", default='pegRNAs.csv')
-    parser_pe_sensor_designer.add_argument("-nl", "--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
+    parser_pe_sensor_designer.add_argument("-l", "--literal_eval", action='store_true', dest='literal_eval', help="Convert string representations", default=False)
 
     # pegRNA_outcome() [outcome]:
     parser_pe_pegRNA_outcome.add_argument("-i", "--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
@@ -953,7 +957,7 @@ Examples:[/red]
     parser_pe_pegRNA_outcome.add_argument("-o", "--out_dir", type=str, help="Output directory (Default: ../pegRNA_outcome)", default='../pegRNA_outcome')
     parser_pe_pegRNA_outcome.add_argument("-f", "--out_file", type=str, help="Name of the output file (Default: pegRNAs.csv)", default='pegRNAs.csv')
     parser_pe_pegRNA_outcome.add_argument("-d", "--detailed", action='store_true', help="Return detailed geometry checks", default=False)
-    parser_pe_pegRNA_outcome.add_argument("-nl", "--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
+    parser_pe_pegRNA_outcome.add_argument("-l", "--literal_eval", action='store_true', dest='literal_eval', help="Convert string representations", default=False)
 
     # pegRNA_signature() [signature]:
     parser_pe_pegRNA_signature.add_argument("-i", "--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
@@ -967,7 +971,7 @@ Examples:[/red]
     parser_pe_pegRNA_signature.add_argument("-es", "--edit_sequence", type=str, help="Column name for edit sequences (Default: 'Edit_sequence')", default='Edit_sequence')
     parser_pe_pegRNA_signature.add_argument("-o", "--out_dir", type=str, help="Output directory (Default: ../pegRNA_signature)", default='../pegRNA_signature')
     parser_pe_pegRNA_signature.add_argument("-f", "--out_file", type=str, help="Name of the output file (Default: pegRNAs.csv)", default='pegRNAs.csv')
-    parser_pe_pegRNA_signature.add_argument("-nl", "--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
+    parser_pe_pegRNA_signature.add_argument("-l", "--literal_eval", action='store_true', dest='literal_eval', help="Convert string representations", default=False)
 
     parser_pe_pegRNA_signature.add_argument("-ms", "--match_score", type=float, help="Match score for pairwise alignment", default=argparse.SUPPRESS)
     parser_pe_pegRNA_signature.add_argument("-mms", "--mismatch_score", type=float, help="Mismatch score for pairwise alignment", default=argparse.SUPPRESS)
@@ -989,17 +993,131 @@ Examples:[/red]
     parser_pe_epegRNA_fasta.add_argument("-er", "--RTT", type=str, default="RTT_sequence", help="epegRNA RTT column name")
     parser_pe_epegRNA_fasta.add_argument("-ep", "--PBS", type=str, default="PBS_sequence", help="epegRNA PBS column name")
     parser_pe_epegRNA_fasta.add_argument("-el", "--linker", type=str, default="Linker_sequence", help="epegRNA Linker column name")
-    parser_pe_epegRNA_fasta.add_argument("-nl", "--no_literals", action='store_false', dest='literal_eval', help="Do not convert string representations", default=True)
+    parser_pe_epegRNA_fasta.add_argument("-l", "--literal_eval", action='store_true', dest='literal_eval', help="Convert string representations", default=False)
 
     # Set defaults
-    parser_pe_prime_designer.set_defaults(func=pe_old.prime_designer)
-    parser_pe_pilot_screen.set_defaults(func=pe_old.pilot_screen)
-    parser_pe_epegRNA_linkers.set_defaults(func=pe_old.epegRNA_linkers)
-    parser_pe_merge.set_defaults(func=pe_old.merge)
-    parser_pe_sensor_designer.set_defaults(func=pe_old.sensor_designer)
-    parser_pe_pegRNA_outcome.set_defaults(func=pe_old.pegRNA_outcome)
-    parser_pe_pegRNA_signature.set_defaults(func=pe_old.pegRNA_signature)
-    parser_pe_epegRNA_fasta.set_defaults(func=pe_old.epegRNA_fasta)
+    parser_pe_prime_designer.set_defaults(func=pe.prime_designer)
+    parser_pe_pilot_screen.set_defaults(func=pe.pilot_screen)
+    parser_pe_epegRNA_linkers.set_defaults(func=pe.epegRNA_linkers)
+    parser_pe_merge.set_defaults(func=pe.merge)
+    parser_pe_sensor_designer.set_defaults(func=pe.sensor_designer)
+    parser_pe_pegRNA_outcome.set_defaults(func=pe.pegRNA_outcome)
+    parser_pe_pegRNA_signature.set_defaults(func=pe.pegRNA_signature)
+    parser_pe_epegRNA_fasta.set_defaults(func=pe.epegRNA_fasta)
+
+    '''
+    edms.bio.dms:
+    - dms_designer() [designer]: Execute PrimeDesign saturation mutagenesis (EDMS version)
+    - merge(): rejoins epeg/ngRNAs & creates ngRNA_groups
+    - dms_signature() [signature]: create signatures for DMS outcomes using alignments
+    '''
+    parser_dms = subparsers.add_parser("dms", help="Deep Mutation Scanning", formatter_class=formatter_class)
+    subparsers_dms = parser_dms.add_subparsers()
+
+    parser_dms_dms_designer = subparsers_dms.add_parser("designer", help="Execute PrimeDesign saturation mutagenesis (EDMS version)", description="Execute PrimeDesign saturation mutagenesis (EDMS version)", formatter_class=formatter_class)
+    parser_dms_merge = subparsers_dms.add_parser("merge", help="rejoins epeg/ngRNAs & creates ngRNA_groups", description="rejoins epeg/ngRNAs & creates ngRNA_groups", formatter_class=formatter_class)
+    parser_dms_dms_signature = subparsers_dms.add_parser("signature", help="Create signatures for DMS outcomes using alignments", description="Create signatures for DMS outcomes using alignments", formatter_class=formatter_class)
+    
+    # dms_designer() [designer]:
+    parser_dms_dms_designer.add_argument("-i", "--in_file", type=str, dest='in_file', help="[Required (Option 1)] Input file (.csv or .txt) with sequences for DMSDesign. Format: target_name,target_sequence,index (Required). See examples below...")
+    parser_dms_dms_designer.add_argument("-n", "--name", type=str, dest='target_name',help="[Required (Option 2)] Name of the target")
+    parser_dms_dms_designer.add_argument("-f5", "--flank5", type=str, dest='flank5_sequence', help="[Required (Option 2)] 5' flank sequence (in-frame, length divisible by 3)")
+    parser_dms_dms_designer.add_argument("-t", "--target", type=str, dest='target_sequence', help="[Required (Option 2)] Target sequence (in-frame, length divisible by 3)")
+    parser_dms_dms_designer.add_argument("-f3", "--flank3", type=str, dest='flank3_sequence', help="[Required (Option 2)] 3' flank sequence (in-frame, length divisible by 3)")
+    parser_dms_dms_designer.add_argument("-x", "--index", type=int, default=1, help="[Required (Option 2)] Index of 1st amino acid or base in target sequence (Default: 1)")
+    parser_dms_dms_designer.add_argument("-s", "--silent_mutation", type=int, help="Number of silent codon changes to add (Default: 0)", default=0)
+    parser_dms_dms_designer.add_argument("-smode", "--silent_mutation_mode", type=str, help="Silent mutation placement mode; close, upstream, downstream, distribute, or barcode (Default: barcode)", default='barcode')
+    parser_dms_dms_designer.add_argument("-sm", "--saturation_mutagenesis", type=str, choices=['aa', 'aa_subs', 'aa_ins', 'aa_dels', 'aa_silent', 'base'], help="Saturation mutagenesis design with prime editing. The 'aa' option makes all amino acid substitutions ('aa_subs'), +1 amino acid insertions ('aa_ins'), and -1 amino acid deletions ('aa_dels'). The 'aa_silent' option makes all possible silent codon changes. The 'base' option makes DNA base changes.", default=None)
+    parser_dms_dms_designer.add_argument("-e", "--enzymes", type=str, nargs="+", help="list of type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to check for in pegRNAs and ngRNAs (Default: ['Esp3I'])", default=['Esp3I'])
+    parser_dms_dms_designer.add_argument("-dr", "--dont_replace", action='store_false',dest='replace', help="Do not replace or remove DMS oligos with RE enzyme sites", default=True)
+    parser_dms_dms_designer.add_argument("-o", "--out_dir", type=str, help="Name of output directory for DMSDesign (Default: ./DMSDesign/DATETIMESTAMP_DMSDesign)", default='./DMSDesign/DATETIMESTAMP_DMSDesign')
+    parser_dms_dms_designer.add_argument("-sd", '--save_dir', type=str, help='Directory to save final annotated DMSDesign output (Default: ./dms)', default='./dms')
+    parser_dms_dms_designer.add_argument("-sf", '--save_file', type=str, help='filename for final annotated DMSDesign output (if None, generated from target_name or in_file)', default=argparse.SUPPRESS)
+
+    # [here] Help message for edms pe prime_designer because input file format can't be captured as block text by Myformatter(RichHelpFormatter):
+    if any(["edms" in argv for argv in sys.argv]) and "dms" in sys.argv and "designer" in sys.argv and ("--help" in sys.argv or "-h" in sys.argv):
+        parser_dms_dms_designer.print_help()
+        rprint("""[red]
+Examples:[/red]
+  [cyan]--file[/cyan] [dark_magenta]IN_FILE[/dark_magenta]
+  [blue]Input file (.csv or .txt) with sequences for PrimeDesign.
+  Format: target_name,target_sequence,index
+
+  *** Example saturation_mutagenesis.CSV file *** ---------------------------------------
+  |											|
+  |	target,ATGTGC(TGTGATGGTATGCCGGCGTAGTAA)TCGTAG,1		                        |
+  |											|
+  ---------------------------------------------------------------------------------------
+
+  *** Example saturation_mutagenesis.TXT file *** ---------------------------------------
+  |											|
+  |	target	ATGTGC(TGTGATGGTATGCCGGCGTAGTAA)TCGTAG   1                              |
+  |											|
+  ---------------------------------------------------------------------------------------
+
+  *** Example not_saturation_mutagenesis.CSV file *** -----------------------------------
+  |											|
+  |	target_01_substitution,ATGTGCTGTGATGGTAT(G/A)CCGGCGTAGTAATCGTAGC,1		|
+  |	target_01_insertion,ATGTGCTGTGATGGTATG(+ATCTCGATGA)CCGGCGTAGTAATCGTAGC,1	|
+  |	target_01_deletion,ATGTGCTGTGATGG(-TATGCCG)GCGTAGTAATCGTAGC,1			|
+  |											|
+  ---------------------------------------------------------------------------------------
+
+  *** Example not_saturation_mutagenesis.TXT file *** -----------------------------------
+  |											|
+  |	target_01_substitution	ATGTGCTGTGATGGTAT(G/A)CCGGCGTAGTAATCGTAGC   1           |
+  |	target_01_insertion	ATGTGCTGTGATGGTATG(+ATCTCGATGA)CCGGCGTAGTAATCGTAGC  1   |
+  |	target_01_deletion	ATGTGCTGTGATGG(-TATGCCG)GCGTAGTAATCGTAGC    1           |
+  |											|
+  ---------------------------------------------------------------------------------------
+
+  *** Formatting different DNA edits *** ------------------------------------------------
+  |											|
+  |	Substitution edit:	Format: (reference/edit)	Example:(G/A)		|
+  |	Insertion edit:		Format: (+insertion)		Example:(+ATCG)		|
+  |	Deletion edit:		Format: (-deletion)		Example:(-ATCG)		|
+  |											|
+  ---------------------------------------------------------------------------------------
+
+  *** Combination edit example *** ------------------------------------------------------
+  |											|
+  |	Reference:			ATGCTGTGAT G TCGTGATG    A			|
+  |	Edit:				A--CTGTGAT C TCGTGATGatcgA			|
+  |	Sequence format:	A(-TG)CTGTGAT(G/C)TCGTGATG(+atcg)A			|
+  |											|
+  ---------------------------------------------------------------------------------------[/blue]""")
+        sys.exit()
+
+    # merge():
+    parser_dms_merge.add_argument("-d", "--dms_designs", type=str, help="Directory or file with DMS designs", required=True)
+    
+    parser_dms_merge.add_argument("-o", "--out_dir", type=str, dest='dir', help="Output directory (Default: ../DMSDesign_combined)", default='../DMSDesign_combined')
+    parser_dms_merge.add_argument("-f", "--out_file", type=str, dest='file', help="Name of the output file (Default: DMSDesign_combined.csv)", default='DMSDesign_combined.csv')
+    parser_dms_merge.add_argument("-l", "--literal_eval", action='store_true', dest='literal_eval', help="Convert string representations", default=False)
+
+    # dms_signature() [signature]:
+    parser_dms_dms_signature.add_argument("-i", "--pegRNAs", type=str, help="Path to pegRNAs file", required=True)
+
+    parser_dms_dms_signature.add_argument("-C", "--config_key", type=str, help="Config file key (FWD primer_REV primer) with 'motif5' (flank5) & 'motif3' (flank3)", default=argparse.SUPPRESS)
+    parser_dms_dms_signature.add_argument("-f5", "--flank5", type=str, dest='flank5_sequence', help=f"Flank 5' sequence", default=argparse.SUPPRESS)
+    parser_dms_dms_signature.add_argument("-f3", "--flank3", type=str, dest='flank3_sequence', help=f"Flank 3' sequence", default=argparse.SUPPRESS)
+    parser_dms_dms_signature.add_argument("-f5l", "--flank5_length", type=int, help="Length of flank5 sequence to include in alignment if provided (Default: 0)", default=0)
+    parser_dms_dms_signature.add_argument("-f3l", "--flank3_length", type=int, help="Length of flank3 sequence to include in alignment if provided (Default: 0)", default=0)
+    parser_dms_dms_signature.add_argument("-rs", "--reference_sequence", type=str, help="Column name for reference sequences (Default: 'Reference_sequence')", default='Reference_sequence')
+    parser_dms_dms_signature.add_argument("-es", "--edit_sequence", type=str, help="Column name for edit sequences (Default: 'Edit_sequence_with_silent_mutations')", default='Edit_sequence_with_silent_mutations')
+    parser_dms_dms_signature.add_argument("-o", "--out_dir", type=str, help="Output directory (Default: ../pegRNA_signature)", default='../pegRNA_signature')
+    parser_dms_dms_signature.add_argument("-f", "--out_file", type=str, help="Name of the output file (Default: pegRNAs.csv)", default='pegRNAs.csv')
+    parser_dms_dms_signature.add_argument("-l", "--literal_eval", action='store_true', dest='literal_eval', help="Convert string representations", default=False)
+
+    parser_dms_dms_signature.add_argument("-ms", "--match_score", type=float, help="Match score for pairwise alignment", default=argparse.SUPPRESS)
+    parser_dms_dms_signature.add_argument("-mms", "--mismatch_score", type=float, help="Mismatch score for pairwise alignment", default=argparse.SUPPRESS)
+    parser_dms_dms_signature.add_argument("-ogs", "--open_gap_score", type=float, help="Open gap score for pairwise alignment", default=argparse.SUPPRESS)
+    parser_dms_dms_signature.add_argument("-egs", "--extend_gap_score", type=float, help="Extend gap score for pairwise alignment", default=argparse.SUPPRESS)
+
+    # Set defaults
+    parser_dms_dms_designer.set_defaults(func=dms.dms_designer)
+    parser_dms_merge.set_defaults(func=dms.merge)
+    parser_dms_dms_signature.set_defaults(func=dms.dms_signature)
 
     '''
     edms.bio.plate:

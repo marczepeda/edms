@@ -111,7 +111,12 @@ def parse_signature_literal(text: str) -> Signature:
     return obj if isinstance(obj, Signature) else text
 
 # Signature Functions
-def concat_gapped_from_aligned(ref_seq: str, query_seq: str, alignment) -> Tuple[str, str]:
+def concat_gapped_from_aligned(
+    ref_seq: str,
+    query_seq: str,
+    alignment,
+    include_terminal_gaps: bool = True,
+) -> Tuple[str, str]:
     """
     concat_gapped_from_aligned(): Construct continuous gapped strings for the aligned region only, using PairwiseAlignment.aligned coordinate blocks.
                                   Works for global or local alignments. Leading/trailing unaligned sequence is omitted (local) or represented by gaps 
@@ -121,6 +126,7 @@ def concat_gapped_from_aligned(ref_seq: str, query_seq: str, alignment) -> Tuple
     ref_seq (str): reference sequence
     query_seq (str): query sequence
     alignment: PairwiseAligner alignment
+    include_terminal_gaps (bool, optional): whether to include leading/trailing gaps for global alignments (Default: True)
     """
     ref_blocks = alignment.aligned[0]  # array of [start, end) on WT
     query_blocks = alignment.aligned[1] # array of [start, end) on read
@@ -128,44 +134,53 @@ def concat_gapped_from_aligned(ref_seq: str, query_seq: str, alignment) -> Tuple
 
     ref_parts, query_parts = [], []
 
-    for i, ((rs, re), (qs, qe)) in enumerate(zip(ref_blocks, query_blocks)):
-        if i > 0:
-            prs, pre = ref_blocks[i-1]
-            pqs, pqe = query_blocks[i-1]
+    def append_gap_region(prev_re, rs, prev_qe, qs):
+        ref_advanced = rs - prev_re
+        query_advanced = qs - prev_qe
 
-            # Gap(s) between previous and current blocks
-            # Deletion relative to WT (gap in read)
-            if rs > pre and qs == pqe:
-                ref_parts.append(ref_seq[pre:rs])
-                query_parts.append("-" * (rs - pre))
+        if ref_advanced > 0 and query_advanced == 0:
+            # deletion relative to reference
+            ref_parts.append(ref_seq[prev_re:rs])
+            query_parts.append("-" * ref_advanced)
 
-            # Insertion relative to WT (gap in reference)
-            if qs > pqe and rs == pre:
-                ref_parts.append("-" * (qs - pqe))
-                query_parts.append(query_seq[pqe:qs])
+        elif query_advanced > 0 and ref_advanced == 0:
+            # insertion relative to reference
+            ref_parts.append("-" * query_advanced)
+            query_parts.append(query_seq[prev_qe:qs])
 
-            # If both advanced, that would indicate an unaligned diagonal jump
-            # which shouldn't happen in a standard pairwise alignment.
-            if rs > pre and qs > pqe:
-                # Defensive: treat it as mismatches (diagonal) – append them aligned.
-                span = min(rs - pre, qs - pqe)
-                ref_parts.append(ref_seq[pre:pre+span])
-                query_parts.append(query_seq[pqe:pqe+span])
-                # Any remainder will be handled by the gap cases above
-                if rs - pre > span:
-                    ref_parts.append(ref_seq[pre+span:rs])
-                    query_parts.append("-" * (rs - (pre + span)))
-                if qs - pqe > span:
-                    ref_parts.append("-" * (qs - (pqe + span)))
-                    query_parts.append(query_seq[pqe+span:qs])
+        # If both advanced, that would indicate an unaligned diagonal jump
+        # which shouldn't happen in a standard pairwise alignment.
+        elif ref_advanced > 0 and query_advanced > 0:
+            # Defensive: treat it as mismatches (diagonal) – append them aligned.
+            span = min(ref_advanced, query_advanced)
+            ref_parts.append(ref_seq[prev_re:prev_re + span])
+            query_parts.append(query_seq[prev_qe:prev_qe + span])
 
-        # Now the aligned block itself (matches+mismatches)
+            # Any remainder will be handled by the gap cases above
+            if ref_advanced > span:
+                ref_parts.append(ref_seq[prev_re + span:rs])
+                query_parts.append("-" * (ref_advanced - span))
+
+            if query_advanced > span:
+                ref_parts.append("-" * (query_advanced - span))
+                query_parts.append(query_seq[prev_qe + span:qs])
+
+    prev_re = 0 if include_terminal_gaps else ref_blocks[0][0]
+    prev_qe = 0 if include_terminal_gaps else query_blocks[0][0]
+
+    for (rs, re), (qs, qe) in zip(ref_blocks, query_blocks):
+        append_gap_region(prev_re, rs, prev_qe, qs)
+
         ref_parts.append(ref_seq[rs:re])
         query_parts.append(query_seq[qs:qe])
 
-    ref_gapped = "".join(ref_parts)
-    query_gapped = "".join(query_parts)
-    return ref_gapped, query_gapped
+        prev_re = re
+        prev_qe = qe
+
+    if include_terminal_gaps:
+        append_gap_region(prev_re, len(ref_seq), prev_qe, len(query_seq))
+
+    return "".join(ref_parts), "".join(query_parts)
 
 def left_align_indels(indels: List[Indel], ref: str) -> List[Indel]:
     """

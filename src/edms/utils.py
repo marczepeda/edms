@@ -197,7 +197,7 @@ def mkdir(dir: str | Path, sep: str='/'):
 
     Dependencies: os
     '''
-    dirs = str(dir).split(sep)
+    dirs = os.path.abspath(str(dir)).split(sep)
     for i in range(len(dirs)):
         check_dir = sep.join(dirs[:i+1])
         if (os.path.exists(check_dir)==False)&(i!=0):
@@ -215,8 +215,8 @@ def check_outpath(file: str | None, dir: str | None):
     if file is None or isinstance(file, str)==False:
         return None, None
     elif dir is None or isinstance(dir, str)==False:
-        dir = os.path.dirname(os.path.normpath(file))
-        file = os.path.basename(os.path.normpath(file))
+        dir = os.path.dirname(os.path.abspath(file))
+        file = os.path.basename(os.path.abspath(file))
         if dir == '':
             print(f"No directory specified in file path; saving to current directory.\ndir = {dir}\nfile = {file}")
             dir = '.'

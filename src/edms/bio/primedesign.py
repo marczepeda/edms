@@ -70,7 +70,7 @@ parser.add_argument('-rtt_pooled', '--rtt_max_length_pooled', type = int, defaul
 
 
 # Output directory
-parser.add_argument('-out', '--out_dir', default = '0', type = str, help = '***** Name of output directory (Default: ./DATETIMESTAMP_PrimeDesign). *****\n\n')
+parser.add_argument('-out', '--out_dir', default = './PrimeDesign/DATETIMESTAMP_PrimeDesign', type = str, help = '***** Name of output directory (Default: ./DATETIMESTAMP_PrimeDesign). *****\n\n')
 
 args = parser.parse_args()
 
@@ -104,8 +104,8 @@ if rtt_length_list == 0:
 
 # Output directory date and time stamped
 out_dir = args.out_dir
-if out_dir == '0':
-	out_dir = '%s_PrimeDesign' % str(time.strftime("%y%m%d_%H.%M.%S", time.localtime()))
+if out_dir == './PrimeDesign/DATETIMESTAMP_PrimeDesign':
+	out_dir = './PrimeDesign/%s_PrimeDesign' % str(time.strftime("%y%m%d_%H.%M.%S", time.localtime()))
 
 if not os.path.exists(out_dir):
 	os.makedirs(out_dir)
@@ -220,6 +220,38 @@ for codon in aa2codon:
 
 def codon_nt_difference(codon_ref, codon_edit):
 	return(sum([1 if ref_base != edit_base else 0 for ref_base, edit_base in zip(codon_ref.upper(), codon_edit.upper())]))
+
+def silent_codon_in_allowed_range(target_design_entry, codon_start_abs, codon_end_abs):
+	"""Return True when a candidate silent codon is inside the saturation-mutagenesis region.
+
+	The range is only defined for saturation mutagenesis. For normal PrimeDesign
+	inputs, this helper returns True and does not change behavior.
+	Coordinates are 0-indexed and half-open: [start, end).
+	"""
+	allowed_range = target_design_entry.get('silent_mutation_allowed_range', None)
+	if allowed_range is None:
+		return True
+	return codon_start_abs >= allowed_range[0] and codon_end_abs <= allowed_range[1]
+
+def silent_mutation_edit_sequence_in_allowed_range(target_design_entry, edit_sequence, silent_mutation_edit_sequence):
+	"""Validate that any additional silent codon changes remain inside the allowed region.
+
+	This is a final safety gate for saturation mutagenesis. It compares the edit
+	sequence before and after adding the silent PAM/synonymous mutation. Any
+	new base differences are assigned to their codon and the whole codon must be
+	inside silent_mutation_allowed_range.
+	"""
+	allowed_range = target_design_entry.get('silent_mutation_allowed_range', None)
+	if allowed_range is None or silent_mutation_edit_sequence in ['', None]:
+		return True
+	if len(edit_sequence) != len(silent_mutation_edit_sequence):
+		return False
+	changed_codons = set()
+	for i, (base_before, base_after) in enumerate(zip(edit_sequence.upper(), silent_mutation_edit_sequence.upper())):
+		if base_before != base_after:
+			codon_start = int(i / 3) * 3
+			changed_codons.add((codon_start, codon_start + 3))
+	return all(silent_codon_in_allowed_range(target_design_entry, start, end) for start, end in changed_codons)
 
 ##### Extract reference and edited sequence information
 def process_sequence(input_sequence):
@@ -364,6 +396,8 @@ def saturating_mutagenesis_input_sequences(target_name, target_sequence, sm_type
 	sm_target_sequence_list = []
 	sm_target_name_list = []
 	sm_output_target_name_list = []
+	sm_allowed_range_list = []
+	sm_allowed_range = (len(sequence_left), len(sequence_left) + len(sequence_to_edit))
 
 	def append_sm_target(output_target_name, sm_target_sequence, internal_suffix = None):
 		"""Append a saturation-mutagenesis target.
@@ -384,6 +418,7 @@ def saturating_mutagenesis_input_sequences(target_name, target_sequence, sm_type
 		sm_target_name_list.append(internal_target_name)
 		sm_target_sequence_list.append(sm_target_sequence)
 		sm_output_target_name_list.append(output_target_name)
+		sm_allowed_range_list.append(sm_allowed_range)
 
 	def sorted_codons_by_difference(codon_ref, codon_edit_entry_list):
 		"""Return all codons ranked by max nt difference, then codon usage."""
@@ -490,7 +525,7 @@ def saturating_mutagenesis_input_sequences(target_name, target_sequence, sm_type
 				output_target_name = '%s_%s_%sto%s' % (target_name, str(base_index+1), base_ref, base_edit)
 				append_sm_target(output_target_name, sequence_left + inner_sequence_left + '(%s/%s)' % (base_ref, base_edit) + inner_sequence_right + sequence_right)
 
-	return(sm_target_name_list, sm_target_sequence_list, sm_output_target_name_list)
+	return(sm_target_name_list, sm_target_sequence_list, sm_output_target_name_list, sm_allowed_range_list)
 
 ##### Dictionary for to organize different DNA targets
 target_design = {}
@@ -527,20 +562,20 @@ with open(file_in, 'r') as f:
 		
 		if saturation_mutagenesis:
 
-			sm_target_name_list, sm_target_sequence_list, sm_output_target_name_list = saturating_mutagenesis_input_sequences(target_name, target_sequence, saturation_mutagenesis)
+			sm_target_name_list, sm_target_sequence_list, sm_output_target_name_list, sm_allowed_range_list = saturating_mutagenesis_input_sequences(target_name, target_sequence, saturation_mutagenesis)
 			
-			for sm_target_name, sm_target_sequence, sm_output_target_name in zip(sm_target_name_list, sm_target_sequence_list, sm_output_target_name_list):
+			for sm_target_name, sm_target_sequence, sm_output_target_name, sm_allowed_range in zip(sm_target_name_list, sm_target_sequence_list, sm_output_target_name_list, sm_allowed_range_list):
 
 				editformat2sequence, editnumber2sequence, reference_sequence, edit_sequence, editnumber_sequence, edit_span_length_w_ref, edit_span_length_w_edit, edit_start_in_ref, edit_stop_in_ref_rev = process_sequence(sm_target_sequence)
 
 				# Initialize dictionary for the design of pegRNA spacers for each target sequence and intended edit(s)
-				target_design[sm_target_name] = {'target_sequence':sm_target_sequence, 'editformat2sequence': editformat2sequence, 'editnumber2sequence': editnumber2sequence, 'reference_sequence': reference_sequence, 'edit_sequence': edit_sequence, 'editnumber_sequence': editnumber_sequence, 'edit_span_length': [edit_span_length_w_ref, edit_span_length_w_edit], 'edit_start_in_ref': edit_start_in_ref, 'edit_stop_in_ref_rev': edit_stop_in_ref_rev, 'pegRNA':{'+':[], '-':[]}, 'ngRNA':{'+':[], '-':[]}, 'output_target_name': sm_output_target_name, 'internal_target_name': sm_target_name}
+				target_design[sm_target_name] = {'target_sequence':sm_target_sequence, 'editformat2sequence': editformat2sequence, 'editnumber2sequence': editnumber2sequence, 'reference_sequence': reference_sequence, 'edit_sequence': edit_sequence, 'editnumber_sequence': editnumber_sequence, 'edit_span_length': [edit_span_length_w_ref, edit_span_length_w_edit], 'edit_start_in_ref': edit_start_in_ref, 'edit_stop_in_ref_rev': edit_stop_in_ref_rev, 'pegRNA':{'+':[], '-':[]}, 'ngRNA':{'+':[], '-':[]}, 'output_target_name': sm_output_target_name, 'internal_target_name': sm_target_name, 'silent_mutation_allowed_range': sm_allowed_range}
 
 		else:
 			editformat2sequence, editnumber2sequence, reference_sequence, edit_sequence, editnumber_sequence, edit_span_length_w_ref, edit_span_length_w_edit, edit_start_in_ref, edit_stop_in_ref_rev = process_sequence(target_sequence)
 
 			# Initialize dictionary for the design of pegRNA spacers for each target sequence and intended edit(s)
-			target_design[target_name] = {'target_sequence':target_sequence, 'editformat2sequence': editformat2sequence, 'editnumber2sequence': editnumber2sequence, 'reference_sequence': reference_sequence, 'edit_sequence': edit_sequence, 'editnumber_sequence': editnumber_sequence, 'edit_span_length': [edit_span_length_w_ref, edit_span_length_w_edit], 'edit_start_in_ref': edit_start_in_ref, 'edit_stop_in_ref_rev': edit_stop_in_ref_rev, 'pegRNA':{'+':[], '-':[]}, 'ngRNA':{'+':[], '-':[]}, 'output_target_name': target_name, 'internal_target_name': target_name}
+			target_design[target_name] = {'target_sequence':target_sequence, 'editformat2sequence': editformat2sequence, 'editnumber2sequence': editnumber2sequence, 'reference_sequence': reference_sequence, 'edit_sequence': edit_sequence, 'editnumber_sequence': editnumber_sequence, 'edit_span_length': [edit_span_length_w_ref, edit_span_length_w_edit], 'edit_start_in_ref': edit_start_in_ref, 'edit_stop_in_ref_rev': edit_stop_in_ref_rev, 'pegRNA':{'+':[], '-':[]}, 'ngRNA':{'+':[], '-':[]}, 'output_target_name': target_name, 'internal_target_name': target_name, 'silent_mutation_allowed_range': None}
 
 if len(target_design) == 0:
 	logger.error('Input file %s does not have any entries. Make sure a column header is included (target_name,target_sequence) ...' % str(file_in))
@@ -1162,6 +1197,17 @@ for target_name in target_design:
 												silent_mutation_relative_to_edit = 'downstream'
 												break
 					
+					# Enforce saturation-mutagenesis silent mutation boundaries.
+					# If the extra silent mutation falls outside the parenthesized region,
+					# revert to the original edit sequence and original PAM annotation.
+					if saturation_mutagenesis and len(silent_mutation_edit_sequence) > 0 and not silent_mutation_edit_sequence_in_allowed_range(target_design[target_name], edit_sequence, silent_mutation_edit_sequence):
+						pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + rtt_length])
+						pegRNA_ext_max = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + rtt_max_length_pooled])
+						pe_pam_ref_silent_mutation = ''
+						pe_annotate = pe_annotate_constant
+						silent_mutation_edit_sequence = ''
+						silent_mutation_relative_to_edit = None
+
 					# Create pegRNA ID based on annotation
 					if 'PAM_disrupted' in pe_annotate and 'silent_mutation' in pe_annotate:
 						pe_annotate_code = 0
@@ -1578,6 +1624,17 @@ for target_name in target_design:
 												silent_mutation_edit_sequence = edit_sequence[:pe_nick_edit_idx + codon_start_idx] + new_codon + edit_sequence[pe_nick_edit_idx + codon_end_idx:]
 												silent_mutation_relative_to_edit = 'upstream'
 												break
+
+					# Enforce saturation-mutagenesis silent mutation boundaries.
+					# If the extra silent mutation falls outside the parenthesized region,
+					# revert to the original edit sequence and original PAM annotation.
+					if saturation_mutagenesis and len(silent_mutation_edit_sequence) > 0 and not silent_mutation_edit_sequence_in_allowed_range(target_design[target_name], edit_sequence, silent_mutation_edit_sequence):
+						pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + pbs_length]
+						pegRNA_ext_max = edit_sequence[pe_nick_edit_idx - rtt_max_length_pooled:pe_nick_edit_idx + pbs_length]
+						pe_pam_ref_silent_mutation = ''
+						pe_annotate = pe_annotate_constant
+						silent_mutation_edit_sequence = ''
+						silent_mutation_relative_to_edit = None
 
 					# Create pegRNA ID based on annotation
 					if 'PAM_disrupted' in pe_annotate and 'silent_mutation' in pe_annotate:

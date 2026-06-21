@@ -15,12 +15,12 @@ Usage:
 - found_list_in_order(): returns index of sub_ls found consecutive order in main_ls or -1
 - find_enzyme_sites(): find enzyme sites in pegRNAs or ngRNAs
 - enzyme_codon_swap(): modify pegRNA RTT sequences to disrupt a RE recognition site
- 
+
 [PrimeDesign]
 - prime_design_input(): creates and checks PrimeDesign saturation mutagenesis input file
-- prime_design(): run PrimeDesign using Docker (NEED TO BE RUNNING DESKTOP APP)
+- prime_design(): run PrimeDesign
 - prime_design_output(): splits peg/ngRNAs from PrimeDesign output & finishes annotations
-- prime_designer(): execute PrimeDesign for EDMS using Docker (NEED TO BE RUNNING DESKTOP APP)
+- prime_designer(): execute PrimeDesign for EDMS workflow
 - merge(): rejoins epeg/ngRNAs & creates ngRNA_groups
 
 [pegRNA]
@@ -28,7 +28,7 @@ Usage:
 - shared_sequences(): Reduce PE library into shared spacers and PBS sequences
 - pilot_screen(): Create pilot screen for EDMS
 - sensor_designer(): Design pegRNA sensors
-- pegRNA_outcome(): confirm that pegRNAs should create the predicted edits
+- pegRNA_outcome(): confirm that pegRNAs have correct reference/edit-sequence geometry.
 - pegRNA_signature(): create signatures for pegRNA outcomes using alignments
 - epegRNA_fasta(): generate FASTA files representing epegRNAs cloned into a linearized vector
 
@@ -61,8 +61,7 @@ from ..gen import tidy as t
 from ..gen import plot as p
 from ..data import cosmic as co 
 from ..data import cvar
-from . import fastq as fq
-from ..utils import memory_timer,load_resource_csv,mkdir
+from ..utils import memory_timer, load_resource_csv, mkdir
 import edms.config as config
 
 # Biological Dictionaries
@@ -173,7 +172,7 @@ def found_list_in_order(main_ls: list, sub_ls: list) -> int:
     
     return -1 # Not found
 
-def find_enzyme_sites(df: pd.DataFrame | str, enzyme: str, RE_type_IIS_df: pd.DataFrame | str = None, literal_eval: bool=True) -> pd.DataFrame:
+def find_enzyme_sites(df: pd.DataFrame | str, enzyme: str, RE_type_IIS_df: pd.DataFrame | str = None, literal_eval: bool=False) -> pd.DataFrame:
     ''' 
     find_enzyme_sites(): find enzyme sites in pegRNAs or ngRNAs
     
@@ -181,7 +180,7 @@ def find_enzyme_sites(df: pd.DataFrame | str, enzyme: str, RE_type_IIS_df: pd.Da
     df (pd.DataFrame | str): DataFrame with pegRNAs or ngRNAs or file path to DataFrame
     enzyme (str): Enzyme name (e.g. Esp3I, BsaI, BspMI, etc.)
     RE_type_IIS_df (pd.DataFrame | str, optional): DataFrame with Type IIS RE information (or file path)
-    literal_eval (bool, optional): convert string representations (Default: True)
+    literal_eval (bool, optional): convert string representations (Default: False)
     '''
     # Get dataframes from file path if needed
     if type(df)==str:
@@ -205,7 +204,7 @@ def find_enzyme_sites(df: pd.DataFrame | str, enzyme: str, RE_type_IIS_df: pd.Da
 
 def enzyme_codon_swap(pegRNAs: pd.DataFrame | str, enzyme: str, 
                       RE_type_IIS_df: pd.DataFrame | str = None, out_dir: str = None, 
-                      out_file: str = None, return_df: bool = True, literal_eval: bool=True, comments: bool=False) -> pd.DataFrame:
+                      out_file: str = None, return_df: bool = True, literal_eval: bool=False, comments: bool=False) -> pd.DataFrame:
     '''
     enzyme_codon_swap(): modify pegRNA RTT sequences to disrupt a RE recognition site
 
@@ -216,7 +215,7 @@ def enzyme_codon_swap(pegRNAs: pd.DataFrame | str, enzyme: str,
     out_dir (str, optional): output directory
     out_file (str, optional): output filename
     return_df (bool, optional): Return pegRNAs DataFrame (Default: True)
-    literal_eval (bool, optional): convert string representations (Default: True)
+    literal_eval (bool, optional): convert string representations (Default: False)
     comments (bool, optional): Print comments (Default: False)
     '''
     # Initialize timer; memory reporting
@@ -523,7 +522,7 @@ def prime_design(file: str, pe_format: str = 'NNNNNNNNNNNNNNNNN/NNN[NGG]', pbs_l
                 nicking_distance_minimum: int = 0, nicking_distance_maximum: int = 100, filter_c1_extension: bool = False, silent_mutation: bool = False,
                 genome_wide_design: bool = False, saturation_mutagenesis: str = None, number_of_pegrnas: int = 3, number_of_ngrnas: int = 3,
                 nicking_distance_pooled: int = 75, homology_downstream: int = 15, pbs_length_pooled: int = 14, rtt_max_length_pooled: int = 50,
-                out_dir: str = './DATETIMESTAMP_PrimeDesign'):
+                out_dir: str = './PrimeDesign/DATETIMESTAMP_PrimeDesign'):
     ''' 
     prime_design(): execute PrimeDesign (EDMS version)
     
@@ -544,7 +543,7 @@ def prime_design(file: str, pe_format: str = 'NNNNNNNNNNNNNNNNN/NNN[NGG]', pbs_l
     homology_downstream (int, optional): this parameter determines the minimum RT extension length downstream of an edit for pegRNA designs. (Default: 15)
     pbs_length_pooled (int, optional): the PBS length to design pegRNAs for pooled design applications. (Default: 14 nt)
     rtt_max_length_pooled (int, optional): maximum RTT length to design pegRNAs for pooled design applications. (Default: 50 nt)
-    out_dir (str, optional): name of output directory (Default: ./DATETIMESTAMP_PrimeDesign)
+    out_dir (str, optional): name of output directory (Default: ./PrimeDesign/DATETIMESTAMP_PrimeDesign)
     
     *** Example saturation_mutagenesis.TXT file *** ---------------------------------------
     |											|
@@ -610,13 +609,14 @@ def prime_design(file: str, pe_format: str = 'NNNNNNNNNNNNNNNNN/NNN[NGG]', pbs_l
     if homology_downstream!=15: cmd += f' -homology_downstream {homology_downstream}'
     if pbs_length_pooled!=14: cmd += f' -pbs_pooled {pbs_length_pooled}'
     if rtt_max_length_pooled!=50: cmd += f' -rtt_pooled {rtt_max_length_pooled}'
-    if out_dir!='./DATETIMESTAMP_PrimeDesign': cmd+= f' -out {out_dir}'
+    if out_dir!='./PrimeDesign/DATETIMESTAMP_PrimeDesign': cmd+= f' -out {out_dir}'
     print(cmd)
     
     os.system(cmd) # Execute PrimeDesign Command Line
 
 def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame | str, saturation_mutagenesis:str=None, 
-                        index: int=1, enzymes: list[str]=['Esp3I'], replace: bool=True) -> dict[pd.DataFrame]:
+                        index: int=1, enzymes: list[str]=['Esp3I'], replace: bool=True,
+                        pegRNAs_dir: str='./pegRNAs', ngRNAs_dir: str='./ngRNAs') -> dict[pd.DataFrame]:
     ''' 
     prime_design_output(): splits peg/ngRNAs from PrimeDesign output & finishes annotations
     
@@ -630,7 +630,9 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
     index (int, optional): 1st amino acid or base in target sequence index (Default: 1)
     enzymes (list, optional): list of type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to check for in pegRNAs and ngRNAs (Default: ['Esp3I'])
     replace (bool, optional): replace pegRNAs and remove ngRNAs with RE enzyme sites (Default: True if saturation_mutagenesis is not None)
-    
+    pegRNAs_dir (str, optional): directory to save pegRNAs (Default: './pegRNAs')
+    ngRNAs_dir (str, optional): directory to save ngRNAs (Default: './ngRNAs')
+
     Dependencies: io, numpy, & pandas
     '''
     if isinstance(in_file, str): # Get in_file from file path if needed
@@ -754,13 +756,13 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
             if len(pegRNAs_enzyme) > 0:
 
                 io.save(obj=pegRNAs_enzyme,
-                        dir=f'../pegRNAs/{enzyme}/codon_swap_before',
+                        dir=f'{pegRNAs_dir}/{enzyme}/codon_swap_before',
                         file=f'{int(pegRNAs_enzyme.iloc[0]['PBS_length'])}.csv')
                 
                 # Codon swap pegRNAs with enzyme recognition site
                 pegRNAs_enzyme = enzyme_codon_swap(pegRNAs=pegRNAs_enzyme,enzyme=enzyme,comments=True)
                 io.save(obj=pegRNAs_enzyme,
-                        dir=f'../pegRNAs/{enzyme}/codon_swap_after',
+                        dir=f'{pegRNAs_dir}/{enzyme}/codon_swap_after',
                         file=f'{int(pegRNAs_enzyme.iloc[0]['PBS_length'])}.csv')
                 pegRNAs = pd.concat([pegRNAs,pegRNAs_enzyme],ignore_index=True)
                 print(f"pegRNAs edits recovered by modifying {enzyme} recognition site: {list(pegRNAs_enzyme['Edit'].unique())}")
@@ -778,7 +780,7 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
                 if len(lost_pegRNAs_edits) > 0:
                     print(f"pegRNA edits lost due to {enzyme} recognition site: {lost_pegRNAs_edits}")
                     io.save(obj=pegRNAs_enzyme[pegRNAs_enzyme['Edit'].isin(lost_pegRNAs_edits)],
-                            dir=f'../pegRNAs/{enzyme}/lost',
+                            dir=f'{pegRNAs_dir}/{enzyme}/lost',
                             file=f'{int(pegRNAs_enzyme.iloc[0]['PBS_length'])}.csv')
 
                 # Drop enzyme column
@@ -794,7 +796,7 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
             if len(ngRNAs_enzyme) > 0:
                 
                 io.save(obj=ngRNAs_enzyme,
-                        dir=f'../ngRNAs/{enzyme}/codon_swap_before',
+                        dir=f'{ngRNAs_dir}/{enzyme}/codon_swap_before',
                         file=f'{int(pegRNAs.iloc[0]['PBS_length'])}.csv')
 
                 # Drop ngRNAs with RE recognition sites
@@ -809,7 +811,7 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
                 if len(lost_ngRNAs_edits) > 0:
                     print(f"ngRNA edits lost due to {enzyme} recognition site: {lost_ngRNAs_edits}")
                     io.save(obj=ngRNAs_enzyme[ngRNAs_enzyme['Edit'].isin(lost_ngRNAs_edits)],
-                            dir=f'../ngRNAs/{enzyme}/lost',
+                            dir=f'{ngRNAs_dir}/{enzyme}/lost',
                             file=f'{int(pegRNAs.iloc[0]['PBS_length'])}.csv')
 
                 # Drop enzyme column
@@ -828,7 +830,7 @@ def prime_designer(in_file: str = None, target_name: str = None, flank5_sequence
                 number_of_pegrnas: int = 3, number_of_ngrnas: int = 3, nicking_distance_pooled: int = 75, homology_downstream: int = 15,
                 pbs_length_pooled_list: list = [11,13,15], rtt_max_length_pooled: int = 50,
                 scaffold_sequence: str='GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC', 
-                enzymes: list[str]=['Esp3I'], replace: bool=True):
+                enzymes: list[str]=['Esp3I'], replace: bool=True, out_dir: str = './PrimeDesign/DATETIMESTAMP_PrimeDesign', pegRNAs_dir: str = './pegRNAs', ngRNAs_dir: str = './ngRNAs'):
     '''
     prime_designer(): execute PrimeDesign saturation mutagenesis (EDMS version)
     
@@ -859,6 +861,9 @@ def prime_designer(in_file: str = None, target_name: str = None, flank5_sequence
         Alternative option for VLPs: SpCas9 flip + extend + com-modified = GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC
     enzymes (list, optional): list of type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to check for in pegRNAs and ngRNAs (Default: ['Esp3I'])
     replace (bool, optional): replace pegRNAs and remove ngRNAs with RE sites (Default: True)
+    out_dir (str, optional): name of output directory (Default: ./PrimeDesign/DATETIMESTAMP_PrimeDesign)
+    pegRNAs_dir (str, optional): directory to save pegRNAs with RE sites before and after codon swap (Default: ./pegRNAs)
+    ngRNAs_dir (str, optional): directory to save ngRNAs with RE sites before removal (Default: ./ngRNAs)
 
     *** Example saturation_mutagenesis.TXT file *** ---------------------------------------
     |											|
@@ -938,11 +943,16 @@ def prime_designer(in_file: str = None, target_name: str = None, flank5_sequence
                         rtt_max_length_pooled=rtt_max_length_pooled, homology_downstream=homology_downstream, pe_format=pe_format,
                         pbs_length_list=pbs_length_list, rtt_length_list=rtt_length_list, nicking_distance_minimum=nicking_distance_minimum,
                         nicking_distance_maximum=nicking_distance_maximum, filter_c1_extension=filter_c1_extension, genome_wide_design=genome_wide_design,
-                        nicking_distance_pooled=nicking_distance_pooled)
+                        nicking_distance_pooled=nicking_distance_pooled, out_dir=out_dir)
 
+            if out_dir == './PrimeDesign/DATETIMESTAMP_PrimeDesign': 
+                search_dir = './PrimeDesign'
+            else:
+                search_dir = out_dir
+                
             # Obtain pegRNAs and ngRNAs from PrimeDesign output
             pegRNAs[pbs_length_pooled],ngRNAs[pbs_length_pooled] = prime_design_output(
-                pt=sorted([file for file in io.relative_paths('.') if "PrimeDesign.csv" in file], reverse= True)[0], 
+                pt=sorted([os.path.join(search_dir, file) for file in io.relative_paths(search_dir) if "PrimeDesign.csv" in file], reverse= True)[0], 
                 scaffold_sequence=scaffold_sequence, in_file=f'./{"_".join(target_name.split(" "))}.csv', 
                 saturation_mutagenesis=saturation_mutagenesis, index=index, enzymes=enzymes, replace=replace)
         
@@ -953,13 +963,18 @@ def prime_designer(in_file: str = None, target_name: str = None, flank5_sequence
                         rtt_max_length_pooled=rtt_max_length_pooled, homology_downstream=homology_downstream, pe_format=pe_format,
                         pbs_length_list=pbs_length_list, rtt_length_list=rtt_length_list, nicking_distance_minimum=nicking_distance_minimum,
                         nicking_distance_maximum=nicking_distance_maximum, filter_c1_extension=filter_c1_extension, genome_wide_design=genome_wide_design,
-                        nicking_distance_pooled=nicking_distance_pooled)
+                        nicking_distance_pooled=nicking_distance_pooled, out_dir=out_dir)
             
+            if out_dir == './PrimeDesign/DATETIMESTAMP_PrimeDesign': 
+                search_dir = './PrimeDesign'
+            else:
+                search_dir = out_dir
+
             # Obtain pegRNAs and ngRNAs from PrimeDesign output
             pegRNAs[pbs_length_pooled],ngRNAs[pbs_length_pooled] = prime_design_output(
-                pt=sorted([file for file in io.relative_paths('.') if "PrimeDesign.csv" in file], reverse= True)[0], 
+                pt=os.path.abspath(sorted([os.path.join(search_dir, file) for file in io.relative_paths(search_dir) if "PrimeDesign.csv" in file], reverse= True)[0]), 
                 scaffold_sequence=scaffold_sequence, in_file=in_file, 
-                saturation_mutagenesis=saturation_mutagenesis, index=index, enzymes=enzymes, replace=replace)
+                saturation_mutagenesis=saturation_mutagenesis, index=index, enzymes=enzymes, replace=replace, pegRNAs_dir=pegRNAs_dir, ngRNAs_dir=ngRNAs_dir)
         
         if (saturation_mutagenesis is None) & (genome_wide_design==False): # Only run once if not saturation mutagenesis
             pegRNAs['pegRNAs'] = pegRNAs.pop(pbs_length_pooled) # Rename dictionary keys
@@ -967,11 +982,11 @@ def prime_designer(in_file: str = None, target_name: str = None, flank5_sequence
             break 
     
     # Save pegRNAs and ngRNAs
-    io.save_dir(dir='../pegRNAs', suf='.csv', dc=pegRNAs)
-    io.save_dir(dir='../ngRNAs', suf='.csv', dc=ngRNAs)
+    io.save_dir(dir=pegRNAs_dir, suf='.csv', dc=pegRNAs)
+    io.save_dir(dir=ngRNAs_dir, suf='.csv', dc=ngRNAs)
 
 def merge(epegRNAs: str | dict | pd.DataFrame, ngRNAs: str | dict | pd.DataFrame, ngRNAs_groups_max: int=3,
-        epegRNA_suffix: str='_epegRNA', ngRNA_suffix: str='_ngRNA', dir: str=None, file: str=None, literal_eval: bool=True) -> pd.DataFrame:
+        epegRNA_suffix: str='_epegRNA', ngRNA_suffix: str='_ngRNA', dir: str=None, file: str=None, literal_eval: bool=False) -> pd.DataFrame:
     '''
     merge(): rejoins epeg/ngRNAs & creates ngRNA_groups
     
@@ -981,7 +996,7 @@ def merge(epegRNAs: str | dict | pd.DataFrame, ngRNAs: str | dict | pd.DataFrame
     ngRNAs_group_max (int, optional): maximum # of ngRNAs per epegRNA (Default: 3)
     epegRNA_suffix (str, optional): Suffix for epegRNAs columns (Default: epegRNA_)
     ngRNA_suffix (str, optional): Suffix for ngRNAs columns (Default: ngRNA_)
-    literal_eval (bool, optional): convert string representations (Default: True)
+    literal_eval (bool, optional): convert string representations (Default: False)
     
     Dependencies: tidy & pandas
     '''
@@ -1032,7 +1047,7 @@ def merge(epegRNAs: str | dict | pd.DataFrame, ngRNAs: str | dict | pd.DataFrame
 def epegRNA_linkers(pegRNAs: str | pd.DataFrame, epegRNA_motif_sequence: str='CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA',
                     linker_pattern: str='NNNNNNNN', excluded_motifs: list=['Esp3I'],
                     ckpt_dir: str=None, ckpt_file=None, ckpt_pt: str='',
-                    out_dir: str=None, out_file: str=None, literal_eval: bool=True) -> pd.DataFrame:
+                    out_dir: str=None, out_file: str=None, literal_eval: bool=False) -> pd.DataFrame:
     ''' 
     epegRNA_linkers(): generate epegRNA linkers between PBS and 3' hairpin motif & finish annotations
     
@@ -1044,7 +1059,7 @@ def epegRNA_linkers(pegRNAs: str | pd.DataFrame, epegRNA_motif_sequence: str='CG
     ckpt_dir (str, optional): Checkpoint directory
     ckpt_file (str, optional): Checkpoint file name
     ckpt_pt (str, optional): Previous ckpt path
-    literal_eval (bool, optional): convert string representations (Default: True)
+    literal_eval (bool, optional): convert string representations (Default: False)
     
     Dependencies: pandas, pegLIT, & io
     '''
@@ -1095,7 +1110,7 @@ def epegRNA_linkers(pegRNAs: str | pd.DataFrame, epegRNA_motif_sequence: str='CG
     
     return epegRNAs
 
-def shared_sequences(pegRNAs: pd.DataFrame | str, hist_plot:bool=True, hist_dir: str=None, hist_file: str=None, literal_eval: bool=True, **kwargs) -> pd.DataFrame:
+def shared_sequences(pegRNAs: pd.DataFrame | str, hist_plot:bool=True, hist_dir: str=None, hist_file: str=None, literal_eval: bool=False, **kwargs) -> pd.DataFrame:
     ''' 
     shared_sequences(): Reduce PE library into shared spacers and PBS sequences
     
@@ -1104,7 +1119,7 @@ def shared_sequences(pegRNAs: pd.DataFrame | str, hist_plot:bool=True, hist_dir:
     hist_plot (bool, optional): display histogram of reduced PE library (Default: True)
     hist_dir (str, optional): directory to save histogram
     hist_file (str, optional): file name to save histogram
-    literal_eval (bool, optional): convert string representations (Default: True)
+    literal_eval (bool, optional): convert string representations (Default: False)
 
     Dependencies: pandas & plot
     '''
@@ -1158,7 +1173,7 @@ def shared_sequences(pegRNAs: pd.DataFrame | str, hist_plot:bool=True, hist_dir:
 
     return shared_pegRNAs_lib
 
-def pilot_screen(pegRNAs_dir: str, mutations_pt: str, database: Literal['COSMIC','ClinVar']='COSMIC', literal_eval: bool=True):
+def pilot_screen(pegRNAs_dir: str, mutations_pt: str, database: Literal['COSMIC','ClinVar']='COSMIC', literal_eval: bool=False):
     ''' 
     pilot_screen(): Determine pilot screen for EDMS
     
@@ -1166,7 +1181,7 @@ def pilot_screen(pegRNAs_dir: str, mutations_pt: str, database: Literal['COSMIC'
     pegRNAs_dir (str): directory with pegRNAs from prime_designer() output
     mutations_pt (str): path to mutations file (COSMIC or ClinVar)
     database (str, optional): database to use for priority mutations (Default: 'COSMIC')
-    literal_eval (bool, optional): convert string representations (Default: True)
+    literal_eval (bool, optional): convert string representations (Default: False)
     
     Dependencies: io, cosmic, cvar, shared_sequences(), priority_muts(), & priority_edits()
     '''
@@ -1220,7 +1235,7 @@ def pilot_screen(pegRNAs_dir: str, mutations_pt: str, database: Literal['COSMIC'
                 dc=pegRNAs_priority)
 
 def sensor_designer(pegRNAs: pd.DataFrame | str, sensor_length: int=60, before_spacer: int=5, sensor_orientation: Literal['revcom','forward']='revcom',
-                    out_dir: str=None, out_file: str=None, return_df: bool=True, literal_eval: bool=True) -> pd.DataFrame:
+                    out_dir: str=None, out_file: str=None, return_df: bool=True, literal_eval: bool=False) -> pd.DataFrame:
     ''' 
     sensor_designer(): design pegRNA sensors
     
@@ -1232,7 +1247,7 @@ def sensor_designer(pegRNAs: pd.DataFrame | str, sensor_length: int=60, before_s
     out_dir (str, optional): output directory
     out_file (str, optional): output filename
     return_df (bool, optional): return dataframe (Default: True)
-    literal_eval (bool, optional): convert string representations (Default: True)
+    literal_eval (bool, optional): convert string representations (Default: False)
 
     Dependencies: io, pandas, Bio.Seq.Seq
     '''
@@ -1313,7 +1328,7 @@ def sensor_designer(pegRNAs: pd.DataFrame | str, sensor_length: int=60, before_s
 
 def pegRNA_outcome(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str = None,
                 out_dir: str=None, out_file: str=None, detailed: bool=False,
-                return_df: bool=True, literal_eval: bool=True) -> pd.DataFrame:
+                return_df: bool=True, literal_eval: bool=False) -> pd.DataFrame:
     ''' 
     pegRNA_outcome(): confirm that pegRNAs have correct reference/edit-sequence geometry.
         1. spacer binds Reference_sequence at one unique location;
@@ -1329,7 +1344,7 @@ def pegRNA_outcome(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str = No
     out_file (str, optional): output filename
     detailed (bool, optional): whether to return detailed geometry checks or just programmed_sequence_match (Default: False)
     return_df (bool, optional): return dataframe (Default: True)
-    literal_eval (bool, optional): convert string representations (Default: True)
+    literal_eval (bool, optional): convert string representations (Default: False)
     '''
     # Initialize timer; memory reporting
     memory_timer(reset=True)
@@ -1468,7 +1483,7 @@ def pegRNA_signature(pegRNAs: pd.DataFrame | str, config_key: str=None,
                     flank5_length: int=0, flank3_length: int=0,
                     reference_sequence: str='Reference_sequence', edit_sequence: str='Edit_sequence',
                     match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, extend_gap_score: float = -0.1,
-                    out_dir: str=None, out_file: str=None, save_alignments: bool=False, return_df: bool=True, literal_eval: bool=True) -> pd.DataFrame:
+                    out_dir: str=None, out_file: str=None, save_alignments: bool=False, return_df: bool=True, literal_eval: bool=False) -> pd.DataFrame:
     ''' 
     pegRNA_signature(): create signatures for pegRNA outcomes using alignments
     
@@ -1489,15 +1504,15 @@ def pegRNA_signature(pegRNAs: pd.DataFrame | str, config_key: str=None,
     out_file (str, optional): output filename
     save_alignments (bool, optional): save alignments (Default: False, save memory)
     return_df (bool, optional): return dataframe (Default: True)
-    literal_eval (bool, optional): convert string representations (Default: True)
+    literal_eval (bool, optional): convert string representations when loading files (Default: False)
     '''
     # Initialize timer; memory reporting
     memory_timer(reset=True)
     memories = []
 
     # Get pegRNAs DataFrame from file path if needed
-    if type(pegRNAs)==str:
-        pegRNAs = io.get(pt=pegRNAs,literal_eval=literal_eval)
+    if isinstance(pegRNAs, str):
+        pegRNAs = io.get(pt=pegRNAs, literal_eval=literal_eval)
 
     # High sequence homology; punish gaps
     aligner = PairwiseAligner()
@@ -1514,7 +1529,8 @@ def pegRNA_signature(pegRNAs: pd.DataFrame | str, config_key: str=None,
         flank3_sequence = config_key['motif3']
 
     # Get alignments and signatures
-    aligments_list = []
+    if save_alignments:
+        aligments_list = []
     signatures_list = []
     for i,(reference_seq, edit_seq) in enumerate(t.zip_cols(df=pegRNAs, cols=[reference_sequence,edit_sequence])): # Iterate through reference and edit sequences
         
@@ -1535,18 +1551,16 @@ def pegRNA_signature(pegRNAs: pd.DataFrame | str, config_key: str=None,
 
         # Create and append alignment
         alignment = aligner.align(Seq(reference_seq.upper()), Seq(edit_seq.upper()))[0]
-        aligments_list.append(alignment)
+        if save_alignments:
+            aligments_list.append(alignment)
 
         # Create and append signature
         signatures_list.append(signature_from_alignment(ref_seq=reference_seq.upper(), query_seq=edit_seq.upper(), alignment=alignment))
 
     # Create Alignment and Signature columns
-    pegRNAs['Alignment'] = aligments_list
+    if save_alignments:
+        pegRNAs['Alignment'] = aligments_list
     pegRNAs['Signature'] = signatures_list
-    
-    # Drop Alignment column if not saving
-    if save_alignments==False:
-        pegRNAs.drop(columns=['Alignment'],inplace=True)
 
     # Count # of SNVs, insertions, deletions in Signature
     snvs_ls = []
@@ -1579,7 +1593,7 @@ def epegRNA_fasta(df: pd.DataFrame | str, linearized_vector: str, out_dir: str,
                   spacer: str='Spacer_sequence', scaffold: str='Scaffold_sequence',
                   extension: str='Extension_sequence', RTT: str='RTT_sequence',
                   PBS: str='PBS_sequence', linker: str='Linker_sequence',
-                  literal_eval: bool=True) -> None:
+                  literal_eval: bool=False) -> None:
     '''
     epegRNA_fasta(): generate FASTA files representing epegRNAs cloned into a linearized vector
     
@@ -1597,7 +1611,7 @@ def epegRNA_fasta(df: pd.DataFrame | str, linearized_vector: str, out_dir: str,
     RTT (str, optional): epegRNA reverse transcripase template column name (Default: RTT_sequence)
     PBS (str, optional): epegRNA primer binding site column name (Default: PBS_sequence)
     linker (str, optional): epegRNA linker column name (Default: Linker_sequence)
-    literal_eval (bool, optional): convert string representations (Default: True)
+    literal_eval (bool, optional): convert string representations (Default: False)
     '''
     # Make output directory if it does not exist
     mkdir(out_dir)
