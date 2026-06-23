@@ -162,6 +162,7 @@ def add_subparser(subparsers, formatter_class=None):
     - epegRNAs(): design GG cloning oligonucleotides for prime editing epegRNAs
     - ngRNAs(): design GG cloning oligonucleotides for prime editing ngRNAs
     - epegRNA_pool(): makes twist oligonucleotides for prime editing
+    - dms_pool(): makes twist oligonucleotides for DMS
     - pcr_sim(): returns dataframe with simulated pcr product
     - off_targets(): Find off-target sequences for a list of sequences using pairwise alignment.
     '''
@@ -270,6 +271,35 @@ def add_subparser(subparsers, formatter_class=None):
     parser_clone_epegRNA_pool.add_argument("-ep", "--epegRNA_PBS", type=str, default="PBS_sequence", help="epegRNA PBS column name")
     parser_clone_epegRNA_pool.add_argument("-el", "--epegRNA_linker", type=str, default="Linker_sequence", help="epegRNA Linker column name")
     parser_clone_epegRNA_pool.set_defaults(func=cl.epegRNA_pool) 
+
+    # dms_pool(): design GG cloning oligonucleotides for deep mutational scanning (DMS) libraries
+    parser_clone_dms_pool = subparsers_clone.add_parser("dms_pool", help="Design GG oligos for pooled DMS libraries", description="Design GG oligos for pooled DMS libraries", formatter_class=formatter_class)
+    
+    parser_clone_dms_pool.add_argument("-i", "--df", type=str, help="Input file path", required=True)
+    parser_clone_dms_pool.add_argument("-b", "--barcode", type=str, help="subpool barcode column name", required=True)
+    parser_clone_dms_pool.add_argument("-fht5v", "--fwd_homology_t5_val", type=str, nargs="+", help="Forward homology value to check for in PCR_df (Examples: 'FOXA1-S165', 'FOXA1-W199', 'FOXA1-R233')", required=True)
+    parser_clone_dms_pool.add_argument("-rht3v", "--rev_homology_t3_val", type=str, nargs="+", help="Reverse homology value to check for in PCR_df (Examples: 'FOXA1-P205', 'FOXA1-G239', 'FOXA1-P272')", required=True)
+    
+    parser_clone_dms_pool.add_argument("-bv", "--barcode_val", type=str, nargs="+", default=argparse.SUPPRESS, help="subpool barcode column values in df[barcode] (Examples: ['1', '2', '3'] or None)")
+    parser_clone_dms_pool.add_argument("-o", "--dir", type=str, help="Output directory", default='../out')
+    parser_clone_dms_pool.add_argument("-f", "--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_dms_pool.csv')
+
+    parser_clone_dms_pool.add_argument("-U", "--UMI_df", type=str, help="UMI sequences file path", default=argparse.SUPPRESS)
+    parser_clone_dms_pool.add_argument("-P", "--PCR_df", type=str, help="PCR primer and subpool barcode file path", default=argparse.SUPPRESS)
+    parser_clone_dms_pool.add_argument("-R", "--RE_type_IIS_df", type=str, help="RE Type IIS file path", default=argparse.SUPPRESS)
+    parser_clone_dms_pool.add_argument("-Ui", "--UMI_i", type=int, help="UMI start index (Default: 0)", default=0)
+    parser_clone_dms_pool.add_argument("-e", "--enzymes", type=str, nargs="+", help="List of Type IIS restriction enzymes to check for (Default: Esp3I)", default='Esp3I')
+    parser_clone_dms_pool.add_argument("-bi", "--barcode_i", type=int, help="subpool barcode start index (Default: 0)", default=0)
+    parser_clone_dms_pool.add_argument("-fbt5", "--fwd_barcode_t5", type=str, default="Forward Barcode", help="Forward barcode column name")
+    parser_clone_dms_pool.add_argument("-rbt3", "--rev_barcode_t3", type=str, default="Reverse Barcode", help="Reverse barcode column name")
+    parser_clone_dms_pool.add_argument("-frt5", "--fwd_RE_t5", type=str, default="Forward RE Name", help="Forward restriction enzyme column name")
+    parser_clone_dms_pool.add_argument("-rrt3", "--rev_RE_t3", type=str, default="Reverse RE Name", help="Reverse restriction enzyme column name")
+    parser_clone_dms_pool.add_argument("-fht5", "--fwd_homology_t5", type=str, default="Forward Homology Name", help="Forward homology column name")
+    parser_clone_dms_pool.add_argument("-rht3", "--rev_homology_t3", type=str, default="Reverse Homology Name", help="Reverse homology column name")
+    parser_clone_dms_pool.add_argument("-frt5v", "--fwd_RE_t5_val", type=str, default="Esp3I", help="Forward restriction enzyme value to check for")
+    parser_clone_dms_pool.add_argument("-rrt3v", "--rev_RE_t3_val", type=str, default="Esp3I", help="Reverse restriction enzyme value to check for")
+    parser_clone_dms_pool.add_argument("-t", "--template", type=str, default='Edit_sequence_with_silent_mutations', help="Oligonucleotide template column name")
+    parser_clone_dms_pool.set_defaults(func=cl.dms_pool) 
     
     # umi(): generates unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance
     parser_clone_umi = subparsers_clone.add_parser("umi", help="Generate unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance", description="Generate unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance", formatter_class=formatter_class)
@@ -1008,14 +1038,14 @@ Examples:[/red]
     '''
     edms.bio.dms:
     - dms_designer() [designer]: Execute PrimeDesign saturation mutagenesis (EDMS version)
-    - merge(): rejoins epeg/ngRNAs & creates ngRNA_groups
+    - merge(): combine one or more DMSDesign outputs into one edit-sequence library
     - dms_signature() [signature]: create signatures for DMS outcomes using alignments
     '''
     parser_dms = subparsers.add_parser("dms", help="Deep Mutation Scanning", formatter_class=formatter_class)
     subparsers_dms = parser_dms.add_subparsers()
 
     parser_dms_dms_designer = subparsers_dms.add_parser("designer", help="Execute PrimeDesign saturation mutagenesis (EDMS version)", description="Execute PrimeDesign saturation mutagenesis (EDMS version)", formatter_class=formatter_class)
-    parser_dms_merge = subparsers_dms.add_parser("merge", help="rejoins epeg/ngRNAs & creates ngRNA_groups", description="rejoins epeg/ngRNAs & creates ngRNA_groups", formatter_class=formatter_class)
+    parser_dms_merge = subparsers_dms.add_parser("merge", help="Combine one or more DMSDesign outputs into one edit-sequence library", description="Combine one or more DMSDesign outputs into one edit-sequence library", formatter_class=formatter_class)
     parser_dms_dms_signature = subparsers_dms.add_parser("signature", help="Create signatures for DMS outcomes using alignments", description="Create signatures for DMS outcomes using alignments", formatter_class=formatter_class)
     
     # dms_designer() [designer]:

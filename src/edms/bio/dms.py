@@ -216,7 +216,7 @@ def enzyme_codon_swap(df: pd.DataFrame | str, enzyme: str, sequence_col: str = '
         changed_sequences.append(best_seq)
         annotations.append(best_annot)
 
-    df[f'{sequence_col}_{enzyme}_codon_swap'] = changed_sequences
+    df[sequence_col] = changed_sequences
     df[f'{enzyme}_codon_swap_annotation'] = annotations
     if out_dir is not None and out_file is not None:
         io.save(obj=df, dir=out_dir, file=out_file)
@@ -268,12 +268,9 @@ def replace_enzyme_sites(df: pd.DataFrame | str, enzyme: str,
         comments=comments,
     )
 
-    swap_col = f'{sequence_col}_{enzyme}_codon_swap'
-    annot_col = f'{enzyme}_codon_swap_annotation'
-
-    df_swap[f'{enzyme}_codon_swap_recovered'] = df_swap[annot_col].astype(str) != ''
+    df_swap[f'{enzyme}_codon_swap_recovered'] = df_swap[f'{enzyme}_codon_swap_annotation'].astype(str) != ''
     df_swap.loc[df_swap[f'{enzyme}_codon_swap_recovered'], sequence_col] = df_swap.loc[
-        df_swap[f'{enzyme}_codon_swap_recovered'], swap_col
+        df_swap[f'{enzyme}_codon_swap_recovered'], f'{sequence_col}_{enzyme}_codon_swap'
     ]
 
     df_swap = find_enzyme_sites(
@@ -305,7 +302,8 @@ def replace_enzyme_sites(df: pd.DataFrame | str, enzyme: str,
             file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_{enzyme}_lost.csv'
         )
 
-    df_clean[f'{enzyme}_codon_swap_recovered'] = False
+    df_clean[f'{enzyme}_codon_swap_recovered'] = np.nan
+    df_clean[f'{enzyme}_codon_swap_annotation'] = np.nan
     out = pd.concat([df_clean, df_after], ignore_index=True)
 
     out = find_enzyme_sites(

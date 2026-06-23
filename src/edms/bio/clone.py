@@ -14,6 +14,7 @@ Usage:
 
 [Library GG Cloning]
 - epegRNA_pool(): design GG cloning oligonucleotides for pooled prime editing epegRNAs
+- dms_pool(): design GG cloning oligonucleotides for deep mutational scanning (DMS) libraries
 
 [UMIs]
 - generate_sequences(): recursively generates all possible sequences of A, T, C, G of the specified length
@@ -365,6 +366,9 @@ def epegRNA_pool(
     if make_extension==True: df[epegRNA_extension] = df[epegRNA_RTT]+df[epegRNA_PBS]+df[epegRNA_linker]
     else: print(f'Warning: Did not make extension sequence!\nMake sure "{epegRNA_extension}" column includes RTT+PBS+linker for epegRNAs.')
 
+    # Print PCR_df options
+    print(f'PCR_df options:\n{PCR_df[[fwd_RE_t5, rev_RE_t3, fwd_homology_t5, rev_homology_t3]].drop_duplicates().reset_index(drop=True)}\n')
+
     # Filter PCR_df for specific RE and homology sequences
     PCR_df = PCR_df[
         (PCR_df[fwd_RE_t5] == fwd_RE_t5_val) &
@@ -456,9 +460,253 @@ def epegRNA_pool(
         # Make final oligonucleotide sequence based on template: FWD UMI - FWD Barcode - FWD RE - FWD Homology - epegRNA_spacer - epegRNA_scaffold - epegRNA_extension - RE Homology - REV RE - REV Barcode - REV UMI
         oligo = df.iloc[i]['Forward UMI']+df.iloc[i][fwd_barcode_t5]+df.iloc[i][fwd_RE_t5.replace("Name", "Sequence")]+df.iloc[i][fwd_homology_t5.replace("Name", "Sequence")]+add_G+ \
                         df.iloc[i][epegRNA_spacer]+df.iloc[i][epegRNA_scaffold]+df.iloc[i][epegRNA_extension]+ \
-                        df.iloc[i][rev_RE_t3.replace("Name", "Sequence")]+df.iloc[i][rev_homology_t3.replace("Name", "Sequence")]+df.iloc[i][rev_barcode_t3]+df.iloc[i]['Reverse UMI']
+                        df.iloc[i][rev_homology_t3.replace("Name", "Sequence")]+df.iloc[i][rev_RE_t3.replace("Name", "Sequence")]+df.iloc[i][rev_barcode_t3]+df.iloc[i]['Reverse UMI']
         oligos.append(oligo.upper()) # Make sure oligos are uppercase
             
+    df['Oligonucleotide'] = oligos
+    df['Oligonucleotide_length']=[len(oligo) for oligo in df['Oligonucleotide']]
+
+    # Check for 2 recognition sites per enzyme
+    for (enzyme,recognition,recognition_rc) in t.zip_cols(df=RE_type_IIS_df[RE_type_IIS_df['Name'].isin(enzymes)], # Just Esp3I by default
+                                                          cols=['Name','Recognition','Recognition_rc']):
+        # Check forward direction for recognition sites
+        enzyme_sites_fwd = [t.find_all(oligo,recognition) for oligo in oligos] # Iterate through oligonucleotides
+
+        # Check reverse direction for recognition sites
+        enzyme_sites_rc = [t.find_all(oligo,recognition_rc) for oligo in oligos] # Iterate through oligonucleotides
+        
+        # Sum recognition sites in both directions
+        enzyme_sites = [len(enzyme_site_fwd)+len(enzyme_site_rc) for (enzyme_site_fwd,enzyme_site_rc) in zip(enzyme_sites_fwd,enzyme_sites_rc)]
+        
+        df[enzyme] = enzyme_sites
+        df[f'{enzyme}_fwd_i'] = enzyme_sites_fwd
+        df[f'{enzyme}_rc_i'] = enzyme_sites_rc
+    
+    # Save & return dataframe
+    io.save(obj=df, file=file, dir=dir)
+    if return_df:
+        return df
+
+def dms_pool(
+    df: pd.DataFrame | str, barcode: str,
+    fwd_homology_t5_val: str | list, rev_homology_t3_val: str | list,
+    barcode_val: list | None = None,
+    UMI_df: pd.DataFrame | str=None,
+    PCR_df: pd.DataFrame| str=None,
+    RE_type_IIS_df: pd.DataFrame| str=None,
+    UMI_i: int=0, enzymes: list=['Esp3I'], barcode_i:int=0, 
+    fwd_barcode_t5:str='Forward Barcode', rev_barcode_t3:str='Reverse Barcode',
+    fwd_RE_t5:str='Forward RE Name', rev_RE_t3:str='Reverse RE Name',
+    fwd_homology_t5:str='Forward Homology Name', rev_homology_t3:str='Reverse Homology Name',
+    fwd_RE_t5_val:str='Esp3I', rev_RE_t3_val:str='Esp3I',
+    template:str='Edit_sequence_with_silent_mutations',
+    dir:str=None, file:str=None, return_df:bool=True) -> pd.DataFrame:
+    ''' 
+    dms_pool(): design GG cloning oligonucleotides for deep mutational scanning (DMS) libraries
+    
+    Parameters:
+    df (dataframe | str): Dataframe with sequence information for epegRNAs (or file path)
+    barcode (str): subpool barcode column name in df
+    fwd_homology_t5_val (str | list): forward homology column value in PCR_df (Examples: 'FOXA1-S165', 'FOXA1-W199', 'FOXA1-R233', or ['FOXA1-S165', 'FOXA1-W199', 'FOXA1-R233'])
+    rev_homology_t3_val (str | list): reverse homology column value in PCR_df (Examples: 'FOXA1-P205', 'FOXA1-G239', 'FOXA1-P272', or ['FOXA1-P205', 'FOXA1-G239', 'FOXA1-P272'])
+    barcode_val (list | None): subpool barcode column values in df[barcode] (Examples: ['1', '2', '3'] or None)
+    UMI_df (dataframe | str, optional): Dataframe with UMI sequences (or file path)
+    PCR_df (dataframe | str, optional): Dataframe with PCR primer and subpool barcode information (or file path)
+    RE_type_IIS_df (dataframe | str, optional): Dataframe with Type IIS restriction enzyme information (or file path)
+    UMI_i (int, optional): UMI start index (Default: 0)
+    enzymes (list, optional): list of Type IIS restriction enzymes to check for (Default: ['Esp3I'])
+    barcode_i (int, optional): subpool barcode start index (Default: 0)
+    fwd_barcode_t5 (str, optional): forward barcode column name (Default: 'Forward Barcode')
+    rev_barcode_t3 (str, optional): reverse barcode column name (Default: 'Reverse Barcode')
+    fwd_RE_t5 (str, optional): forward restriction enzyme column name (Default: 'Forward RE Name')
+    rev_RE_t3 (str, optional): reverse restriction enzyme column name (Default: 'Reverse RE Name')
+    fwd_homology_t5 (str, optional): forward homology column name (Default: 'Forward Homology Name')
+    rev_homology_t3 (str, optional): reverse homology column name (Default: 'Reverse Homology Name')
+    fwd_RE_t5_val (str, optional): forward restriction enzyme column value (Default: 'Esp3I')
+    rev_RE_t3_val (str, optional): reverse restriction enzyme column value (Default: 'Esp3I')
+    template (str, optional): oligonucleotide template column name in df (Default: 'Edit_sequence_with_silent_mutations')
+    dir (str, optional): save directory (Default: None)
+    file (str, optional): save file (Default: None)
+    return_df (bool, optional): return dataframe (Default: True)
+
+    Assumptions:
+    1. Oligo Template: FWD UMI - FWD Barcode - FWD RE - FWD Homology - Trimmed Template - RE Homology - REV RE - REV Barcode - REV UMI
+    
+    Dependencies: pandas
+    '''
+    # Get dataframes from file paths if needed
+    if isinstance(df, str):
+        df = io.get(pt=df)
+    else:
+        df = df.copy().reset_index(drop=True)
+
+    if isinstance(UMI_df, str):
+        UMI_df = io.get(pt=UMI_df)
+    elif isinstance(UMI_df, pd.DataFrame):
+        UMI_df = UMI_df.copy()
+
+    if isinstance(PCR_df, str):
+        PCR_df = io.get(pt=PCR_df)
+    elif isinstance(PCR_df, pd.DataFrame):
+        PCR_df = PCR_df.copy()
+
+    if isinstance(RE_type_IIS_df, str):
+        RE_type_IIS_df = io.get(pt=RE_type_IIS_df)
+    elif isinstance(RE_type_IIS_df, pd.DataFrame):
+        RE_type_IIS_df = RE_type_IIS_df.copy()
+    
+    # Load UMI and PCR dataframes from resources if not provided
+    save_time = False
+    if UMI_df is None and PCR_df is None and RE_type_IIS_df is None and enzymes == ['Esp3I']: # Default UMI, PCR, Enzyme dataframes, and enzymes (save time)
+        UMI_df = load_resource_csv(filename='UMI_15_hamming_4_yield_18687_Esp3I_0.csv')
+        PCR_df = load_resource_csv(filename='dms_pcr.csv')
+        RE_type_IIS_df = load_resource_csv(filename='RE_type_IIS.csv')
+        save_time = True
+    
+    else: # Not default (checking for RE sites)
+        if UMI_df is None: # Get UMI dataframe from resources if not provided
+            UMI_df = load_resource_csv(filename='UMI_15_hamming_4_yield_19356.csv')
+        
+        if PCR_df is None: # Get PCR dataframe from resources if not provided
+            PCR_df = load_resource_csv(filename='dms_pcr.csv')
+        else:
+            PCR_df = PCR_df.copy() # Make copy of provided PCR dataframe to avoid modifying original
+            if not all(col in PCR_df.columns for col in [fwd_barcode_t5, rev_barcode_t3, fwd_RE_t5, rev_RE_t3, fwd_homology_t5, rev_homology_t3, fwd_RE_t5.replace("Name", "Sequence"), rev_RE_t3.replace("Name", "Sequence"), fwd_homology_t5.replace("Name", "Sequence"), rev_homology_t3.replace("Name", "Sequence")]):
+                raise ValueError(f'PCR dataframe must include columns: {fwd_barcode_t5}, {rev_barcode_t3}, {fwd_RE_t5}, {rev_RE_t3}, {fwd_homology_t5}, and {rev_homology_t3} to filter for specific RE and homology sequences!\nAlso, need columns with RE and homology sequences: {fwd_RE_t5.replace("Name", "Sequence")}, {rev_RE_t3.replace("Name", "Sequence")}, {fwd_homology_t5.replace("Name", "Sequence")}, and {rev_homology_t3.replace("Name", "Sequence")}!')
+        
+        if RE_type_IIS_df is None: # Get from resources if not provided
+            RE_type_IIS_df = load_resource_csv(filename='RE_type_IIS.csv')
+
+    # Print PCR_df options
+    print(f'PCR_df options:\n{PCR_df[[fwd_RE_t5, rev_RE_t3, fwd_homology_t5, rev_homology_t3]].drop_duplicates().reset_index(drop=True)}\n')
+
+    # Convert length 1 lists to strings for fwd_homology_t5_val and rev_homology_t3_val
+    if isinstance(fwd_homology_t5_val, list) and len(fwd_homology_t5_val) == 1:
+        fwd_homology_t5_val = fwd_homology_t5_val[0]
+    if isinstance(rev_homology_t3_val, list) and len(rev_homology_t3_val) == 1:
+        rev_homology_t3_val = rev_homology_t3_val[0]
+
+    # Check that fwd_homology_t5_val and rev_homology_t3_val are both strings or both lists of the same length; barcode_val must be None (string) or list of the same length.
+    if isinstance(fwd_homology_t5_val, str):
+        if isinstance(rev_homology_t3_val, list):
+            raise ValueError(f'If fwd_homology_t5_val is a string, rev_homology_t3_val and barcode_val must also be a string (not a list)!')
+        elif barcode_val is not None:
+            raise ValueError(f'If fwd_homology_t5_val is a string, barcode_val must be None!')
+    elif isinstance(fwd_homology_t5_val, list):
+        if isinstance(rev_homology_t3_val, str) or barcode_val is None:
+            raise ValueError(f'If fwd_homology_t5_val is a list, rev_homology_t3_val and barcode_val must also be a list (not None)!')
+        elif len(fwd_homology_t5_val) != len(rev_homology_t3_val) or len(fwd_homology_t5_val) != len(barcode_val):
+            raise ValueError(f'fwd_homology_t5_val, rev_homology_t3_val, and barcode_val must be the same length if all are lists!')
+
+    if barcode_val is not None: # Assign barcode_val to df[barcode] if provided
+        if any(barcode_val[i] != df[barcode].unique()[i] for i in range(len(barcode_val))): # Check that barcode_val matches df[barcode] unique values
+            raise ValueError(f'Barcode val does not exactly match the unique values in df[barcode]:\n\tBarcode_val: {barcode_val}\n\tUnique barcodes in df: {df[barcode].unique().tolist()}')
+
+
+    # Filter PCR_df for specific RE and homology sequences
+    if isinstance(fwd_homology_t5_val, str) & isinstance(rev_homology_t3_val, str): # All are strings
+        PCR_df = PCR_df[
+            (PCR_df[fwd_RE_t5] == fwd_RE_t5_val) &
+            (PCR_df[rev_RE_t3] == rev_RE_t3_val) &
+            (PCR_df[fwd_homology_t5] == fwd_homology_t5_val) &
+            (PCR_df[rev_homology_t3] == rev_homology_t3_val)
+        ].reset_index(drop=True)
+        barcodes = sorted(df[barcode].unique())
+        PCR_barcodes = PCR_df.iloc[barcode_i:barcode_i+len(barcodes)] # Get corresponding barcodes from PCR dataframe starting at barcode_i
+        PCR_barcodes[barcode] = barcodes
+        
+    elif isinstance(fwd_homology_t5_val, list) & isinstance(rev_homology_t3_val, list): # Both are lists
+        
+        PCR_barcodes = pd.DataFrame()
+        for i, (barcode_v, fwd_homology, rev_homology) in enumerate(zip(barcode_val,fwd_homology_t5_val, rev_homology_t3_val)):
+            PCR_df_temp = PCR_df[
+                (PCR_df[fwd_RE_t5] == fwd_RE_t5_val) &
+                (PCR_df[rev_RE_t3] == rev_RE_t3_val) &
+                (PCR_df[fwd_homology_t5] == fwd_homology) &
+                (PCR_df[rev_homology_t3] == rev_homology)
+            ].reset_index(drop=True).iloc[barcode_i+i:barcode_i+i+1] # Get corresponding barcodes from PCR dataframe starting at barcode_i
+            PCR_df_temp[barcode] = barcode_v
+            PCR_barcodes = pd.concat([PCR_barcodes, PCR_df_temp], ignore_index=True)
+
+    # Assign subpool barcodes
+    df = pd.merge(left=df,right=PCR_barcodes,on=barcode)
+    print(f'{len(PCR_barcodes)} Barcodes: index = [{barcode_i}:{barcode_i+PCR_barcodes.shape[0]}]')    
+
+    # Check for RE sites in UMI sequences + subpool barcodes (discard UMIs with RE sites)
+    if save_time == False: # Not default UMI, PCR, Enzyme dataframes, and enzymes (do not save time)
+        fwd_UMI_ls = []
+        fwd_barcode_ls = []
+        fwd_UMI_barcode_ls = []
+
+        rev_UMI_ls = []
+        rev_barcode_ls = []
+        rev_barcode_UMI_ls = []
+
+        for umi in UMI_df['UMI_sequence']: # Iterate through UMIs
+            for fwd_barcode in PCR_barcodes[fwd_barcode_t5]: # Iterate through FWD barcodes
+                fwd_UMI_ls.append(umi)
+                fwd_barcode_ls.append(fwd_barcode)
+                fwd_UMI_barcode_ls.append(umi+fwd_barcode)
+            
+            for rev_barcode in PCR_barcodes[rev_barcode_t3]: # Iterate through REV barcodes
+                rev_UMI_ls.append(umi)
+                rev_barcode_ls.append(rev_barcode)
+                rev_barcode_UMI_ls.append(rev_barcode+umi)
+        
+        UMI_barcode_df = pd.DataFrame({'Forward UMI':fwd_UMI_ls,
+                                    'Forward Barcode':fwd_barcode_ls,
+                                    'Forward UMI+Barcode':fwd_UMI_barcode_ls,
+                                    'Reverse UMI':rev_UMI_ls,
+                                    'Reverse Barcode':rev_barcode_ls,
+                                    'Reverse Barcode+UMI':rev_barcode_UMI_ls})
+
+        for (enzyme,recognition,recognition_rc) in t.zip_cols(df=RE_type_IIS_df[RE_type_IIS_df['Name'].isin(enzymes)], # Just Esp3I by default
+                                                            cols=['Name','Recognition','Recognition_rc']):
+            # Check Forward UMI+Barcode for RE sites
+            UMI_barcode_df[f'{enzyme} Forward UMI+Barcode'] = [len(t.find_all(oligo,recognition))+len(t.find_all(oligo,recognition_rc)) for oligo in UMI_barcode_df['Forward UMI+Barcode']] # Iterate through oligonucleotides
+            
+            # Check Forward UMI+Barcode for RE sites
+            UMI_barcode_df[f'{enzyme} Reverse Barcode+UMI'] = [len(t.find_all(oligo,recognition))+len(t.find_all(oligo,recognition_rc)) for oligo in UMI_barcode_df['Reverse Barcode+UMI']] # Iterate through oligonucleotides
+
+            # Count number of RE sites (should be 0)
+            RE_ls = []
+            for umi in UMI_df['UMI_sequence']:
+                RE_ls.append(sum(UMI_barcode_df[(UMI_barcode_df['Forward UMI']==umi)][f'{enzyme} Forward UMI+Barcode']) + sum(UMI_barcode_df[(UMI_barcode_df['Reverse UMI']==umi)][f'{enzyme} Reverse Barcode+UMI']))
+            UMI_df[enzyme] = RE_ls
+        
+        # Keep UMIs with no RE sites
+        UMI_df = UMI_df[UMI_df[enzymes].sum(axis=1)==0]
+
+    # Assign UMI to each oligo
+    UMI_sequences = UMI_df['UMI_sequence'].tolist()
+    if len(UMI_sequences[UMI_i:])<df.shape[0]*2: # Check if there are enough UMIs for the number of oligos
+        ValueError(f'{len(UMI_sequences)} UMIs is less than 2x{df.shape[0]} oligonucleotides!')
+    UMI_sequences = UMI_sequences[UMI_i:UMI_i+df.shape[0]*2] # Get UMIs starting at UMI_i
+    print(f'{len(UMI_sequences)} UMIs: index = [{UMI_i}:{UMI_i+df.shape[0]*2}]')
+    df['Forward UMI'] = UMI_sequences[:df.shape[0]] # Assign forward UMIs
+    df['Reverse UMI'] = UMI_sequences[df.shape[0]:] # Assign reverse UMIs
+
+    # Make oligo & determine length
+    oligos = []
+    trimmed_templates = []
+    for i, (temp_seq, fwd_homology_t5_trim, rev_homology_t3_trim) in enumerate(t.zip_cols(
+        df=df, cols=[template, fwd_homology_t5.replace("Name", "Sequence Trim"), rev_homology_t3.replace("Name", "Sequence Trim")])):
+
+        # Trim flanks if provided
+        if temp_seq.find(fwd_homology_t5_trim)==-1 or temp_seq.rfind(rev_homology_t3_trim)==-1:
+            raise(ValueError(f"Flank5 or Flank3 sequences were not found in edit sequence for DMS row {i}.\nPlease check for flank5 ({fwd_homology_t5_trim}) and flank3 ({rev_homology_t3_trim}) sequences in the template sequence:\n{temp_seq}"))
+
+        # Trim flanks from template sequences
+        trimmed_temp_seq = temp_seq[temp_seq.find(fwd_homology_t5_trim)+len(fwd_homology_t5_trim) : temp_seq.rfind(rev_homology_t3_trim)]
+        trimmed_templates.append(trimmed_temp_seq)
+
+        # Make final oligonucleotide sequence based on template: FWD UMI - FWD Barcode - FWD RE - FWD Homology - Trimmed Template - RE Homology - REV RE - REV Barcode - REV UMI
+        oligo = df.iloc[i]['Forward UMI']+df.iloc[i][fwd_barcode_t5]+df.iloc[i][fwd_RE_t5.replace("Name", "Sequence")]+df.iloc[i][fwd_homology_t5.replace("Name", "Sequence")]+ \
+                trimmed_templates[i]+ \
+                df.iloc[i][rev_homology_t3.replace("Name", "Sequence")]+df.iloc[i][rev_RE_t3.replace("Name", "Sequence")]+df.iloc[i][rev_barcode_t3]+df.iloc[i]['Reverse UMI']
+        oligos.append(oligo.upper()) # Make sure oligos are uppercase
+
+    df[f'{template}_trimmed'] = trimmed_templates
     df['Oligonucleotide'] = oligos
     df['Oligonucleotide_length']=[len(oligo) for oligo in df['Oligonucleotide']]
 
