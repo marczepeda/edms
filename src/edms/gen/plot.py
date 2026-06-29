@@ -763,7 +763,7 @@ def formatter(graph: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file:
               y_axis: str, y_axis_size: int, y_axis_weight: str, y_axis_font: str, y_axis_scale: str, y_axis_dims: tuple, y_axis_pad: int, y_ticks_size: int, y_ticks_rot: int, y_ticks_font: str, y_ticks: list,
               legend_title: str, legend_title_size: int, legend_title_weight: str, legend_size: int, legend_bbox_to_anchor: tuple, legend_loc: str, legend_items: tuple, legend_ncol: int,
               legend_columnspacing: int=-4, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, 
-              dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True, PDB_pt: str = None, icon: str = 'python', cats_ord: list = None) -> None:
+              dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True, PDB_pt: str = None, icon: str = 'python', cats_order: list = None) -> None:
     ''' 
     formatter(): formats, displays, and saves plots
 
@@ -819,7 +819,7 @@ def formatter(graph: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file:
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     PDB_pt (str, optional): Path to PDB file for mol* visualization; only intended for fastq plots (Default: None)
     icon (str, optional): html file icon (Default: python logo)
-    cats_ord (list, optional): order of categories for categorical plots
+    cats_order (list, optional): order of categories for categorical plots
 
     Dependencies: os, matplotlib, seaborn, io, re_un_cap(), & round_up_pow_10()
     '''
@@ -855,7 +855,7 @@ def formatter(graph: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file:
                 else: plt.xlim(x_axis_dims[0],x_axis_dims[1])
             else:
                 if is_html: # put one tick per category, centered on each bar row
-                    ls = df[x].unique().tolist() if cats_ord is None else cats_ord
+                    ls = df[x].unique().tolist() if cats_order is None else cats_order
                     ax.set_xticks(np.arange(len(ls)))
                     ax.set_xticklabels(ls,
                                     rotation=x_ticks_rot,
@@ -884,7 +884,7 @@ def formatter(graph: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file:
                 else: plt.ylim(y_axis_dims[0],y_axis_dims[1])
             else:
                 if is_html: # put one tick per category, centered on each bar row
-                    ls = df[y].unique().tolist() if cats_ord is None else cats_ord
+                    ls = df[y].unique().tolist() if cats_order is None else cats_order
                     ax.set_yticks(np.arange(len(ls)))
                     ax.set_yticklabels(ls,
                                     rotation=y_ticks_rot,
@@ -1172,7 +1172,7 @@ def _apply_formatter_on_ax(*, ax, df_sub: pd.DataFrame, graph: str,
                            y_ticks_size: float, y_ticks_rot: float, y_ticks_font: str, y_ticks: list[str] | None,
                            legend_title: str | None, legend_title_size: float, legend_title_weight: str, legend_size: float, legend_bbox_to_anchor: tuple[float, float] | None, legend_loc: str | None, legend_items: list[str] | None, legend_ncol: int | None,
                            legend_columnspacing: float, legend_handletextpad: float, legend_labelspacing: float, legend_borderpad: float, legend_handlelength: float,
-                           dpi: int, transparent: bool, show: bool, space_capitalize: bool, PDB_pt: str | None, icon: str | None, cats_ord: list[str] | None) -> None:
+                           dpi: int, transparent: bool, show: bool, space_capitalize: bool, PDB_pt: str | None, icon: str | None, cats_order: list[str] | None) -> None:
     """
     _apply_formatter_on_ax(): Apply the formatter to a specific axis with the appropriate subset of data and parameters for that panel.
 
@@ -1186,7 +1186,7 @@ def _apply_formatter_on_ax(*, ax, df_sub: pd.DataFrame, graph: str,
     x_axis (str | None), x_axis_size (float), x_axis_weight (str), x_axis_font (str), x_axis_scale (str), x_axis_dims (tuple[float, float]), x_axis_pad (float), x_ticks_size (float), x_ticks_rot (float), x_ticks_font (str), x_ticks (list[str] | None): The x-axis label and its formatting parameters.
     y_axis (str | None), y_axis_size (float), y_axis_weight (str), y_axis_font (str), y_axis_scale (str), y_axis_dims (tuple[float, float]), y_axis_pad (float), y_ticks_size (float), y_ticks_rot (float), y_ticks_font (str), y_ticks (list[str] | None): The y-axis label and its formatting parameters.
     legend_title (str | None), legend_title_size (float), legend_title_weight (str), legend_size (float), legend_bbox_to_anchor (tuple[float, float] | None), legend_loc (str | None), legend_items (list[str] | None), legend_ncol (int | None), legend_columnspacing
-    cats_ord: Order of categories for categorical plots (if applicable).
+    cats_order: Order of categories for categorical plots (if applicable).
     """
     plt.sca(ax)  # make this axis current for plt.title/xlabel/etc in formatter
     formatter(
@@ -1206,7 +1206,7 @@ def _apply_formatter_on_ax(*, ax, df_sub: pd.DataFrame, graph: str,
         legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad,
         legend_handlelength=legend_handlelength,
         dpi=dpi, transparent=transparent, show=False,  # <- don't show per facet
-        space_capitalize=space_capitalize, PDB_pt=PDB_pt, icon=icon, cats_ord=cats_ord
+        space_capitalize=space_capitalize, PDB_pt=PDB_pt, icon=icon, cats_order=cats_order
     )
 
 # Graph methods
@@ -1567,7 +1567,7 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
                 legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad,
                 legend_handlelength=legend_handlelength,
                 dpi=dpi, transparent=transparent, show=False, space_capitalize=space_capitalize,
-                PDB_pt=None, icon='scatter', cats_ord=None
+                PDB_pt=None, icon='scatter', cats_order=None
             )
 
             panel_title = _subplot_title(
@@ -1623,7 +1623,7 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
     return fig, axes
 
 def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
-        cats_ord: list = None, cats_exclude: list|str = None,
+        cats_order: list = None, cats_exclude: list|str = None,
         cols: str = None, cols_order: list = None, cols_exclude: list | str = None,
         line: float = None, facetx: str = None, facety: str = None,
         facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
@@ -1653,7 +1653,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
     df (dataframe | str): pandas dataframe (or file path)
     x (str, optional): x-axis column name
     y (str, optional): y-axis column name
-    cats_ord (list, optional): category column values order (x- or y-axis)
+    cats_order (list, optional): category column values order (x- or y-axis)
     cats_exclude (list | str, optional): category column values exclude (x- or y-axis)
     cols (str, optional): color column name
     cols_order (list, optional): color column values order
@@ -1799,87 +1799,87 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
         # seaborn plots
         if cols is not None:
             if graph == 'bar':
-                sns.barplot(data=df_sub, x=x, y=y, order=cats_ord, errorbar=errorbar,
+                sns.barplot(data=df_sub, x=x, y=y, order=cats_order, errorbar=errorbar,
                             err_kws={'color': edgecol, 'linewidth': errwid}, capsize=errcap,
                             hue=cols, hue_order=cols_order, edgecolor=edgecol, linewidth=lw,
                             palette=palette, ax=ax, **kwargs)
             elif graph == 'box':
-                sns.boxplot(data=df_sub, x=x, y=y, order=cats_ord,
+                sns.boxplot(data=df_sub, x=x, y=y, order=cats_order,
                             hue=cols, hue_order=cols_order, linewidth=lw, palette=palette, ax=ax, **kwargs)
             elif graph == 'violin':
-                sns.violinplot(data=df_sub, x=x, y=y, order=cats_ord,
+                sns.violinplot(data=df_sub, x=x, y=y, order=cats_order,
                                hue=cols, hue_order=cols_order, edgecolor=edgecol, linewidth=lw,
                                palette=palette, ax=ax, **kwargs)
             elif graph == 'swarm':
-                sns.swarmplot(data=df_sub, x=x, y=y, order=cats_ord,
+                sns.swarmplot(data=df_sub, x=x, y=y, order=cats_order,
                               hue=cols, hue_order=cols_order, edgecolor=edgecol,
                               alpha=alpha, linewidth=lw, dodge=dodge, size=size,
                               palette=palette, ax=ax, **kwargs)
             elif graph == 'strip':
-                sns.stripplot(data=df_sub, x=x, y=y, order=cats_ord,
+                sns.stripplot(data=df_sub, x=x, y=y, order=cats_order,
                               hue=cols, hue_order=cols_order, edgecolor=edgecol,
                               alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter,
                               size=size, palette=palette, ax=ax, **kwargs)
             elif graph == 'point':
-                sns.pointplot(data=df_sub, x=x, y=y, order=cats_ord,
+                sns.pointplot(data=df_sub, x=x, y=y, order=cats_order,
                               errorbar=errorbar, err_kws={'linewidth': errwid}, capsize=errcap,
                               hue=cols, hue_order=cols_order, palette=palette, ax=ax, **kwargs)
             elif graph == 'count':
                 if (x != '') and (y != ''):
                     raise ValueError("Cannot make countplot with both x and y specified.")
                 elif x != '':
-                    sns.countplot(data=df_sub, x=x, order=cats_ord, hue=cols, hue_order=cols_order, palette=palette, ax=ax, **kwargs)
+                    sns.countplot(data=df_sub, x=x, order=cats_order, hue=cols, hue_order=cols_order, palette=palette, ax=ax, **kwargs)
                 elif y != '':
-                    sns.countplot(data=df_sub, y=y, order=cats_ord, hue=cols, hue_order=cols_order, palette=palette, ax=ax, **kwargs)
+                    sns.countplot(data=df_sub, y=y, order=cats_order, hue=cols, hue_order=cols_order, palette=palette, ax=ax, **kwargs)
                 else:
                     raise ValueError("Cannot make countplot without x or y specified.")
             elif graph=='bar_strip':
-                sns.barplot(data=df_sub, x=x, y=y, order=cats_ord, errorbar=errorbar, 
+                sns.barplot(data=df_sub, x=x, y=y, order=cats_order, errorbar=errorbar, 
                             err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, 
                             hue=cols, hue_order=cols_order, edgecolor=edgecol, linewidth=lw, 
                             palette=palette, ax=ax, **kwargs)
-                sns.stripplot(data=df_sub, x=x, y=y, order=cats_ord, 
+                sns.stripplot(data=df_sub, x=x, y=y, order=cats_order, 
                             hue=cols, hue_order=cols_order, edgecolor=edgecol, 
                             alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, 
                             size=size, palette=palette, ax=ax, **kwargs)
             elif graph=='box_strip':
-                sns.boxplot(data=df_sub, x=x, y=y, order=cats_ord, 
+                sns.boxplot(data=df_sub, x=x, y=y, order=cats_order, 
                             hue=cols, hue_order=cols_order, linewidth=lw, 
                             palette=palette, ax=ax, fill=False, fliersize=0, color=edgecol, **kwargs)
-                sns.stripplot(data=df_sub, x=x, y=y, order=cats_ord, 
+                sns.stripplot(data=df_sub, x=x, y=y, order=cats_order, 
                               hue=cols, hue_order=cols_order, edgecolor=edgecol, 
                               alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, 
                               size=size, palette=palette, ax=ax, **kwargs)
             elif graph=='violin_strip':
-                sns.violinplot(data=df_sub, x=x, y=y, order=cats_ord, 
+                sns.violinplot(data=df_sub, x=x, y=y, order=cats_order, 
                                hue=cols, hue_order=cols_order, edgecolor=edgecol, 
                                linewidth=lw, palette=palette, ax=ax, **kwargs)
-                sns.stripplot(data=df_sub, x=x, y=y, order=cats_ord, 
+                sns.stripplot(data=df_sub, x=x, y=y, order=cats_order, 
                               hue=cols, hue_order=cols_order, edgecolor=edgecol, 
                               alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, 
                               size=size, palette=palette, ax=ax, **kwargs)
             elif graph=='bar_swarm':
-                sns.barplot(data=df_sub, x=x, y=y, order=cats_ord, errorbar=errorbar, 
+                sns.barplot(data=df_sub, x=x, y=y, order=cats_order, errorbar=errorbar, 
                             err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, 
                             hue=cols, hue_order=cols_order, edgecolor=edgecol, 
                             linewidth=lw, palette=palette, ax=ax, **kwargs)
-                sns.swarmplot(data=df_sub, x=x, y=y, order=cats_ord, 
+                sns.swarmplot(data=df_sub, x=x, y=y, order=cats_order, 
                             hue=cols, hue_order=cols_order, edgecolor=edgecol, 
                             alpha=alpha, linewidth=lw, dodge=dodge, 
                             size=size, palette=palette, ax=ax, **kwargs)
             elif graph=='box_swarm':
-                sns.boxplot(data=df_sub, x=x, y=y, order=cats_ord, 
+                sns.boxplot(data=df_sub, x=x, y=y, order=cats_order, 
                             hue=cols, hue_order=cols_order, linewidth=lw, 
                             palette=palette, ax=ax, fill=False, fliersize=0, color=edgecol, **kwargs)
-                sns.swarmplot(data=df_sub, x=x, y=y, order=cats_ord, 
+                sns.swarmplot(data=df_sub, x=x, y=y, order=cats_order, 
                             hue=cols, hue_order=cols_order, edgecolor=edgecol, 
                             alpha=alpha, linewidth=lw, dodge=dodge, size=size, 
                             palette=palette, ax=ax, **kwargs)
             elif graph=='violin_swarm':
-                sns.violinplot(data=df_sub, x=x, y=y, order=cats_ord, 
+                sns.violinplot(data=df_sub, x=x, y=y, order=cats_order, 
                                hue=cols, hue_order=cols_order, edgecolor=edgecol, 
                                linewidth=lw, palette=palette, ax=ax, **kwargs)
-                sns.swarmplot(data=df_sub, x=x, y=y, order=cats_ord, 
+                sns.swarmplot(data=df_sub, x=x, y=y, order=cats_order, 
                             hue=cols, hue_order=cols_order, edgecolor=edgecol, 
                             alpha=alpha, linewidth=lw, dodge=dodge, size=size, 
                             palette=palette, ax=ax, **kwargs)
@@ -1887,64 +1887,64 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
                 raise ValueError("Invalid graph! bar, box, violin, swarm, strip, point, count, bar_strip, box_strip, violin_strip, bar_swarm, box_swarm, violin_swarm")
         else:
             if graph == 'bar':
-                sns.barplot(data=df_sub, x=x, y=y, order=cats_ord, errorbar=errorbar,
+                sns.barplot(data=df_sub, x=x, y=y, order=cats_order, errorbar=errorbar,
                             err_kws={'color': edgecol, 'linewidth': errwid}, capsize=errcap,
                             edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
             elif graph == 'box':
-                sns.boxplot(data=df_sub, x=x, y=y, order=cats_ord, 
+                sns.boxplot(data=df_sub, x=x, y=y, order=cats_order, 
                             linewidth=lw, ax=ax, palette=palette, **kwargs)
             elif graph == 'violin':
-                sns.violinplot(data=df_sub, x=x, y=y, order=cats_ord, edgecolor=edgecol, 
+                sns.violinplot(data=df_sub, x=x, y=y, order=cats_order, edgecolor=edgecol, 
                             linewidth=lw, palette=palette, ax=ax, **kwargs)
             elif graph == 'swarm':
-                sns.swarmplot(data=df_sub, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol,
+                sns.swarmplot(data=df_sub, x=x, y=y, order=cats_order, color=edgecol, edgecolor=edgecol,
                               alpha=alpha, linewidth=lw, dodge=dodge, size=size, palette=palette, ax=ax, **kwargs)
             elif graph == 'strip':
-                sns.stripplot(data=df_sub, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol,
+                sns.stripplot(data=df_sub, x=x, y=y, order=cats_order, color=edgecol, edgecolor=edgecol,
                               alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, size=size, palette=palette, ax=ax, **kwargs)
             elif graph == 'point':
-                sns.pointplot(data=df_sub, x=x, y=y, order=cats_ord, errorbar=errorbar,
+                sns.pointplot(data=df_sub, x=x, y=y, order=cats_order, errorbar=errorbar,
                               err_kws={'linewidth': errwid}, capsize=errcap, palette=palette, ax=ax, **kwargs)
             elif graph == 'count':
                 if (x != '') and (y != ''):
                     raise ValueError("Cannot make countplot with both x and y specified.")
                 elif x != '':
-                    sns.countplot(data=df_sub, x=x, order=cats_ord, ax=ax, palette=palette, **kwargs)
+                    sns.countplot(data=df_sub, x=x, order=cats_order, ax=ax, palette=palette, **kwargs)
                 elif y != '':
-                    sns.countplot(data=df_sub, y=y, order=cats_ord, ax=ax, palette=palette, **kwargs)
+                    sns.countplot(data=df_sub, y=y, order=cats_order, ax=ax, palette=palette, **kwargs)
                 else:
                     raise ValueError("Cannot make countplot without x or y specified.")
             elif graph=='bar_strip':
-                sns.barplot(data=df_sub, x=x, y=y, order=cats_ord, errorbar=errorbar, 
+                sns.barplot(data=df_sub, x=x, y=y, order=cats_order, errorbar=errorbar, 
                         err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, 
                         edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
-                sns.stripplot(data=df_sub, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, 
+                sns.stripplot(data=df_sub, x=x, y=y, order=cats_order, color=edgecol, edgecolor=edgecol, 
                         alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, size=size, palette=palette, ax=ax, **kwargs)
             elif graph=='box_strip':
-                sns.boxplot(data=df_sub, x=x, y=y, order=cats_ord, linewidth=lw, ax=ax, 
+                sns.boxplot(data=df_sub, x=x, y=y, order=cats_order, linewidth=lw, ax=ax, 
                         fill=False, fliersize=0, color=edgecol, **kwargs)
-                sns.stripplot(data=df_sub, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, 
+                sns.stripplot(data=df_sub, x=x, y=y, order=cats_order, color=edgecol, edgecolor=edgecol, 
                         alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, size=size, palette=palette, ax=ax, **kwargs)
             elif graph=='violin_strip':
-                sns.violinplot(data=df_sub, x=x, y=y, order=cats_ord, edgecolor=edgecol, 
+                sns.violinplot(data=df_sub, x=x, y=y, order=cats_order, edgecolor=edgecol, 
                         linewidth=lw, ax=ax, palette=palette, **kwargs)
-                sns.stripplot(data=df_sub, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, 
+                sns.stripplot(data=df_sub, x=x, y=y, order=cats_order, color=edgecol, edgecolor=edgecol, 
                         alpha=alpha, linewidth=lw, dodge=dodge, jitter=jitter, size=size, palette=palette, ax=ax, **kwargs)
             elif graph=='bar_swarm':
-                sns.barplot(data=df_sub, x=x, y=y, order=cats_ord, errorbar=errorbar, 
+                sns.barplot(data=df_sub, x=x, y=y, order=cats_order, errorbar=errorbar, 
                         err_kws={'color':edgecol, 'linewidth':errwid}, capsize=errcap, 
                         edgecolor=edgecol, linewidth=lw, palette=palette, ax=ax, **kwargs)
-                sns.swarmplot(data=df_sub, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, 
+                sns.swarmplot(data=df_sub, x=x, y=y, order=cats_order, color=edgecol, edgecolor=edgecol, 
                         alpha=alpha, linewidth=lw, dodge=dodge, size=size, palette=palette, ax=ax, **kwargs)
             elif graph=='box_swarm': # figure out
-                sns.boxplot(data=df_sub, x=x, y=y, order=cats_ord, linewidth=lw, ax=ax, 
+                sns.boxplot(data=df_sub, x=x, y=y, order=cats_order, linewidth=lw, ax=ax, 
                         fill=False, fliersize=0, color=edgecol, **kwargs)
-                sns.swarmplot(data=df_sub, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, 
+                sns.swarmplot(data=df_sub, x=x, y=y, order=cats_order, color=edgecol, edgecolor=edgecol, 
                         alpha=alpha, linewidth=lw, dodge=dodge, size=size, palette=palette, ax=ax, **kwargs)
             elif graph=='violin_swarm':
-                sns.violinplot(data=df_sub, x=x, y=y, order=cats_ord, edgecolor=edgecol, 
+                sns.violinplot(data=df_sub, x=x, y=y, order=cats_order, edgecolor=edgecol, 
                         linewidth=lw, palette=palette, ax=ax, **kwargs)
-                sns.swarmplot(data=df_sub, x=x, y=y, order=cats_ord, color=edgecol, edgecolor=edgecol, 
+                sns.swarmplot(data=df_sub, x=x, y=y, order=cats_order, color=edgecol, edgecolor=edgecol, 
                         alpha=alpha, linewidth=lw, dodge=dodge, size=size, palette=palette, ax=ax, **kwargs)
             else:
                 raise ValueError("Invalid graph! bar, box, violin, swarm, strip, point, count, bar_strip, box_strip, violin_strip, bar_swarm, box_swarm, violin_swarm")
@@ -2003,7 +2003,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
                 legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad,
                 legend_handlelength=legend_handlelength,
                 dpi=dpi, transparent=transparent, show=False, space_capitalize=space_capitalize,
-                PDB_pt=None, icon='cat', cats_ord=cats_ord
+                PDB_pt=None, icon='cat', cats_ord=cats_order
             )
 
             panel_title = _subplot_title(
@@ -2330,7 +2330,7 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
             space_capitalize=space_capitalize,
             PDB_pt=None,
             icon='histogram',
-            cats_ord=None
+            cats_order=None
         )
 
     for i, r in enumerate(row_vals):

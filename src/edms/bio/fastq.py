@@ -4261,7 +4261,7 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
         return df,secondary_structure
 
 # Plot methods
-def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list = None, cats_exclude: list|str = None, cols: str=None, cols_order: list=None, cols_exclude: list|str=None, PDB_pt: str=None, line: float = None,
+def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_order: list = None, cats_exclude: list|str = None, cols: str=None, cols_order: list=None, cols_exclude: list|str=None, PDB_pt: str=None, line: float = None,
         facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
         file: str=None, dir: str=None, palette_or_cmap: str='colorblind', alpha: float=1.0, dodge: bool=True, jitter: bool=True, size: float=5, edgecol: str='black', lw: int=1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
         figsize: tuple=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
@@ -4279,7 +4279,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list
     df (dataframe | str): pandas dataframe (or file path)
     x (str, optional): x-axis column name
     y (str, optional): y-axis column name
-    cats_ord (list, optional): category column values order (x- or y-axis)
+    cats_order (list, optional): category column values order (x- or y-axis)
     cats_exclude (list | str, optional): category column values exclude (x- or y-axis)
     cols (str, optional): color column name
     cols_order (list, optional): color column values order
@@ -4360,7 +4360,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list
         df = df.copy()
 
     # Sort data by genotype position
-    if cats_ord is None:
+    if cats_order is None:
         cats = ''
         if x!='': # Check that x column is numeric
             if df[x].apply(lambda row: isinstance(row, (int, float))).all()==True: 
@@ -4373,8 +4373,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list
         positions = list()
         for geno in genotypes:
             numbers = re.findall(r'\d+\.?\d*', geno)
-            if geno==f'<{cutoff_value}':positions.append(1000001) # Places <cutoff near the end
-            elif 'Edit' == geno: positions.append(1000002) # Places Edit near the end
+            if 'Edit' == geno: positions.append(1000002) # Places Edit near the end
             elif 'Indel' == geno: positions.append(1000003) # Places Indel near the end
             elif 'Not WT' == geno: positions.append(1000004) # Places Not WT near the end
             elif 'WT' == geno: positions.append(1000005) # Places WT at the end
@@ -4385,7 +4384,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_ord: list
                                'genotypes':genotypes})
         cols_order = list(assign.sort_values(by='positions')['genotypes'])
 
-    p.cat(graph=graph,df=df,x=x,y=y,cats_ord=cats_ord,cats_exclude=cats_exclude,cols=cols,cols_order=cols_order,cols_exclude=cols_exclude,PDB_pt=PDB_pt,line=line,
+    p.cat(graph=graph,df=df,x=x,y=y,cats_order=cats_order,cats_exclude=cats_exclude,cols=cols,cols_order=cols_order,cols_exclude=cols_exclude,PDB_pt=PDB_pt,line=line,
           facetx=facetx,facety=facety,facetx_order=facetx_order,facety_order=facety_order,subplot_titles=subplot_titles,
           file=file,dir=dir,palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
           figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,

@@ -189,7 +189,7 @@ def add_common_plot_cat_args(subparser, fastq_parser=False, pwes_parsers=False):
     if pwes_parsers == False:
         subparser.add_argument("-x", "--x", help="X-axis column name", type=str, default="")
         subparser.add_argument("-y", "--y", help="Y-axis column name", type=str, default="")
-        subparser.add_argument("-co", "--cats_ord", nargs="+", help="Category column values order (x- or y-axis)")
+        subparser.add_argument("-co", "--cats_order", nargs="+", help="Category column values order (x- or y-axis)")
         subparser.add_argument("-ce", "--cats_exclude", nargs="+", help="Category column values exclude (x- or y-axis)")
         subparser.add_argument("-cl", "--cols", type=str, help="Color column name for grouping")
         subparser.add_argument("-clo", "--cols_order", nargs="+", help="Color column values order")
