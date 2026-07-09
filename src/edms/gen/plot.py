@@ -739,21 +739,27 @@ def autoscale_limits(values, buffer=0.1, min_range=1.0):
 
     return vmin - pad, vmax + pad
 
-def autoscale_xy(df, x, y, x_axis_dims, y_axis_dims, x_axis_scale, y_axis_scale, buffer=0.1, min_range=1.0):
+def autoscale_xy(df, x, y, x_axis_dims, y_axis_dims, x_axis_scale, y_axis_scale, buffer=0.1, min_range=1.0, graph=None):
     """
     autoscale_xy(): Compute x and y axis limits with proportional padding.
     """
     if x_axis_dims==(0,0):
         if df[x].apply(lambda row: isinstance(row, (int, float))).all()==True: # Check that x column is numeric
             print('Autoscaling x axis dimensions.')
-            if x_axis_scale=='log': x_axis_dims = (round_down_pow_10(min(df[x])), round_up_pow_10(max(df[x])))
-            else: x_axis_dims = autoscale_limits(df[x], buffer=buffer, min_range=min_range)
-    
+            x_ls = df[x].tolist()
+            if graph in ['bar', 'bar_swarm', 'bar_strip'] and (all(v <= 0 for v in x_ls) or all(v >= 0 for v in x_ls)): 
+                x_ls.append(0)
+            if x_axis_scale=='log': x_axis_dims = (round_down_pow_10(min(x_ls)), round_up_pow_10(max(x_ls)))
+            else: x_axis_dims = autoscale_limits(x_ls, buffer=buffer, min_range=min_range)
+
     if y_axis_dims==(0,0):
         if df[y].apply(lambda row: isinstance(row, (int, float))).all()==True: # Check that y column is numeric
             print('Autoscaling y axis dimensions.')
-            if y_axis_scale=='log': y_axis_dims = (round_down_pow_10(min(df[y])), round_up_pow_10(max(df[y])))
-            else: y_axis_dims = autoscale_limits(df[y], buffer=buffer, min_range=min_range)
+            y_ls = df[y].tolist()
+            if graph in ['bar', 'bar_swarm', 'bar_strip'] and (all(v <= 0 for v in y_ls) or all(v >= 0 for v in y_ls)):
+                y_ls.append(0)
+            if y_axis_scale=='log': y_axis_dims = (round_down_pow_10(min(y_ls)), round_up_pow_10(max(y_ls)))
+            else: y_axis_dims = autoscale_limits(y_ls, buffer=buffer, min_range=min_range)
 
     return x_axis_dims, y_axis_dims
 
@@ -1769,7 +1775,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
     # Set global autoscale limits if not provided
     x_axis_dims, y_axis_dims = autoscale_xy(
         df=df, x=x, y=y, x_axis_dims=x_axis_dims, y_axis_dims=y_axis_dims,
-        x_axis_scale=x_axis_scale, y_axis_scale=y_axis_scale
+        x_axis_scale=x_axis_scale, y_axis_scale=y_axis_scale, graph=graph
     )
 
     # --- Build facet layout ---
@@ -2003,7 +2009,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
                 legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad,
                 legend_handlelength=legend_handlelength,
                 dpi=dpi, transparent=transparent, show=False, space_capitalize=space_capitalize,
-                PDB_pt=None, icon='cat', cats_ord=cats_order
+                PDB_pt=None, icon='cat', cats_order=cats_order
             )
 
             panel_title = _subplot_title(

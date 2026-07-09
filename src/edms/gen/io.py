@@ -156,7 +156,7 @@ def save(obj, file: str, dir: str | None = None, cols: list=[], id: bool=False, 
     
     Parameters:
     obj: dataframe, series, set, or list
-    file (str, optional): file name or full path if dir is None
+    file (str, required): file name or full path if dir is None
     dir (str | None, optional): output directory
     cols (str, list, optional): isolate dataframe column(s)
     id (bool, optional): include dataframe index (False)

@@ -22,6 +22,7 @@ Usage:
 
 [Make directories]
 - mkdir(): make directory if it does not exist (including parent directories)
+- check_outpath(): determine output file path and ensure output directory exists
 
 [Supporting argument methods]
 - parse_tuple_int(arg): Parse a string argument into a tuple of integers
