@@ -1100,10 +1100,11 @@ def epegRNA_linkers(pegRNAs: str | pd.DataFrame, epegRNA_motif_sequence: str='CG
     # Generate epegRNAs
     pegRNAs['Linker_sequence'] = linkers
     pegRNAs['Motif_sequence'] = [epegRNA_motif_sequence]*len(pegRNAs)
-    epegRNAs = t.reorder_cols(df=pegRNAs,
-                              cols=['pegRNA_number','gRNA_type','Strand','Edit', # Important metadata
-                                    'Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence','Linker_sequence','Motif_sequence']) # Sequence information
-    
+    if all(item in pegRNAs.columns for item in ['pegRNA_number','gRNA_type','Strand','Edit']):
+        epegRNAs = t.reorder_cols(df=pegRNAs,
+                                  cols=['pegRNA_number','gRNA_type','Strand','Edit', # Important metadata
+                                        'Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence','Linker_sequence','Motif_sequence']) # Sequence information
+
     # Save epeg_ngRNAs if dir and file are provided
     if out_dir is not None and out_file is not None:
         io.save(obj=epegRNAs, dir=out_dir, file=out_file)

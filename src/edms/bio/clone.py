@@ -184,7 +184,14 @@ def epegRNAs(df: pd.DataFrame | str, id: str, tG: str=True, order: bool=True, ma
     if type(df)==str: # Get epegRNAs dataframe from file path if needed
         df = io.get(pt=df)
     
-    if make_extension==True: df[extension] = df[RTT]+df[PBS]+df[linker] # Make extension by concatenating RTT, PBS, and linker
+    if make_extension==True: 
+        if df[RTT].isnull().any():
+            print(f'Warning: Null values found in "{RTT}" column for some epegRNAs.')
+        if df[PBS].isnull().any():
+            print(f'Warning: Null values found in "{PBS}" column for some epegRNAs.')
+        if df[linker].isnull().any():
+            print(f'Warning: Null values found in "{linker}" column for some epegRNAs.')
+        df[extension] = [rtt+pbs+linker for rtt,pbs,linker in zip(df[RTT].fillna(""), df[PBS].fillna(""), df[linker].fillna(""))] # Make extension by concatenating RTT, PBS, and linker
     else: print(f'Warning: Did not make extension sequence!\nMake sure "{extension}" column includes RTT+PBS+linker for epegRNAs.')
     df=tb(df=df,id=id,seq=spacer,t5=spacer_t5,t3=spacer_t3,b5=spacer_b5,b3=spacer_b3,tG=tG,pre='es_') # Make top and bottom oligos for spacer inserts
     df=tb(df=df,id=id,seq=extension,t5=extension_t5,t3=extension_t3,b5=extension_b5,b3=extension_b3,tG=False,pre='ee_') # Make top and bottom oligos for extension inserts
