@@ -743,7 +743,7 @@ def autoscale_xy(df, x, y, x_axis_dims, y_axis_dims, x_axis_scale, y_axis_scale,
     """
     autoscale_xy(): Compute x and y axis limits with proportional padding.
     """
-    if x_axis_dims==(0,0):
+    if x_axis_dims==(0,0) and x is not None:
         if df[x].apply(lambda row: isinstance(row, (int, float))).all()==True: # Check that x column is numeric
             print('Autoscaling x axis dimensions.')
             x_ls = df[x].tolist()
@@ -752,7 +752,7 @@ def autoscale_xy(df, x, y, x_axis_dims, y_axis_dims, x_axis_scale, y_axis_scale,
             if x_axis_scale=='log': x_axis_dims = (round_down_pow_10(min(x_ls)), round_up_pow_10(max(x_ls)))
             else: x_axis_dims = autoscale_limits(x_ls, buffer=buffer, min_range=min_range)
 
-    if y_axis_dims==(0,0):
+    if y_axis_dims==(0,0) and y is not None:
         if df[y].apply(lambda row: isinstance(row, (int, float))).all()==True: # Check that y column is numeric
             print('Autoscaling y axis dimensions.')
             y_ls = df[y].tolist()
@@ -2164,7 +2164,7 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
 
     # Set global autoscale limits if not provided
     x_axis_dims, y_axis_dims = autoscale_xy(
-        df=df, x=x, y=y, x_axis_dims=x_axis_dims, y_axis_dims=y_axis_dims,
+        df=df, x=x, y=None, x_axis_dims=x_axis_dims, y_axis_dims=y_axis_dims,
         x_axis_scale=x_axis_scale, y_axis_scale=y_axis_scale
     )
 
