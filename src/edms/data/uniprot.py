@@ -529,7 +529,10 @@ def normalize_ptm_description(desc):
         return "Acetylation"
     if "methyl" in desc:
         return "Methylation"
-    if "glycosylation" in desc:
+    if "glycosylation" in desc or "glycan" in desc or "-linked" in desc:
+        # Real UniProt CARBOHYD descriptions rarely say "glycosylation" --
+        # they instead read like "N-linked (GlcNAc...) asparagine" or
+        # "O-linked (GalNAc...) threonine".
         return "Glycosylation"
     if "ubiquitin" in desc:
         return "Ubiquitination"
@@ -667,11 +670,24 @@ def load_uniprot_feature_viewer_json(
 
     if isinstance(obj, (str, bytes)):
         # If this looks like a path that exists on disk, read from it;
-        # otherwise treat it as raw JSON text.
-        path = Path(str(obj))
-        if path.exists():
-            data = json.loads(path.read_text())
-        else:
+        # otherwise treat it as raw JSON text. Only attempt the path check
+        # for strings that are plausibly a file path -- raw JSON text
+        # routinely exceeds typical OS filename length limits (~255 chars),
+        # and Path.exists() raises OSError("File name too long") rather
+        # than returning False in that case, so skip straight to json.loads()
+        # for long or JSON-shaped input.
+        data = None
+        if isinstance(obj, str):
+            stripped = obj.lstrip()
+            looks_like_json_text = stripped.startswith("{") or stripped.startswith("[")
+            if not looks_like_json_text and len(obj) <= 255:
+                try:
+                    path = Path(obj)
+                    if path.exists():
+                        data = json.loads(path.read_text())
+                except OSError:
+                    data = None
+        if data is None:
             data = json.loads(obj)
     elif isinstance(obj, dict):
         data = obj
@@ -714,7 +730,10 @@ def load_many_from_files(paths: Iterable[_PathLike]) -> List[UniProtEntry]:
 
     entries: List[UniProtEntry] = []
     for p in paths:
-        entries.append(load_uniprot_feature_viewer_json(Path(p)))
+        # load_uniprot_feature_viewer_json() only accepts str/bytes/dict (not
+        # a bare Path/PathLike), so convert here rather than widening its
+        # type check.
+        entries.append(load_uniprot_feature_viewer_json(str(p)))
     return entries
 
 

@@ -194,17 +194,28 @@ def left_align_indels(indels: List[Indel], ref: str) -> List[Indel]:
     for ind in indels:
         if ind.dellen > 0:  # deletion
             start = ind.pos
-            # shift left while previous base equals the rightmost deleted base
-            del_seq = ref[ind.pos:ind.pos+ind.dellen]
-            while start > 0 and ind.pos > 0 and ref[start-1] == del_seq[-1]:
+            # Shift left while the base immediately before the window equals the CURRENT
+            # trailing base of the deletion window (ref[start+dellen-1], recomputed every
+            # iteration from the current `start`) -- not a fixed base from the original
+            # position. This is required for correct left-alignment inside repeats whose
+            # period is greater than 1 (a fixed trailing base only happens to work for
+            # homopolymer runs, where every base in the run is identical anyway).
+            while start > 0 and ref[start-1] == ref[start+ind.dellen-1]:
                 start -= 1
             out.append(Indel(pos=start, ins="", dellen=ind.dellen))
         elif ind.ins:  # insertion
             start = ind.pos
-            # shift left while previous base equals the last base of insertion
-            while start > 0 and ref[start-1] == ind.ins[-1]:
+            ins = ind.ins
+            # Shift left while previous base equals the last base of the insertion,
+            # rotating the insertion each step (moving its last base to the front) so the
+            # shifted Indel still decodes to the exact same edited sequence. Without the
+            # rotation, shifting a multi-character insertion silently changes the sequence
+            # it represents (a single-base insertion is unaffected since rotating a
+            # 1-character string is a no-op, which is why this bug was previously hidden).
+            while start > 0 and ref[start-1] == ins[-1]:
+                ins = ins[-1] + ins[:-1]
                 start -= 1
-            out.append(Indel(pos=start, ins=ind.ins, dellen=0))
+            out.append(Indel(pos=start, ins=ins, dellen=0))
         else:
             out.append(ind)
     

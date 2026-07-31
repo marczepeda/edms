@@ -7,7 +7,7 @@ name = "edms"
 dynamic = ["version"]
 description = "Endogenous Deep Mutational Scans"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = { file = "LICENSE" }
 authors = [
   { name = "Marcanthony Zepeda", email = "mzepeda@g.harvard.edu" }
@@ -47,6 +47,7 @@ classifiers = [
 
 [project.optional-dependencies]
 pymol = ["pymol-open-source"]
+test = ["pytest", "pytest-mock"]
 
 [project.scripts]
 edms = "edms.main:main"
@@ -79,3 +80,7 @@ where = ["src"]
 version_scheme = "post-release"
 local_scheme = "no-local-version"
 write_to = "src/edms/_version.py"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

@@ -161,7 +161,7 @@ def found_list_in_order(main_ls: list, sub_ls: list) -> int:
                     else: # If item does not match sub_ls, break
                         break
                     
-                    if s+1 == len(sub_ls): # If last item in sub_ls; found True
+                    if s == len(sub_ls): # All items in sub_ls matched (including the last); found True
                         found=True
 
                 except IndexError: # End of main_ls reached

@@ -562,7 +562,6 @@ def split_fastqs_by_expected_errors(
             output_ee0=output_ee0,
             output_eeplus=output_eeplus,
             threshold=threshold,
-            write_gzip=write_gzip,
         )
 
         summaries.append(summary)
@@ -2377,7 +2376,7 @@ def trim_filter(record, qall:int, qavg:int, qtrim:int, qmask:int, alls:int,
             if qtrim!=0: # Save compute time if trim is not desired
                 for i in range(len(quality_scores)): # Find 5' trim
                     if quality_scores[i] >= qtrim: break
-                    trim_5 = i
+                    trim_5 = i + 1
                 for i in reversed(range(len(quality_scores))): # Find 3' trim
                     if quality_scores[i] >= qtrim: break
                     trim_3 = i
@@ -3183,7 +3182,7 @@ def extract_umis(fastq_dir: str, out_dir: str='./extract_umis',
     for file in os.listdir(path=fastq_dir):
         if file.endswith('.fastq') or file.endswith('.fastq.gz'):
             # Extract UMIs using umi_tools
-            command = f'conda run -n {env} umi_tools extract --bc-pattern={bc_pattern} --stdin={os.path.join(fastq_dir,file)} --stdout={os.path.join(out_dir,file.replace(".gz",""))} --log={os.path.join(out_dir,".extract_umi",file)}.log'
+            command = f'conda run -n {env} umi_tools extract --bc-pattern={bc_pattern} --stdin={os.path.join(fastq_dir,file)} --stdout={os.path.join(out_dir,file.replace(".gz",""))} --log={os.path.join(out_dir,".extract_umis",file)}.log'
             print(f"{command}")
             result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
             

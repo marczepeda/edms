@@ -16,13 +16,27 @@ import sys
 import time
 from argparse import RawTextHelpFormatter
 
-parser = argparse.ArgumentParser(description='''----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+logger = logging.getLogger(__name__)
+
+# Module-level placeholders populated by _configure_cli(); only meaningful after main() runs.
+file_in = None
+saturation_mutagenesis = False
+silent_mutation = 0
+silent_mutation_mode = 'barcode'
+out_dir = None
+
+
+def _configure_cli():
+    """Parse CLI args and configure logging/output dir. Only called from main(), never on import."""
+    global args, file_in, saturation_mutagenesis, silent_mutation, silent_mutation_mode, out_dir, logger
+
+    parser = argparse.ArgumentParser(description='''----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Software for the design of edit sequences for deep mutational scanning.
-Input sequence syntax follows PrimeDesign: substitutions (REF/EDIT), insertions (+EDIT), deletions (-REF).
+Input sequence syntax follows DMSDesign: substitutions (REF/EDIT), insertions (+EDIT), deletions (-REF).
 For saturation mutagenesis, place one region in parentheses and choose -sat_mut.
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------''', formatter_class=RawTextHelpFormatter)
 
-parser.add_argument('-f', '--file', required=True, type=str, help="""Input file (.txt or .csv) with sequences for PrimeDesign. Format: target_name,target_sequence (Required)
+    parser.add_argument('-f', '--file', required=True, type=str, help="""Input file (.txt or .csv) with sequences for DMSDesign. Format: target_name,target_sequence (Required)
 
 *** Example .TXT file *** --------------------------------------------------------------
 |											|
@@ -57,40 +71,40 @@ parser.add_argument('-f', '--file', required=True, type=str, help="""Input file 
  ---------------------------------------------------------------------------------------
 
 """)
-parser.add_argument('-sat_mut', '--saturation_mutagenesis', default=False, choices=['aa', 'aa_subs', 'aa_ins', 'aa_dels', 'aa_silent', 'base'], type=str,
-                    help='Saturation mutagenesis mode. aa = aa_subs + aa_ins + aa_dels. Default: False')
-parser.add_argument('-silent_mut', '--silent_mutation', default=0, type=int,
-                    help='Number of additional silent codon changes to introduce into each edit sequence. Must be >= 0. Default: 0')
-parser.add_argument('-silent_mut_mode', '--silent_mutation_mode', default='barcode',
-                    choices=['close', 'upstream', 'downstream', 'distribute', 'barcode'], type=str,
-                    help='Silent mutation placement mode. close = nearest intended edit; upstream = 5-prime of edit; downstream = 3-prime of edit; distribute = spread across allowed region; barcode = deterministic variant-specific synonymous pattern. Default: barcode')
-parser.add_argument('-out', '--out_dir', default='./DMSDesign/DATETIMESTAMP_DMSDesign', type=str, help='Output directory. Default: ./DMSDesign/DATETIMESTAMP_DMSDesign')
+    parser.add_argument('-sat_mut', '--saturation_mutagenesis', default=False, choices=['aa', 'aa_subs', 'aa_ins', 'aa_dels', 'aa_silent', 'base'], type=str,
+                        help='Saturation mutagenesis mode. aa = aa_subs + aa_ins + aa_dels. Default: False')
+    parser.add_argument('-silent_mut', '--silent_mutation', default=0, type=int,
+                        help='Number of additional silent codon changes to introduce into each edit sequence. Must be >= 0. Default: 0')
+    parser.add_argument('-silent_mut_mode', '--silent_mutation_mode', default='barcode',
+                        choices=['close', 'upstream', 'downstream', 'distribute', 'barcode'], type=str,
+                        help='Silent mutation placement mode. close = nearest intended edit; upstream = 5-prime of edit; downstream = 3-prime of edit; distribute = spread across allowed region; barcode = deterministic variant-specific synonymous pattern. Default: barcode')
+    parser.add_argument('-out', '--out_dir', default='./DMSDesign/DATETIMESTAMP_DMSDesign', type=str, help='Output directory. Default: ./DMSDesign/DATETIMESTAMP_DMSDesign')
 
-args = parser.parse_args()
-file_in = args.file
-saturation_mutagenesis = args.saturation_mutagenesis
-silent_mutation = args.silent_mutation
-silent_mutation_mode = args.silent_mutation_mode
+    args = parser.parse_args()
+    file_in = args.file
+    saturation_mutagenesis = args.saturation_mutagenesis
+    silent_mutation = args.silent_mutation
+    silent_mutation_mode = args.silent_mutation_mode
 
-if silent_mutation < 0:
-    raise ValueError('--silent_mutation must be an integer greater than or equal to 0')
+    if silent_mutation < 0:
+        raise ValueError('--silent_mutation must be an integer greater than or equal to 0')
 
-out_dir = args.out_dir
-if out_dir == './DMSDesign/DATETIMESTAMP_DMSDesign':
-    out_dir = './DMSDesign/%s_DMSDesign' % str(time.strftime('%y%m%d_%H.%M.%S', time.localtime()))
-os.makedirs(out_dir, exist_ok=True)
+    out_dir = args.out_dir
+    if out_dir == './DMSDesign/DATETIMESTAMP_DMSDesign':
+        out_dir = './DMSDesign/%s_DMSDesign' % str(time.strftime('%y%m%d_%H.%M.%S', time.localtime()))
+    os.makedirs(out_dir, exist_ok=True)
 
-logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-fh = logging.FileHandler(os.path.join(out_dir, 'DMSDesign.log'))
-fh.setLevel(logging.DEBUG)
-fh.setFormatter(formatter)
-logger.addHandler(fh)
-ch = logging.StreamHandler()
-ch.setLevel(logging.INFO)
-ch.setFormatter(formatter)
-logger.addHandler(ch)
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    fh = logging.FileHandler(os.path.join(out_dir, 'DMSDesign.log'))
+    fh.setLevel(logging.DEBUG)
+    fh.setFormatter(formatter)
+    logger.addHandler(fh)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
 
 codon_dict = {
     'GGG':['Gly','G',0.25],'GGA':['Gly','G',0.25],'GGT':['Gly','G',0.16],'GGC':['Gly','G',0.34],
@@ -160,6 +174,7 @@ def process_sequence(input_sequence):
     editnumber2sequence = {}
     edit_idxs = [[m.start(), m.end()] for m in re.finditer(r'\(.*?\)', input_sequence)]
     edit_counter = 1
+    edits_by_position = []  # (start, end, ref, alt, edit_counter), one entry per edit occurrence
     for edit_idx in edit_idxs:
         edit = input_sequence[edit_idx[0]:edit_idx[1]]
         if '/' in edit:
@@ -171,24 +186,36 @@ def process_sequence(input_sequence):
         elif '-' in edit:
             ref = edit.split('-')[1].replace(')', '')
             alt = ''
-        editformat2sequence[edit] = [ref, alt, edit_counter]
+        # Key on the edit text AND its start position so that two edit regions sharing identical
+        # annotation text (e.g. two separate (A/T) substitutions at different positions) do not
+        # overwrite each other in the dict.
+        editformat2sequence[f'{edit}__at_{edit_idx[0]}'] = [ref, alt, edit_counter]
         editnumber2sequence[edit_counter] = [ref, alt]
+        edits_by_position.append((edit_idx[0], edit_idx[1], ref, alt, edit_counter))
         edit_counter += 1
 
     edit_start = min(i.start() for i in re.finditer(r'\(', input_sequence))
     edit_stop = max(i.start() for i in re.finditer(r'\)', input_sequence))
-    edit_span_sequence_w_ref = input_sequence[edit_start:edit_stop + 1]
-    edit_span_sequence_w_edit = input_sequence[edit_start:edit_stop + 1]
-    reference_sequence = input_sequence
-    edit_sequence = input_sequence
-    editnumber_sequence = input_sequence
 
-    for edit, values in editformat2sequence.items():
-        edit_span_sequence_w_ref = edit_span_sequence_w_ref.replace(edit, values[0])
-        edit_span_sequence_w_edit = edit_span_sequence_w_edit.replace(edit, values[1])
-        reference_sequence = reference_sequence.replace(edit, values[0])
-        edit_sequence = edit_sequence.replace(edit, values[1])
-        editnumber_sequence = editnumber_sequence.replace(edit, str(values[2]))
+    def _substitute_by_position(base_sequence, offset, value_index):
+        """Rebuild base_sequence by substituting each parenthesized edit region (identified by its
+        absolute character span in input_sequence, shifted by `offset` for `base_sequence`) with
+        its ref (0), alt (1), or edit_counter (2) value. Edits are applied right-to-left so that
+        replacing one edit never shifts the positions of the edits still to be processed. This
+        replaces the previous `str.replace(edit_text, ...)` approach, which silently mis-numbered
+        (or dropped) edits that share identical annotation text at different positions."""
+        result = base_sequence
+        for start, end, ref, alt, counter in sorted(edits_by_position, key=lambda e: e[0], reverse=True):
+            value = (ref, alt, str(counter))[value_index]
+            s, e = start - offset, end - offset
+            result = result[:s] + value + result[e:]
+        return result
+
+    reference_sequence = _substitute_by_position(input_sequence, 0, 0)
+    edit_sequence = _substitute_by_position(input_sequence, 0, 1)
+    editnumber_sequence = _substitute_by_position(input_sequence, 0, 2)
+    edit_span_sequence_w_ref = _substitute_by_position(input_sequence[edit_start:edit_stop + 1], edit_start, 0)
+    edit_span_sequence_w_edit = _substitute_by_position(input_sequence[edit_start:edit_stop + 1], edit_start, 1)
 
     edit_start_in_ref = re.search(r'\(', input_sequence).start()
     edit_stop_in_ref_rev = re.search(r'\)', input_sequence[::-1]).start()
@@ -622,6 +649,7 @@ def build_designs():
 
 
 def main():
+    _configure_cli()
     designs = build_designs()
     if len(designs) == 0:
         logger.error('Input file %s does not have any entries. Include a header: target_name,target_sequence.', file_in)

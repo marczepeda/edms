@@ -40,8 +40,12 @@ def apply_filters(seq_pre, seq_linker, seq_post, ac_thresh, u_thresh, n_thresh, 
         return False
     
     # Excluded Motif
-    if excluded_motifs is not None:
-        seq_neighborhood = seq_pre[-(len(excluded_motifs)):] + seq_linker + seq_post[:len(excluded_motifs)]
+    if excluded_motifs is not None and len(excluded_motifs) > 0:
+        # Window must extend (motif_length - 1) nt into seq_pre/seq_post so that a motif spanning
+        # the seq_pre/seq_linker or seq_linker/seq_post boundary is not missed. Sized by the
+        # longest excluded motif (not the *number* of motifs).
+        motif_context = max(len(motif) for motif in excluded_motifs) - 1
+        seq_neighborhood = (seq_pre[-motif_context:] if motif_context > 0 else "") + seq_linker + (seq_post[:motif_context] if motif_context > 0 else "")
         for motif in excluded_motifs:
             if motif in seq_neighborhood:
                 return False

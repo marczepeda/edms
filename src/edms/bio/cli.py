@@ -890,7 +890,7 @@ def add_subparser(subparsers, formatter_class=None):
         parser_pe_prime_designer.print_help()
         rprint("""[red]
 Examples:[/red]
-  [cyan]--file[/cyan] [dark_magenta]IN_FILE[/dark_magenta]
+  [cyan]--in_file[/cyan] [dark_magenta]IN_FILE[/dark_magenta]
   [blue]Input file (.csv or .txt) with sequences for PrimeDesign.
   Format: target_name,target_sequence,index
 

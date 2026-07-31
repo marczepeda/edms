@@ -327,6 +327,11 @@ def out_subs(dir: str):
             file_path = os.path.join(root, file)
             target_path = os.path.join(parent_dir, file)
 
+            # Already at the top level - nothing to move, and it must not
+            # be treated as a "conflict" with itself.
+            if os.path.abspath(file_path) == os.path.abspath(target_path):
+                continue
+
             # Resolve name conflicts by appending a counter
             base, ext = os.path.splitext(file)
             counter = 1

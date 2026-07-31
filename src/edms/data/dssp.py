@@ -79,14 +79,17 @@ def retrieve(id_or_file: str, dir: str=None) -> pd.DataFrame:
         subprocess.run(f"{command}", shell=True, cwd='.')
     else:
         try: # from config
-            for id_or_file_config in os.listdir(os.path.expanduser('~/.config/edms/PDB/')):
-                if id_or_file.lower() in id_or_file_config.lower() and (id_or_file_config.endswith('.cif') or id_or_file_config.endswith('.mmCIF')):
-                    command = f"mkdssp {os.path.expanduser('~/.config/edms/PDB')}/{id_or_file_config} {dir}/{id_or_file}.dssp"
-                    print(f"Running command: {command}")
-                    subprocess.run(f"{command}", shell=True, cwd='.')
-                    break
+            id_or_file_configs = os.listdir(os.path.expanduser('~/.config/edms/PDB/'))
+        except OSError:
+            id_or_file_configs = []
 
-        except:
+        for id_or_file_config in id_or_file_configs:
+            if id_or_file.lower() in id_or_file_config.lower() and (id_or_file_config.endswith('.cif') or id_or_file_config.endswith('.mmCIF')):
+                command = f"mkdssp {os.path.expanduser('~/.config/edms/PDB')}/{id_or_file_config} {dir}/{id_or_file}.dssp"
+                print(f"Running command: {command}")
+                subprocess.run(f"{command}", shell=True, cwd='.')
+                break
+        else: # no matching file found (config dir missing or no match) -> raise as documented
             raise FileNotFoundError(f"PDB file with .cif or .mmCIF extension was not found: {id_or_file}.\nPlease provide a valid filename or PDB id (if saved to {os.path.expanduser('~/.config/edms/PDB/')}) or file path for PDB structure file")
 
 
@@ -172,8 +175,9 @@ def parse_segments(dssp_file: str, chain_id: str, unknown_color: str='white') ->
     # add color column
     out["ss_color"] = out["ss_code"].map(ss_map).apply(lambda x: x[1] if isinstance(x, list) else unknown_color)
 
-    # add description column
-    out["ss_description"] = out["ss_code"].map(ss_map).apply(lambda x: x[0] if isinstance(x, list) else x)
+    # add description column (fall back to the raw code itself, like ss_color falls back to unknown_color)
+    out["ss_description"] = out["ss_code"].map(ss_map).apply(lambda x: x[0] if isinstance(x, list) else None)
+    out["ss_description"] = out["ss_description"].where(out["ss_description"].notna(), out["ss_code"])
 
     # count per structure type
     out["ss_count"] = out.groupby("ss_code").cumcount() + 1

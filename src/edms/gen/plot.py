@@ -657,15 +657,15 @@ def repeat_palette_cmap(palette_or_cmap: str, repeats: int):
     if not isinstance(repeats, int) or repeats <= 0:
         raise ValueError(f"repeats={repeats} must be a positive integer.")
     
-    if palette_or_cmap in sns.color_palette(): # Check if cmap is a valid seaborn color palette
+    if palette_or_cmap in sns.palettes.SEABORN_PALETTES: # Check if cmap is a valid seaborn color palette name
         cmap = sns.palettes.SEABORN_PALETTES[palette_or_cmap] # Get the color palette
         return mcolors.ListedColormap(cmap * repeats) # Repeats the color palette
     elif palette_or_cmap in plt.colormaps() or isinstance(palette_or_cmap, mcolors.Colormap): # Check if cmap is a valid matplotlib color map or custom colormap
         cmap = cm.get_cmap(palette_or_cmap) # Get the color map
         return mcolors.ListedColormap([cmap(i) for i in range(cmap.N)] * repeats) # Breaks the color map into a repeated list
     else:
-        print(f'{cmap} is not a valid matplotlib color map and did not apply repeat.')
-        return cmap
+        print(f'{palette_or_cmap} is not a valid matplotlib color map and did not apply repeat.')
+        return palette_or_cmap
 
 def _category_color_map(values, palette_or_cmap='colorblind', order=None):
     if order is not None and len(order) > 0:
@@ -1773,8 +1773,12 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
         palette = palette_or_cmap
 
     # Set global autoscale limits if not provided
+    # (cat()'s own x/y "not specified" sentinel is '', unlike autoscale_xy's
+    # `is not None` convention used elsewhere - e.g. dist() passes y=None -
+    # so translate '' to None here rather than looking up df[''].)
     x_axis_dims, y_axis_dims = autoscale_xy(
-        df=df, x=x, y=y, x_axis_dims=x_axis_dims, y_axis_dims=y_axis_dims,
+        df=df, x=(x if x != '' else None), y=(y if y != '' else None),
+        x_axis_dims=x_axis_dims, y_axis_dims=y_axis_dims,
         x_axis_scale=x_axis_scale, y_axis_scale=y_axis_scale, graph=graph
     )
 
@@ -2513,9 +2517,12 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vals: str = None,
         x_default = df.columns.name if df.columns.name is not None else ''
         y_default = df.index.name if df.index.name is not None else ''
 
+        nrows = 1
+        ncols = 1
+
         fig, axes = plt.subplots(
-            nrows=1,
-            ncols=1,
+            nrows=nrows,
+            ncols=ncols,
             figsize=figsize
         )
         axes = np.array(axes).reshape(1, 1)

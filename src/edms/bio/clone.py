@@ -195,9 +195,6 @@ def epegRNAs(df: pd.DataFrame | str, id: str, tG: str=True, order: bool=True, ma
     else: print(f'Warning: Did not make extension sequence!\nMake sure "{extension}" column includes RTT+PBS+linker for epegRNAs.')
     df=tb(df=df,id=id,seq=spacer,t5=spacer_t5,t3=spacer_t3,b5=spacer_b5,b3=spacer_b3,tG=tG,pre='es_') # Make top and bottom oligos for spacer inserts
     df=tb(df=df,id=id,seq=extension,t5=extension_t5,t3=extension_t3,b5=extension_b5,b3=extension_b3,tG=False,pre='ee_') # Make top and bottom oligos for extension inserts
-    if order_scaffold==True: # Order top and bottom oligonucleotide for scaffold sequence
-        df = pd.concat([ord_form(df=df,id=id,seq='TATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC',suf='_top',pre='scaffold_'),
-                        ord_form(df=df,id=id,seq='GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC',suf='_bot',pre='scaffold_')]).reset_index(drop=True)
     if order==True: # Sigma order format (or original dataframe with top and bottom oligos)
         if order_scaffold==True: # Include the scaffold sequence in the order
             df = pd.concat([ord_form(df=df,id=id,seq=spacer,suf='_top',pre='es_'),

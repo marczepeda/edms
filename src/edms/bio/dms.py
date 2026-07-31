@@ -268,10 +268,10 @@ def replace_enzyme_sites(df: pd.DataFrame | str, enzyme: str,
         comments=comments,
     )
 
+    # enzyme_codon_swap() already writes the (possibly unchanged) swapped sequence directly into
+    # sequence_col, so there is no separate '{sequence_col}_{enzyme}_codon_swap' column to recover
+    # it from; just record whether a synonymous swap was actually found for each row.
     df_swap[f'{enzyme}_codon_swap_recovered'] = df_swap[f'{enzyme}_codon_swap_annotation'].astype(str) != ''
-    df_swap.loc[df_swap[f'{enzyme}_codon_swap_recovered'], sequence_col] = df_swap.loc[
-        df_swap[f'{enzyme}_codon_swap_recovered'], f'{sequence_col}_{enzyme}_codon_swap'
-    ]
 
     df_swap = find_enzyme_sites(
         df=df_swap,

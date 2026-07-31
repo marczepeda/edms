@@ -160,7 +160,7 @@ def priority_edits(pegRNAs: pd.DataFrame | str, pegRNAs_shared: pd.DataFrame | s
         pegRNAs_temp = pegRNAs_temp[(pegRNAs_temp['Spacer_sequence']==pegRNAs_shared.iloc[p]['Spacer_sequence'])&(pegRNAs_temp['PBS_sequence']==pegRNAs_shared.iloc[p]['PBS_sequence'])] # Confirm spacer & PBS matches
         pegRNAs_temp.drop_duplicates(subset=['Spacer_sequence'],inplace=True) # Drop redundant pegRNAs (not sure if this is needed)
         pegRNAs_priority = pd.concat([pegRNAs_priority,pegRNAs_temp]).reset_index(drop=True)
-        pegRNAs_priority['ClinVar_count'] = [df_clinvar['Protein change'].value_counts()[edit] if edit in df_clinvar['AA_mut'].to_list() else 0 for edit in pegRNAs_priority['Edit']]
+        pegRNAs_priority['ClinVar_count'] = [df_clinvar['Protein change'].value_counts()[edit] if edit in df_clinvar['Protein change'].to_list() else 0 for edit in pegRNAs_priority['Edit']]
 
     # Save & return pegRNAs priority dataframe
     io.save(obj=pegRNAs_priority, dir=dir, file=file) 

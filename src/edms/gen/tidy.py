@@ -95,7 +95,7 @@ def merge(data: pd.DataFrame, meta: pd.DataFrame, id, cols: list) -> pd.DataFram
         for c in cols: 
             id_c = dict(zip(meta[id],meta[c]))
             data[c] = [id_c[i] for i in data[id]]
-    elif (type(id)==list)&(len(id)==2):
+    elif (type(id)==list) and (len(id)==2):
         for c in cols: 
             id_c = dict(zip(meta[id[1]],meta[c]))
             data[c] = [id_c[i] for i in data[id[0]]]

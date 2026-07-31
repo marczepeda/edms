@@ -751,8 +751,9 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
 
     # Organize data by 'pval' or specified 'size' column, typically input abundance
     sizes=(1,100)
+    size_norm = None # Default: no shared size normalization unless a valid size column is resolved below
     if size in [False,'False','false']: # No size
-        size = None 
+        size = None
 
     else:
         if size is not None and size in df.columns:
@@ -855,7 +856,7 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
                 if ss_h is None:
                     ss_h  = 0.5 # height of secondary structure track
                 if ss_y is None:
-                    ss_y  = min(df[f'log2({FC})'])-2*0.5 # position below min y value
+                    ss_y  = min(df[scores_col])-2*0.5 # position below min y value
 
                 # secondary structure
                 for ss_description in secondary_structure['ss_description'].unique():

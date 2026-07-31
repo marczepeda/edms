@@ -160,10 +160,10 @@ def difference(df: pd.DataFrame | str, data_col: str, compare_col: str, compare:
                                                         'p_value': p_values,
                                                         'null_hypothesis':['reject' if corrected_p_value else 'fail to reject' for corrected_p_value in corrected_p_values]})]).reset_index(drop=True)
             
-            else: print('Error: Invalid compare. List needs to contain 2 or more stings')
-        
+            else: raise ValueError('Invalid compare. List needs to contain 2 or more strings')
+
         else: # Data that does not follow a normal distribution
-            
+
             # Mann Whitney U Test
             print(f'Statistical Test: Mann Whitney U Test ({method} correction)\n - The Mann-Whitney U test is a non-parametric test used to compare differences between two independent groups when the dependent variable is either ordinal or continuous, but not normally distributed.')
             df2 = pd.concat([df[df[compare_col]==comp] for comp in compare]).reset_index(drop=True) # Only include specified data
@@ -227,10 +227,10 @@ def difference(df: pd.DataFrame | str, data_col: str, compare_col: str, compare:
                                                             'p_value': p_values,
                                                             'null_hypothesis':['reject' if corrected_p_value else 'fail to reject' for corrected_p_value in corrected_p_values]})]).reset_index(drop=True)
 
-            else: print('Error: Invalid compare. List needs to contain 2 or more stings')
+            else: raise ValueError('Invalid compare. List needs to contain 2 or more strings')
 
         else: # Data that does not follow a normal distribution
-            
+
             # Wilcoxon Signed-Rank Test
             print(f'Statistical Test: Wilcoxon Signed-Rank Test ({method} correction) \n - To control for Type-I error, adjust the significance threshold (α) to account for the number of tests.')
             df2 = pd.concat([df[df[compare_col]==comp] for comp in compare]).reset_index(drop=True) # Only include specified data
@@ -485,9 +485,10 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str,
         column_prefix += '_'
     
     # Rename count column with prefix for clarity
-    if f'{column_prefix}{count}' in df.columns:
-        raise ValueError(f"Column name '{column_prefix}{count}' already exists in df. Please choose a different column_prefix or count column name to avoid conflicts.")
-    df.rename(columns={count: f'{column_prefix}{count}'}, inplace=True)
+    new_count_col = f'{column_prefix}{count}'
+    if new_count_col != count and new_count_col in df.columns:
+        raise ValueError(f"Column name '{new_count_col}' already exists in df. Please choose a different column_prefix or count column name to avoid conflicts.")
+    df.rename(columns={count: new_count_col}, inplace=True)
 
     # Validate replicate column
     if replicate is not None:
@@ -667,7 +668,7 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str,
 
         # Pair within replicate: match on (var, replicate)
         paired = df_other.merge(
-            df_comp[[var, replicate, f'{column_prefix}{count}_scaled_pc', f'{column_prefix}scaled']],
+            df_comp[[var, replicate, f'{column_prefix}{count}_scaled_pc', f'{column_prefix}{count}_scaled']],
             on=[var, replicate],
             how='inner',
             suffixes=('', f'_{cond_comp}')
@@ -718,11 +719,14 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str,
             .reset_index()
         )
 
-        grp_comp = grp[grp[cond] == cond_comp][[var, f'{column_prefix}{count}_scaled_pc_mean', f'{column_prefix}{count}_scaled_pc_var', f'{column_prefix}{count}_scaled_pc_count']]
+        # NOTE: `grp`'s named-aggregation columns above (scaled_pc_mean,
+        # scaled_pc_var, scaled_pc_count) are not prefixed with
+        # column_prefix/count, so select/rename using those actual names.
+        grp_comp = grp[grp[cond] == cond_comp][[var, 'scaled_pc_mean', 'scaled_pc_var', 'scaled_pc_count']]
         grp_comp = grp_comp.rename(columns={
-            f'{column_prefix}{count}_scaled_pc_mean': f'{column_prefix}{count}_scaled_pc_mean_{cond_comp}',
-            f'{column_prefix}{count}_scaled_pc_var': f'{column_prefix}{count}_scaled_pc_var_{cond_comp}',
-            f'{column_prefix}{count}_scaled_pc_count': f'{column_prefix}{count}_scaled_pc_n_{cond_comp}',
+            'scaled_pc_mean': f'scaled_pc_mean_{cond_comp}',
+            'scaled_pc_var': f'scaled_pc_var_{cond_comp}',
+            'scaled_pc_count': f'scaled_pc_n_{cond_comp}',
         })
 
         df_stat = grp[grp[cond] != cond_comp].merge(grp_comp, on=var, how='left').merge(ttest_df, on=[cond, var], how='left')
