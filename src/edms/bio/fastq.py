@@ -51,6 +51,7 @@ Usage:
 - editing_per_library(): Determine editing relative library abundance
 
 [UMI methods]
+- _env(): is env variable path or name
 - extract_umis(): extract UMIs using umi_tools
 - trim_motifs(): trimming motifs with cutadapt
 - make_sams(): generates alignments saved as a SAM files using bowtie2
@@ -3159,6 +3160,15 @@ def editing_per_library(edit_dc: dict | str, paired_regions_dc: dict | str, fast
         return out_df
 
 # UMI methods
+def _env(env: str):
+    '''
+    _env(): is env variable path or name
+
+    Parameters:
+    env (str): env
+    '''
+    return '-p' if os.path.isdir(env) else '-n'
+
 def extract_umis(fastq_dir: str, out_dir: str='./extract_umis', 
                  bc_pattern: str='NNNNNNNNNNNNNNNN', env: str='umi_tools', sh: bool=False):
     ''' 
@@ -3168,7 +3178,7 @@ def extract_umis(fastq_dir: str, out_dir: str='./extract_umis',
     fastq_dir (str): directory with FASTQ files
     out_dir (str): output directory (Default: ./extract_umis)
     bc_pattern (str, optional): UMI barcode pattern (Default: NNNNNNNNNNNNNNNN)
-    env (str, optional): conda environment with umi_tools installed (Default: umi_tools)
+    env (str, optional): conda environment with umi_tools installed (name or path, Default: umi_tools)
     sh (bool, optional): combine output log files into a single file in working directory (Default: False)
     '''
     # Memory reporting
@@ -3182,7 +3192,7 @@ def extract_umis(fastq_dir: str, out_dir: str='./extract_umis',
     for file in os.listdir(path=fastq_dir):
         if file.endswith('.fastq') or file.endswith('.fastq.gz'):
             # Extract UMIs using umi_tools
-            command = f'conda run -n {env} umi_tools extract --bc-pattern={bc_pattern} --stdin={os.path.join(fastq_dir,file)} --stdout={os.path.join(out_dir,file.replace(".gz",""))} --log={os.path.join(out_dir,".extract_umis",file)}.log'
+            command = f'conda run {_env(env)} {env} umi_tools extract --bc-pattern={bc_pattern} --stdin={os.path.join(fastq_dir,file)} --stdout={os.path.join(out_dir,file.replace(".gz",""))} --log={os.path.join(out_dir,".extract_umis",file)}.log'
             print(f"{command}")
             result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
             
@@ -3219,7 +3229,7 @@ def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs',
     motif_length (int, optional): trim 'in_file' motifs to this length (Default: 21)
     error_rate (float, optional): maximum error rate allowed in each motif (Default: 0.1)
     max_expected_errors (float, optional): maximum expected errors after trimming motifs (Default: None; 0.2 recomended)
-    env (str, optional): Conda environment with cutadapt installed (Default: umi_tools)
+    env (str, optional): Conda environment with cutadapt installed (name or path, Default: umi_tools)
     sh (bool, optional): combine output log files into a single file in working directory (Default: False)
     '''
     # Memory reporting
@@ -3255,7 +3265,7 @@ def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs',
     for file in os.listdir(path=fastq_dir):
         if file.endswith('.fastq') or file.endswith('.fastq.gz'):
             # Trim motifs using cutadapt (only keep reads with both motifs (up to 10% error rate))
-            command = f'conda run -n {env} cutadapt -g {motif5} -e {error_rate} --trimmed-only -o {os.path.join(out_dir,".trim5",file.replace(".gz",""))} {os.path.join(fastq_dir,file)} > {os.path.join(out_dir,".trim_motifs",file)}_trim5.log'
+            command = f'conda run {_env(env)} {env} cutadapt -g {motif5} -e {error_rate} --trimmed-only -o {os.path.join(out_dir,".trim5",file.replace(".gz",""))} {os.path.join(fastq_dir,file)} > {os.path.join(out_dir,".trim_motifs",file)}_trim5.log'
             print(f"{command}")
             result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
             
@@ -3264,9 +3274,9 @@ def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs',
             if result.stderr: print(f"errors:\n{result.stderr}")
 
             if max_expected_errors is None:
-                command = f'conda run -n {env} cutadapt -a {motif3} -e {error_rate} --trimmed-only -o {os.path.join(out_dir,file.replace(".gz",""))} {os.path.join(out_dir,".trim5",file.replace(".gz",""))} > {os.path.join(out_dir,".trim_motifs",file)}_trim53.log'
+                command = f'conda run {_env(env)} {env} cutadapt -a {motif3} -e {error_rate} --trimmed-only -o {os.path.join(out_dir,file.replace(".gz",""))} {os.path.join(out_dir,".trim5",file.replace(".gz",""))} > {os.path.join(out_dir,".trim_motifs",file)}_trim53.log'
             else: # Filter reads with too many expected errors after trimming motifs
-                command = f'conda run -n {env} cutadapt -a {motif3} -e {error_rate} --max-ee {max_expected_errors} --trimmed-only -o {os.path.join(out_dir,file.replace(".gz",""))} {os.path.join(out_dir,".trim5",file.replace(".gz",""))} > {os.path.join(out_dir,".trim_motifs",file)}_trim53.log'
+                command = f'conda run {_env(env)} {env} cutadapt -a {motif3} -e {error_rate} --max-ee {max_expected_errors} --trimmed-only -o {os.path.join(out_dir,file.replace(".gz",""))} {os.path.join(out_dir,".trim5",file.replace(".gz",""))} > {os.path.join(out_dir,".trim_motifs",file)}_trim53.log'
             print(f"{command}")
             result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
 
@@ -3307,7 +3317,7 @@ def make_sams(fastq_dir: str, out_dir: str='./make_sams',
         --fast-local           -D 10 -R 2 -N 0 -L 22 -i S,1,1.75
         --sensitive-local      -D 15 -R 2 -N 0 -L 20 -i S,1,0.75 (default)
         --very-sensitive-local -D 20 -R 3 -N 0 -L 20 -i S,1,0.50
-    env (str, optional): Conda environment with bowtie2 installed (Default: umi_tools)
+    env (str, optional): Conda environment with bowtie2 installed (name or path, Default: umi_tools)
     sh (bool, optional): combine output log files into a single file in working directory (Default: False)
     '''
     # Memory reporting
@@ -3339,7 +3349,7 @@ def make_sams(fastq_dir: str, out_dir: str='./make_sams',
         SeqIO.write(SeqRecord(seq, id=target_name, description=''), fasta, 'fasta')
         
     # Create bowtie2 index
-    command = f'conda run -n {env} bowtie2-build {fasta} {".".join(fasta.split(".")[:-1])}'
+    command = f'conda run {_env(env)} {env} bowtie2-build {fasta} {".".join(fasta.split(".")[:-1])}'
     print(f"{command}")
     result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
     
@@ -3354,7 +3364,7 @@ def make_sams(fastq_dir: str, out_dir: str='./make_sams',
     for file in os.listdir(path=fastq_dir):
         if file.endswith('.fastq') or file.endswith('.fastq.gz'):
             # Generate SAM files using bowtie2
-            command = f'conda run -n {env} bowtie2 -x {".".join(fasta.split(".")[:-1])} -U {os.path.join(fastq_dir,file)} -S {os.path.join(out_dir,file)}.sam --{sensitivity} > {os.path.join(out_dir,".make_sams",file)}.log'
+            command = f'conda run {_env(env)} {env} bowtie2 -x {".".join(fasta.split(".")[:-1])} -U {os.path.join(fastq_dir,file)} -S {os.path.join(out_dir,file)}.sam --{sensitivity} > {os.path.join(out_dir,".make_sams",file)}.log'
             print(f"{command}")
             result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
             
@@ -3379,7 +3389,7 @@ def make_bams(sam_dir: str, out_dir: str='./make_bams', env: str='umi_tools', sh
     Parameters:
     sam_dir (str): directory with SAM files
     out_dir (str): output directory (Default: ./make_bams)
-    env (str, optional): Conda environment with samtools installed (Default: umi_tools)
+    env (str, optional): Conda environment with samtools installed (name or path, Default: umi_tools)
     sh (bool, optional): combine output log files into a single file in working directory (Default: False)
     '''
     # Memory reporting
@@ -3393,7 +3403,7 @@ def make_bams(sam_dir: str, out_dir: str='./make_bams', env: str='umi_tools', sh
     for file in os.listdir(path=sam_dir):
         if file.endswith('.sam'):
             # Convert SAM to sorted BAM using samtools
-            command = f"conda run -n {env} bash -lc \
+            command = f"conda run {_env(env)} {env} bash -lc \
                         'set -euo pipefail; \
                         samtools view -b {os.path.join(sam_dir,file)} | samtools sort -o {os.path.join(out_dir,file.replace('.sam','.sorted.bam'))}' \
                         > {os.path.join(out_dir,'.make_bams',file)}.log 2>&1"
@@ -3408,7 +3418,7 @@ def make_bams(sam_dir: str, out_dir: str='./make_bams', env: str='umi_tools', sh
             memories.append(memory_timer(task=f'samtools view | samtools sort: {file}'))
 
             # Make BAM index using samtools
-            command = f'conda run -n {env} samtools index {os.path.join(out_dir,file.replace(".sam",".sorted.bam"))} > {os.path.join(out_dir,".make_bams",file)}.index.log'
+            command = f'conda run {_env(env)} {env} samtools index {os.path.join(out_dir,file.replace(".sam",".sorted.bam"))} > {os.path.join(out_dir,".make_bams",file)}.index.log'
             print(f"{command}")
             result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
 
@@ -3434,7 +3444,7 @@ def bam_umi_tags(bam_dir: str, out_dir: str='./bam_umi_tags',
     Parameters:
     bam_dir (str): directory with BAM files
     out_dir (str): output directory (Default: ./bam_umi_tags)
-    env (str, optional): Conda environment with umi_tools installed (Default: umi_tools)
+    env (str, optional): Conda environment with umi_tools installed (name or path, Default: umi_tools)
     sh (bool, optional): combine output log files into a single file in working directory (Default: False)
     '''
     # Memory reporting
@@ -3448,7 +3458,7 @@ def bam_umi_tags(bam_dir: str, out_dir: str='./bam_umi_tags',
     for file in os.listdir(path=bam_dir):
         if file.endswith('.bam'):
             # Group BAM files by UMI using fgbio
-            command = f'conda run -n {env} fgbio CopyUmiFromReadName -i {os.path.join(bam_dir,file)} -o {os.path.join(out_dir,file.replace(".bam",".withRX.bam"))} --field-delimiter _'
+            command = f'conda run {_env(env)} {env} fgbio CopyUmiFromReadName -i {os.path.join(bam_dir,file)} -o {os.path.join(out_dir,file.replace(".bam",".withRX.bam"))} --field-delimiter _'
             print(f"{command}")
             result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
             
@@ -3489,7 +3499,7 @@ def group_umis(bam_dir: str, out_dir: str='./group_umis',
            'ACGT-CCGG') and allows for one of the two UMIs to be absent (e.g. 'ACGT-' or '-ACGT'). The molecular IDs produced
            have more structure than for single UMI strategies and are of the form '{base}/{A|B}'. E.g. two UMI pairs would be
            mapped as follows AAAA-GGGG -> 1/A, GGGG-AAAA -> 1/B.
-    env (str, optional): Conda environment with fgbio installed (Default: umi_tools)
+    env (str, optional): Conda environment with fgbio installed (name or path, Default: umi_tools)
     sh (bool, optional): combine output log files into a single file in working directory (Default: False)
     '''
     # Memory reporting
@@ -3505,7 +3515,7 @@ def group_umis(bam_dir: str, out_dir: str='./group_umis',
     for file in os.listdir(path=bam_dir):
         if file.endswith('.bam'):
             # Group BAM files by UMI using fgbio
-            command = f'conda run -n {env} fgbio GroupReadsByUmi -i {os.path.join(bam_dir,file)} -o {os.path.join(out_dir,file.replace(".bam",".grouped.bam"))} -s {strategy} -e {edits} -f {os.path.join(out_dir,"family_hist",file.replace(".bam",".family_hist.txt"))} -g {os.path.join(out_dir,"grouping_metrics",file.replace(".bam",".grouping_metrics.txt"))}'
+            command = f'conda run {_env(env)} {env} fgbio GroupReadsByUmi -i {os.path.join(bam_dir,file)} -o {os.path.join(out_dir,file.replace(".bam",".grouped.bam"))} -s {strategy} -e {edits} -f {os.path.join(out_dir,"family_hist",file.replace(".bam",".family_hist.txt"))} -g {os.path.join(out_dir,"grouping_metrics",file.replace(".bam",".grouping_metrics.txt"))}'
             print(f"{command}")
             result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
             
@@ -3532,7 +3542,7 @@ def consensus_umis(bam_dir: str, out_dir: str='./consensus_umis',
     bam_dir (str): directory with grouped BAM files
     out_dir (str): output directory (Default: ./consensus_umis)
     min_reads (int, optional): minimum reads per UMI group to generate consensus (Default: 1)
-    env (str, optional): Conda environment with fgbio installed (Default: umi_tools)
+    env (str, optional): Conda environment with fgbio installed (name or path, Default: umi_tools)
     sh (bool, optional): combine output log files into a single file in working directory (Default: False)
     '''
     # Memory reporting
@@ -3546,7 +3556,7 @@ def consensus_umis(bam_dir: str, out_dir: str='./consensus_umis',
     for file in os.listdir(path=bam_dir):
         if file.endswith('.grouped.bam'):
             # Generate consensus reads from grouped BAM files using fgbio
-            command = f'conda run -n {env} fgbio CallMolecularConsensusReads -i {os.path.join(bam_dir,file)} -o {os.path.join(out_dir,file.replace(".grouped.bam",".consensus.bam"))} -M {min_reads}'
+            command = f'conda run {_env(env)} {env} fgbio CallMolecularConsensusReads -i {os.path.join(bam_dir,file)} -o {os.path.join(out_dir,file.replace(".grouped.bam",".consensus.bam"))} -M {min_reads}'
             print(f"{command}")
             result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
             
@@ -3571,7 +3581,7 @@ def bam_to_fastq(bam_dir: str, out_dir: str='./bam_to_fastq', env: str='umi_tool
     Parameters:
     bam_dir (str): directory with BAM files
     out_dir (str): output directory (Default: ./bam_to_fastq)
-    env (str, optional): Conda environment with samtools installed (Default: umi_tools)
+    env (str, optional): Conda environment with samtools installed (name or path, Default: umi_tools)
     sh (bool, optional): combine output log files into a single file in working directory (Default: False)
     '''
     # Memory reporting
@@ -3585,7 +3595,7 @@ def bam_to_fastq(bam_dir: str, out_dir: str='./bam_to_fastq', env: str='umi_tool
     for file in os.listdir(path=bam_dir):
         if file.endswith('.bam'):
             # Convert BAM to FASTQ using samtools
-            command = f'conda run -n {env} samtools fastq -n {os.path.join(bam_dir,file)} > {os.path.join(out_dir,file.replace(".bam",".fastq"))}'
+            command = f'conda run {_env(env)} {env} samtools fastq -n {os.path.join(bam_dir,file)} > {os.path.join(out_dir,file.replace(".bam",".fastq"))}'
             print(f"{command}")
             result = subprocess.run(f"{command}", shell=True, cwd='.', capture_output=True, text=True)
             

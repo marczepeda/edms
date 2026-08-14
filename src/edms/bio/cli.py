@@ -194,7 +194,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_clone_epegRNAs.add_argument("-i", "--df", type=str, help="Input file path", required=True)
     parser_clone_epegRNAs.add_argument("-I", "--id", type=str, help="Column name for unique sequence identifier",required=True)
 
-    parser_clone_epegRNAs.add_argument("-o", "--dir", help="Output directory path", type=str, default='../out')
+    parser_clone_epegRNAs.add_argument("-o", "--dir", help="Output directory path", type=str, default='.')
     parser_clone_epegRNAs.add_argument("-f", "--file", help="Output file name", type=str, default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_epegRNAs.csv')
 
     parser_clone_epegRNAs.add_argument("-dg", "--dont_tG", dest="tG", default=True, action="store_false", help="Don't add 5' G to spacer if needed")
@@ -223,7 +223,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_clone_ngRNAs.add_argument("-i", "--df", type=str, help="Input file path", required=True)
     parser_clone_ngRNAs.add_argument("-I", "--id", type=str, help="Column name for unique sequence identifier",required=True)
 
-    parser_clone_ngRNAs.add_argument("-o", "--dir", help="Output directory path", type=str, default='../out')
+    parser_clone_ngRNAs.add_argument("-o", "--dir", help="Output directory path", type=str, default='.')
     parser_clone_ngRNAs.add_argument("-f", "--file", help="Output file name", type=str, default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_epegRNAs.csv')
     
     parser_clone_ngRNAs.add_argument("-dg", "--dont_tG", dest="tG", default=True, action="store_false", help="Don't add 5' G to spacer if needed")
@@ -520,7 +520,7 @@ def add_subparser(subparsers, formatter_class=None):
     # Add specific arguments: split_fastqs_by_expected_errors() [split]
     parser_fastq_split.add_argument("-t","--threshold", type=float, help="Expected errors threshold for splitting reads (Default: 1.0)", default=1.0)
     parser_fastq_split.add_argument("-r","--recursive", action="store_true", help="Recursively split fastqs in immediate subdirectories", default=False)
-    parser_fastq_comb.add_argument("-dg","--dont_write_gzip", dest = "write_gzip", action="store_false", help="Don't gzip output FASTQ file(s)", default=True)
+    parser_fastq_split.add_argument("-dg","--dont_write_gzip", dest = "write_gzip", action="store_false", help="Don't gzip output FASTQ file(s)", default=True)
 
     # Add specific arguments: genotyping()
     parser_fastq_genotyping.add_argument("-fp","--out_file_prefix", type=str, help="Name of output file prefix", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
@@ -697,7 +697,7 @@ def add_subparser(subparsers, formatter_class=None):
 
     parser_fastq_extract_umis.add_argument("-o", "--out_dir", help="Output directory (Default: ./extract_umis)", default=f'./extract_umis')
     parser_fastq_extract_umis.add_argument("-b", "--bc_pattern", help="UMI barcode pattern (Default: NNNNNNNNNNNNNNNN)", default="NNNNNNNNNNNNNNNN")
-    parser_fastq_extract_umis.add_argument("-e", "--env", help="Conda environment with umi_tools installed (Default: umi_tools)", default="umi_tools")
+    parser_fastq_extract_umis.add_argument("-e", "--env", help="Conda environment with umi_tools installed (name or path, Default: umi_tools)", default="umi_tools")
     parser_fastq_extract_umis.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
 
     # trim_motifs() [trim]:
@@ -713,7 +713,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_trim_motifs.add_argument("-l", "--motif_length", type=int, help="Trim 'in_file' motifs to this length (Default: 21)", default=21)
     parser_fastq_trim_motifs.add_argument("-r", "--error_rate", type=float, help="Maximum error rate allowed in each motif (Default: 0.1 = 10%%)", default=0.1)
     parser_fastq_trim_motifs.add_argument("-E", "--max_expected_errors", type=float, help="Maximum expected errors after trimming motifs (Default: None; 0.2 recommended)", default=argparse.SUPPRESS)
-    parser_fastq_trim_motifs.add_argument("-e", "--env", help="Conda environment with cutadapt installed (Default: umi_tools)", default="umi_tools")
+    parser_fastq_trim_motifs.add_argument("-e", "--env", help="Conda environment with cutadapt installed (name or path, Default: umi_tools)", default="umi_tools")
     parser_fastq_trim_motifs.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
 
     # make_sams():
@@ -727,21 +727,21 @@ def add_subparser(subparsers, formatter_class=None):
 
     parser_fastq_make_sams.add_argument("-s", "--sensitivity", choices=["very-sensitive", "sensitive", "fast", "very-fast", "very-sensitive-local", "sensitive-local", "fast-local", "very-fast-local"], 
                                         default="very-sensitive", help="Bowtie2 sensitivity setting (Default: very-sensitive)")
-    parser_fastq_make_sams.add_argument("-e", "--env", help="Conda environment with bowtie2 installed (Default: umi_tools)", default="umi_tools")
+    parser_fastq_make_sams.add_argument("-e", "--env", help="Conda environment with bowtie2 installed (name or path, Default: umi_tools)", default="umi_tools")
     parser_fastq_make_sams.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
 
     # make_bams():
     parser_fastq_make_bams.add_argument("-s", "--sam_dir", help="Directory containing SAM files", required=True)
 
     parser_fastq_make_bams.add_argument("-o", "--out_dir", help="Output directory (Default: ./make_bams)", default=f'./make_bams')
-    parser_fastq_make_bams.add_argument("-e", "--env", help="Conda environment with samtools installed (Default: umi_tools)", default="umi_tools")
+    parser_fastq_make_bams.add_argument("-e", "--env", help="Conda environment with samtools installed (name or path, Default: umi_tools)", default="umi_tools")
     parser_fastq_make_bams.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
 
     # bam_umi_tags():
     parser_fastq_bam_umi_tags.add_argument("-b", "--bam_dir", help="Directory containing bam files", required=True)
 
     parser_fastq_bam_umi_tags.add_argument("-o", "--out_dir", help="Output directory (Default: ./bam_umi_tags)", default=f'./bam_umi_tags')
-    parser_fastq_bam_umi_tags.add_argument("-e", "--env", help="Conda environment with fgbio installed (Default: umi_tools)", default="umi_tools")
+    parser_fastq_bam_umi_tags.add_argument("-e", "--env", help="Conda environment with fgbio installed (name or path, Default: umi_tools)", default="umi_tools")
     parser_fastq_bam_umi_tags.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
 
     # group_umis():
@@ -750,7 +750,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_group_umis.add_argument("-o", "--out_dir", help="Output directory (Default: ./group_umis)", default=f'./group_umis')
     parser_fastq_group_umis.add_argument("-s", "--strategy", choices=["Identical","Edit","Adjacency", "Paired"], help="umi grouping strategy (Default: Adjacency)", default="Adjacency")
     parser_fastq_group_umis.add_argument("-E", "--edits", type=int, help="Maximum edit distance to group UMIs (Default: 1)", default=1)
-    parser_fastq_group_umis.add_argument("-e", "--env", help="Conda environment with fgbio installed (Default: umi_tools)", default="umi_tools")
+    parser_fastq_group_umis.add_argument("-e", "--env", help="Conda environment with fgbio installed (name or path, Default: umi_tools)", default="umi_tools")
     parser_fastq_group_umis.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
 
     # consensus_umis():
@@ -758,14 +758,14 @@ def add_subparser(subparsers, formatter_class=None):
 
     parser_fastq_consensus_umis.add_argument("-o", "--out_dir", help="Output directory (Default: ./consensus_umis)", default=f'./consensus_umis')
     parser_fastq_consensus_umis.add_argument("-m", "--min_reads", type=int, help="Minimum reads per UMI to call consensus (Default: 1)", default=1)
-    parser_fastq_consensus_umis.add_argument("-e", "--env", help="Conda environment with fgbio installed (Default: umi_tools)", default="umi_tools")
+    parser_fastq_consensus_umis.add_argument("-e", "--env", help="Conda environment with fgbio installed (name or path, Default: umi_tools)", default="umi_tools")
     parser_fastq_consensus_umis.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
 
     # bam_to_fastq():
     parser_fastq_bam_to_fastq.add_argument("-b", "--bam_dir", help="Directory containing BAM files", required=True)
 
     parser_fastq_bam_to_fastq.add_argument("-o", "--out_dir", help="Output directory (Default: ./bam_to_fastq)", default=f'./bam_to_fastq')
-    parser_fastq_bam_to_fastq.add_argument("-e", "--env", help="Conda environment with samtools installed (Default: umi_tools)", default="umi_tools")
+    parser_fastq_bam_to_fastq.add_argument("-e", "--env", help="Conda environment with samtools installed (name or path, Default: umi_tools)", default="umi_tools")
     parser_fastq_bam_to_fastq.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
 
     # cat():
