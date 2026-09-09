@@ -812,17 +812,20 @@ def add_subparser(subparsers, formatter_class=None):
     - combine(): Combine text files matching provided suffixes into a single output file, inserting a header with the original filename before each file's content.
     - split_R1_R2(): split paired reads into new R1 and R2 subdirectories at the parent directory
     - excel_csvs(): exports excel file to .csv files in specified directory  
+    - basespace(): reorganize an Illumina BaseSpace download into a parsable format
     '''
     parser_io = subparsers.add_parser("io", help="Input/Output", formatter_class=formatter_class)
     subparsers_io = parser_io.add_subparsers()
     
     # Create subparsers for commands
-    parser_io_in_subs = subparsers_io.add_parser("in", help="*No FASRC* Moves all files with a given suffix into subfolders named after the files (excluding the suffix)", description="*No FASRC* Moves all files with a given suffix into subfolders named after the files (excluding the suffix)", formatter_class=formatter_class)
-    parser_io_out_subs = subparsers_io.add_parser("out", help="*No FASRC* Delete subdirectories and move their files to the parent directory", description="*No FASRC* Delete subdirectories and move their files to the parent directory", formatter_class=formatter_class)
+    parser_io_in_subs = subparsers_io.add_parser("in", help="Moves all files with a given suffix into subfolders named after the files (excluding the suffix)", description="Moves all files with a given suffix into subfolders named after the files (excluding the suffix)", formatter_class=formatter_class)
+    parser_io_out_subs = subparsers_io.add_parser("out", help="Delete subdirectories and move their files to the parent directory", description="Delete subdirectories and move their files to the parent directory", formatter_class=formatter_class)
     parser_io_create_sh = subparsers_io.add_parser("sh", help='Generate SLURM shell script for Harvard FASRC cluster.', description='Generate SLURM shell script for Harvard FASRC cluster.', formatter_class=formatter_class)
+    parser_io_create_pipeline = subparsers_io.add_parser("pipeline", help='Generate SLURM shell scripts and a submit.sh driver from a pipeline .csv.', description='Generate a SLURM shell script per job, plus a submit.sh that chains the steps with afterok dependencies, from a pipeline .csv. One row per pipeline stage; see the column reference below.', formatter_class=formatter_class)
     parser_io_combine = subparsers_io.add_parser("combine", help='Combine text files matching provided suffixes into a single output file, inserting a header with the original filename before each file\'s content.', description='Combine text files matching provided suffixes into a single output file, inserting a header with the original filename before each file\'s content.', formatter_class=formatter_class)
-    parser_io_split_R1_R2 = subparsers_io.add_parser("split_R1_R2", help='*No FASRC* Split paired reads into new R1 and R2 subdirectories at the parent directory.', description='*No FASRC* Split paired reads into new R1 and R2 subdirectories at the parent directory.', formatter_class=formatter_class)
+    parser_io_split_R1_R2 = subparsers_io.add_parser("split_R1_R2", help='Split paired reads into new R1 and R2 subdirectories at the parent directory.', description='Split paired reads into new R1 and R2 subdirectories at the parent directory.', formatter_class=formatter_class)
     parser_io_excel_csvs = subparsers_io.add_parser("excel_csvs", help='Exports excel file to .csv files in specified directory.', description='Exports excel file to .csv files in specified directory.', formatter_class=formatter_class)
+    parser_io_basespace = subparsers_io.add_parser("basespace", help='Reorganize an Illumina BaseSpace download into a parsable format.', description='Reorganize an Illumina BaseSpace download into a parsable format. Inspects every 1st-layer folder of the download and, for each one holding sample fastqs, runs the equivalent of "edms io out", "edms io split_R1_R2", then within R1 and R2 "edms io in -s .fastq.gz -g prefix -p _" and "edms fastq comb -r". Folders holding only undetermined reads or no fastqs at all are skipped. Modifies the download in place.', formatter_class=formatter_class)
 
     # Add common arguments
     for parser_io_common in [parser_io_in_subs,parser_io_out_subs,parser_io_split_R1_R2]:
@@ -845,6 +848,78 @@ def add_subparser(subparsers, formatter_class=None):
     parser_io_create_sh.add_argument('-y', '--python', type=str, default='python', help='Python module to load.')
     parser_io_create_sh.add_argument('-n', '--env', type=str, default='edms', help='Conda environment to activate.')
 
+    # create_pipeline() [pipeline]: generates a SLURM shell script per job plus a submit.sh driver.
+    parser_io_create_pipeline.add_argument('-i', '--pt', type=str, help='Path to the pipeline .csv (or .tsv) file (required unless --example).', default=None)
+    parser_io_create_pipeline.add_argument('-o', '--dir', type=str, help='Directory to write the scripts into (Default: current directory).', default='.')
+    parser_io_create_pipeline.add_argument('-s', '--submit_file', type=str, help='Name of the submission driver script (Default: submit.sh).', default='submit.sh')
+    parser_io_create_pipeline.add_argument('-c', '--cores', type=int, default=1, help='Default number of CPU cores to request.')
+    parser_io_create_pipeline.add_argument('-p', '--partition', type=str, default='serial_requeue', help='Default SLURM partition to use.')
+    parser_io_create_pipeline.add_argument('-t', '--time', type=str, default='0-00:10', help='Default job run time in D-HH:MM format.')
+    parser_io_create_pipeline.add_argument('-m', '--mem', type=int, default=1000, help='Default memory in MB.')
+    parser_io_create_pipeline.add_argument('-e', '--email', type=str, default=None, help='Default notification email address.')
+    parser_io_create_pipeline.add_argument('-y', '--python', type=str, default='python', help='Default python module to load.')
+    parser_io_create_pipeline.add_argument('-n', '--env', type=str, default='edms', help='Default conda environment to activate.')
+    parser_io_create_pipeline.add_argument('-g', '--prog', type=str, default='edms', help='Program invoked by each generated command (Default: edms).')
+    parser_io_create_pipeline.add_argument('-x', '--example', action='store_true', default=False, help='Write the annotated example pipeline .csv into --dir as a starting template, then stop.')
+    parser_io_create_pipeline.add_argument('-d', '--dry_run', action='store_true', default=False, help='Print what would be generated without writing any files.')
+
+    # Help message for edms io pipeline because the column reference can't be captured as block text by Myformatter(RichHelpFormatter):
+    if any(["edms" in argv for argv in sys.argv]) and "io" in sys.argv and "pipeline" in sys.argv and ("--help" in sys.argv or "-h" in sys.argv):
+        parser_io_create_pipeline.print_help()
+        rprint("""[red]
+Pipeline .csv column reference:[/red]
+  [cyan]-i[/cyan] [dark_magenta]PT[/dark_magenta]
+  [blue]One row per pipeline stage. Reserved columns:
+
+  *** Structural columns *** -------------------------------------------------
+  |                                                                          |
+  |  step         Stage name, and the script name for an un-scattered stage  |
+  |               (Required). A stage whose name starts with '#' is skipped, |
+  |               so it can be parked without deleting the row.              |
+  |  sample       Blank on a step row. Filled in together with 'step' to make|
+  |               an override row, which replaces only the fields it fills,  |
+  |               for that one sample of that stage.                         |
+  |  command      The edms subcommand to run, e.g. 'fastq trim' (Required on |
+  |               step rows).                                                |
+  |  scatter      ';' or ',' separated sample names: fans the stage out into |
+  |               one script per sample, substituting {sample} into every    |
+  |               value. '@file.txt' reads one name per line.                |
+  |  depends_on   ';' or ',' separated earlier stages to wait for: adds      |
+  |               --dependency=afterok on their job ids in submit.sh.        |
+  |  script       Script filename override; may contain {sample}. Needed when|
+  |               two scattered stages would otherwise write the same file.  |
+  |                                                                          |
+  ----------------------------------------------------------------------------
+
+  *** SLURM columns (blank cell falls back to the option shown) *** ----------
+  |                                                                          |
+  |  sbatch_cores       -> #SBATCH -n              (default: --cores)        |
+  |  sbatch_partition   -> #SBATCH -p              (default: --partition)    |
+  |  sbatch_time        -> #SBATCH -t, as D-HH:MM  (default: --time)         |
+  |  sbatch_mem         -> #SBATCH --mem, in MB    (default: --mem)          |
+  |  sbatch_email       -> #SBATCH --mail-user     (default: --email)        |
+  |  sbatch_python      -> module load <value>     (default: --python)       |
+  |  sbatch_env         -> mamba activate <value>  (default: --env)          |
+  |                                                                          |
+  ----------------------------------------------------------------------------
+
+  *** Every other column becomes a flag on the generated command *** ---------
+  |                                                                          |
+  |  fastq_dir         -> --fastq_dir <value>                                |
+  |  -q                -> -q <value>        (a '-' name is used verbatim)    |
+  |  (blank cell)      -> omitted (so one .csv covers many subcommands)      |
+  |  TRUE or yes       -> --flag            (alone, for a store_true flag)   |
+  |  FALSE or no       -> omitted                                            |
+  |  0 or 21 or ACGT   -> --flag <value>    ('0' is a value, not false-y)    |
+  |  #notes            -> ignored (a note for the reader, never a flag)      |
+  |                                                                          |
+  ----------------------------------------------------------------------------
+
+  Write the annotated template, then preview it before writing any scripts:
+        edms io pipeline --example -o .
+        edms io pipeline -i pipeline_example.csv --dry_run[/blue]""")
+        sys.exit()
+
     # combine() arguments
     parser_io_combine.add_argument('-i', '--in_dir', type=str, help='Directory to search for input files.', required=True)
     
@@ -859,13 +934,22 @@ def add_subparser(subparsers, formatter_class=None):
     parser_io_excel_csvs.add_argument('-p', '--pt', type=str, help='Excel file path', required=True)
     parser_io_excel_csvs.add_argument('-o', '--dir', type=str, help='Output directory path (Default: same directory as excel file name).',default='')
 
+    # basespace(): reorganize an Illumina BaseSpace download into a parsable format
+    parser_io_basespace.add_argument('-o', '--dir', type=str, help='Path to the Illumina BaseSpace download directory (Default: current directory).', default='.')
+    parser_io_basespace.add_argument('-s', '--suf', type=str, help="Fastq file suffix used to find & group reads (Default: '.fastq.gz').", default='.fastq.gz')
+    parser_io_basespace.add_argument('-e', '--exclude', type=str, nargs='+', help="Filename prefix(es) marking reads that don't count as samples (Default: Undetermined; case-insensitive). Accepts multiple values, e.g. -e Undetermined PhiX.", default=['Undetermined'])
+    parser_io_basespace.add_argument('-p', '--prefix_sep', type=str, help="Delimiter splitting the sample name from the rest of the fastq filename (Default: '_'; e.g., MUZ350-201_S1_L001_R1_001.fastq.gz -> MUZ350-201).", default='_')
+    parser_io_basespace.add_argument('-d', '--dry_run', action='store_true', help='Print the commands that would be run for each folder without moving any files (Default: False).', default=False)
+
     # Call command functions
     parser_io_in_subs.set_defaults(func=io.in_subs)
     parser_io_out_subs.set_defaults(func=io.out_subs)
     parser_io_create_sh.set_defaults(func=io.create_sh)
+    parser_io_create_pipeline.set_defaults(func=io.create_pipeline)
     parser_io_combine.set_defaults(func=io.combine)
     parser_io_split_R1_R2.set_defaults(func=io.split_R1_R2)
     parser_io_excel_csvs.set_defaults(func=io.excel_csvs)
+    parser_io_basespace.set_defaults(func=io.basespace)
 
     '''
     edms.gen.com:

@@ -1218,7 +1218,7 @@ def _apply_formatter_on_ax(*, ax, df_sub: pd.DataFrame, graph: str,
 # Graph methods
 def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
         cols: str = None, cols_order: list = None, cols_exclude: list | str = None,
-        stys: str = None, stys_order: list = [], mark_order: list = [], label: str | None = None,
+        stys: str = None, stys_order: list = None, mark_order: list = None, label: str | None = None,
         facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
         file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', alpha: float = 1.0, edgecol: str = 'black',
         figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
@@ -1249,8 +1249,8 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
     cols_order (list, optional): color column values order
     cols_exclude (list | str, optional): color column values exclude
     stys (str, optional): styles column name
-    stys_order (list, optional): styles order
-    mark_order (list, optional): marker order
+    stys_order (list, optional): styles order (Default: None; order inferred from the data)
+    mark_order (list, optional): marker order (Default: None; distinct markers assigned automatically)
     label (str, optional): column name for point labels; static text for images, interactive tooltips for HTML
     facetx (str, optional): column name for facet columns (creates one subplot per category in this column, arranged in separate columns)
     facety (str, optional): column name for facet rows (creates one subplot per category in this column, arranged in separate rows)
@@ -1340,6 +1340,12 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
         y_ticks_size=y_ticks_size*html_size_multiplier
         legend_title_size=legend_title_size*html_size_multiplier
         legend_size=legend_size*html_size_multiplier*.75
+
+    # Let seaborn infer style order & markers when unspecified (empty list == unspecified)
+    if not stys_order:
+        stys_order = None
+    if not mark_order:
+        mark_order = True
 
     # Set up color palette
     if cols is not None:

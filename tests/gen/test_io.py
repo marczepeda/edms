@@ -389,3 +389,264 @@ def test_sorted_file_names(tmp_path):
     (tmp_path / "c.txt").write_text("z")
     names = io.sorted_file_names(str(tmp_path), suf=".csv")
     assert names == ["a.csv", "b.csv"]
+
+
+# --------------------------------------------------------------------------- #
+# create_pipeline()
+# --------------------------------------------------------------------------- #
+
+def _write_pipeline(tmp_path, rows, cols=None, name="pipeline.csv"):
+    """Write a pipeline spec .csv and return its path."""
+    cols = cols or ["step", "sample", "command", "scatter", "depends_on", "script",
+                    "sbatch_time", "sbatch_mem", "fastq_dir", "out_dir", "n_extra_nt",
+                    "save_alignments", "sh"]
+    pt = tmp_path / name
+    pd.DataFrame(rows, columns=cols).fillna("").to_csv(pt, index=False)
+    return str(pt)
+
+
+def test_create_pipeline_writes_one_script_per_scattered_sample(tmp_path):
+    pt = _write_pipeline(tmp_path, [
+        {"step": "trim", "command": "fastq trim",
+         "sbatch_time": "0-02:00", "sbatch_mem": "10000",
+         "fastq_dir": "/raw", "out_dir": "/trim", "sh": "TRUE"},
+        {"step": "count", "command": "fastq signatures", "scatter": "A;B;C",
+         "depends_on": "trim", "sbatch_time": "1-00:00", "sbatch_mem": "15000",
+         "fastq_dir": "/trim/{sample}", "out_dir": "/count/{sample}", "sh": "TRUE"},
+    ])
+    out = tmp_path / "out"
+    written = io.create_pipeline(pt=pt, dir=str(out), email="test@example.com")
+
+    assert written == ["trim", "A", "B", "C"]
+    for name in ["trim.sh", "A.sh", "B.sh", "C.sh", "submit.sh"]:
+        assert (out / name).exists()
+
+    # {sample} is substituted, and blank cells are omitted entirely
+    b = (out / "B.sh").read_text()
+    assert "--fastq_dir /trim/B" in b
+    assert "--out_dir /count/B" in b
+    assert "--n_extra_nt" not in b
+    # Per-step SLURM settings land in the SBATCH header
+    assert "-t 1-00:00" in b
+    assert "--mem=15000" in b
+
+
+def test_create_pipeline_boolean_and_numeric_cells(tmp_path):
+    pt = _write_pipeline(tmp_path, [
+        {"step": "count", "command": "fastq signatures",
+         "n_extra_nt": "0", "save_alignments": "FALSE", "sh": "TRUE"},
+    ])
+    out = tmp_path / "out"
+    io.create_pipeline(pt=pt, dir=str(out), email="test@example.com")
+    text = (out / "count.sh").read_text()
+
+    # TRUE renders the bare store_true flag
+    assert "--sh" in text
+    # FALSE omits the flag entirely
+    assert "--save_alignments" not in text
+    # A numeric 0 is a value, NOT a false-y boolean
+    assert "--n_extra_nt 0" in text
+
+
+def test_create_pipeline_per_sample_override(tmp_path):
+    pt = _write_pipeline(tmp_path, [
+        {"step": "count", "command": "fastq signatures", "scatter": "A;B",
+         "sbatch_time": "1-00:00", "sbatch_mem": "15000", "n_extra_nt": "0"},
+        # Override row: 'step' and 'sample' both filled, blank cells inherit
+        {"step": "count", "sample": "B", "sbatch_mem": "64000", "n_extra_nt": "2"},
+    ])
+    out = tmp_path / "out"
+    io.create_pipeline(pt=pt, dir=str(out), email="test@example.com")
+
+    a, b = (out / "A.sh").read_text(), (out / "B.sh").read_text()
+    assert "--mem=15000" in a and "--n_extra_nt 0" in a
+    assert "--mem=64000" in b and "--n_extra_nt 2" in b
+    # Un-overridden fields are inherited from the step row
+    assert "-t 1-00:00" in a and "-t 1-00:00" in b
+
+
+def test_create_pipeline_scatter_from_file(tmp_path):
+    (tmp_path / "samples.txt").write_text("A\n# skip me\n\nB\n")
+    pt = _write_pipeline(tmp_path, [
+        {"step": "count", "command": "fastq signatures", "scatter": "@samples.txt"},
+    ])
+    out = tmp_path / "out"
+    written = io.create_pipeline(pt=pt, dir=str(out), email="test@example.com")
+    # Comments and blank lines are skipped
+    assert written == ["A", "B"]
+
+
+def test_create_pipeline_submit_chains_afterok_dependencies(tmp_path):
+    pt = _write_pipeline(tmp_path, [
+        {"step": "trim", "command": "fastq trim"},
+        {"step": "split", "command": "io in", "depends_on": "trim"},
+        {"step": "count", "command": "fastq signatures", "scatter": "A;B",
+         "depends_on": "split"},
+    ])
+    out = tmp_path / "out"
+    io.create_pipeline(pt=pt, dir=str(out), email="test@example.com")
+    submit = (out / "submit.sh").read_text()
+
+    # trim has no dependency; the later steps wait on the previous step's ids
+    assert "sbatch --parsable trim.sh" in submit
+    assert "--dependency=afterok:${trim_DEP} split.sh" in submit
+    assert "--dependency=afterok:${split_DEP} A.sh" in submit
+    assert "--dependency=afterok:${split_DEP} B.sh" in submit
+    # Scattered steps expose all of their job ids for downstream steps
+    assert 'count_DEP=$(IFS=:; echo "${count_JIDS[*]}")' in submit
+    assert os.access(out / "submit.sh", os.X_OK)
+
+
+def test_create_pipeline_script_column_overrides_name(tmp_path):
+    pt = _write_pipeline(tmp_path, [
+        {"step": "count", "command": "fastq signatures", "scatter": "A;B",
+         "script": "count_{sample}"},
+    ])
+    out = tmp_path / "out"
+    written = io.create_pipeline(pt=pt, dir=str(out), email="test@example.com")
+    assert written == ["count_A", "count_B"]
+
+
+@pytest.mark.parametrize("rows, match", [
+    # Two scattered steps would both write A.sh / B.sh
+    ([{"step": "count", "command": "fastq signatures", "scatter": "A;B"},
+      {"step": "plot", "command": "fastq cat", "scatter": "A;B"}],
+     "both want to write"),
+    # Dependency defined later in the file
+    ([{"step": "count", "command": "fastq signatures", "depends_on": "trim"},
+      {"step": "trim", "command": "fastq trim"}],
+     "not defined earlier"),
+    # Dependency that does not exist at all
+    ([{"step": "count", "command": "fastq signatures", "depends_on": "nope"}],
+     "has no step row"),
+    # Override pointing at a sample the step does not scatter over
+    ([{"step": "count", "command": "fastq signatures", "scatter": "A"},
+      {"step": "count", "sample": "ZZ"}],
+     "does not scatter over"),
+    # Step row with no command
+    ([{"step": "trim"}], "missing a 'command'"),
+    # Same step name twice
+    ([{"step": "trim", "command": "fastq trim"},
+      {"step": "trim", "command": "fastq trim"}], "Duplicate step"),
+])
+def test_create_pipeline_rejects_bad_specs(tmp_path, rows, match):
+    pt = _write_pipeline(tmp_path, rows)
+    with pytest.raises(ValueError, match=match):
+        io.create_pipeline(pt=pt, dir=str(tmp_path / "out"), email="test@example.com")
+
+
+def test_create_pipeline_requires_step_and_command_columns(tmp_path):
+    pt = tmp_path / "bad.csv"
+    pd.DataFrame({"stage": ["trim"]}).to_csv(pt, index=False)
+    with pytest.raises(ValueError, match="'step' column"):
+        io.create_pipeline(pt=str(pt), dir=str(tmp_path / "out"), email="test@example.com")
+
+    pd.DataFrame({"step": ["trim"]}).to_csv(pt, index=False)
+    with pytest.raises(ValueError, match="'command' column"):
+        io.create_pipeline(pt=str(pt), dir=str(tmp_path / "out"), email="test@example.com")
+
+
+def test_create_sh_cmd_and_log_prefix_are_backward_compatible(tmp_path):
+    # Default: still runs the same-named python script
+    io.create_sh(dir=str(tmp_path), file="legacy.sh", email="test@example.com")
+    assert "python legacy.py" in (tmp_path / "legacy.sh").read_text()
+
+    # cmd= replaces the body, log_prefix= names the SLURM logs
+    io.create_sh(dir=str(tmp_path), file="job.sh", email="test@example.com",
+                 cmd="edms fastq trim -q /raw", log_prefix="job")
+    text = (tmp_path / "job.sh").read_text()
+    assert "edms fastq trim -q /raw" in text
+    assert "python job.py" not in text
+    assert "-o job_%j.out" in text
+
+
+def test_create_pipeline_dry_run_writes_nothing(tmp_path, capsys):
+    pt = _write_pipeline(tmp_path, [
+        {"step": "trim", "command": "fastq trim", "out_dir": "/trim"},
+        {"step": "count", "command": "fastq signatures", "scatter": "A;B",
+         "depends_on": "trim", "sbatch_mem": "15000", "fastq_dir": "/trim/{sample}"},
+    ])
+    out = tmp_path / "out"
+    written = io.create_pipeline(pt=pt, dir=str(out), email="test@example.com", dry_run=True)
+
+    # The return value still describes every job that would be created
+    assert written == ["trim", "A", "B"]
+    # ...but nothing reached the filesystem, not even the output directory
+    assert not out.exists()
+
+    text = capsys.readouterr().out
+    assert "DRY RUN" in text
+    # Each job is previewed with its resolved command and SLURM settings
+    assert "trim.sh" in text and "A.sh" in text and "B.sh" in text
+    assert "--fastq_dir /trim/B" in text
+    assert "15000 MB" in text
+    # ...along with the dependency chain that submit.sh would encode
+    assert "afterok: trim" in text
+
+
+def test_create_pipeline_dry_run_still_validates(tmp_path):
+    # A dry run parses and validates the whole spec, so mistakes surface
+    # before any files are written.
+    pt = _write_pipeline(tmp_path, [
+        {"step": "count", "command": "fastq signatures", "depends_on": "nope"},
+    ])
+    with pytest.raises(ValueError, match="has no step row"):
+        io.create_pipeline(pt=pt, dir=str(tmp_path / "out"),
+                           email="test@example.com", dry_run=True)
+
+
+def test_create_pipeline_dry_run_matches_real_run(tmp_path):
+    """The commands previewed by a dry run are the ones actually written."""
+    rows = [
+        {"step": "trim", "command": "fastq trim", "out_dir": "/trim", "sh": "TRUE"},
+        {"step": "count", "command": "fastq signatures", "scatter": "A;B",
+         "depends_on": "trim", "fastq_dir": "/trim/{sample}", "n_extra_nt": "0"},
+    ]
+    preview = io.create_pipeline(pt=_write_pipeline(tmp_path, rows, name="a.csv"),
+                                 dir=str(tmp_path / "dry"), email="test@example.com",
+                                 dry_run=True)
+    real = io.create_pipeline(pt=_write_pipeline(tmp_path, rows, name="b.csv"),
+                              dir=str(tmp_path / "real"), email="test@example.com")
+    assert preview == real
+
+
+def test_create_pipeline_hash_columns_and_rows_are_ignored(tmp_path):
+    pt = _write_pipeline(
+        tmp_path,
+        [{"step": "count", "command": "fastq signatures", "fastq_dir": "/trim",
+          "#notes": "a note for the reader, not a flag"},
+         {"step": "#parked", "command": "fastq cat", "fastq_dir": "/x"}],
+        cols=["step", "sample", "command", "scatter", "depends_on", "script",
+              "sbatch_time", "sbatch_mem", "fastq_dir", "#notes"],
+    )
+    out = tmp_path / "out"
+    written = io.create_pipeline(pt=pt, dir=str(out), email="test@example.com")
+
+    # The '#' step row is skipped entirely
+    assert written == ["count"]
+    assert not (out / "parked.sh").exists()
+    # The '#' column never reaches the command line
+    text = (out / "count.sh").read_text()
+    assert "--fastq_dir /trim" in text
+    assert "notes" not in text
+    assert "#notes" not in text
+
+
+def test_create_pipeline_example_writes_template(tmp_path):
+    out = tmp_path / "out"
+    written = io.create_pipeline(dir=str(out), example=True)
+    pt = out / io.PIPELINE_EXAMPLE
+    assert pt.exists() and str(pt) == written
+
+    # The shipped template is itself a valid spec that generates cleanly
+    jobs = io.create_pipeline(pt=str(pt), dir=str(tmp_path / "gen"),
+                              email="test@example.com", dry_run=True)
+    assert jobs  # it produces at least one job
+    # It exercises scatter, overrides and the '#' conventions
+    text = pt.read_text()
+    assert "{sample}" in text and "#notes" in text
+
+
+def test_create_pipeline_requires_pt_without_example(tmp_path):
+    with pytest.raises(ValueError, match="pt is required"):
+        io.create_pipeline(dir=str(tmp_path / "out"), email="test@example.com")

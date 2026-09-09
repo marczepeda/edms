@@ -24,6 +24,9 @@ Usage:
 - mkdir(): make directory if it does not exist (including parent directories)
 - check_outpath(): determine output file path and ensure output directory exists
 
+[Filter dataframes]
+- apply_filters(): apply pandas query strings and drop_duplicates to a dataframe, reporting row counts
+
 [Supporting argument methods]
 - parse_tuple_int(arg): Parse a string argument into a tuple of integers
 - parse_tuple_float(arg): Parse a string argument into a tuple of floats
@@ -225,6 +228,60 @@ def check_outpath(file: str | None, dir: str | None):
     mkdir(dir)  # Ensure output directory exists
 
     return file, dir
+
+# Filter dataframes
+def apply_filters(df: pd.DataFrame, query: list[str] | str = None, drop_duplicates: list[str] | str = None,
+                  label: str = 'rows', allow_empty: bool = False) -> pd.DataFrame:
+    '''
+    apply_filters(): apply pandas query strings and drop_duplicates to a dataframe, reporting row counts
+
+    Queries are applied in the order given with pandas\' python engine, so string methods
+    (i.e., "Reference_sequence.str.contains(\'ACGTTCAAG\')") and chained comparisons
+    (i.e., "difference_count >= 1 and difference_count <= 3") both work. drop_duplicates is
+    applied last, keeping the first occurrence.
+
+    Parameters:
+    df (dataframe): dataframe to filter
+    query (list[str] | str, optional): pandas query string(s) applied in order (Default: None)
+    drop_duplicates (list[str] | str, optional): column name(s) to drop duplicates on (Default: None)
+    label (str, optional): noun used in the printed row counts (Default: \'rows\')
+    allow_empty (bool, optional): return an empty dataframe instead of raising (Default: False)
+
+    Dependencies: pandas
+    '''
+    if query is None: query = []
+    elif isinstance(query, str): query = [query]
+    if drop_duplicates is None: drop_duplicates = []
+    elif isinstance(drop_duplicates, str): drop_duplicates = [drop_duplicates]
+
+    if not query and not drop_duplicates: # Nothing to do; leave the dataframe untouched
+        return df
+
+    print(f'Filtering: {len(df)} {label}')
+    for q in query:
+        before = len(df)
+        try:
+            df = df.query(q, engine='python')
+        except Exception as e:
+            raise ValueError(f"Filter query failed: {q!r}\n"
+                             f"{type(e).__name__}: {e}\n"
+                             f"Available columns: {list(df.columns)}") from e
+        print(f'  --query {q!r}: {before} -> {len(df)} {label}')
+        if len(df) == 0 and not allow_empty:
+            raise ValueError(f"Filter query {q!r} removed every row; nothing left to work with.")
+
+    if drop_duplicates:
+        missing = [col for col in drop_duplicates if col not in df.columns]
+        if missing:
+            raise ValueError(f"drop_duplicates column(s) {missing} not found. "
+                             f"Available columns: {list(df.columns)}")
+        before = len(df)
+        df = df.drop_duplicates(subset=drop_duplicates)
+        print(f'  --drop_duplicates {drop_duplicates}: {before} -> {len(df)} {label}')
+        if len(df) == 0 and not allow_empty:
+            raise ValueError(f"drop_duplicates on {drop_duplicates} removed every row.")
+
+    return df.reset_index(drop=True)
 
 # Supporting argument methods
 def parse_tuple_int(arg):

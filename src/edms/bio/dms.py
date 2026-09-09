@@ -44,7 +44,7 @@ from Bio.SeqRecord import SeqRecord
 from .signature import signature_from_alignment
 from ..gen import io as io
 from ..gen import tidy as t
-from ..utils import memory_timer, load_resource_csv, mkdir
+from ..utils import memory_timer, load_resource_csv
 
 # Biological Dictionaries
 ''' dna_aa_codon_table: DNA to AA codon table '''
