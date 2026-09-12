@@ -424,7 +424,7 @@ def pymol_script(
 
 # Plot functions
 def hist(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new", line: float = None,
-    file: str = None, palette_or_cmap: str = 'turbo', alpha: float = 1.0, dodge: bool = False, jitter: bool = True, size: float = 5, edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
+    file: str = None, palette_or_cmap: str | list | dict | mcolors.Colormap = 'turbo', alpha: float = 1.0, dodge: bool = False, jitter: bool = True, size: float = 5, edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
     figsize: tuple=(6,6), title: str = 'Number of Edits in Clusters', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
     x_axis: str = 'Cluster #', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
     y_axis: str = 'Count', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
@@ -439,7 +439,8 @@ def hist(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new", line: float =
     cluster_col (str, optional): column name in df_clus with cluster labels (Default: "cl_new")
     line (float, optional): add horizontal line at y value or vertical line at x value
     file (str, optional): output plot file path (including the file extension)
-    palette_or_cmap (str, optional): Palette or colormap for the plot.
+    palette_or_cmap (str | list | dict | Colormap, optional): seaborn palette name, matplotlib color map
+                                                            (name or object), list of colors, or {category: color} dictionary
     alpha (float, optional): Alpha value for transparency of markers.
     edgecol (str, optional): Edge color for markers.
     figsize (tuple, optional): Figure size for the plot.
@@ -506,7 +507,7 @@ def hist(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new", line: float =
         dpi=dpi,transparent=transparent,show=show,space_capitalize=space_capitalize,**kwargs)
 
 def cat(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new",scores_col: str = "log2(FC)", line: float = None,
-    file: str = None, palette_or_cmap: str = 'turbo', alpha: float = 0.5, dodge: bool = False, jitter: bool = True, size: float = 5, edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
+    file: str = None, palette_or_cmap: str | list | dict | mcolors.Colormap = 'turbo', alpha: float = 0.5, dodge: bool = False, jitter: bool = True, size: float = 5, edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
     figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
     x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
     y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
@@ -522,7 +523,8 @@ def cat(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new",scores_col: str
     scores_col (str, optional): column name in df_clus with sgRNA scores (Default: "log2(FC)")
     line (float, optional): add horizontal line at y value or vertical line at x value
     file (str, optional): output plot file path (including the file extension)
-    palette_or_cmap (str, optional): Palette or colormap for the plot.
+    palette_or_cmap (str | list | dict | Colormap, optional): seaborn palette name, matplotlib color map
+                                                            (name or object), list of colors, or {category: color} dictionary
     alpha (float, optional): Alpha value for transparency of markers.
     edgecol (str, optional): Edge color for markers.
     figsize (tuple, optional): Figure size for the plot.
@@ -609,7 +611,7 @@ def cat(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new",scores_col: str
 
 def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="cl_new", scores_col: str="log2(FC)", individual: bool=True, size: str=None, size_dims: tuple=None, label: str='Edit', label_size: int=16,
         label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None, DSSP: str=None, chain_id: str=None, ss_h: int=None, ss_y: int=None,
-        file: str=None, palette_or_cmap: str = 'turbo', edgecol: str='black', figsize=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
+        file: str=None, palette_or_cmap: str | list | dict | mcolors.Colormap = 'turbo', edgecol: str='black', figsize=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
         legend_title: str='',legend_title_size: int=12, legend_title_weight: str ='bold', legend_size: int = 12, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1, 
@@ -643,7 +645,9 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
     ss_h (int, optional): height for secondary structure in the plot (Default: autogenerate)
     ss_y (int, optional): y position for secondary structure in the plot (Default: autogenerate)
     file (str, optional): output plot file path
-    palette_or_cmap (str, optional): seaborn color palette or matplotlib color map (only used if individual parameter is specified)
+    palette_or_cmap (str | list | dict | Colormap, optional): seaborn palette name, matplotlib color map
+                                                            (name or object), list of colors, or {category: color} dictionary
+                                                            (only used if individual parameter is specified)
     edgecol (str, optional): point edge color
     figsize (tuple, optional): figure size
     title (str, optional): plot title
@@ -951,7 +955,8 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
         sns.scatterplot(
             data=clus_df,
             x='AA Number', y=scores_col,
-            hue=cluster_col, edgecolor=edgecol, palette=palette_or_cmap, 
+            hue=cluster_col, edgecolor=edgecol,
+            palette=p.resolve_palette(palette_or_cmap, cats=clus_df[cluster_col].dropna().drop_duplicates().tolist()),
             style=stys, style_order=stys_order if stys_order else None, markers=mark_order if mark_order else None,
             size=size if display_legend else None, sizes=(50,50), size_norm=size_norm,
             legend=False, zorder = 2,

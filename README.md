@@ -3,40 +3,7 @@
 ```shell
 edms -h # or edms <TAB>
 ```
-## Library Design Pipelines
-Two commands chain a whole library design together instead of running each step by hand.
-Both take `--query` (pandas query strings, applied in order) and `--drop_duplicates` to filter
-the designer output, and `--signature_query` / `--signature_drop_duplicates` to filter again on
-the signature columns (`difference_count`, `SNV_count`, ...).
 
-### `edms pe pipeline` — pooled epegRNA libraries
-`prime_designer` -> filter -> `pegRNA_signature` -> filter -> `epegRNA_linkers` -> `epegRNA_pool`
-
-`epegRNA_linkers` is the slow step, so it is fanned out across `--linker_jobs` SLURM scripts
-rather than run inline. That splits the command into two stages:
-```shell
-# 1. Design, filter, and write out_dir/linkers/{chunk_N.sh, pool.sh, submit.sh}
-edms pe pipeline --stage design -n FOXA1 -f5 ... -t ... -f3 ... -x 168 \
-    -sm aa_silent -plp 11 -npe 20 -nng 1 \
-    -q "Reference_sequence.str.contains('ACGTTCAAGCGCAGCTACCCG')" \
-    -dd Edit -C spMUZ88_spMUZ89 -sq "difference_count == 1" \
-    -j 10 -bval "FOXA1[DBD]" -o ./pe_pipeline
-
-# 2. On the cluster: submits every chunk, then chains --stage pool behind them (afterok)
-cd pe_pipeline/linkers && bash submit.sh
-```
-`--stage pool` reads its settings back from `out_dir/.pe_pipeline.json`, so nothing has to be
-retyped; `--stage all` runs everything in one process with serial linkers (small libraries only).
-
-### `edms dms pipeline` — pooled DMS libraries
-`dms_designer` -> filter -> `dms_signature` -> filter -> `dms_pool`, all in one process.
-```shell
-edms dms pipeline -n FOXA1 -f5 ... -t ... -f3 ... -x 168 \
-    -sm aa -s 2 -smode barcode -C spMUZ88_spMUZ89 \
-    -q "Edit_type == 'substitution'" -dd Edit -sq "difference_count == 3" \
-    -fht5v FOXA1-S165 -rht3v FOXA1-P205 -o ./dms_pipeline
-```
-`dms_pool` is skipped (with the command to run later) unless both homology values are given.
 ## Package Organization
 - gen: input/output, data wrangling, generating plots, and statistics.
     ```shell

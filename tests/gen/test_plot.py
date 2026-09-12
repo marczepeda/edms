@@ -125,6 +125,66 @@ def test_repeat_palette_cmap_invalid_name_returns_input_unchanged(capsys):
     assert "not a valid matplotlib color map" in captured.out
 
 
+def test_repeat_palette_cmap_color_list():
+    # A plain list of colors is repeated as-is (no LinearSegmentedColormap needed).
+    cmap = p.repeat_palette_cmap(["#4EC569", "#FA5757"], repeats=3)
+    assert isinstance(cmap, matplotlib.colors.ListedColormap)
+    assert cmap.N == 6
+
+
+def test_is_color_list():
+    assert p._is_color_list(["#4EC569", "red", (0, 0, 1)])
+    assert not p._is_color_list("colorblind")
+    assert not p._is_color_list([])
+    assert not p._is_color_list(["not_a_color"])
+    assert not p._is_color_list({"a": "#4EC569"})
+
+
+def test_palette_colors_list_cycles_and_truncates():
+    colors = ["#4EC569", "#FA5757"]
+    assert len(p.palette_colors(colors)) == 2
+    # cycles when more colors are requested than given
+    assert p.palette_colors(colors, n_colors=5) == [matplotlib.colors.to_rgba(c)
+                                                    for c in colors * 3][:5]
+    # truncates when fewer are requested
+    assert p.palette_colors(colors, n_colors=1) == [matplotlib.colors.to_rgba(colors[0])]
+
+
+def test_palette_colors_name_and_colormap():
+    assert len(p.palette_colors("colorblind", n_colors=4)) == 4
+    assert len(p.palette_colors("viridis", n_colors=7)) == 7
+    cmap = matplotlib.colors.LinearSegmentedColormap.from_list(
+        "custom", ["#4EC569", "#FA5757"], N=10
+    )
+    assert len(p.palette_colors(cmap)) == 10
+    assert len(p.palette_colors(cmap, n_colors=3)) == 3
+
+
+def test_palette_colors_invalid_name_falls_back(capsys):
+    colors = p.palette_colors("not_a_real_palette", n_colors=3)
+    assert len(colors) == 3
+    assert "used colorblind instead" in capsys.readouterr().out
+
+
+def test_category_color_map_accepts_color_list():
+    lut = p._category_color_map(["a", "b"], palette_or_cmap=["#4EC569", "#FA5757"])
+    assert lut["a"] == matplotlib.colors.to_rgba("#4EC569")
+    assert lut["b"] == matplotlib.colors.to_rgba("#FA5757")
+
+
+def test_category_color_map_passes_dict_through():
+    lut = {"a": "#4EC569", "b": "#FA5757"}
+    assert p._category_color_map(["a", "b"], palette_or_cmap=lut) is lut
+
+
+def test_as_cmap_inputs():
+    # list of colors and seaborn palette names both become colormaps; matplotlib
+    # colormap names are left for matplotlib/seaborn to resolve downstream.
+    assert isinstance(p._as_cmap(["#4EC569", "#FA5757"]), matplotlib.colors.ListedColormap)
+    assert isinstance(p._as_cmap("colorblind"), matplotlib.colors.ListedColormap)
+    assert p._as_cmap("Reds") == "Reds"
+
+
 def test_matplotlib_cmaps_smoke():
     # Just confirm it runs to completion without error (Agg backend, so
     # plt.show() is a no-op).
@@ -346,3 +406,74 @@ def test_vol_return_df_false_returns_fig_axes(vol_df):
 def test_vol_save(tmp_path, vol_df):
     out = p.vol(vol_df, x="log2fc", y="neglog10p", file=str(tmp_path / "vol.png"), show=False, return_df=False)
     assert (tmp_path / "vol.png").exists()
+
+
+# --------------------------------------------------------------------------- #
+# palette_or_cmap / cmap input types across the graph methods
+# --------------------------------------------------------------------------- #
+
+CUSTOM_COLORS = ["#4EC569", "#2FCFE4", "#A969D6", "#FA5757"]
+CUSTOM_CMAP = matplotlib.colors.LinearSegmentedColormap.from_list(
+    "custom", CUSTOM_COLORS, N=4
+)
+
+
+@pytest.mark.parametrize("palette", [
+    CUSTOM_COLORS,                      # list of colors
+    CUSTOM_CMAP,                        # colormap object
+    "colorblind",                       # seaborn palette name
+    "viridis",                          # matplotlib colormap name
+    {"a": "#4EC569", "b": "#FA5757"},   # {category: color}
+])
+def test_cat_palette_input_types_without_cols(cat_df, palette):
+    fig, axes = p.cat("bar", cat_df, x="grp", y="val", palette_or_cmap=palette, show=False)
+    assert isinstance(fig, plt.Figure)
+    plt.close(fig)
+
+
+@pytest.mark.parametrize("palette", [CUSTOM_COLORS, CUSTOM_CMAP, "colorblind"])
+def test_cat_palette_input_types_with_cols(cat_df, palette):
+    df = cat_df.copy()
+    df["hue"] = ["x", "y"] * 3
+    fig, axes = p.cat("bar", df, x="grp", y="val", cols="hue",
+                      palette_or_cmap=palette, show=False)
+    assert isinstance(fig, plt.Figure)
+    plt.close(fig)
+
+
+def test_cat_color_list_maps_onto_cats_order(cat_df):
+    # Colors are assigned to categories in cats_order (seaborn desaturates bar
+    # faces by 0.75, which is its own long-standing default).
+    colors = ["#4EC569", "#FA5757"]
+    fig, axes = p.cat("bar", cat_df, x="grp", y="val", cats_order=["a", "b"],
+                      palette_or_cmap=colors, show=False)
+    faces = [matplotlib.colors.to_hex(patch.get_facecolor())
+             for patch in axes[0, 0].patches][:2]
+    assert faces == [matplotlib.colors.to_hex(sns.desaturate(c, 0.75)) for c in colors]
+    plt.close(fig)
+
+
+@pytest.mark.parametrize("palette", [CUSTOM_COLORS, CUSTOM_CMAP])
+def test_scat_and_dist_palette_input_types(scat_df, dist_df, palette):
+    fig, axes = p.scat("scat", scat_df, x="x", y="y", cols="grp",
+                       palette_or_cmap=palette, show=False)
+    plt.close(fig)
+    fig, axes = p.dist("hist", dist_df, x="val", cols="grp",
+                       palette_or_cmap=palette, show=False)
+    plt.close(fig)
+
+
+@pytest.mark.parametrize("palette", [CUSTOM_COLORS, CUSTOM_CMAP])
+def test_stack_palette_input_types(stack_df, palette):
+    fig, axes = p.stack(stack_df, x="x", y="y", cols="cols",
+                        palette_or_cmap=palette, show=False)
+    assert isinstance(fig, plt.Figure)
+    plt.close(fig)
+
+
+@pytest.mark.parametrize("cmap", [CUSTOM_COLORS, CUSTOM_CMAP, "colorblind", "Reds"])
+def test_heat_cmap_input_types(cmap):
+    df = pd.DataFrame({"a": [1.0, 2.0], "b": [3.0, 4.0]}, index=["r1", "r2"])
+    fig, axes = p.heat(df, cmap=cmap, show=False)
+    assert isinstance(fig, plt.Figure)
+    plt.close(fig)

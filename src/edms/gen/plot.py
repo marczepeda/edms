@@ -21,7 +21,12 @@ Usage:
 - log10: returns log10 of maximum value from series or 0
 - move_dis_legend(): moves legend for distribution graphs
 - extract_pivots(): returns a dictionary of pivot-formatted dataframes from tidy-formatted dataframe
+- _is_color_list(): True when input is a sequence of matplotlib colors
+- _get_cmap(): returns a matplotlib color map from a color map name or object
+- palette_colors(): returns a discrete list of colors from a palette name, color map, or list of colors
+- resolve_palette(): returns a seaborn-ready palette from a palette name, color map, color list, or {category: color} dictionary
 - repeat_palette_cmap(): returns a list of a repeated seaborn palette or matplotlib color map
+- _as_cmap(): returns a matplotlib color map from a palette name, color map, or list of colors
 - _category_color_map: a dictionary mapping category names to colors for categorical plots
 - _is_blank_label(): True when user did not explicitly set the axis label
 - autoscale_limits(): Compute axis limits from data with proportional padding.
@@ -59,6 +64,7 @@ import os
 import math
 import pandas as pd
 import seaborn as sns
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib.colors as mcolors
@@ -644,48 +650,176 @@ def extract_pivots(df: pd.DataFrame, x: str, y: str, vars: str='variable', vals:
         pivots[key]=pd.pivot(df[df[vars]==key],index=y,columns=x,values=vals)
     return pivots
 
-def repeat_palette_cmap(palette_or_cmap: str, repeats: int):
+# Seaborn color palette names (all other names are treated as matplotlib color maps)
+SEABORN_PALETTE_NAMES = (
+    "deep", "muted", "bright", "pastel", "dark", "colorblind",
+    "husl", "hsv", "Paired", "Set1", "Set2", "Set3", "tab10", "tab20"
+)
+
+def _is_color_list(palette_or_cmap) -> bool:
+    '''
+    _is_color_list(): True when input is a sequence of matplotlib colors
+
+    Parameters:
+    palette_or_cmap: value supplied to a plotting method's palette_or_cmap/cmap parameter
+
+    Dependencies: numpy & matplotlib.colors
+    '''
+    if isinstance(palette_or_cmap, (str, dict, mcolors.Colormap)): # Names, {category: color} maps, and color maps are not color lists
+        return False
+    if not isinstance(palette_or_cmap, (list, tuple, np.ndarray)):
+        return False
+    colors = list(palette_or_cmap)
+    return len(colors) > 0 and all(mcolors.is_color_like(color) for color in colors)
+
+def _get_cmap(palette_or_cmap, n_colors: int = None) -> mcolors.Colormap:
+    '''
+    _get_cmap(): returns a matplotlib color map from a color map name or object (optionally resampled)
+
+    Parameters:
+    palette_or_cmap (str | Colormap): matplotlib color map name or object
+    n_colors (int, optional): number of colors to resample the color map to
+
+    Dependencies: matplotlib
+    '''
+    cmap = palette_or_cmap if isinstance(palette_or_cmap, mcolors.Colormap) else mpl.colormaps[palette_or_cmap]
+    return cmap if n_colors is None else cmap.resampled(n_colors)
+
+def palette_colors(palette_or_cmap, n_colors: int = None) -> list:
+    '''
+    palette_colors(): returns a discrete list of colors from a seaborn palette name,
+    matplotlib color map (name or object), or list of colors
+
+    Parameters:
+    palette_or_cmap (str | list | Colormap): seaborn palette name, matplotlib color map
+                                             (name or object), or list of colors
+                                             (i.e., ['#4EC569','red',(0,0,1)])
+    n_colors (int, optional): number of colors to return (color lists are cycled/truncated
+                              & palettes/color maps are sampled; None returns the natural length)
+
+    Dependencies: numpy, matplotlib, seaborn, _is_color_list(), & _get_cmap()
+    '''
+    if _is_color_list(palette_or_cmap): # List of colors: cycle (or truncate) to the requested length
+        colors = [mcolors.to_rgba(color) for color in palette_or_cmap]
+        if n_colors is not None:
+            colors = [colors[i % len(colors)] for i in range(n_colors)]
+        return colors
+
+    if isinstance(palette_or_cmap, mcolors.Colormap): # Custom color map object
+        cmap = _get_cmap(palette_or_cmap, n_colors=n_colors)
+        return [cmap(i) for i in range(cmap.N)]
+
+    if isinstance(palette_or_cmap, str) and palette_or_cmap in SEABORN_PALETTE_NAMES: # Seaborn color palette name
+        return list(sns.color_palette(palette_or_cmap, n_colors=n_colors))
+
+    if isinstance(palette_or_cmap, str) and palette_or_cmap in plt.colormaps(): # Matplotlib color map name
+        cmap = _get_cmap(palette_or_cmap, n_colors=n_colors)
+        return [cmap(i) for i in range(cmap.N)]
+
+    print(f'{palette_or_cmap} is not a valid seaborn color palette, matplotlib color map, or list of colors; used colorblind instead.')
+    return list(sns.color_palette('colorblind', n_colors=n_colors))
+
+def resolve_palette(palette_or_cmap, cats: list = None):
+    '''
+    resolve_palette(): returns a seaborn-ready palette from a seaborn palette name,
+    matplotlib color map (name or object), list of colors, or {category: color} dictionary
+
+    Parameters:
+    palette_or_cmap (str | list | dict | Colormap): seaborn palette name, matplotlib color map
+                                                    (name or object), list of colors, or
+                                                    {category: color} dictionary
+    cats (list, optional): categories that the colors are assigned to in order
+                           (returns a {category: color} dictionary when provided)
+
+    Dependencies: seaborn, _category_color_map(), & palette_colors()
+
+    Note: seaborn palette names are passed through untouched so that seaborn keeps
+    full control of its own palettes (i.e., unchanged colors for existing plots).
+    '''
+    if isinstance(palette_or_cmap, dict): # Already a {category: color} map
+        return palette_or_cmap
+    if isinstance(palette_or_cmap, str): # Seaborn/matplotlib name; seaborn handles both
+        return palette_or_cmap
+    if cats is None or len(cats) == 0: # Categories unknown (i.e., no hue), so return a color list
+        return palette_colors(palette_or_cmap)
+    return _category_color_map(cats, palette_or_cmap=palette_or_cmap, order=cats)
+
+def repeat_palette_cmap(palette_or_cmap, repeats: int):
     '''
     repeat_palette_cmap(): returns a list of a repeated seaborn palette or matplotlib color map
 
     Parameters:
-    palette_or_cmap (str): seaborn palette or matplotlib color map name
+    palette_or_cmap (str | list | Colormap): seaborn palette name, matplotlib color map
+                                             (name or object), or list of colors
     repeats (int): number of color map repeats
+
+    Dependencies: matplotlib, seaborn, _is_color_list(), & _get_cmap()
     '''
     # Check repeats is a positive integer
     if not isinstance(repeats, int) or repeats <= 0:
         raise ValueError(f"repeats={repeats} must be a positive integer.")
-    
-    if palette_or_cmap in sns.palettes.SEABORN_PALETTES: # Check if cmap is a valid seaborn color palette name
+
+    if _is_color_list(palette_or_cmap): # Check if palette_or_cmap is a list of colors
+        return mcolors.ListedColormap([mcolors.to_rgba(color) for color in palette_or_cmap] * repeats) # Repeats the color list
+    elif isinstance(palette_or_cmap, str) and palette_or_cmap in sns.palettes.SEABORN_PALETTES: # Check if cmap is a valid seaborn color palette name
         cmap = sns.palettes.SEABORN_PALETTES[palette_or_cmap] # Get the color palette
         return mcolors.ListedColormap(cmap * repeats) # Repeats the color palette
-    elif palette_or_cmap in plt.colormaps() or isinstance(palette_or_cmap, mcolors.Colormap): # Check if cmap is a valid matplotlib color map or custom colormap
-        cmap = cm.get_cmap(palette_or_cmap) # Get the color map
+    elif isinstance(palette_or_cmap, mcolors.Colormap) or (isinstance(palette_or_cmap, str) and palette_or_cmap in plt.colormaps()): # Check if cmap is a valid matplotlib color map or custom colormap
+        cmap = _get_cmap(palette_or_cmap) # Get the color map
         return mcolors.ListedColormap([cmap(i) for i in range(cmap.N)] * repeats) # Breaks the color map into a repeated list
     else:
         print(f'{palette_or_cmap} is not a valid matplotlib color map and did not apply repeat.')
         return palette_or_cmap
 
-def _category_color_map(values, palette_or_cmap='colorblind', order=None):
+def _as_cmap(palette_or_cmap, n_colors: int = None) -> mcolors.Colormap | str:
+    '''
+    _as_cmap(): returns a matplotlib color map from a seaborn palette name, matplotlib color map
+    (name or object), or list of colors
+
+    Parameters:
+    palette_or_cmap (str | list | Colormap): seaborn palette name, matplotlib color map
+                                             (name or object), or list of colors
+    n_colors (int, optional): number of colors to resample the color map to
+
+    Dependencies: matplotlib, seaborn, _is_color_list(), & _get_cmap()
+    '''
+    if isinstance(palette_or_cmap, mcolors.Colormap):
+        return _get_cmap(palette_or_cmap, n_colors=n_colors)
+    if _is_color_list(palette_or_cmap): # List of colors becomes a discrete color map
+        return mcolors.ListedColormap([mcolors.to_rgba(color) for color in palette_or_cmap])
+    if isinstance(palette_or_cmap, str) and palette_or_cmap in SEABORN_PALETTE_NAMES: # Seaborn palettes are not matplotlib color map names
+        return mcolors.ListedColormap(sns.color_palette(palette_or_cmap, n_colors=n_colors))
+    return palette_or_cmap # Matplotlib color map name (handled downstream)
+
+def _category_color_map(values, palette_or_cmap='colorblind', order=None) -> dict:
+    '''
+    _category_color_map(): returns a {category: color} dictionary for a categorical variable
+
+    Parameters:
+    values: categorical values (or list of categories) that colors are assigned to
+    palette_or_cmap (str | list | dict | Colormap): seaborn palette name, matplotlib color map
+                                                    (name or object), list of colors, or
+                                                    {category: color} dictionary
+    order (list, optional): category order (defaults to order of appearance)
+
+    Dependencies: pandas & palette_colors()
+    '''
     if order is not None and len(order) > 0:
         cats = list(order)
     else:
         cats = pd.Series(values).dropna().drop_duplicates().tolist()
 
-    color_palettes = [
-        "deep", "muted", "bright", "pastel", "dark", "colorblind",
-        "husl", "hsv", "Paired", "Set1", "Set2", "Set3", "tab10", "tab20"
-    ]
+    if isinstance(palette_or_cmap, dict): # Already a {category: color} map
+        return palette_or_cmap
 
-    if palette_or_cmap in color_palettes:
-        colors = sns.color_palette(palette_or_cmap, n_colors=len(cats))
-    elif palette_or_cmap in plt.colormaps() or isinstance(palette_or_cmap, mcolors.Colormap):
-        cmap = cm.get_cmap(palette_or_cmap, len(cats))
-        colors = [cmap(i) for i in range(cmap.N)]
-    else:
-        colors = sns.color_palette("colorblind", n_colors=len(cats))
+    colors = palette_colors(palette_or_cmap, n_colors=len(cats))
 
-    return dict(zip(cats, colors))
+    # Include string keys since seaborn converts categorical levels to strings for some plots
+    lut = dict()
+    for cat, color in zip(cats, colors):
+        lut[cat] = color
+        lut[str(cat)] = color
+    return lut
 
 def _is_blank_label(v: str | list | tuple) -> bool:
     """
@@ -1215,7 +1349,7 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
         cols: str = None, cols_order: list = None, cols_exclude: list | str = None,
         stys: str = None, stys_order: list = None, mark_order: list = None, label: str | None = None,
         facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
-        file: str = None, palette_or_cmap: str = 'colorblind', alpha: float = 1.0, edgecol: str = 'black',
+        file: str = None, palette_or_cmap: str | list | dict | mcolors.Colormap = 'colorblind', alpha: float = 1.0, edgecol: str = 'black',
         figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
         x_axis: str | list = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial',
         x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None,
@@ -1253,7 +1387,10 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
     facety_order (list, optional): order of facet rows
     subplot_titles (str | list, optional): Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none
     file (str, optional): output plot file path
-    palette_or_cmap (str, optional): seaborn color palette or matplotlib color map
+    palette_or_cmap (str | list | dict | Colormap, optional): seaborn color palette name,
+                                                            matplotlib color map (name or object),
+                                                            list of colors (i.e., ['#4EC569','red']),
+                                                            or {category: color} dictionary
     alpha (float, optional): Alpha (transparency) for scatter points (0 to 1)
     edgecol (str, optional): point edge color
     figsize (tuple, optional): figure size
@@ -1349,7 +1486,7 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
             order=cols_order
         )
     else:
-        palette = palette_or_cmap
+        palette = resolve_palette(palette_or_cmap)
 
     # Set global autoscale limits if not provided
     x_axis_dims, y_axis_dims = autoscale_xy(
@@ -1633,7 +1770,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
         cols: str = None, cols_order: list = None, cols_exclude: list | str = None,
         line: float = None, facetx: str = None, facety: str = None,
         facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
-        file: str = None, palette_or_cmap: str = 'colorblind', alpha: float = 1.0,
+        file: str = None, palette_or_cmap: str | list | dict | mcolors.Colormap = 'colorblind', alpha: float = 1.0,
         dodge: bool = False, jitter: bool = True, size: float = 5,
         edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
         figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
@@ -1671,7 +1808,10 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
     facety_order (list, optional): order of facet rows
     subplot_titles (str | list, optional): Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none
     file (str, optional): output plot file path
-    palette_or_cmap (str, optional): seaborn color palette or matplotlib color map
+    palette_or_cmap (str | list | dict | Colormap, optional): seaborn color palette name,
+                                                            matplotlib color map (name or object),
+                                                            list of colors (i.e., ['#4EC569','red']),
+                                                            or {category: color} dictionary
     alpha (float, optional): Alpha (transparency) for scatter points (0 to 1)
     dodge (bool, optional): whether to separate points by color category
     jitter (bool, optional): whether to add jitter to points (for strip plots)
@@ -1769,7 +1909,18 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
             order=cols_order
         )
     else:
-        palette = palette_or_cmap
+        # Without cols, seaborn colors the categorical axis itself; map the colors onto
+        # those categories so that color lists/maps are assigned in cats_order and stay
+        # consistent across facets (numeric axes fall back to seaborn's own cycling).
+        if cats_order:
+            cats_palette = list(cats_order)
+        else:
+            cats_palette = None
+            for axis_col in (x, y):
+                if axis_col != '' and not pd.api.types.is_numeric_dtype(df[axis_col]):
+                    cats_palette = df[axis_col].dropna().drop_duplicates().tolist()
+                    break
+        palette = resolve_palette(palette_or_cmap, cats=cats_palette)
 
     # Set global autoscale limits if not provided
     # (cat()'s own x/y "not specified" sentinel is '', unlike autoscale_xy's
@@ -2068,7 +2219,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
     return fig, axes
 
 def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_order: list = None, cols_exclude: list | str = None, bins: int = 40, log10_low: int = 0,
-        file: str = None, palette_or_cmap: str = 'colorblind', edgecol: str = 'black', lw: int = 1,
+        file: str = None, palette_or_cmap: str | list | dict | mcolors.Colormap = 'colorblind', edgecol: str = 'black', lw: int = 1,
         facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
         figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
@@ -2088,7 +2239,10 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
     bins (int, optional): # of bins for histogram
     log10_low (int, optional): log scale lower bound
     file (str, optional): output plot file path
-    palette_or_cmap (str, optional): seaborn color palette or matplotlib color map
+    palette_or_cmap (str | list | dict | Colormap, optional): seaborn color palette name,
+                                                            matplotlib color map (name or object),
+                                                            list of colors (i.e., ['#4EC569','red']),
+                                                            or {category: color} dictionary
     edgecol (str, optional): point edge color
     lw (int, optional): line width
     facetx (str, optional): column name for facet columns (creates one subplot per category in this column, arranged in separate columns)
@@ -2162,7 +2316,7 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
             order=cols_order
         )
     else:
-        palette = palette_or_cmap
+        palette = resolve_palette(palette_or_cmap)
 
     # Set global autoscale limits if not provided
     x_axis_dims, y_axis_dims = autoscale_xy(
@@ -2404,7 +2558,7 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
 
 def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vals: str = None, vals_dims: tuple = None,
         facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
-        file: str = None, edgecol: str = 'black', lw: int = 1, annot: bool = False, center: float = None, cmap: str = "Reds", sq: bool = True,
+        file: str = None, edgecol: str = 'black', lw: int = 1, annot: bool = False, center: float = None, cmap: str | list | mcolors.Colormap = "Reds", sq: bool = True,
         cbar: bool=True, cbar_label: str=None, cbar_label_size: int=None, cbar_label_weight: str='bold', cbar_tick_size: int=None, cbar_shrink: float=None, cbar_aspect: int=None, cbar_pad: float=None, cbar_orientation: str=None, cbar_mode: str = "figure",
         title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial', figsize: tuple=(6,6),
         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 45, x_ticks_font: str = 'Arial',
@@ -2429,7 +2583,8 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vals: str = None,
     lw (int, optional): line width
     annot (bool, optional): annotate values
     center (float, optional): center value for colormap
-    cmap (str, optional): matplotlib color map
+    cmap (str | list | Colormap, optional): matplotlib color map (name or object),
+                                           seaborn color palette name, or list of colors
     sq (bool, optional): square dimensions (Default: True)
     cbar (bool, optional): show colorbar (Default: True)
     cbar_label (str, optional): colorbar label
@@ -2481,6 +2636,9 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vals: str = None,
         raise ValueError(
             "facetx/facety require tidy-formatted input with x, y, and vals specified."
         )
+
+    # Accept a list of colors, a seaborn palette name, or a color map (name or object)
+    cmap = _as_cmap(cmap)
 
     # colorbar kwargs
     cbar_kws = {}
@@ -2780,7 +2938,7 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vals: str = None,
 
 def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str = '', cutoff_value: float = 0, cutoff_keep: bool = True, cols_order: list = [], x_order: list = [],
         facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
-        file: str = None, palette_or_cmap: str = 'tab20', repeats: int = 1, errcap: int = 4, vertical: bool = True,
+        file: str = None, palette_or_cmap: str | list | dict | mcolors.Colormap = 'tab20', repeats: int = 1, errcap: int = 4, vertical: bool = True,
         figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial',
         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_dims: tuple = (0, 0),  y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial',
@@ -2806,7 +2964,10 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
     facety_order (list, optional): order of y-axis facet values
     subplot_titles (str | list, optional): Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none
     file (str, optional): output plot file path
-    palette_or_cmap (str, optional): seaborn palette or matplotlib color map
+    palette_or_cmap (str | list | dict | Colormap, optional): seaborn color palette name,
+                                                            matplotlib color map (name or object),
+                                                            list of colors (i.e., ['#4EC569','red']),
+                                                            or {category: color} dictionary
     repeats (int, optional): number of color palette or map repeats (Default: 1)
     errcap (int, optional): error bar cap line width
     vertical (bool, optional): vertical orientation; otherwise horizontal (Default: True)

@@ -4547,7 +4547,7 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
 # Plot methods
 def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_order: list = None, cats_exclude: list|str = None, cols: str=None, cols_order: list=None, cols_exclude: list|str=None, PDB_pt: str=None, line: float = None,
         facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
-        file: str=None, palette_or_cmap: str='colorblind', alpha: float=1.0, dodge: bool=True, jitter: bool=True, size: float=5, edgecol: str='black', lw: int=1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
+        file: str=None, palette_or_cmap: str | list | dict | mcolors.Colormap='colorblind', alpha: float=1.0, dodge: bool=True, jitter: bool=True, size: float=5, edgecol: str='black', lw: int=1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
         figsize: tuple=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_scale: str='linear', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_scale: str='linear', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
@@ -4576,7 +4576,8 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_order: li
     facety_order (list, optional): order of facet rows
     subplot_titles (str | list, optional): Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none
     file (str, optional): output plot file path
-    palette_or_cmap (str, optional): seaborn color palette or matplotlib color map
+    palette_or_cmap (str | list | dict | Colormap, optional): seaborn palette name, matplotlib color map
+                                                            (name or object), list of colors, or {category: color} dictionary
     alpha (float, optional): Alpha (transparency) for scatter points (0 to 1)
     dodge (bool, optional): whether to separate points by color category
     jitter (bool, optional): whether to add jitter to points (for strip plots)
@@ -4679,7 +4680,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_order: li
 
 def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: str='Edit', cutoff_group: str='fastq_file', cutoff_value: float=0, cutoff_keep: bool=True, 
           cols_order: list=[], x_order: list=[], facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values', PDB_pt: str=None,
-          file: str=None, palette_or_cmap: str='tab20', repeats: int=1, errcap: int=4, vertical: bool=True,
+          file: str=None, palette_or_cmap: str | list | dict | mcolors.Colormap='tab20', repeats: int=1, errcap: int=4, vertical: bool=True,
           figsize: tuple=(6,6), title: str='Editing Outcomes', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
           x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial',
           y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial',
@@ -4706,7 +4707,8 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
     subplot_titles (str | list, optional): Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none
     PDB_pt (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
     file (str, optional): output plot file path
-    palette_or_cmap (str, optional): seaborn palette or matplotlib color map
+    palette_or_cmap (str | list | dict | Colormap, optional): seaborn palette name, matplotlib color map
+                                                            (name or object), list of colors, or {category: color} dictionary
     repeats (int, optional): number of color palette or map repeats (Default: 1)
     errcap (int, optional): error bar cap line width
     vertical (bool, optional): vertical orientation; otherwise horizontal (Default: True)
