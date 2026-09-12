@@ -45,6 +45,8 @@ import pandas as pd
 import numpy as np
 import os
 import re
+import shlex
+import sys
 import datetime
 from typing import Literal
 from Bio.Seq import Seq
@@ -478,16 +480,15 @@ def enzyme_codon_swap(pegRNAs: pd.DataFrame | str, enzyme: str,
     memories.append(memory_timer(task=f"enzyme_codon_swap()"))
     if out_dir is not None and out_file is not None:
         io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
-                dir=os.path.join(out_dir,f'.{enzyme}_codon_swap'),
-                file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
-        io.save(obj=pegRNAs, dir=out_dir, file=out_file)
+                file=os.path.join(out_dir,f'.{enzyme}_codon_swap', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv'))
+        io.save(obj=pegRNAs, file=os.path.join(out_dir, out_file))
     if return_df==True: return pegRNAs
 
 # PrimeDesign
 def prime_design_input(target_name: str, flank5_sequence: str, 
                     target_sequence: str, flank3_sequence: str,
                     index: int=1, silent_mutation: bool=True,
-                    dir: str='.', file: str='prime_design_input.csv'):
+                    file: str='prime_design_input.csv'):
     ''' 
     prime_design_input(): creates and checks PrimeDesign saturation mutagenesis input file
     
@@ -498,8 +499,7 @@ def prime_design_input(target_name: str, flank5_sequence: str,
     flank3_sequence: in-frame nucleotide sequence with 3' of saturation mutagensis region (length must be divisible by 3)
     index (int, optional): 1st amino acid or base in target sequence index (Default: 1)
     silent_mutation (bool, optional): check that sequences are in-frame for silent mutation option (Default: True)
-    dir (str, optional): name of the output directory 
-    file (str, optional): name of the output file
+    file (str, optional): output file path
     
     Dependencies: pandas & io
     
@@ -515,7 +515,6 @@ def prime_design_input(target_name: str, flank5_sequence: str,
     io.save(obj=pd.DataFrame({'target_name': [target_name],
                               'target_sequence': [f"{flank5_sequence}({target_sequence}){flank3_sequence}"],
                               'index': [index]}),
-            dir=dir,
             file=file)
 
 def prime_design(file: str, pe_format: str = 'NNNNNNNNNNNNNNNNN/NNN[NGG]', pbs_length_list: list = [], rtt_length_list: list = [], 
@@ -592,7 +591,7 @@ def prime_design(file: str, pe_format: str = 'NNNNNNNNNNNNNNNNN/NNN[NGG]', pbs_l
     Dependencies: os, numpy, & https://github.com/pinellolab/PrimeDesign
     '''
     # Write PrimeDesign Command Line
-    cmd = 'python -m edms.bio.primedesign'
+    cmd = f'{shlex.quote(sys.executable)} -m edms.bio.primedesign'
     cmd += f' -f {file}' # Append required parameters
     if pe_format!='NNNNNNNNNNNNNNNNN/NNN[NGG]': cmd += f' -pe_format {pe_format}'
     if pbs_length_list: cmd += f' -pbs {" ".join([str(val) for val in pbs_length_list])}' # Append optional parameters
@@ -756,14 +755,12 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
             if len(pegRNAs_enzyme) > 0:
 
                 io.save(obj=pegRNAs_enzyme,
-                        dir=f'{pegRNAs_dir}/{enzyme}/codon_swap_before',
-                        file=f'{int(pegRNAs_enzyme.iloc[0]['PBS_length'])}.csv')
+                        file=os.path.join(f'{pegRNAs_dir}/{enzyme}/codon_swap_before', f'{int(pegRNAs_enzyme.iloc[0]['PBS_length'])}.csv'))
                 
                 # Codon swap pegRNAs with enzyme recognition site
                 pegRNAs_enzyme = enzyme_codon_swap(pegRNAs=pegRNAs_enzyme,enzyme=enzyme,comments=True)
                 io.save(obj=pegRNAs_enzyme,
-                        dir=f'{pegRNAs_dir}/{enzyme}/codon_swap_after',
-                        file=f'{int(pegRNAs_enzyme.iloc[0]['PBS_length'])}.csv')
+                        file=os.path.join(f'{pegRNAs_dir}/{enzyme}/codon_swap_after', f'{int(pegRNAs_enzyme.iloc[0]['PBS_length'])}.csv'))
                 pegRNAs = pd.concat([pegRNAs,pegRNAs_enzyme],ignore_index=True)
                 print(f"pegRNAs edits recovered by modifying {enzyme} recognition site: {list(pegRNAs_enzyme['Edit'].unique())}")
 
@@ -780,8 +777,7 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
                 if len(lost_pegRNAs_edits) > 0:
                     print(f"pegRNA edits lost due to {enzyme} recognition site: {lost_pegRNAs_edits}")
                     io.save(obj=pegRNAs_enzyme[pegRNAs_enzyme['Edit'].isin(lost_pegRNAs_edits)],
-                            dir=f'{pegRNAs_dir}/{enzyme}/lost',
-                            file=f'{int(pegRNAs_enzyme.iloc[0]['PBS_length'])}.csv')
+                            file=os.path.join(f'{pegRNAs_dir}/{enzyme}/lost', f'{int(pegRNAs_enzyme.iloc[0]['PBS_length'])}.csv'))
 
                 # Drop enzyme column
                 pegRNAs.drop(columns=[enzyme,f'{enzyme}_fwd_i',f'{enzyme}_rc_i'],inplace=True)
@@ -796,8 +792,7 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
             if len(ngRNAs_enzyme) > 0:
                 
                 io.save(obj=ngRNAs_enzyme,
-                        dir=f'{ngRNAs_dir}/{enzyme}/codon_swap_before',
-                        file=f'{int(pegRNAs.iloc[0]['PBS_length'])}.csv')
+                        file=os.path.join(f'{ngRNAs_dir}/{enzyme}/codon_swap_before', f'{int(pegRNAs.iloc[0]['PBS_length'])}.csv'))
 
                 # Drop ngRNAs with RE recognition sites
                 ngRNAs = ngRNAs[ngRNAs[enzyme]==0].reset_index(drop=True)
@@ -811,8 +806,7 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
                 if len(lost_ngRNAs_edits) > 0:
                     print(f"ngRNA edits lost due to {enzyme} recognition site: {lost_ngRNAs_edits}")
                     io.save(obj=ngRNAs_enzyme[ngRNAs_enzyme['Edit'].isin(lost_ngRNAs_edits)],
-                            dir=f'{ngRNAs_dir}/{enzyme}/lost',
-                            file=f'{int(pegRNAs.iloc[0]['PBS_length'])}.csv')
+                            file=os.path.join(f'{ngRNAs_dir}/{enzyme}/lost', f'{int(pegRNAs.iloc[0]['PBS_length'])}.csv'))
 
                 # Drop enzyme column
                 ngRNAs.drop(columns=[enzyme,f'{enzyme}_fwd_i',f'{enzyme}_rc_i'],inplace=True)
@@ -913,7 +907,7 @@ def prime_designer(in_file: str = None, target_name: str = None, flank5_sequence
     '''
     if in_file is None: # Create PrimeDesign input file if needed
         prime_design_input(target_name=target_name, flank5_sequence=flank5_sequence, target_sequence=target_sequence, 
-                        flank3_sequence=flank3_sequence, index=index, silent_mutation=silent_mutation, dir='.', file=f'{"_".join(target_name.split(" "))}.csv')
+                        flank3_sequence=flank3_sequence, index=index, silent_mutation=silent_mutation, file=os.path.join('.', f'{"_".join(target_name.split(" "))}.csv'))
 
     elif (in_file is not None) & (silent_mutation == True): # Check that in_file target sequences are in-frame if silent_mutation is True
         in_file_df = io.get(pt=in_file)
@@ -986,7 +980,7 @@ def prime_designer(in_file: str = None, target_name: str = None, flank5_sequence
     io.save_dir(dir=ngRNAs_dir, suf='.csv', dc=ngRNAs)
 
 def merge(epegRNAs: str | dict | pd.DataFrame, ngRNAs: str | dict | pd.DataFrame, ngRNAs_groups_max: int=3,
-        epegRNA_suffix: str='_epegRNA', ngRNA_suffix: str='_ngRNA', dir: str=None, file: str=None, literal_eval: bool=False) -> pd.DataFrame:
+        epegRNA_suffix: str='_epegRNA', ngRNA_suffix: str='_ngRNA', file: str=None, literal_eval: bool=False) -> pd.DataFrame:
     '''
     merge(): rejoins epeg/ngRNAs & creates ngRNA_groups
     
@@ -1037,9 +1031,9 @@ def merge(epegRNAs: str | dict | pd.DataFrame, ngRNAs: str | dict | pd.DataFrame
         ngRNAs_dc[pegRNA_num]+=1
     epeg_ngRNAs['ngRNA_group']=ngRNA_group_ls
     
-    # Save epeg_ngRNAs if dir and file are provided
-    if dir is not None and file is not None:
-        io.save(obj=epeg_ngRNAs, dir=dir, file=file)
+    # Save epeg_ngRNAs if a file path is provided
+    if file is not None:
+        io.save(obj=epeg_ngRNAs, file=file)
 
     return epeg_ngRNAs
 
@@ -1094,7 +1088,7 @@ def epegRNA_linkers(pegRNAs: str | pd.DataFrame, epegRNA_motif_sequence: str='CG
                                          seq_motif=epegRNA_motif_sequence,linker_pattern=linker_pattern,excluded_motifs=excluded_motifs))
             if ckpt_dir is not None and ckpt_file is not None: # Save ckpts
                 ckpt = pd.concat([ckpt,pd.DataFrame({'pegRNA_number': [i], 'Linker_sequence': [linkers[i]]})])
-                io.save(obj=ckpt, dir=ckpt_dir, file=ckpt_file)
+                io.save(obj=ckpt, file=os.path.join(ckpt_dir, ckpt_file))
             print(f'Status: {i} out of {len(pegRNAs)}')
     
     # Generate epegRNAs
@@ -1105,9 +1099,9 @@ def epegRNA_linkers(pegRNAs: str | pd.DataFrame, epegRNA_motif_sequence: str='CG
                                   cols=['pegRNA_number','gRNA_type','Strand','Edit', # Important metadata
                                         'Spacer_sequence','Scaffold_sequence','RTT_sequence','PBS_sequence','Linker_sequence','Motif_sequence']) # Sequence information
 
-    # Save epeg_ngRNAs if dir and file are provided
+    # Save epeg_ngRNAs if a file path is provided
     if out_dir is not None and out_file is not None:
-        io.save(obj=epegRNAs, dir=out_dir, file=out_file)
+        io.save(obj=epegRNAs, file=os.path.join(out_dir, out_file))
     
     return epegRNAs
 
@@ -1124,6 +1118,8 @@ def shared_sequences(pegRNAs: pd.DataFrame | str, hist_plot:bool=True, hist_dir:
 
     Dependencies: pandas & plot
     '''
+    if hist_dir is None: hist_dir = '.' # Save relative to the current directory
+
     # Get pegRNAs DataFrame from file path if needed
     if type(pegRNAs)==str:
         pegRNAs = io.get(pt=pegRNAs, literal_eval=literal_eval)
@@ -1170,7 +1166,7 @@ def shared_sequences(pegRNAs: pd.DataFrame | str, hist_plot:bool=True, hist_dir:
                                                                'AA_number': aa_numbers})]).reset_index(drop=True)
         p.dist(typ='hist',df=shared_hist,x='AA_number',cols='Group_Spacer_PBS',x_axis='AA number',title=f'Shared Spacers & PBS Sequences in the {shared_pegRNAs_lib.iloc[0]['Target_name']} PE Library',
                x_axis_dims=(min(shared_hist['AA_number']),max(shared_hist['AA_number'])),figsize=(10,2),bins=max(shared_hist['AA_number'])-min(shared_hist['AA_number'])+1,
-               legend_loc='upper center',legend_bbox_to_anchor=(0.5, -.3),dir=hist_dir,file=hist_file,legend_ncol=2,**kwargs)
+               legend_loc='upper center',legend_bbox_to_anchor=(0.5, -.3),file=os.path.join(hist_dir, hist_file),legend_ncol=2,**kwargs)
 
     return shared_pegRNAs_lib
 
@@ -1322,9 +1318,8 @@ def sensor_designer(pegRNAs: pd.DataFrame | str, sensor_length: int=60, before_s
     memories.append(memory_timer(task=f"sensors()"))
     if out_dir is not None and out_file is not None:
         io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
-                dir=os.path.join(out_dir,f'.sensors'),
-                file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
-        io.save(obj=pegRNAs, dir=out_dir, file=out_file)
+                file=os.path.join(out_dir,f'.sensors', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv'))
+        io.save(obj=pegRNAs, file=os.path.join(out_dir, out_file))
     if return_df==True: return pegRNAs
 
 def pegRNA_outcome(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str = None,
@@ -1474,9 +1469,8 @@ def pegRNA_outcome(pegRNAs: pd.DataFrame | str, in_file: pd.DataFrame | str = No
     memories.append(memory_timer(task=f"pegRNA_outcome(): {len(pegRNAs)} out of {len(pegRNAs)}"))
     if out_dir is not None and out_file is not None:
         io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
-                dir=os.path.join(out_dir,f'.pegRNA_outcome'),
-                file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
-        io.save(obj=pegRNAs, dir=out_dir, file=out_file)
+                file=os.path.join(out_dir,f'.pegRNA_outcome', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv'))
+        io.save(obj=pegRNAs, file=os.path.join(out_dir, out_file))
     if return_df==True: return pegRNAs
 
 def pegRNA_signature(pegRNAs: pd.DataFrame | str, config_key: str=None,
@@ -1584,9 +1578,8 @@ def pegRNA_signature(pegRNAs: pd.DataFrame | str, config_key: str=None,
     memories.append(memory_timer(task=f"pegRNA_signature(): {len(pegRNAs)} out of {len(pegRNAs)}"))
     if out_dir is not None and out_file is not None:
         io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
-                dir=os.path.join(out_dir,f'.pegRNA_signature'),
-                file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
-        io.save(obj=pegRNAs, dir=out_dir, file=out_file)
+                file=os.path.join(out_dir,f'.pegRNA_signature', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv'))
+        io.save(obj=pegRNAs, file=os.path.join(out_dir, out_file))
     if return_df==True: return pegRNAs
 
 def epegRNA_fasta(df: pd.DataFrame | str, linearized_vector: str, out_dir: str, 

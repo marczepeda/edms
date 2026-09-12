@@ -8,9 +8,7 @@ real end-to-end run through the bundled `dmsdesign` CLI script), merge(), and
 dms_signature() using the real PairwiseAligner + signature module.
 '''
 import math
-import os
 
-import numpy as np
 import pandas as pd
 import pytest
 
@@ -266,7 +264,7 @@ def test_replace_enzyme_sites_recovers_resolvable_site(tmp_path):
 
 def test_dms_design_input_creates_expected_csv(tmp_path):
     dms.dms_design_input(target_name='geneA', flank5_sequence='ATG', target_sequence='TGC',
-                          flank3_sequence='TAA', dir=str(tmp_path), file='input.csv')
+                          flank3_sequence='TAA', file=str(tmp_path / 'input.csv'))
     df = pd.read_csv(tmp_path / 'input.csv')
     assert df.iloc[0]['target_name'] == 'geneA'
     assert df.iloc[0]['target_sequence'] == 'ATG(TGC)TAA'
@@ -277,17 +275,17 @@ def test_dms_design_input_creates_expected_csv(tmp_path):
 
 def test_dms_design_input_negative_silent_mutation_raises(tmp_path):
     with pytest.raises(ValueError):
-        dms.dms_design_input('g', 'ATG', 'TGC', 'TAA', silent_mutation=-1, dir=str(tmp_path))
+        dms.dms_design_input('g', 'ATG', 'TGC', 'TAA', silent_mutation=-1, file=str(tmp_path / 'dms_design_input.csv'))
 
 
 def test_dms_design_input_invalid_mode_raises(tmp_path):
     with pytest.raises(ValueError):
-        dms.dms_design_input('g', 'ATG', 'TGC', 'TAA', silent_mutation_mode='bogus', dir=str(tmp_path))
+        dms.dms_design_input('g', 'ATG', 'TGC', 'TAA', silent_mutation_mode='bogus', file=str(tmp_path / 'dms_design_input.csv'))
 
 
 def test_dms_design_input_requires_in_frame_flanks_for_silent_mutation(tmp_path):
     with pytest.raises(ValueError):
-        dms.dms_design_input('g', 'AT', 'TGC', 'TAA', silent_mutation=1, dir=str(tmp_path))
+        dms.dms_design_input('g', 'AT', 'TGC', 'TAA', silent_mutation=1, file=str(tmp_path / 'dms_design_input.csv'))
 
 
 # ---------------------------------------------------------------------------
@@ -485,7 +483,7 @@ def test_merge_single_csv_path(tmp_path):
 
 def test_merge_saves_output_when_dir_and_file_given(tmp_path):
     df1 = pd.DataFrame({'a': [1]})
-    dms.merge([df1], dir=str(tmp_path), file='merged.csv')
+    dms.merge([df1], file=str(tmp_path / 'merged.csv'))
     saved = pd.read_csv(tmp_path / 'merged.csv')
     assert saved['a'].tolist() == [1]
 
@@ -561,111 +559,3 @@ def test_dms_signature_saves_outputs_and_memories_when_requested(tmp_path):
     memory_dir = tmp_path / '.dms_signature'
     assert memory_dir.exists()
     assert len(list(memory_dir.glob('*_memories.csv'))) == 1
-
-
-# ---------------------------------------------------------------------------
-# pipeline (dms_designer -> filter -> dms_signature -> dms_pool)
-# ---------------------------------------------------------------------------
-
-def test_pipeline_requires_a_target(tmp_path):
-    with pytest.raises(ValueError, match='in_file'):
-        dms.pipeline(out_dir=str(tmp_path))
-
-
-def _stub_designer(monkeypatch, df):
-    """Replace dms_designer() so pipeline() tests exercise the stages around it."""
-    calls = {}
-
-    def fake(**kwargs):
-        calls.update(kwargs)
-        return df.copy()
-
-    monkeypatch.setattr(dms, 'dms_designer', fake)
-    return calls
-
-
-def _designs():
-    # Two substitutions and one deletion; the deletion is the odd one out for filtering
-    ref = 'AAAA' + 'ATGCGTATCGATCG' + 'TTTT'
-    return pd.DataFrame({
-        'Edit': ['A1G', 'A1G', 'A2del'],
-        'Edit_type': ['substitution', 'substitution', 'deletion'],
-        'Reference_sequence': [ref] * 3,
-        'Edit_sequence_with_silent_mutations': [
-            'AAAA' + 'ATGCGT' + 'C' + 'TCGATCG' + 'TTTT',   # 1 SNV
-            'AAAA' + 'ATGCGT' + 'C' + 'TCGATCG' + 'TTTT',   # duplicate Edit
-            'AAAA' + 'ATGCGT' + 'TCGATCG' + 'TTTT',         # 1 deletion
-        ],
-    })
-
-
-def test_pipeline_passes_designer_output_through_both_filter_stages(tmp_path, monkeypatch):
-    _stub_designer(monkeypatch, _designs())
-    out = dms.pipeline(out_dir=str(tmp_path), target_name='T',
-                       signature_flank5_sequence='AAAA', signature_flank3_sequence='TTTT',
-                       query=["Edit_type == 'substitution'"], drop_duplicates=['Edit'],
-                       signature_query=['SNV_count == 1'], skip_pool=True)
-    assert list(out['Edit']) == ['A1G']
-    assert (tmp_path / dms.PIPELINE_LAYOUT['filtered']).exists()
-    assert (tmp_path / dms.PIPELINE_LAYOUT['signature']).exists()
-    assert not (tmp_path / dms.PIPELINE_LAYOUT['pool']).exists()
-
-
-def test_pipeline_forwards_designer_arguments_and_directories(tmp_path, monkeypatch):
-    calls = _stub_designer(monkeypatch, _designs())
-    dms.pipeline(out_dir=str(tmp_path), target_name='T', index=168, silent_mutation=2,
-                 silent_mutation_mode='distribute', saturation_mutagenesis='aa',
-                 signature_flank5_sequence='AAAA', signature_flank3_sequence='TTTT',
-                 skip_pool=True)
-    assert calls['index'] == 168
-    assert calls['silent_mutation'] == 2
-    assert calls['silent_mutation_mode'] == 'distribute'
-    assert calls['saturation_mutagenesis'] == 'aa'
-    assert calls['out_dir'] == os.path.join(str(tmp_path), dms.PIPELINE_LAYOUT['dmsdesign'])
-    assert calls['save_dir'] == os.path.join(str(tmp_path), dms.PIPELINE_LAYOUT['dms'])
-
-
-def test_pipeline_skips_pooling_without_homology_values(tmp_path, monkeypatch, capsys):
-    _stub_designer(monkeypatch, _designs())
-    dms.pipeline(out_dir=str(tmp_path), target_name='T',
-                 signature_flank5_sequence='AAAA', signature_flank3_sequence='TTTT')
-    out = capsys.readouterr().out
-    assert 'Skipping dms_pool()' in out
-    assert 'edms clone dms_pool' in out
-    assert not (tmp_path / dms.PIPELINE_LAYOUT['pool']).exists()
-
-
-def test_pipeline_unwraps_single_element_homology_lists_and_adds_a_barcode(tmp_path, monkeypatch):
-    _stub_designer(monkeypatch, _designs())
-    seen = {}
-
-    def fake_dms_pool(**kwargs):
-        seen.update(kwargs)
-        return kwargs['df']
-
-    from edms.bio import clone as cl
-    monkeypatch.setattr(cl, 'dms_pool', fake_dms_pool)
-
-    dms.pipeline(out_dir=str(tmp_path), target_name='FOXA1',
-                 signature_flank5_sequence='AAAA', signature_flank3_sequence='TTTT',
-                 fwd_homology_t5_val=['FOXA1-S165'], rev_homology_t3_val=['FOXA1-P205'])
-
-    # dms_pool() only takes the list form alongside barcode_val, which a single subpool has no use for
-    assert seen['fwd_homology_t5_val'] == 'FOXA1-S165'
-    assert seen['rev_homology_t3_val'] == 'FOXA1-P205'
-    assert list(seen['df']['Group'].unique()) == ['FOXA1']
-
-
-def test_pipeline_keeps_multi_subpool_homology_lists(tmp_path, monkeypatch):
-    _stub_designer(monkeypatch, _designs())
-    seen = {}
-    from edms.bio import clone as cl
-    monkeypatch.setattr(cl, 'dms_pool', lambda **kwargs: seen.update(kwargs) or kwargs['df'])
-
-    dms.pipeline(out_dir=str(tmp_path), target_name='FOXA1',
-                 signature_flank5_sequence='AAAA', signature_flank3_sequence='TTTT',
-                 fwd_homology_t5_val=['FOXA1-S165', 'FOXA1-W199'],
-                 rev_homology_t3_val=['FOXA1-P205', 'FOXA1-G239'],
-                 barcode_val=['1', '2'])
-    assert seen['fwd_homology_t5_val'] == ['FOXA1-S165', 'FOXA1-W199']
-    assert seen['barcode_val'] == ['1', '2']

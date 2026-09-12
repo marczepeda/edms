@@ -80,7 +80,6 @@ def parse_csv_to_tidy(
     default_plate_name: str = "{wells}-well {index}",
     skip_empty_cells: bool = True,
     replicate_requires_value: bool = True,
-    dir: str = None,
     file: str = None,
 ) -> pd.DataFrame:
     """
@@ -200,7 +199,7 @@ def parse_csv_to_tidy(
     else:
         df["replicate"] = df.groupby("value").cumcount() + 1
 
-    io.save(obj=df, dir=dir, file=file)
+    io.save(obj=df, file=file)
 
     return df
 
@@ -210,7 +209,6 @@ def make(
     values: str | list,
     index: Optional[list[str]] = ['plate', 'row'],
     columns: Optional[str] = 'col',
-    dir: Optional[str] = None,
     file: Optional[str] = None,
     return_df: bool = True,
 ) -> pd.DataFrame:
@@ -226,10 +224,8 @@ def make(
         Columns to use as index (default: ['plate', 'row']).
     - columns: Optional[str]
         Column to use as columns (default: 'col').
-    - dir: Optional[str]
-        Directory to save the resulting plate DataFrame (default: None).
     - file: Optional[str]
-        Filename to save the resulting plate DataFrame (default: None).
+        Output file path for the resulting plate DataFrame (default: None).
     - return_df: bool
         Whether to return the resulting DataFrame (default: True).
     """
@@ -246,7 +242,7 @@ def make(
     plate_df = pd.pivot(df, index=index, columns=columns, values=values)
     
     # Save to file if directory and filename are provided
-    io.save(obj=plate_df, dir=dir, file=file)
+    io.save(obj=plate_df, file=file)
 
     # Return the resulting DataFrame if requested
     if return_df:

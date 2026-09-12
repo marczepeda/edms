@@ -19,6 +19,7 @@ Usage:
 '''
 # Import packages
 import pandas as pd
+import os
 import re
 import ast
 from ..gen import io
@@ -26,14 +27,13 @@ from ..gen import tidy as t
 from ..gen import plot as p
 
 # COSMIC database
-def mutations(df: pd.DataFrame | str, dir:str=None, file:str=None) -> pd.DataFrame:
+def mutations(df: pd.DataFrame | str, file:str=None) -> pd.DataFrame:
     ''' 
     mutations(): returns COSMIC mutations dataframe for a given gene
     
     Parameters:
     df (dataframe | str): COSMIC dataframe (or file path)
-    dir (str, optional): save directory
-    file (str, optional): save file
+    file (str, optional): output file path
     
     Dependencies: re & io
     '''
@@ -59,7 +59,7 @@ def mutations(df: pd.DataFrame | str, dir:str=None, file:str=None) -> pd.DataFra
     df['AA_mut']=aa_muts
 
     # Save & return dataframe
-    io.save(obj=df, dir=dir, file=file) 
+    io.save(obj=df, file=file) 
     return df
 
 def prevalence(df: pd.DataFrame) -> list:
@@ -86,6 +86,8 @@ def cds_group(df_cosmic: pd.DataFrame | str, df_cds: pd.DataFrame | str, out_dir
 
     Dependencies: io,plot,os,pandas
     '''
+    if out_dir is None: out_dir = '.' # Save relative to the current directory
+
     # Get COSMIC mutations() and CDS datarames from file paths if needed
     if type(df_cosmic)==str: 
         df_cosmic = io.get(pt=df_cosmic)
@@ -109,11 +111,11 @@ def cds_group(df_cosmic: pd.DataFrame | str, df_cds: pd.DataFrame | str, out_dir
     # Plot histogram
     p.dist(typ='hist',df=df_cosmic,x='AA_position',bins=df_cds.iloc[-1]['end'],cols='CDS',edgecol=None,
            title='COSMIC Mutations',x_axis='Position (AA)',y_axis=f"{df_cds.iloc[0]['gene']}",
-           dir=out_dir,file=f"{df_cds.iloc[0]['gene']}_CDS_group.pdf",
+           file=os.path.join(out_dir, f"{df_cds.iloc[0]['gene']}_CDS_group.pdf"),
            **plot_kwargs)
 
 # Prime editing
-def priority_muts(pegRNAs_shared: pd.DataFrame, df_cosmic: str, dir:str=None, file:str=None) -> pd.DataFrame:
+def priority_muts(pegRNAs_shared: pd.DataFrame, df_cosmic: str, file:str=None) -> pd.DataFrame:
     ''' 
     priority_muts: returns the shared sequences library dataframe with priority mutations
     
@@ -121,8 +123,7 @@ def priority_muts(pegRNAs_shared: pd.DataFrame, df_cosmic: str, dir:str=None, fi
     pegRNAs (dataframe): pegRNAs library dataframe
     pegRNAs_shared (dataframe): pegRNAs shared sequences library dataframe
     df_cosmic (dataframe | str): COSMIC dataframe (or file path)
-    dir (str, optional): save directory
-    file (str, optional): save file
+    file (str, optional): output file path
     
     Dependencies: pandas, ast, prevalence(), & mutations()
     '''
@@ -171,11 +172,11 @@ def priority_muts(pegRNAs_shared: pd.DataFrame, df_cosmic: str, dir:str=None, fi
     pegRNAs_shared['Priority_mut']=priority_muts
 
     # Save & return shared sequences library dataframe
-    io.save(obj=pegRNAs_shared, dir=dir, file=file) 
+    io.save(obj=pegRNAs_shared, file=file) 
     return pegRNAs_shared
 
 def priority_edits(pegRNAs: pd.DataFrame | str, pegRNAs_shared: pd.DataFrame | str, df_cosmic: pd.DataFrame | str, 
-                   dir:str=None, file:str=None) -> pd.DataFrame:
+                   file:str=None) -> pd.DataFrame:
     ''' 
     priority_edits(): returns a dataframe with the most clinically-relevant prime edits to prioritize from the shared sequences library
     
@@ -183,8 +184,7 @@ def priority_edits(pegRNAs: pd.DataFrame | str, pegRNAs_shared: pd.DataFrame | s
     pegRNAs (dataframe | str): pegRNAs library dataframe (or file path)
     pegRNAs_shared (dataframe | str): pegRNAs shared sequences library dataframe (or file path)
     df_cosmic (dataframe | str): COSMIC mutations() dataframe (or file path)
-    dir (str, optional): save directory
-    file (str, optional): save file
+    file (str, optional): output file path
 
     Dependencies: pandas, ast, & prevalence()
     '''
@@ -208,7 +208,7 @@ def priority_edits(pegRNAs: pd.DataFrame | str, pegRNAs_shared: pd.DataFrame | s
     pegRNAs_priority['COSMIC_count'] = [df_cosmic['AA_mut'].value_counts()[edit] if edit in df_cosmic['AA_mut'].to_list() else 0 for edit in pegRNAs_priority['Edit']]
     
     # Save & return pegRNAs priority dataframe
-    io.save(obj=pegRNAs_priority, dir=dir, file=file) 
+    io.save(obj=pegRNAs_priority, file=file) 
     return pegRNAs_priority
 
 # Base & prime editing accessible mutations
@@ -270,8 +270,7 @@ def editor_mutations(df_cosmic: pd.DataFrame | str, df_bescan: pd.DataFrame | st
     df_bescan2['BE_COMSIC']= [be_cosmic_list]
     if out_dir is not None:
         io.save(obj=df_bescan2,
-                dir=out_dir,
-                file=f"{df_bescan.iloc[0]['gene']}_BE_COSMIC.csv")
+                file=os.path.join(out_dir, f"{df_bescan.iloc[0]['gene']}_BE_COSMIC.csv"))
 
 
     # Quantify BE and PE COSMIC mutations 
@@ -293,16 +292,14 @@ def editor_mutations(df_cosmic: pd.DataFrame | str, df_bescan: pd.DataFrame | st
     
     if out_dir is not None:
         io.save(obj=cosmic_nodup_change_type.reset_index(drop=False),
-                dir=out_dir,
-                file=f"{df_bescan.iloc[0]['gene']}_COSMIC_types.csv")
+                file=os.path.join(out_dir, f"{df_bescan.iloc[0]['gene']}_COSMIC_types.csv"))
         io.save(obj=df_editor_cosmic,
-                dir=out_dir,
-                file=f"{df_bescan.iloc[0]['gene']}_editor_COSMIC.csv")
+                file=os.path.join(out_dir, f"{df_bescan.iloc[0]['gene']}_editor_COSMIC.csv"))
 
         p.stack(df=df_editor_cosmic,x='gene',y='fraction',cols='mutation',
                 cols_ord=['Substitution (ABE/CBE)','Substitution (PE)','Indel (PE)','Complex'],
                 x_ticks_rot=0,x_ticks_ha='center',x_axis='COSMIC',
                 title=df_bescan.iloc[0]['gene'],
-                figsize=(1,5),dir=out_dir,
-                file=f"{df_bescan.iloc[0]['gene']}_editor_COSMIC.pdf",
+                figsize=(1,5),
+                file=os.path.join(out_dir, f"{df_bescan.iloc[0]['gene']}_editor_COSMIC.pdf"),
                 **plot_kwargs)

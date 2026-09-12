@@ -96,7 +96,7 @@ import pickle
 from ..gen import io, tidy as t, plot as p, stat as st
 from ..data import uniprot, pdb
 from .fastq import add_label_info
-from ..utils import mkdir
+from ..utils import mkdir, check_outpath
 
 # Helper functions
 ### HEX <-> RGB CONVERSION
@@ -367,7 +367,6 @@ def make_cluster_color_dict(cluster_ids, cmap_name="turbo"):
     }
 
 def pymol_script(
-    dir: str,
     file: str,
     pdb_filename: str,
     residue_dict: dict,
@@ -377,17 +376,16 @@ def pymol_script(
     pymol_script(): Generates a PyMOL script to display selected residues as separate objects.
 
     Parameters:
-    dir (str): Path to save the generated PyMOL script.
-    file (str): Name of the file to save the generated PyMOL script.
+    file (str): Output path for the generated PyMOL script.
     pdb_filename (str): Path to the PDB file to load in PyMOL
     residue_dict (dict): Dictionary where keys are cluster identifiers and values are lists
         of residues, e.g. ['O0168', 'O0172'] or [168, 172]
     colors (list): List of RGB tuples corresponding to each cluster for coloring the residues.
         Must be in the same order as residue_dict.items().
     """
-    mkdir(dir)
+    pt = check_outpath(file=file) # Make output directory if it does not exist
 
-    with open(os.path.join(dir, file), "w") as pymol_file:
+    with open(pt, "w") as pymol_file:
         if '.config/edms/PDB/' in pdb_filename:
             pymol_file.write(f"fetch {pdb_filename.split('/')[-1].split('.')[0]}\n")
         else:
@@ -426,7 +424,7 @@ def pymol_script(
 
 # Plot functions
 def hist(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new", line: float = None,
-    file: str = None, dir: str = None, palette_or_cmap: str = 'turbo', alpha: float = 1.0, dodge: bool = False, jitter: bool = True, size: float = 5, edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
+    file: str = None, palette_or_cmap: str = 'turbo', alpha: float = 1.0, dodge: bool = False, jitter: bool = True, size: float = 5, edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
     figsize: tuple=(6,6), title: str = 'Number of Edits in Clusters', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
     x_axis: str = 'Cluster #', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
     y_axis: str = 'Count', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
@@ -440,8 +438,7 @@ def hist(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new", line: float =
     df_clus (pd.DataFrame | str): DataFrame or path to a saved DataFrame containing clustering results, must have cluster_col column for cluster labels.
     cluster_col (str, optional): column name in df_clus with cluster labels (Default: "cl_new")
     line (float, optional): add horizontal line at y value or vertical line at x value
-    file (str, optional): filename to save the plot (including the file extension)
-    dir (str, optional): Directory to save the plot.
+    file (str, optional): output plot file path (including the file extension)
     palette_or_cmap (str, optional): Palette or colormap for the plot.
     alpha (float, optional): Alpha value for transparency of markers.
     edgecol (str, optional): Edge color for markers.
@@ -500,7 +497,7 @@ def hist(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new", line: float =
     clust_counts[cluster_col] = clust_counts[cluster_col].astype(str)  # Ensure cluster labels are strings for categorical plotting
 
     p.cat(graph='bar', df=clust_counts, x=cluster_col, y="count", line=line,
-        file=f'{".".join(file.split(".")[:-1])}_hist.{file.split(".")[-1]}' if file else "hist.all", dir=dir,palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
+        file=f'{".".join(file.split(".")[:-1])}_hist.{file.split(".")[-1]}' if file else "hist.all", palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
         figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
         x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_axis_pad=x_axis_pad,x_ticks_size=x_ticks_size,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,x_ticks=x_ticks,
         y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_scale=y_axis_scale,y_axis_dims=y_axis_dims,y_axis_pad=y_axis_pad,y_ticks_size=y_ticks_size,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,y_ticks=y_ticks,
@@ -509,7 +506,7 @@ def hist(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new", line: float =
         dpi=dpi,transparent=transparent,show=show,space_capitalize=space_capitalize,**kwargs)
 
 def cat(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new",scores_col: str = "log2(FC)", line: float = None,
-    file: str = None, dir: str = None, palette_or_cmap: str = 'turbo', alpha: float = 0.5, dodge: bool = False, jitter: bool = True, size: float = 5, edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
+    file: str = None, palette_or_cmap: str = 'turbo', alpha: float = 0.5, dodge: bool = False, jitter: bool = True, size: float = 5, edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
     figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
     x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
     y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
@@ -524,8 +521,7 @@ def cat(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new",scores_col: str
     cluster_col (str, optional): column name in df_clus with cluster labels (Default: "cl_new")
     scores_col (str, optional): column name in df_clus with sgRNA scores (Default: "log2(FC)")
     line (float, optional): add horizontal line at y value or vertical line at x value
-    file (str, optional): filename to save the plot (including the file extension)
-    dir (str, optional): Directory to save the plot.
+    file (str, optional): output plot file path (including the file extension)
     palette_or_cmap (str, optional): Palette or colormap for the plot.
     alpha (float, optional): Alpha value for transparency of markers.
     edgecol (str, optional): Edge color for markers.
@@ -585,7 +581,7 @@ def cat(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new",scores_col: str
 
     # Categorical bar chart of cluster counts
     p.cat(graph='strip', df=df_clus, x=cluster_col, y=scores_col, line=line,
-        file=f'{".".join(file.split(".")[:-1])}_strip.{file.split(".")[-1]}' if file else f"strip.all", dir=dir,palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
+        file=f'{".".join(file.split(".")[:-1])}_strip.{file.split(".")[-1]}' if file else f"strip.all", palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
         figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
         x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_axis_pad=x_axis_pad,x_ticks_size=x_ticks_size,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,x_ticks=x_ticks,
         y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_scale=y_axis_scale,y_axis_dims=y_axis_dims,y_axis_pad=y_axis_pad,y_ticks_size=y_ticks_size,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,y_ticks=y_ticks,
@@ -594,7 +590,7 @@ def cat(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new",scores_col: str
         dpi=dpi,transparent=transparent,show=show,space_capitalize=space_capitalize,**kwargs)
 
     p.cat(graph='box', df=df_clus, x=cluster_col, y=scores_col, line=line,
-        file=f'{".".join(file.split(".")[:-1])}_box.{file.split(".")[-1]}' if file else f"box.all", dir=dir,palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
+        file=f'{".".join(file.split(".")[:-1])}_box.{file.split(".")[-1]}' if file else f"box.all", palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
         figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
         x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_axis_pad=x_axis_pad,x_ticks_size=x_ticks_size,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,x_ticks=x_ticks,
         y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_scale=y_axis_scale,y_axis_dims=y_axis_dims,y_axis_pad=y_axis_pad,y_ticks_size=y_ticks_size,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,y_ticks=y_ticks,
@@ -603,7 +599,7 @@ def cat(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new",scores_col: str
         dpi=dpi,transparent=transparent,show=show,space_capitalize=space_capitalize,**kwargs)
     
     p.cat(graph='box_strip', df=df_clus, x=cluster_col, y=scores_col, line=line,
-        file=f'{".".join(file.split(".")[:-1])}_box_strip.{file.split(".")[-1]}' if file else f"box_strip.all", dir=dir,palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
+        file=f'{".".join(file.split(".")[:-1])}_box_strip.{file.split(".")[-1]}' if file else f"box_strip.all", palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
         figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
         x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_axis_pad=x_axis_pad,x_ticks_size=x_ticks_size,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,x_ticks=x_ticks,
         y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_scale=y_axis_scale,y_axis_dims=y_axis_dims,y_axis_pad=y_axis_pad,y_ticks_size=y_ticks_size,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,y_ticks=y_ticks,
@@ -613,7 +609,7 @@ def cat(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new",scores_col: str
 
 def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="cl_new", scores_col: str="log2(FC)", individual: bool=True, size: str=None, size_dims: tuple=None, label: str='Edit', label_size: int=16,
         label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None, DSSP: str=None, chain_id: str=None, ss_h: int=None, ss_y: int=None,
-        file: str=None, dir: str=None, palette_or_cmap: str = 'turbo', edgecol: str='black', figsize=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
+        file: str=None, palette_or_cmap: str = 'turbo', edgecol: str='black', figsize=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
         legend_title: str='',legend_title_size: int=12, legend_title_weight: str ='bold', legend_size: int = 12, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1, 
@@ -646,8 +642,7 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
     chain_id (str, optional): Chain identifier to isolate for secondary structure analysis (Default: None)
     ss_h (int, optional): height for secondary structure in the plot (Default: autogenerate)
     ss_y (int, optional): y position for secondary structure in the plot (Default: autogenerate)
-    file (str, optional): save plot to filename
-    dir (str, optional): save plot to directory
+    file (str, optional): output plot file path
     palette_or_cmap (str, optional): seaborn color palette or matplotlib color map (only used if individual parameter is specified)
     edgecol (str, optional): point edge color
     figsize (tuple, optional): figure size
@@ -925,7 +920,7 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
             plt.title(title, fontsize=title_size, fontweight=title_weight, family=title_font)
 
             # Save & show fig; return dataframe
-            p.save_fig(file=f"{'.'.join(file.split('.')[:-1])}_tornado_{clus}.{file.split('.')[-1]}" if file is not None else f"tornado.all", dir=dir, fig=fig, dpi=dpi, PDB_pt=PDB_pt, icon='tornado')
+            p.save_fig(file=f"{'.'.join(file.split('.')[:-1])}_tornado_{clus}.{file.split('.')[-1]}" if file is not None else f"tornado.all", fig=fig, dpi=dpi, PDB_pt=PDB_pt, icon='tornado')
             if show:
                 ext = file.split('.')[-1].lower() if file is not None else ''
                 if ext not in ('html', 'json'):
@@ -1098,7 +1093,7 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
         plt.title(title, fontsize=title_size, fontweight=title_weight, family=title_font)
 
         # Save & show fig; return dataframe
-        p.save_fig(file=f"{'.'.join(file.split('.')[:-1])}_tornado.{file.split('.')[-1]}" if file is not None else f"tornado.all", dir=dir, fig=fig, dpi=dpi, transparent=transparent, PDB_pt=PDB_pt, icon='tornado')
+        p.save_fig(file=f"{'.'.join(file.split('.')[:-1])}_tornado.{file.split('.')[-1]}" if file is not None else f"tornado.all", fig=fig, dpi=dpi, transparent=transparent, PDB_pt=PDB_pt, icon='tornado')
         if show:
             ext = file.split('.')[-1].lower() if file is not None else ''
             if ext not in ('html', 'json'):
@@ -1112,7 +1107,7 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
 
 def heatmap(
     df_scaled: pd.DataFrame | str, mask_on: bool = True, blackout: list[str] = ['X'],
-    file: str = None, dir: str = None, figsize: tuple = (4, 2.2),
+    file: str = None, figsize: tuple = (4, 2.2),
     color: str='black', edgecol: str=None, lw: int=0, alpha: float=1,
     center: float=0, cmap: str="RdBu_r", sq: bool=True, vmin: float=-1, vmax: float=1, cbar: bool=False,
     spine_color: str = "black", spine_visible: bool = True, spine_wspace: float = 0.2, spine_hspace: float = 0.2,
@@ -1125,8 +1120,7 @@ def heatmap(
     df_scaled (pd.DataFrame | str): Scaled DataFrame containing PWES values.
     mask_on (bool): Whether to mask the lower triangle of the heatmap.
     blackout (list[str]): List of prefixes for rows/columns to blackout (e.g., 'X' for non-protein residues).
-    file (str, optional): save plot to filename
-    dir (str, optional): save plot to directory
+    file (str, optional): output plot file path
     figsize (tuple, optional): figure size per subplot
     color (str, optional): point color
     edgecol (str, optional): point edge color
@@ -1212,7 +1206,7 @@ def heatmap(
 
     # SAVE & SHOW #
     plt.tight_layout()
-    p.save_fig(file=file, dir=dir, fig=fig, dpi=dpi, transparent=transparent, icon='heat')
+    p.save_fig(file=file, fig=fig, dpi=dpi, transparent=transparent, icon='heat')
     if show:
         ext = file.split('.')[-1].lower() if file is not None else ''
         if ext not in ('html', 'json'):
@@ -1223,7 +1217,7 @@ def heatmap(
 
 def heatmap_cbar(
     orientation: str='vertical', # otherwise horizontal
-    file: str = None, dir: str = None, figsize: tuple = (.25, 2),
+    file: str = None, figsize: tuple = (.25, 2),
     cmap: str='RdBu_r', vmin: float=-1, vmax: float=1, lw: float = 0.5,
     tick_size: int=8, tick_width=0.5, label_font: str='Arial', label_size: int=6,
     dpi: int=0, transparent: bool=False, show: bool=True):
@@ -1232,8 +1226,7 @@ def heatmap_cbar(
 
     Parameters:
     orientation (str, optional): Orientation of the colorbar ('vertical' or 'horizontal').
-    file (str, optional): save plot to filename
-    dir (str, optional): save plot to directory
+    file (str, optional): output plot file path
     figsize (tuple, optional): figure size per subplot
     cmap (str, optional): colormap to use for heatmap
     vmin (float, optional): minimum value for colormap
@@ -1261,7 +1254,7 @@ def heatmap_cbar(
     cbar.outline.set_linewidth(lw)
 
     # SAVE & SHOW #
-    p.save_fig(file=file, dir=dir, fig=fig, dpi=dpi, transparent=transparent, icon='heat')
+    p.save_fig(file=file, fig=fig, dpi=dpi, transparent=transparent, icon='heat')
     if show:
         ext = file.split('.')[-1].lower() if file is not None else ''
         if ext not in ('html', 'json'):
@@ -1275,7 +1268,7 @@ def clustermap(
     link: np.ndarray | str, 
     df_clusters: pd.DataFrame | str,
     color_list: list=[],
-    file: str = None, dir: str = None, figsize: tuple = (4, 2.2),
+    file: str = None, figsize: tuple = (4, 2.2),
     center: float=0, cmap: str="RdBu_r", vmin: float=-1, vmax: float=1,
     line_color: str="k", line_style: str="--", lw: float=0.25,
     spine_color: str = "black", spine_visible: bool = True,
@@ -1288,8 +1281,7 @@ def clustermap(
     link (np.ndarray | str): Linkage matrix for hierarchical clustering.
     df_clusters (pd.DataFrame | str): DataFrame containing cluster assignments for rows.
     color_list (list): List of colors for clusters (optional).
-    file (str, optional): save plot to filename
-    dir (str, optional): save plot to directory
+    file (str, optional): output plot file path
     figsize (tuple, optional): figure size per subplot
     center (float, optional): value at which to center the colormap
     cmap (str, optional): colormap to use for heatmap
@@ -1356,7 +1348,7 @@ def clustermap(
 
     # SAVE & SHOW #
     plt.tight_layout()
-    p.save_fig(file=file, dir=dir, fig=fig, dpi=dpi, transparent=transparent, icon='heat')
+    p.save_fig(file=file, fig=fig, dpi=dpi, transparent=transparent, icon='heat')
     if show:
         ext = file.split('.')[-1].lower() if file is not None else ''
         if ext not in ('html', 'json'):
@@ -1514,37 +1506,36 @@ def clustering(pdb_file: str, df: pd.DataFrame | str,
         # Generate plots if requested
         if plots:
             if hist_kwargs is None:
-                hist(df_clus=df_clus, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.all", show=show)
+                hist(df_clus=df_clus, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = os.path.join(out_dir_sub, f"{out_prefix_sub}.all"), show=show)
             else:
-                hist(df_clus=df_clus, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.all", show=show, **hist_kwargs)
+                hist(df_clus=df_clus, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = os.path.join(out_dir_sub, f"{out_prefix_sub}.all"), show=show, **hist_kwargs)
             if cat_kwargs is None:
-                cat(df_clus=df_clus, scores_col=scores_col, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.all", show=show)
+                cat(df_clus=df_clus, scores_col=scores_col, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = os.path.join(out_dir_sub, f"{out_prefix_sub}.all"), show=show)
             else:
-                cat(df_clus=df_clus, scores_col=scores_col, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.all", show=show, **cat_kwargs)
+                cat(df_clus=df_clus, scores_col=scores_col, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = os.path.join(out_dir_sub, f"{out_prefix_sub}.all"), show=show, **cat_kwargs)
             if torn_kwargs is None:
-                torn(df=df, df_clus=df_clus, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.all", show=show, display_labels=False, label_info=False, individual=False)
-                #torn(df=df, df_clus=df_clus, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.html", PDB_contacts=pdb_file, show=show, display_labels=True, individual=False) # Does not dislay labels
+                torn(df=df, df_clus=df_clus, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = os.path.join(out_dir_sub, f"{out_prefix_sub}.all"), show=show, display_labels=False, label_info=False, individual=False)
+                #torn(df=df, df_clus=df_clus, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.html", PDB_contacts=pdb_file, show=show, display_labels=True, individual=False) # Does not dislay labels
             else:
-                torn(df=df, df_clus=df_clus, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.all", show=show, display_labels=False, label_info=False, individual=False, **torn_kwargs)
-                #torn(df=df, df_clus=df_clus, dir=out_dir_sub, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.html", PDB_contacts=pdb_file, show=show, display_labels=True, individual=False, **torn_kwargs) # Does not dislay labels
+                torn(df=df, df_clus=df_clus, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = os.path.join(out_dir_sub, f"{out_prefix_sub}.all"), show=show, display_labels=False, label_info=False, individual=False, **torn_kwargs)
+                #torn(df=df, df_clus=df_clus, title=f'{out_prefix.replace("_", " ")}\n{out_dir_sub.split("/")[-1].replace("__", "; ").replace("_", " ")}', file = f"{out_prefix_sub}.html", PDB_contacts=pdb_file, show=show, display_labels=True, individual=False, **torn_kwargs) # Does not dislay labels
             if heatmap_kwargs is None:
-                heatmap(df_scaled=df_pwes_sorted, dir=out_dir_sub, file = f"{out_prefix_sub}_heatmap.all", show=show)
+                heatmap(df_scaled=df_pwes_sorted, file = os.path.join(out_dir_sub, f"{out_prefix_sub}_heatmap.all"), show=show)
             else:
-                heatmap(df_scaled=df_pwes_sorted, dir=out_dir_sub, file = f"{out_prefix_sub}_heatmap.all", show=show, **heatmap_kwargs)
+                heatmap(df_scaled=df_pwes_sorted, file = os.path.join(out_dir_sub, f"{out_prefix_sub}_heatmap.all"), show=show, **heatmap_kwargs)
             if heatmap_cbar_kwargs is None:
-                heatmap_cbar(dir=out_dir_sub, file = f"{out_prefix_sub}_heatmap_colorbar.all", show=show)
+                heatmap_cbar(file = os.path.join(out_dir_sub, f"{out_prefix_sub}_heatmap_colorbar.all"), show=show)
             else:
-                heatmap_cbar(dir=out_dir_sub, file = f"{out_prefix_sub}_heatmap_colorbar.all", show=show, **heatmap_cbar_kwargs)
+                heatmap_cbar(file = os.path.join(out_dir_sub, f"{out_prefix_sub}_heatmap_colorbar.all"), show=show, **heatmap_cbar_kwargs)
             if clustermap_kwargs is None:
-                clustermap(df_scaled=df_pwes_sorted, link=link, df_clusters=df_clus, dir=out_dir_sub, file = f"{out_prefix_sub}_clustermap.all", show=show)
+                clustermap(df_scaled=df_pwes_sorted, link=link, df_clusters=df_clus, file = os.path.join(out_dir_sub, f"{out_prefix_sub}_clustermap.all"), show=show)
             else:
-                clustermap(df_scaled=df_pwes_sorted, link=link, df_clusters=df_clus, dir=out_dir_sub, file = f"{out_prefix_sub}_clustermap.all", show=show, **clustermap_kwargs)
+                clustermap(df_scaled=df_pwes_sorted, link=link, df_clusters=df_clus, file = os.path.join(out_dir_sub, f"{out_prefix_sub}_clustermap.all"), show=show, **clustermap_kwargs)
         
         # Generate PyMOL script if requested
         if pymol:
             pymol_script(
-                dir=out_dir_sub,
-                file=f"{out_prefix_sub}_pymol.pml",
+                file=os.path.join(out_dir_sub, f"{out_prefix_sub}_pymol.pml"),
                 pdb_filename=pdb_file,
                 residue_dict=aas_dict,
                 colors=cluster_colors,

@@ -390,7 +390,7 @@ def test_draw_ss_track_smoke_runs_without_saving(mocker):
             "name": ["α-helix #1", "β-strand #1"],
         }
     )
-    up.draw_ss_track(df, dir=None, file=None, show=False)
+    up.draw_ss_track(df, file=None, show=False)
     # No exception -> smoke test passed; a figure was created
     assert len(plt.get_fignums()) >= 1
 

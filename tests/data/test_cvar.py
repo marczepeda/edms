@@ -33,7 +33,7 @@ def test_mutations_filters_gene_and_parses_position():
 
 def test_mutations_saves_to_tmp_path(tmp_path):
     df = pd.DataFrame({"Gene(s)": ["GENE1"], "Protein change": ["R123H"]})
-    cvar.mutations(df=df, gene_name="GENE1", dir=str(tmp_path), file="out.csv")
+    cvar.mutations(df=df, gene_name="GENE1", file=str(tmp_path / "out.csv"))
     assert (tmp_path / "out.csv").exists()
 
 

@@ -21,15 +21,14 @@ import ast
 from ..gen import io
 
 # ClinVar database
-def mutations(df: pd.DataFrame | str, gene_name:str, dir:str=None, file:str=None) -> pd.DataFrame:
+def mutations(df: pd.DataFrame | str, gene_name:str, file:str=None) -> pd.DataFrame:
     ''' 
     mutations: returns ClinVar mutations dataframe for a given gene.
     
     Parameters:
     df (dataframe | str): ClinVar dataframe (or file path)
     gene_name (str): gene name
-    dir (str, optional): save directory
-    file (str, optional): save file
+    file (str, optional): output file path
 
     Dependencies: re, io
     '''
@@ -53,7 +52,7 @@ def mutations(df: pd.DataFrame | str, gene_name:str, dir:str=None, file:str=None
     df['AA_after']=afters
 
     # Save & return dataframe
-    io.save(obj=df, dir=dir, file=file) 
+    io.save(obj=df, file=file) 
     return df
 
 def prevalence(df: pd.DataFrame) -> list:
@@ -69,15 +68,14 @@ def prevalence(df: pd.DataFrame) -> list:
 
 # Prime editing
 def priority_muts(pegRNAs_shared: pd.DataFrame, df_clinvar: pd.DataFrame | str,
-                  dir:str=None, file:str=None) -> pd.DataFrame:
+                  file:str=None) -> pd.DataFrame:
     ''' 
     priority_muts: returns the shared sequences library dataframe with priority mutations
     
     Parameters:
     pegRNAs_shared (dataframe | str): pegRNAs shared sequences library dataframe (or file path)
     df_clinvar (dataframe | str): ClinVar mutations() dataframe (or file path)
-    dir (str, optional): save directory
-    file (str, optional): save file
+    file (str, optional): output file path
     
     Dependencies: pandas, ast, prevalence()
     '''
@@ -126,11 +124,11 @@ def priority_muts(pegRNAs_shared: pd.DataFrame, df_clinvar: pd.DataFrame | str,
     pegRNAs_shared['Priority_mut']=priority_muts
 
     # Save & return shared sequences library dataframe
-    io.save(obj=pegRNAs_shared, dir=dir, file=file) 
+    io.save(obj=pegRNAs_shared, file=file) 
     return pegRNAs_shared
 
 def priority_edits(pegRNAs: pd.DataFrame | str, pegRNAs_shared: pd.DataFrame | str, df_clinvar: pd.DataFrame | str, 
-                   dir:str=None, file:str=None) -> pd.DataFrame:
+                   file:str=None) -> pd.DataFrame:
     ''' 
     priority_edits(): returns a dataframe with the most clinically-relevant prime edits to prioritize from the shared sequences library
     
@@ -138,8 +136,7 @@ def priority_edits(pegRNAs: pd.DataFrame | str, pegRNAs_shared: pd.DataFrame | s
     pegRNAs (dataframe | str): pegRNAs library dataframe (or file path)
     pegRNAs_shared (dataframe | str): pegRNAs shared sequences library dataframe (or file path)
     df_clinvar (dataframe | str): ClinVar mutations() dataframe (or file path)
-    dir (str, optional): save directory
-    file (str, optional): save file
+    file (str, optional): output file path
 
     Dependencies: pandas, ast, & prevalence()
     '''
@@ -163,5 +160,5 @@ def priority_edits(pegRNAs: pd.DataFrame | str, pegRNAs_shared: pd.DataFrame | s
         pegRNAs_priority['ClinVar_count'] = [df_clinvar['Protein change'].value_counts()[edit] if edit in df_clinvar['Protein change'].to_list() else 0 for edit in pegRNAs_priority['Edit']]
 
     # Save & return pegRNAs priority dataframe
-    io.save(obj=pegRNAs_priority, dir=dir, file=file) 
+    io.save(obj=pegRNAs_priority, file=file) 
     return pegRNAs_priority

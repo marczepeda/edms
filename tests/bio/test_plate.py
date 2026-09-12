@@ -128,7 +128,7 @@ def test_parse_csv_to_tidy_saves_file(tmp_path):
     csv_text = "96-well 1,1,2\nA,s1,s2\n"
     pt = _write_csv(tmp_path, csv_text)
     out_dir = tmp_path / "out"
-    plate.parse_csv_to_tidy(pt, dir=str(out_dir), file="tidy.csv")
+    plate.parse_csv_to_tidy(pt, file=str(out_dir / "tidy.csv"))
     assert os.path.isfile(out_dir / "tidy.csv")
 
 

@@ -14,7 +14,7 @@ Usage:
 - get_dir(): returns python dictionary of dataframe from files within a directory
 
 [Output]
-- save(): save .csv file to a specified output directory from obj
+- save(): save .csv file to a specified output file path from obj
 - save_dir(): save .csv files to a specified output directory from dictionary of objs
 
 [Input/Output]
@@ -155,51 +155,51 @@ def get_dir(dir: str, suf: str='.csv', literal_eval: bool=False, **kwargs) -> di
     return dc
 
 # Output
-def save(obj, file: str, dir: str | None = None, cols: list=[], id: bool=False, sort: bool=True, **kwargs):
+def save(obj, file: str, cols: list=[], id: bool=False, sort: bool=True, **kwargs):
     ''' 
-    save(): save .csv file to a specified output directory from obj
+    save(): save .csv file to a specified output file path from obj
     
     Parameters:
     obj: dataframe, series, set, or list
-    file (str, required): file name or full path if dir is None
-    dir (str | None, optional): output directory
+    file (str, required): output file path; the output directory is created if needed
     cols (str, list, optional): isolate dataframe column(s)
     id (bool, optional): include dataframe index (False)
     sort (bool, optional): sort set, list, or series before saving (True)
     
-    Dependencies: pandas, os, csv & utils.mkdir()
+    Dependencies: pandas, os, csv & utils.check_outpath()
     '''
-    file, dir = check_outpath(file=file, dir=dir) # Check save path
-    if file is None or dir is None:
-        print(f"Warning: Invalid file or directory path; file not saved.\nFile: {file}\nDirectory: {dir}")
+    pt = check_outpath(file=file) # Check save path & make output directory
+    if pt is None:
+        print(f"Warning: Invalid file path; file not saved.\nFile: {file}")
         return
+    name = os.path.basename(pt) # File name used for suffix checks & Excel sheet names
 
     if type(obj)==pd.DataFrame:
         for col in cols: # Check if each element in the list is a string
             if not isinstance(col, str):
                 raise ValueError("All elements in the list must be strings.")
         if cols!=[]: obj = obj[cols]
-        if file.split('.')[-1]=='tsv': obj.to_csv(os.path.join(dir,file), index=id, sep='\t', **kwargs)
-        elif file.split('.')[-1]=='xlsx': 
-            with pd.ExcelWriter(os.path.join(dir,file)) as writer: 
-                obj.to_excel(writer,sheet_name='.'.join(file.split('.')[:-1]),index=id) # Dataframe per sheet
-        else: obj.to_csv(os.path.join(dir,file), index=id, **kwargs)
+        if name.split('.')[-1]=='tsv': obj.to_csv(pt, index=id, sep='\t', **kwargs)
+        elif name.split('.')[-1]=='xlsx': 
+            with pd.ExcelWriter(pt) as writer: 
+                obj.to_excel(writer,sheet_name='.'.join(name.split('.')[:-1]),index=id) # Dataframe per sheet
+        else: obj.to_csv(pt, index=id, **kwargs)
     elif type(obj)==set or type(obj)==list or type(obj)==pd.Series:
         if sort==True: obj2 = sorted(list(obj))
         else: obj2=list(obj)
-        with open(os.path.join(dir,file), 'w', newline='') as csv_file:
+        with open(pt, 'w', newline='') as csv_file:
             csv_writer = csv.writer(csv_file, dialect='excel') # Create a CSV writer object
             csv_writer.writerow(obj2) # Write each row of the list to the CSV file
-    elif (type(obj)==dict)&(file.split('.')[-1]=='xlsx'):
+    elif (type(obj)==dict)&(name.split('.')[-1]=='xlsx'):
         for col in cols: # Check if each element in the list is a string
             if not isinstance(col, str):
                 raise ValueError("All elements in the list must be strings.")
-        with pd.ExcelWriter(os.path.join(dir,file)) as writer:
+        with pd.ExcelWriter(pt) as writer:
             if cols!=[]: obj = obj[cols]
             for key,df in obj.items(): 
                 if cols!=[]: df = df[cols]
                 df.to_excel(writer,sheet_name=key,index=id) # Dataframe per sheet
-    else: raise ValueError(f'save() does not work for {type(obj)} objects with {file.split(".")[-1]} files.')
+    else: raise ValueError(f'save() does not work for {type(obj)} objects with {name.split(".")[-1]} files.')
 
 def save_dir(dir: str, dc: dict, suf: str='.csv', **kwargs):
     ''' 
@@ -212,7 +212,7 @@ def save_dir(dir: str, dc: dict, suf: str='.csv', **kwargs):
 
     Dependencies: pandas, os, csv, & save()
     '''
-    for key,val in dc.items(): save(obj=val, dir=dir, file=f"{key}{suf}",**kwargs)
+    for key,val in dc.items(): save(obj=val, file=os.path.join(dir,f"{key}{suf}"),**kwargs)
 
 # Input/Output
 def excel_csvs(pt: str, dir: str='', **kwargs):
@@ -352,7 +352,7 @@ def out_subs(dir: str):
             if os.path.isdir(dir_path) and not os.listdir(dir_path):
                 os.rmdir(dir_path)
 
-def create_sh(dir: str, file: str,
+def create_sh(file: str,
               cores: int = 1, partition: str='serial_requeue', time: str = '0-00:10', mem: int = 1000, email: str=None,
               python: str = 'python', env: str = 'edms',
               cmd: str = None, log_prefix: str = None):
@@ -360,8 +360,7 @@ def create_sh(dir: str, file: str,
     create_sh(): creates a shell script with SLURM job submission parameters for Harvard FASRC cluster.
 
     Parameters:
-    dir (str): The directory where the shell script will be created.
-    file (str): The name of the shell script file to create (e.g., "script.sh").
+    file (str): Output shell script path (e.g., "./scripts/script.sh"); the output directory is created if needed.
     cores (int, optional): The number of cores to request for the job (Default: 1).
     partition (str, optional): The partition to submit the job to (Default: 'serial_requeue').
     time (str, optional): The maximum runtime for the job in D-HH:MM format (Default: '0-00:10').
@@ -374,14 +373,15 @@ def create_sh(dir: str, file: str,
     log_prefix (str, optional): Prefix for the .out/.err SLURM log files (Default: None =
         "{timestamp}_{file stem}").
 
-    Dependencies: os, datetime, utils.mkdir(), config.get_info()
+    Dependencies: os, datetime, utils.check_outpath(), config.get_info()
     '''
-    # Check if the directory exists
-    mkdir(dir)
-
     # Check if the file is valid
-    if not file.endswith('.sh'):
+    if not str(file).endswith('.sh'):
         raise ValueError("File must end with '.sh'")
+
+    # Resolve the output path and make the output directory
+    pt = check_outpath(file=file)
+    name = os.path.basename(pt)
 
     # Get email from config if not provided
     if email is None:
@@ -391,7 +391,7 @@ def create_sh(dir: str, file: str,
             print(f"Error retrieving email from config: {e}")
             return
 
-    stem = ".".join(file.split(".")[:-1])
+    stem = ".".join(name.split(".")[:-1])
 
     # Body of the script: an explicit command, or the same-named python script
     if cmd is None:
@@ -405,7 +405,7 @@ def create_sh(dir: str, file: str,
 
     # Create .sh file
     try:
-        with open(os.path.join(dir,file), 'w') as file_obj:
+        with open(pt, 'w') as file_obj:
             file_obj.write(f'''#!/bin/bash
 #
 #SBATCH -n {cores} \t# Number of cores
@@ -418,7 +418,7 @@ def create_sh(dir: str, file: str,
 #SBATCH --mail-type=ALL \t# Email
 #SBATCH --mail-user={email} \t# Email
 
-echo -e "File: {file}\\nTime: {time}\\nMemory: {mem} MB" \t# Print job parameters
+echo -e "File: {name}\\nTime: {time}\\nMemory: {mem} MB" \t# Print job parameters
 module load {python} \t# Load python module
 mamba activate {env} \t# Activate conda environment
 export PYTHONUNBUFFERED=1 \t# Ensure prints from python script are written to .out file
@@ -766,7 +766,7 @@ def create_pipeline(pt: str = None, dir: str = '.', submit_file: str = 'submit.s
 
     # Write every job script, then the submission driver
     for job in jobs:
-        create_sh(dir=dir, file=job['file'], cores=job['cores'], partition=job['partition'],
+        create_sh(file=os.path.join(dir, job['file']), cores=job['cores'], partition=job['partition'],
                   time=job['time'], mem=job['mem'], email=job['email'],
                   python=job['python'], env=job['env'],
                   cmd=job['cmd'], log_prefix=job['log_prefix'])

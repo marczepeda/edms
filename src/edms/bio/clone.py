@@ -112,7 +112,7 @@ def tb(df:pd.DataFrame, id:str, seq:str, t5:str, t3:str,
 
 def sgRNAs(df:pd.DataFrame | str,id:str, spacer: str='Spacer_sequence', 
            t5: str='CACC', t3: str='',b5: str='AAAC',b3: str='',tG: bool=True, 
-           order: bool=True, dir:str=None, file:str=None) -> pd.DataFrame:
+           order: bool=True, file:str=None) -> pd.DataFrame:
     ''' 
     sgRNAs(): design GG cloning oligonucleotides for cutting and base editing sgRNAs
     
@@ -126,8 +126,7 @@ def sgRNAs(df:pd.DataFrame | str,id:str, spacer: str='Spacer_sequence',
     b3 (str): bottom oligonucleotide 3' overhang (revcom)
     tG (bool): add 5' G to spacer if needed (Default: True)
     order (bool): order format
-    dir (str, optional): save directory
-    file (str, optional): save file or full path if dir is None
+    file (str, optional): output file path
     
     Dependencies: pandas, io, top_bot(), & ord_form()
     '''
@@ -140,7 +139,7 @@ def sgRNAs(df:pd.DataFrame | str,id:str, spacer: str='Spacer_sequence',
                         ord_form(df=df,id=id,seq=spacer,suf='_bot',pre='o')]).reset_index(drop=True)
     
     # Save & return dataframe
-    io.save(obj=df, dir=dir, file=file)  
+    io.save(obj=df, file=file)  
     return df
 
 def epegRNAs(df: pd.DataFrame | str, id: str, tG: str=True, order: bool=True, make_extension: bool=True,
@@ -148,7 +147,7 @@ def epegRNAs(df: pd.DataFrame | str, id: str, tG: str=True, order: bool=True, ma
              spacer_b5: str='', spacer_b3: str='', extension: str='Extension_sequence', RTT: str='RTT_sequence',
              PBS: str='PBS_sequence', linker: str='Linker_sequence', extension_t5: str='', extension_t3: str='',
              extension_b5: str='CGCG', extension_b3: str='GCACCGACTC',
-             order_scaffold: bool=False, dir:str=None, file:str=None) -> pd.DataFrame:
+             order_scaffold: bool=False, file:str=None) -> pd.DataFrame:
     ''' 
     epegRNAs(): design GG cloning oligonucleotides for prime editing epegRNAs
     
@@ -172,8 +171,7 @@ def epegRNAs(df: pd.DataFrame | str, id: str, tG: str=True, order: bool=True, ma
     PBS (str, optional): epegRNA primer binding site column name (Default: PBS_sequence)
     linker (str, optional): epegRNA linker column name(Default: Linker_sequence)
     order_scaffold (bool, optional): order top and bottom oligonucleotide for scaffold sequence (Default: False)
-    dir (str, optional): save directory
-    file (str, optional): save file or full path if dir is None
+    file (str, optional): output file path
     
     Assumptions:
     1. epegRNA scaffold: GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC
@@ -214,13 +212,13 @@ def epegRNAs(df: pd.DataFrame | str, id: str, tG: str=True, order: bool=True, ma
                             ]).reset_index(drop=True)
 
     # Save & return dataframe
-    io.save(obj=df, dir=dir, file=file)  
+    io.save(obj=df, file=file)  
     return df
 
 def ngRNAs(df: pd.DataFrame | str, id: str, tG: bool=True, order: bool=True,
            spacer: str='Spacer_sequence', spacer_t5: str='CACC', spacer_t3: str='GTTTAAGAGC',
            spacer_b5: str='', spacer_b3: str='', order_scaffold: bool=False, 
-           dir:str=None, file:str=None) -> pd.DataFrame:
+           file:str=None) -> pd.DataFrame:
     ''' 
     ngRNAs(): design GG cloning oligonucleotides for prime editing ngRNAs
     
@@ -235,8 +233,7 @@ def ngRNAs(df: pd.DataFrame | str, id: str, tG: bool=True, order: bool=True,
     spacer_b5 (str, optional): bottom oligonucleotide 5' overhang
     spacer_b3 (str, optional): bottom oligonucleotide 3' overhang}
     order_scaffold (bool, optional): order top and bottom oligonucleotide for scaffold sequence (Default: False)
-    dir (str, optional): save directory
-    file (str, optional): save file
+    file (str, optional): output file path
     
     Assumptions:
     1. ngRNA scaffold: GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC
@@ -262,7 +259,7 @@ def ngRNAs(df: pd.DataFrame | str, id: str, tG: bool=True, order: bool=True,
                             ]).reset_index(drop=True)
 
     # Save & return dataframe
-    io.save(obj=df, dir=dir, file=file)  
+    io.save(obj=df, file=file)  
     return df
 
 # Library GG cloning
@@ -282,7 +279,7 @@ def epegRNA_pool(
     epegRNA_spacer:str='Spacer_sequence', epegRNA_scaffold:str='Scaffold_sequence',
     epegRNA_extension:str='Extension_sequence', epegRNA_RTT:str='RTT_sequence',
     epegRNA_PBS:str='PBS_sequence', epegRNA_linker:str='Linker_sequence',
-    dir:str=None, file:str=None, return_df:bool=True) -> pd.DataFrame:
+    file:str=None, return_df:bool=True) -> pd.DataFrame:
     ''' 
     epegRNA_pool(): design GG cloning oligonucleotides for pooled prime editing epegRNAs
     
@@ -313,8 +310,7 @@ def epegRNA_pool(
     epegRNA_RTT (str, optional): epegRNA reverse transcripase template column name (Default: 'RTT_sequence')
     epegRNA_PBS (str, optional): epegRNA primer binding site column name (Default: 'PBS_sequence')
     epegRNA_linker (str, optional): epegRNA linker column name (Default: 'Linker_sequence')
-    dir (str, optional): save directory (Default: None)
-    file (str, optional): save file (Default: None)
+    file (str, optional): output file path (Default: None)
     return_df (bool, optional): return dataframe (Default: True)
 
     Assumptions:
@@ -487,7 +483,7 @@ def epegRNA_pool(
         df[f'{enzyme}_rc_i'] = enzyme_sites_rc
     
     # Save & return dataframe
-    io.save(obj=df, file=file, dir=dir)
+    io.save(obj=df, file=file)
     if return_df:
         return df
 
@@ -504,7 +500,7 @@ def dms_pool(
     fwd_homology_t5:str='Forward Homology Name', rev_homology_t3:str='Reverse Homology Name',
     fwd_RE_t5_val:str='Esp3I', rev_RE_t3_val:str='Esp3I',
     template:str='Edit_sequence_with_silent_mutations',
-    dir:str=None, file:str=None, return_df:bool=True) -> pd.DataFrame:
+    file:str=None, return_df:bool=True) -> pd.DataFrame:
     ''' 
     dms_pool(): design GG cloning oligonucleotides for deep mutational scanning (DMS) libraries
     
@@ -529,8 +525,7 @@ def dms_pool(
     fwd_RE_t5_val (str, optional): forward restriction enzyme column value (Default: 'Esp3I')
     rev_RE_t3_val (str, optional): reverse restriction enzyme column value (Default: 'Esp3I')
     template (str, optional): oligonucleotide template column name in df (Default: 'Edit_sequence_with_silent_mutations')
-    dir (str, optional): save directory (Default: None)
-    file (str, optional): save file (Default: None)
+    file (str, optional): output file path (Default: None)
     return_df (bool, optional): return dataframe (Default: True)
 
     Assumptions:
@@ -731,7 +726,7 @@ def dms_pool(
         df[f'{enzyme}_rc_i'] = enzyme_sites_rc
     
     # Save & return dataframe
-    io.save(obj=df, file=file, dir=dir)
+    io.save(obj=df, file=file)
     if return_df:
         return df
 
@@ -847,8 +842,7 @@ def umi(length: int = 15, GC_fract: tuple = (0.4, 0.6), hamming: int = 4,
 
         filtered_sequences = shuffle(ls=filtered_sequences)
         io.save(obj=pd.DataFrame({'UMI_sequence': filtered_sequences}),
-                dir=dir, 
-                file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{length}.csv')
+                file=os.path.join(dir, f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{length}.csv'))
         
         stop = len(filtered_sequences)
 
@@ -865,8 +859,7 @@ def umi(length: int = 15, GC_fract: tuple = (0.4, 0.6), hamming: int = 4,
         # Save the filtered sequences after each iteration
         print(f'Kept {len(filtered_sequences_save)} sequences so far...')
         io.save(obj=pd.DataFrame({'UMI_sequence': filtered_sequences_save}),
-                dir=dir, 
-                file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{length}_hamming_{hamming}_yield_{len(filtered_sequences_save)}.csv')
+                file=os.path.join(dir, f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{length}_hamming_{hamming}_yield_{len(filtered_sequences_save)}.csv'))
 
 # Master Mix
 def pcr_mm(primers: pd.Series, template_uL: int, template: str='1-2 ng/uL template',
@@ -923,7 +916,7 @@ def pcr_mm(primers: pd.Series, template_uL: int, template: str='1-2 ng/uL templa
 # Simulation
 def pcr_sim(df: pd.DataFrame | str,template_col: str, fwd_bind_col: str, rev_bind_col: str,
             fwd_ext_col: str=None, rev_ext_col: str=None, product_col: str='PCR Product',
-            primer_in_product: bool=True, dir:str=None, file:str=None) -> pd.DataFrame:
+            primer_in_product: bool=True, file:str=None) -> pd.DataFrame:
     '''
     pcr_sim(): returns dataframe with simulated pcr product 
     
@@ -936,8 +929,7 @@ def pcr_sim(df: pd.DataFrame | str,template_col: str, fwd_bind_col: str, rev_bin
     rev_ext_col (str, optional): rev primer extension region column name (Default: None)
     product_col (str, optional): pcr product column name (Default: 'PCR Product')
     primer_in_product (bool, optional): include primer binding and extension regions in PCR product (Default: True)
-    dir (str, optional): save directory
-    file (str, optional): save file
+    file (str, optional): output file path
 
     Dependencies: pandas,Bio.Seq,tidy
     '''
@@ -993,7 +985,7 @@ def pcr_sim(df: pd.DataFrame | str,template_col: str, fwd_bind_col: str, rev_bin
     df[product_col]=pcr_product_ls
 
     # Save & return dataframe
-    io.save(obj=df, dir=dir, file=file) 
+    io.save(obj=df, file=file) 
     return df
 
 def off_targets(df: pd.DataFrame | str, col: str, match_score: float = 2, mismatch_score: float = -1, 
@@ -1041,8 +1033,7 @@ def off_targets(df: pd.DataFrame | str, col: str, match_score: float = 2, mismat
                                             'Off Target Sequence': off_target_seqs,
                                             'Best Alignment Score': off_target_seqs_scores,
                                             'Best Alignment Formatted': off_target_seqs_alignments}),
-                        dir=os.path.join(dir,'ckpt'),
-                        file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_seqs_{s+1}.csv')
+                        file=os.path.join(dir,'ckpt', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_seqs_{s+1}.csv'))
             
         if seq is None: # Missing region (not applicable to count_alignments())
             continue
@@ -1068,8 +1059,7 @@ def off_targets(df: pd.DataFrame | str, col: str, match_score: float = 2, mismat
                                   'Off Target Sequence': off_target_seqs,
                                   'Best Alignment Score': off_target_seqs_scores,
                                   'Best Alignment Formatted': off_target_seqs_alignments}),
-                dir=dir,
-                file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_seqs_{s+1}.csv')
+                file=os.path.join(dir, f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_seqs_{s+1}.csv'))
     
     if return_df:  # Return results as a DataFrame
         return pd.DataFrame({'Target Sequence': seqs,

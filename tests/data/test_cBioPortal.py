@@ -151,7 +151,7 @@ def test_string_path_input_loads_via_io_get(mocker):
 
 def test_dir_file_saves_output_csv_within_tmp_path(tmp_path):
     df = pd.DataFrame([_row(protein_change="K10Q")])
-    out = cbp.mutations(df=df, wt=WT, config=False, dir=str(tmp_path), file="out.csv")
+    out = cbp.mutations(df=df, wt=WT, config=False, file=str(tmp_path / "out.csv"))
 
     out_file = tmp_path / "out.csv"
     assert out_file.exists()

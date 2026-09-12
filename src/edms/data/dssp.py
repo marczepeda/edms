@@ -38,7 +38,7 @@ try:
 except ImportError:
     print("Warning: secstructartist is not installed properly.\nCannot use edms dssp ssa or plot_ssa() function.")
 from pathlib import Path
-from ..utils import mkdir
+from ..utils import mkdir, check_outpath
 from ..gen import plot as p
 
 # DSSP code descriptions
@@ -269,7 +269,6 @@ def plot_ss_color_key(
     swatch_width: float = 0.35,
     swatch_height: float = 0.35,
     alpha: float = 0.15,
-    dir: str = None,
     file: str = None,
     dpi: int = 1200,
     transparent: bool = True,
@@ -287,8 +286,7 @@ def plot_ss_color_key(
     swatch_width (float, optional): Width of color box.
     swatch_height (float, optional): Height of color box.
     alpha (float, optional): Transparency of color boxes.
-    dir (str, optional): Directory to save the figure; if None, the figure is not saved.
-    file (str, optional): Filename to save the figure; if None, the figure is not saved.
+    file (str, optional): Output file path for the figure; if None, the figure is not saved.
     dpi (int, optional): Resolution for saving the figure.
     transparent (bool, optional): Whether to save the figure with a transparent background.
     show (bool, optional): Whether to display the figure.
@@ -339,15 +337,15 @@ def plot_ss_color_key(
     ax.set_title(title, fontsize=title_size, fontweight=title_weight)
     
     plt.tight_layout()
-    if dir is not None and file is not None:
-        p.save_fig(dir=dir, file=file, dpi=dpi, transparent=transparent)
+    if file is not None:
+        p.save_fig(file=file, dpi=dpi, transparent=transparent)
     if show:
         plt.show()
     
     plot_ss_color_key
 
 def plot_ssa(dssp_file: str, chain_id: str, artist = None, figsize: tuple = (8, 0.5),
-            dir: str = None, file: str = None, dpi: int = 1200, transparent: bool = True, show: bool = True, **kwargs):
+            file: str = None, dpi: int = 1200, transparent: bool = True, show: bool = True, **kwargs):
     """
     plot_ssa(): Plot the secondary structure assignment for a given DSSP file and chain.
 
@@ -355,8 +353,7 @@ def plot_ssa(dssp_file: str, chain_id: str, artist = None, figsize: tuple = (8, 
     dssp_file (str): Path to the DSSP file.
     chain_id (str): Chain identifier to extract, e.g. "A".
     artist (SecStructArtist | str): Optional secstructartist ElementArtist to use for plotting; if None, edms custom style will be used.
-    dir (str, optional): Directory to save the figure; if None, the figure is not saved.
-    file (str, optional): Filename to save the figure; if None, the figure is not saved.
+    file (str, optional): Output file path for the figure; if None, the figure is not saved.
     dpi (int, optional): Resolution for saving the figure.
     transparent (bool, optional): Whether to save the figure with a transparent background.
     show (bool, optional): Whether to display the plot (default: True).
@@ -512,8 +509,8 @@ def plot_ssa(dssp_file: str, chain_id: str, artist = None, figsize: tuple = (8, 
     ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.6), ncol=3)
     
     plt.tight_layout()
-    if dir is not None and file is not None:
-        p.save_fig(dir=dir, file=file, dpi=dpi, transparent=transparent)
+    if file is not None:
+        p.save_fig(file=file, dpi=dpi, transparent=transparent)
     if show:
         plt.show()
 
@@ -535,7 +532,6 @@ def pymol_color_defs_from_ss_map(ss_map: dict) -> list[str]:
 def pymol_ssa(
     dssp_file: str,
     chain_id: str,
-    dir: str,
     file: str,
     pdb_id_or_filename: str = None,
     object_name: str = "prot",
@@ -549,16 +545,14 @@ def pymol_ssa(
     Parameters:
     dssp_file (str): Path to the DSSP file.
     chain_id (str): Chain identifier to extract, e.g. "A".
-    dir (str): Directory to save the PyMOL script.
-    file (str): Output PyMOL script filename, e.g. 'ssa.pml'.
+    file (str): Output PyMOL script path, e.g. '../out/ssa.pml'.
     pdb_id_or_filename (str): PDB ID or path to the structure file to load in PyMOL.
     object_name (str, optional): Name of the PyMOL object.
     base_color (str, optional): Base color applied before DSSP coloring.
     unknown_color (str, optional): Color for unknown DSSP codes.
     execute (bool, optional): Whether to execute the generated PyMOL script immediately after writing it.
     """
-    mkdir(dir)
-    out_file = os.path.join(dir, file)
+    out_file = check_outpath(file=file) # Make output directory if it does not exist
 
     df = parse_segments(
         dssp_file=dssp_file,

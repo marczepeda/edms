@@ -260,7 +260,7 @@ def test_pymol_script_writes_expected_commands(tmp_path):
     residue_dict = {1: [168, 172], 2: ["O0010"]}
     colors = [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0)]
     pwes.pymol_script(
-        dir=str(tmp_path), file="script.pml", pdb_filename="/some/path/model.pdb",
+        file=str(tmp_path / "script.pml"), pdb_filename="/some/path/model.pdb",
         residue_dict=residue_dict, colors=colors,
     )
     text = (tmp_path / "script.pml").read_text()
@@ -273,7 +273,7 @@ def test_pymol_script_writes_expected_commands(tmp_path):
 
 def test_pymol_script_skips_empty_residue_lists(tmp_path):
     pwes.pymol_script(
-        dir=str(tmp_path), file="script.pml", pdb_filename="model.pdb",
+        file=str(tmp_path / "script.pml"), pdb_filename="model.pdb",
         residue_dict={1: []}, colors=[(1.0, 0.0, 0.0)],
     )
     text = (tmp_path / "script.pml").read_text()

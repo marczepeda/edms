@@ -300,7 +300,6 @@ ClickTooltipPlugin.prototype.draw = function() {
 # General Supporting Methods
 def export_mpld3_molstar_html(
     fig: plt.Figure,
-    dir: str,
     file: str,
     pdb_id: str | None = None,
     pdb_url: str | None = None,
@@ -313,7 +312,7 @@ def export_mpld3_molstar_html(
 
     Parameters
     fig (matplotlib.figure.Figure): The Matplotlib figure to convert via mpld3.
-    output_html (str or Path): Target HTML file path.
+    file (str or Path): Target HTML file path; the output directory is created if needed.
     pdb_id (str, optional): PDB ID to load from PDBe if pdb_url is not given.
     pdb_url (str, optional): Direct URL to a structure file. If given, overrides pdb_id.
     icon (str, optional): html file icon (Default: python logo)
@@ -323,15 +322,16 @@ def export_mpld3_molstar_html(
     Path
         Path to the generated HTML file.
     """
-    output_html = Path(os.path.join(dir, file))
+    output_html = Path(check_outpath(file=file))
+    name = output_html.name  # File name; the Mol* assets live in a sibling folder named after it
 
     # 1) Get mpld3 HTML for the figure (this is just a <div> + <script>, no full document)
     fig_html = mpld3.fig_to_html(fig)
 
     # 2) Mol* assets (use CDN for standalone HTML)
     molstar_head = f"""
-<link rel="stylesheet" type="text/css" href="{file[:-5]}/molstar.css" />
-<script src="{file[:-5]}/molstar.js"></script>
+<link rel="stylesheet" type="text/css" href="{name[:-5]}/molstar.css" />
+<script src="{name[:-5]}/molstar.js"></script>
 """
 
     # 3) Set up the structure URL
@@ -426,22 +426,22 @@ document.addEventListener('DOMContentLoaded', function () {{
 
     return output_html
 
-def save_fig(file: str | None, dir: str | None = None, fig=None, dpi: int = 0, transparent: bool = True, PDB_pt: str = None, icon: str = 'python') -> None:
+def save_fig(file: str | None, fig=None, dpi: int = 0, transparent: bool = True, PDB_pt: str = None, icon: str = 'python') -> None:
     """
     save_fig(): save static image and optionally interactive HTML or JSON via mpld3.
 
     Parameters:
-    file (str | None): output filename (static image by default; `.html` and `.json` trigger interactive mpld3 exports)
-    dir (str | None): output directory
+    file (str | None): output file path (static image by default; `.html` and `.json` trigger interactive mpld3 exports); the output directory is created if needed
     fig: matplotlib Figure object (if None, uses current figure)
     dpi (int, optional): resolution for static images and base resolution for interactive exports (default: 1200)
     transparent (bool, optional): whether to save static images with transparent background (default: True)
     PDB_pt (str, optional): File path to PDB file for Mol* visualization (Default: None)
     icon (str, optional): html file icon (Default: python logo)
     """
-    file, dir = check_outpath(file=file, dir=dir)  # Ensure output directory exists and get validated paths
-    if file is None or dir is None:
+    pt = check_outpath(file=file)  # Ensure output directory exists and get the resolved path
+    if pt is None:
         return
+    name = os.path.basename(pt)  # File name used for suffix checks & asset sub-directory names
 
     if fig is None:
         fig = plt.gcf()
@@ -451,11 +451,11 @@ def save_fig(file: str | None, dir: str | None = None, fig=None, dpi: int = 0, t
     except Exception:
         pass
 
-    ext = file.split('.')[-1].lower()
+    ext = name.split('.')[-1].lower()
     if ext not in ('html', 'json'):  # Save static image
         if ext != 'all':
             plt.savefig(
-                fname=os.path.join(dir, file),
+                fname=pt,
                 dpi=dpi if dpi > 0 else 1200,
                 bbox_inches='tight',
                 format=ext,
@@ -464,7 +464,7 @@ def save_fig(file: str | None, dir: str | None = None, fig=None, dpi: int = 0, t
         else:
             for fmt in ['png', 'pdf', 'svg']:
                 plt.savefig(
-                    fname=os.path.join(dir, f"{file[:-4]}.{fmt}"),
+                    fname=f"{pt[:-4]}.{fmt}",
                     dpi=dpi if dpi > 0 else 1200,
                     bbox_inches='tight',
                     format=fmt,
@@ -478,10 +478,10 @@ def save_fig(file: str | None, dir: str | None = None, fig=None, dpi: int = 0, t
         if ext == 'html':
             if PDB_pt is None:
                 # Plain mpld3 HTML
-                mpld3.save_html(fig, os.path.join(dir, file))
+                mpld3.save_html(fig, pt)
             else:
                 # Copy molstar JS and CSS paths
-                sub_dir = os.path.join(dir,file[:-5])
+                sub_dir = pt[:-5]
                 mkdir(sub_dir)
                 with pkg_resources.path(molstar_pkg, "molstar.js") as js_path:
                     shutil.copy(js_path, Path(sub_dir) / "molstar.js")
@@ -513,15 +513,14 @@ def save_fig(file: str | None, dir: str | None = None, fig=None, dpi: int = 0, t
 
                 export_mpld3_molstar_html(
                     fig=fig,
-                    dir=dir,
-                    file=file,
+                    file=pt,
                     pdb_url=PDB_pt,
                     icon=icon
                 )
                 
         elif ext == 'json':
             fig_dict = mpld3.fig_to_dict(fig)
-            with open(os.path.join(dir, file), 'w') as f:
+            with open(pt, 'w') as f:
                 json.dump(fig_dict, f)
 
         fig.set_dpi(original_dpi)
@@ -763,8 +762,7 @@ def autoscale_xy(df, x, y, x_axis_dims, y_axis_dims, x_axis_scale, y_axis_scale,
 
     return x_axis_dims, y_axis_dims
 
-def formatter(graph: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: str, dir: str,
-              title: str, title_size: int, title_weight: str, title_font: str,
+def formatter(graph: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: str, title: str, title_size: int, title_weight: str, title_font: str,
               x_axis: str, x_axis_size: int, x_axis_weight: str, x_axis_font: str, x_axis_scale: str, x_axis_dims: tuple, x_axis_pad: int, x_ticks_size: int, x_ticks_rot: int, x_ticks_font: str, x_ticks: list,
               y_axis: str, y_axis_size: int, y_axis_weight: str, y_axis_font: str, y_axis_scale: str, y_axis_dims: tuple, y_axis_pad: int, y_ticks_size: int, y_ticks_rot: int, y_ticks_font: str, y_ticks: list,
               legend_title: str, legend_title_size: int, legend_title_weight: str, legend_size: int, legend_bbox_to_anchor: tuple, legend_loc: str, legend_items: tuple, legend_ncol: int,
@@ -780,8 +778,7 @@ def formatter(graph: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file:
     x (str): x-axis column name
     y (str): y-axis column name
     cols (str, optional): color column name
-    file (str, optional): save plot to filename
-    dir (str, optional): save plot to directory
+    file (str, optional): output plot file path
     title (str, optional): plot title
     title_size (int, optional): plot title font size
     title_weight (str, optional): plot title bold, italics, etc.
@@ -939,9 +936,9 @@ def formatter(graph: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file:
             else: move_dist_legend(ax,legend_loc,legend_title_props,legend_size,legend_bbox_to_anchor,legend_ncol)
 
     # Save & show fig
-    save_fig(file=file, dir=dir, fig=ax.figure, dpi=dpi, transparent=transparent, PDB_pt=PDB_pt, icon=icon)
+    save_fig(file=file, fig=ax.figure, dpi=dpi, transparent=transparent, PDB_pt=PDB_pt, icon=icon)
     if show:
-        ext = file.split('.')[-1].lower() if file is not None else ''
+        ext = os.path.basename(file).split('.')[-1].lower() if file is not None else ''
         if ext not in ('html', 'json'):
             plt.show()
         else: 
@@ -1055,14 +1052,13 @@ def _facet_values(df: pd.DataFrame, col: str, order: list=None):
     # stable-ish ordering: keep pandas appearance order
     return df[col].dropna().drop_duplicates().tolist()
 
-def _final_save_show(fig, file: str=None, dir: str=None, dpi: int=0, transparent: bool=True, PDB_pt: str=None, icon: str='python', show: bool=True):
+def _final_save_show(fig, file: str=None, dpi: int=0, transparent: bool=True, PDB_pt: str=None, icon: str='python', show: bool=True):
     """
     _final_save_show(): Save/show once for the whole figure using your conventions.
     
     Parameters:
     fig (matplotlib.figure.Figure): Matplotlib figure object to save/show.
-    file (str, optional): Filename for saving the figure. If None, no file is saved.
-    dir (str, optional): Directory for saving the figure. Required if file is not None.
+    file (str, optional): Output file path for the figure. If None, no file is saved.
     dpi (int, optional): DPI for saving the figure. If 0, uses default DPI (1200 for static, 150 for HTML).
     transparent (bool, optional): Whether to save static images with transparent background (default: True).
     PDB_pt (str, optional): Path to PDB file for Mol* visualization; only intended for fastq plots (Default: None).
@@ -1070,11 +1066,11 @@ def _final_save_show(fig, file: str=None, dir: str=None, dpi: int=0, transparent
     show (bool, optional): Whether to display the figure after saving (default: True).
     """
     # Save
-    save_fig(file=file, dir=dir, fig=fig, dpi=dpi, transparent=transparent, PDB_pt=PDB_pt, icon=icon)
+    save_fig(file=file, fig=fig, dpi=dpi, transparent=transparent, PDB_pt=PDB_pt, icon=icon)
 
     # Show
     if show:
-        ext = file.split('.')[-1].lower() if file is not None else ''
+        ext = os.path.basename(file).split('.')[-1].lower() if file is not None else ''
         if ext not in ('html', 'json'):
             plt.show()
         else:
@@ -1170,8 +1166,7 @@ def _subplot_title(idx: int, c=None, r=None,
     return str(subplot_titles)
 
 def _apply_formatter_on_ax(*, ax, df_sub: pd.DataFrame, graph: str,
-                           x: str, y: str, cols: str, file: str | None, dir: str,
-                           title: str | None, title_size: float, title_weight: str, title_font: str,
+                           x: str, y: str, cols: str, file: str | None, title: str | None, title_size: float, title_weight: str, title_font: str,
                            x_axis: str | None, x_axis_size: float, x_axis_weight: str, x_axis_font: str, x_axis_scale: str, x_axis_dims: tuple[float, float], x_axis_pad: float,
                            x_ticks_size: float, x_ticks_rot: float, x_ticks_font: str, x_ticks: list[str] | None,
                            y_axis: str | None, y_axis_size: float, y_axis_weight: str, y_axis_font: str, y_axis_scale: str, y_axis_dims: tuple[float, float], y_axis_pad: float,
@@ -1187,7 +1182,7 @@ def _apply_formatter_on_ax(*, ax, df_sub: pd.DataFrame, graph: str,
     df_sub (pd.DataFrame): The subset of the DataFrame corresponding to this facet panel.
     graph (str): The type of graph to plot (e.g., 'scat', 'bar', etc.).
     x (str), y (str), cols (str): The column names for x-axis, y-axis, and color grouping.
-    file (str | None), dir (str): The filename and directory for saving the plot (if applicable).
+    file (str | None): The output file path for saving the plot (if applicable).
     title (str | None), title_size (float), title_weight (str), title_font (str): The title and its formatting parameters.
     x_axis (str | None), x_axis_size (float), x_axis_weight (str), x_axis_font (str), x_axis_scale (str), x_axis_dims (tuple[float, float]), x_axis_pad (float), x_ticks_size (float), x_ticks_rot (float), x_ticks_font (str), x_ticks (list[str] | None): The x-axis label and its formatting parameters.
     y_axis (str | None), y_axis_size (float), y_axis_weight (str), y_axis_font (str), y_axis_scale (str), y_axis_dims (tuple[float, float]), y_axis_pad (float), y_ticks_size (float), y_ticks_rot (float), y_ticks_font (str), y_ticks (list[str] | None): The y-axis label and its formatting parameters.
@@ -1197,7 +1192,7 @@ def _apply_formatter_on_ax(*, ax, df_sub: pd.DataFrame, graph: str,
     plt.sca(ax)  # make this axis current for plt.title/xlabel/etc in formatter
     formatter(
         graph=graph, ax=ax, df=df_sub, x=x, y=y, cols=cols,
-        file=None, dir=dir,  # <- don't save per facet
+        file=None, # <- don't save per facet
         title=title, title_size=title_size, title_weight=title_weight, title_font=title_font,
         x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font,
         x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad,
@@ -1220,7 +1215,7 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
         cols: str = None, cols_order: list = None, cols_exclude: list | str = None,
         stys: str = None, stys_order: list = None, mark_order: list = None, label: str | None = None,
         facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
-        file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', alpha: float = 1.0, edgecol: str = 'black',
+        file: str = None, palette_or_cmap: str = 'colorblind', alpha: float = 1.0, edgecol: str = 'black',
         figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
         x_axis: str | list = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial',
         x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None,
@@ -1257,8 +1252,7 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
     facetx_order (list, optional): order of facet columns
     facety_order (list, optional): order of facet rows
     subplot_titles (str | list, optional): Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none
-    file (str, optional): save plot to filename
-    dir (str, optional): save plot to directory
+    file (str, optional): output plot file path
     palette_or_cmap (str, optional): seaborn color palette or matplotlib color map
     alpha (float, optional): Alpha (transparency) for scatter points (0 to 1)
     edgecol (str, optional): point edge color
@@ -1564,7 +1558,7 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
             # apply formatter with the appropriate subset of data and parameters for this panel
             _apply_formatter_on_ax(
                 ax=ax, df_sub=df_sub, graph=graph,
-                x=x, y=y, cols=cols, file=file, dir=dir,
+                x=x, y=y, cols=cols, file=file, 
                 title=title_sub if corr_method is not None else '', title_size=title_size, title_weight=title_weight, title_font=title_font,
                 x_axis=x_axis_panel, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font,
                 x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad,
@@ -1631,7 +1625,7 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
 
     # save/show once
     fig.tight_layout()
-    _final_save_show(fig, file=file, dir=dir, dpi=dpi, transparent=transparent, PDB_pt=None, icon='scatter', show=show)
+    _final_save_show(fig, file=file, dpi=dpi, transparent=transparent, PDB_pt=None, icon='scatter', show=show)
     return fig, axes
 
 def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
@@ -1639,7 +1633,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
         cols: str = None, cols_order: list = None, cols_exclude: list | str = None,
         line: float = None, facetx: str = None, facety: str = None,
         facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
-        file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', alpha: float = 1.0,
+        file: str = None, palette_or_cmap: str = 'colorblind', alpha: float = 1.0,
         dodge: bool = False, jitter: bool = True, size: float = 5,
         edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
         figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
@@ -1676,8 +1670,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
     facetx_order (list, optional): order of facet columns
     facety_order (list, optional): order of facet rows
     subplot_titles (str | list, optional): Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none
-    file (str, optional): save plot to filename
-    dir (str, optional): save plot to directory
+    file (str, optional): output plot file path
     palette_or_cmap (str, optional): seaborn color palette or matplotlib color map
     alpha (float, optional): Alpha (transparency) for scatter points (0 to 1)
     dodge (bool, optional): whether to separate points by color category
@@ -2004,7 +1997,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
             # apply formatter with the appropriate subset of data and parameters for this panel
             _apply_formatter_on_ax(
                 ax=ax, df_sub=df_sub, graph=graph,
-                x=x, y=y, cols=cols, file=file, dir=dir,
+                x=x, y=y, cols=cols, file=file, 
                 title='', title_size=title_size, title_weight=title_weight, title_font=title_font,
                 x_axis=x_axis_panel, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font,
                 x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad,
@@ -2071,11 +2064,11 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
 
     # save/show once
     fig.tight_layout()
-    _final_save_show(fig, file=file, dir=dir, dpi=dpi, transparent=transparent, PDB_pt=PDB_pt, icon='cat', show=show)
+    _final_save_show(fig, file=file, dpi=dpi, transparent=transparent, PDB_pt=PDB_pt, icon='cat', show=show)
     return fig, axes
 
 def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_order: list = None, cols_exclude: list | str = None, bins: int = 40, log10_low: int = 0,
-        file: str = None, dir: str = None, palette_or_cmap: str = 'colorblind', edgecol: str = 'black', lw: int = 1,
+        file: str = None, palette_or_cmap: str = 'colorblind', edgecol: str = 'black', lw: int = 1,
         facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
         figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
@@ -2094,8 +2087,7 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
     cols_exclude (list | str, optional): color column values exclude
     bins (int, optional): # of bins for histogram
     log10_low (int, optional): log scale lower bound
-    file (str, optional): save plot to filename
-    dir (str, optional): save plot to directory
+    file (str, optional): output plot file path
     palette_or_cmap (str, optional): seaborn color palette or matplotlib color map
     edgecol (str, optional): point edge color
     lw (int, optional): line width
@@ -2300,7 +2292,6 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
             y=y_plot,
             cols=cols,
             file=file,
-            dir=dir,
             title='' if faceting else title,
             title_size=title_size,
             title_weight=title_weight,
@@ -2401,7 +2392,6 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
     _final_save_show(
         fig,
         file=file,
-        dir=dir,
         dpi=dpi,
         transparent=transparent,
         PDB_pt=None,
@@ -2414,12 +2404,12 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
 
 def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vals: str = None, vals_dims: tuple = None,
         facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
-        file: str = None, dir: str = None, edgecol: str = 'black', lw: int = 1, annot: bool = False, center: float = None, cmap: str = "Reds", sq: bool = True,
+        file: str = None, edgecol: str = 'black', lw: int = 1, annot: bool = False, center: float = None, cmap: str = "Reds", sq: bool = True,
         cbar: bool=True, cbar_label: str=None, cbar_label_size: int=None, cbar_label_weight: str='bold', cbar_tick_size: int=None, cbar_shrink: float=None, cbar_aspect: int=None, cbar_pad: float=None, cbar_orientation: str=None, cbar_mode: str = "figure",
         title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial', figsize: tuple=(6,6),
         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 45, x_ticks_font: str = 'Arial',
         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial',
-         dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True, **kwargs):
+        dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True, **kwargs):
     '''
     heat(): creates heat plot related graphs
 
@@ -2434,8 +2424,7 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vals: str = None,
     facetx_order (list, optional): order of facet columns
     facety_order (list, optional): order of facet rows
     subplot_titles (str | list, optional): Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none
-    file (str, optional): save plot to filename
-    dir (str, optional): save plot to directory
+    file (str, optional): output plot file path
     edgecol (str, optional): point edge color
     lw (int, optional): line width
     annot (bool, optional): annotate values
@@ -2773,7 +2762,6 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vals: str = None,
 
     save_fig(
         file=file,
-        dir=dir,
         fig=fig,
         dpi=dpi,
         transparent=transparent,
@@ -2781,7 +2769,7 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vals: str = None,
     )
 
     if show:
-        ext = file.split('.')[-1].lower() if file is not None else ''
+        ext = os.path.basename(file).split('.')[-1].lower() if file is not None else ''
         if ext not in ('html', 'json'):
             plt.show()
         else:
@@ -2790,9 +2778,9 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vals: str = None,
     plt.close()
     return fig, axes
 
-def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str = '', cutoff_value: float = 0, cutoff_keep: bool = True, cols_order: list = [], x_ord: list = [],
+def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str = '', cutoff_value: float = 0, cutoff_keep: bool = True, cols_order: list = [], x_order: list = [],
         facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
-        file: str = None, dir: str = None, palette_or_cmap: str = 'tab20', repeats: int = 1, errcap: int = 4, vertical: bool = True,
+        file: str = None, palette_or_cmap: str = 'tab20', repeats: int = 1, errcap: int = 4, vertical: bool = True,
         figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial',
         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_dims: tuple = (0, 0),  y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial',
@@ -2811,14 +2799,13 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
     cutoff_value (float, optional): y-axis values needs be greater than (e.g. 0)
     cutoff_keep (bool, optional): keep cutoff group even if below cutoff (Default: True)
     cols_order (list, optional): color column values order
-    x_ord (list, optional): x-axis column values order
+    x_order (list, optional): x-axis column values order
     facetx (str, optional): column name for x-axis faceting
     facety (str, optional): column name for y-axis faceting
     facetx_order (list, optional): order of x-axis facet values
     facety_order (list, optional): order of y-axis facet values
     subplot_titles (str | list, optional): Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none
-    file (str, optional): save plot to filename
-    dir (str, optional): save plot to directory
+    file (str, optional): output plot file path
     palette_or_cmap (str, optional): seaborn palette or matplotlib color map
     repeats (int, optional): number of color palette or map repeats (Default: 1)
     errcap (int, optional): error bar cap line width
@@ -2974,9 +2961,9 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
             df_pivot = df_pivot.reindex(columns=cols_order)
             df_pivot_err = df_pivot_err.reindex(columns=cols_order)
 
-        if x_ord != []:
-            df_pivot = df_pivot.reindex(index=x_ord)
-            df_pivot_err = df_pivot_err.reindex(index=x_ord)
+        if x_order != []:
+            df_pivot = df_pivot.reindex(index=x_order)
+            df_pivot_err = df_pivot_err.reindex(index=x_order)
 
         return df_pivot, df_pivot_err
 
@@ -3208,7 +3195,6 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
     _final_save_show(
         fig,
         file=file,
-        dir=dir,
         dpi=dpi,
         transparent=transparent,
         PDB_pt=PDB_pt,
@@ -3222,7 +3208,7 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
 def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = None, size_dims: tuple = None, label: str = None, stys_order: list = [], mark_order: list = [],
         x_threshold: float = 0, y_threshold: float = 0, bidirectional_x_threshold: bool = True, bidirectional_y_threshold: bool = False, 
         facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
-        file: str = None, dir: str = None, color: str = 'lightgray', alpha: float = 0.5, edgecol: str = 'black', vertical: bool = True,
+        file: str = None, color: str = 'lightgray', alpha: float = 0.5, edgecol: str = 'black', vertical: bool = True,
         figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
@@ -3253,8 +3239,7 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
     facetx_order (list, optional): order of facet columns
     facety_order (list, optional): order of facet rows
     subplot_titles (str | list, optional): Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none
-    file (str, optional): save plot to filename
-    dir (str, optional): save plot to directory
+    file (str, optional): output plot file path
     color (str, optional): matplotlib color for nonsignificant values
     alpha (float, optional): transparency for nonsignificant values (Default: 0.5)
     edgecol (str, optional): point edge color
@@ -3874,7 +3859,6 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
     _final_save_show(
         fig,
         file=file,
-        dir=dir,
         dpi=dpi,
         transparent=transparent,
         PDB_pt=PDB_pt,

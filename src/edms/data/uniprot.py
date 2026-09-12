@@ -965,7 +965,6 @@ def draw_ss_track(
     strand_loop_pad: float = 0.25,
 
     figsize: tuple = (10, 2),
-    dir: str | None = None,
     file: str | None = None,
     dpi: int = 0,
     show: bool = True
@@ -986,8 +985,7 @@ def draw_ss_track(
     base_zorder (int): z-order for the first element; subsequent elements decrease by zorder_step to create a stacking effect
     helix_loop_pad, strand_loop_pad (float): padding to apply to the start/end of helices and strands when auto-drawing loops between elements, to make the sine wave connect more nicely; applied as a subtraction from the end of the current element and an addition to the start of the next element when determining loop start and end positions.
     figsize (tuple, optional): size of the figure to create
-    dir (str, optional): output directory
-    file (str, optional): output filename
+    file (str, optional): output file path
     dpi (int, optional): figure dpi (Default: 1200)
     show (bool, optional): show plot (Default: True)
     """
@@ -1106,6 +1104,6 @@ def draw_ss_track(
     ax.spines["top"].set_visible(False)
     ax.set_xlabel("Residue")
 
-    p.save_fig(file=file, dir=dir, fig=ax.figure, dpi=dpi)
+    p.save_fig(file=file, fig=ax.figure, dpi=dpi)
     if show:
         plt.show()

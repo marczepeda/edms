@@ -1,8 +1,7 @@
 '''
 Tests for edms.utils
 
-Covers apply_filters(), the shared filtering step behind `edms pe pipeline` and
-`edms dms pipeline`.
+Covers apply_filters(), the shared dataframe filtering step.
 '''
 import pandas as pd
 import pytest

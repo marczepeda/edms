@@ -32,7 +32,7 @@ from statsmodels.stats.multitest import multipletests
 from . import io, tidy as t, plot as p
 
 # Statistics
-def describe(df: pd.DataFrame | str, cols:list=[], group:str='', dir:str=None, file:str=None) -> pd.DataFrame:
+def describe(df: pd.DataFrame | str, cols:list=[], group:str='', file:str=None) -> pd.DataFrame:
     ''' 
     describe(): returns descriptive statistics for numerical columns in a DataFrame
     
@@ -40,8 +40,7 @@ def describe(df: pd.DataFrame | str, cols:list=[], group:str='', dir:str=None, f
     df (dataframe | str): pandas dataframe (or file path)
     cols (list, optional): list of numerical columns to compute statistics
     group (str, optional): column name to split tidy dataframes
-    dir (str, optional): save directory
-    file (str, optional): save file
+    file (str, optional): output file path
     
     Dependencies: pandas, numpy, scipy.stats, & io
     '''
@@ -74,13 +73,13 @@ def describe(df: pd.DataFrame | str, cols:list=[], group:str='', dir:str=None, f
     descriptive['75%'] = df.quantile(0.75).reset_index(drop=True)
 
     # Save & return descriptive statistics
-    if dir is not None and file is not None:
-        io.save(obj=descriptive, dir=dir, file=file)  
+    if file is not None:
+        io.save(obj=descriptive, file=file)  
     return descriptive
 
 def difference(df: pd.DataFrame | str, data_col: str, compare_col: str, compare: list,
                same: bool=False, para: bool=True, alpha: float=0.05, within_cols:list=[], method:str='holm',
-               dir: str=None, file: str=None) -> pd.DataFrame:
+               file: str=None) -> pd.DataFrame:
     ''' 
     difference(): computes the appropriate statistical test(s) and returns the p-value(s)
     
@@ -94,8 +93,7 @@ def difference(df: pd.DataFrame | str, data_col: str, compare_col: str, compare:
     alpha (float, optional): significance level for the test (Default: 0.05)
     within_cols (list, optional): list of column names corresponding to different conditions or time points with the same subject (optional; para=True, same=True)
     method (str, optional): multiple hypothesis testing correction method (Default: holm)
-    dir (str, optional): save directory
-    file (str, optional): save file
+    file (str, optional): output file path
 
     Dependencies: pandas, scipy.stats, statsmodels.stats & io
     '''
@@ -248,12 +246,12 @@ def difference(df: pd.DataFrame | str, data_col: str, compare_col: str, compare:
                                         'null_hypothesis':['reject' if corrected_p_value else 'fail to reject' for corrected_p_value in corrected_p_values]})
     
     # Save & return descriptive statistics
-    if dir is not None and file is not None:
-        io.save(obj=inference, dir=dir, file=file)  
+    if file is not None:
+        io.save(obj=inference, file=file)  
     return inference
 
 def correlation(df: pd.DataFrame | str, var_cols: list=[], value_cols: list=[], method: str='pearson', numeric_only: bool=True,
-                plot: bool=True, dir:str=None, file_data:str=None, file_plot:str=None, **kwargs_plot) -> pd.DataFrame:
+                plot: bool=True, file_data:str=None, file_plot:str=None, **kwargs_plot) -> pd.DataFrame:
     ''' 
     correlation(): returns a correlation matrix & plot
     
@@ -264,9 +262,8 @@ def correlation(df: pd.DataFrame | str, var_cols: list=[], value_cols: list=[], 
     method (str, optional): pearson, spearman, or kendall (Default: pearson)
     numeric_only (bool, optional): only calculates correlations for numeric columns (Default: True)
     plot (bool, optional): generate correlation matrix plot (Default: True)
-    dir (str, optional): save directory
-    file_data (str, optional): save data file (e.g., csv)
-    file_plot (str, optional): save plot file (e.g., pdf)
+    file_data (str, optional): output data file path (e.g., .csv)
+    file_plot (str, optional): output plot file path (e.g., .pdf)
     kwargs_plot (dict, optional): plotting keyword arguments
     
     Depedencies: pandas, io
@@ -283,9 +280,9 @@ def correlation(df: pd.DataFrame | str, var_cols: list=[], value_cols: list=[], 
 
     # Plot, save & return correlation matrix
     if plot == True:
-        p.heat(df=df_corr, cbar_label=method, dir=dir, file=file_plot, **kwargs_plot)
-    if dir is not None and file_data is not None:
-        io.save(obj=df_corr, dir=dir, file=file_data, id=True)
+        p.heat(df=df_corr, cbar_label=method, file=file_plot, **kwargs_plot)
+    if file_data is not None:
+        io.save(obj=df_corr, file=file_data, id=True)
     return df_corr
 
 def weighted_correlation(df: pd.DataFrame | str, x: str, y: str, weight: str=None,
@@ -453,7 +450,7 @@ def weighted_corr_line(df: pd.DataFrame, x: str, y: str, weight: str, ax=None,
 # Comparison
 def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str, 
             var: str, count: str, pseudocount: int=1, alternative: str='two-sided', replicate: str = None,
-            column_prefix: str = '', dir: str = None, file: str = None, verbose: bool = False) -> pd.DataFrame:
+            column_prefix: str = '', file: str = None, verbose: bool = False) -> pd.DataFrame:
     ''' 
     compare(): computes FC, pval, and log transformations relative to a specified condition
 
@@ -468,8 +465,7 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str,
     replicate (str, optional): replicate column name (optional; if provided, computes statistics for each sample separately and then aggregates by condition)
     alternative (str, optional): alternative hypothesis for statistical test ('two-sided', 'less', or 'greater'; Default: 'two-sided')
     column_prefix (str, optional): prefix for new columns (Default: '')
-    dir (str, optional): save directory
-    file (str, optional): save file
+    file (str, optional): output file path
     verbose (bool, optional): print progress to console (Default: False)
     '''
     # Get dataframe from file path if needed
@@ -737,13 +733,13 @@ def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str,
     t.unpack_singleton_iterables(df=df_stat, inplace=True)
     
     # Save & return statistics dataframe
-    if dir is not None and file is not None:
-        io.save(obj=df_stat, dir=dir, file=file) 
+    if file is not None:
+        io.save(obj=df_stat, file=file) 
     return df_stat
 
 def odds_ratio(df: pd.DataFrame | str, cond: str, cond_comp: str, 
             var: str, var_comp: str, count: str, pseudocount: int=1,
-            alternative: str='two-sided', dir:str=None, file:str=None, verbose:bool=False) -> pd.DataFrame:
+            alternative: str='two-sided', file:str=None, verbose:bool=False) -> pd.DataFrame:
     ''' 
     odds_ratio(): computes odds ratios relative to a specified condition & variable (e.g., unedited & WT)
 
@@ -756,8 +752,7 @@ def odds_ratio(df: pd.DataFrame | str, cond: str, cond_comp: str,
     count (str): count column name
     pseudocount (int, optional): pseudocount to avoid /0 (Default: 1)
     alternative (str, optional): 'two-sided', 'less', or 'greater' (Default: 'two-sided')
-    dir (str, optional): save directory
-    file (str, optional): save file
+    file (str, optional): output file path
     verbose (bool, optional): print progress to console (Default: False)
     '''
     # Get dataframe from file path if needed
@@ -890,8 +885,8 @@ def odds_ratio(df: pd.DataFrame | str, cond: str, cond_comp: str,
     t.unpack_singleton_iterables(df=df_stat, inplace=True)
 
     # Save & return statistics dataframe
-    if dir is not None and file is not None:
-        io.save(obj=df_stat, dir=dir, file=file) 
+    if file is not None:
+        io.save(obj=df_stat, file=file) 
     return df_stat
 
 def zscore(
@@ -902,7 +897,6 @@ def zscore(
     var: str,
     out_col: str | None = None,
     ddof: int = 1,
-    dir:str=None,
     file:str=None,
 ) -> pd.DataFrame:
     """
@@ -921,8 +915,7 @@ def zscore(
     var (str): The value in `var_col` used as the baseline set for mean/std.
     out_col (str, optional): Output column name (Default: f"{val}_z").
     ddof (int): Delta degrees of freedom for std (0 = population, 1 = sample).
-    dir (str, optional): save directory
-    file (str, optional): save file
+    file (str, optional): output file path
     
     Returns: Copy of df (pd.DataFrame) with added z-score column.
 
@@ -966,6 +959,6 @@ def zscore(
     t.unpack_singleton_iterables(df=out, inplace=True)
 
     # Save & return dataframe
-    if dir is not None and file is not None:
-        io.save(obj=out, dir=dir, file=file)  
+    if file is not None:
+        io.save(obj=out, file=file)  
     return out

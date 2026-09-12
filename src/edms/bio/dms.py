@@ -31,6 +31,8 @@ Usage:
 # Import packages
 import os
 import re
+import shlex
+import sys
 import datetime
 from edms import config
 import pandas as pd
@@ -219,7 +221,7 @@ def enzyme_codon_swap(df: pd.DataFrame | str, enzyme: str, sequence_col: str = '
     df[sequence_col] = changed_sequences
     df[f'{enzyme}_codon_swap_annotation'] = annotations
     if out_dir is not None and out_file is not None:
-        io.save(obj=df, dir=out_dir, file=out_file)
+        io.save(obj=df, file=os.path.join(out_dir, out_file))
     if return_df:
         return df
 
@@ -254,8 +256,7 @@ def replace_enzyme_sites(df: pd.DataFrame | str, enzyme: str,
 
     io.save(
         obj=df_enzyme_before,
-        dir=before_dir,
-        file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_{enzyme}_before.csv'
+        file=os.path.join(before_dir, f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_{enzyme}_before.csv')
     )
 
     df_swap = enzyme_codon_swap(
@@ -291,15 +292,13 @@ def replace_enzyme_sites(df: pd.DataFrame | str, enzyme: str,
     if len(df_after) > 0:
         io.save(
             obj=df_after,
-            dir=after_dir,
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_{enzyme}_after.csv'
+            file=os.path.join(after_dir, f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_{enzyme}_after.csv')
         )
 
     if len(df_lost) > 0:
         io.save(
             obj=df_lost,
-            dir=lost_dir,
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_{enzyme}_lost.csv'
+            file=os.path.join(lost_dir, f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_{enzyme}_lost.csv')
         )
 
     df_clean[f'{enzyme}_codon_swap_recovered'] = np.nan
@@ -325,7 +324,7 @@ def replace_enzyme_sites(df: pd.DataFrame | str, enzyme: str,
 # DMSDesign
 def dms_design_input(target_name: str, flank5_sequence: str, target_sequence: str, flank3_sequence: str,
                      index: int = 1, silent_mutation: int = 0, silent_mutation_mode: str = 'close',
-                     dir: str = '.', file: str = 'dms_design_input.csv'):
+                     file: str = 'dms_design_input.csv'):
     '''
     dms_design_input(): creates and checks DMSDesign saturation mutagenesis input file.
 
@@ -337,8 +336,7 @@ def dms_design_input(target_name: str, flank5_sequence: str, target_sequence: st
     index (int, optional): 1st amino acid or base in target_sequence index (Default: 1)
     silent_mutation (int, optional): number of silent codon changes to add (Default: 0)
     silent_mutation_mode (str, optional): silent mutation placement mode; close, upstream, downstream, distribute, or barcode (Default: close)
-    dir (str, optional): output directory
-    file (str, optional): output filename
+    file (str, optional): output file path
     '''
     if silent_mutation < 0:
         raise ValueError('silent_mutation must be an integer greater than or equal to 0.')
@@ -354,7 +352,7 @@ def dms_design_input(target_name: str, flank5_sequence: str, target_sequence: st
                               'index': [index],
                               'silent_mutation': [silent_mutation],
                               'silent_mutation_mode': [silent_mutation_mode]}),
-            dir=dir, file=file)
+            file=file)
 
 
 def dms_design(file: str, saturation_mutagenesis: Literal['aa', 'aa_subs', 'aa_ins', 'aa_dels', 'aa_silent', 'base'] = None,
@@ -374,7 +372,7 @@ def dms_design(file: str, saturation_mutagenesis: Literal['aa', 'aa_subs', 'aa_i
         raise ValueError('silent_mutation must be an integer greater than or equal to 0.')
     if silent_mutation_mode not in ['close', 'upstream', 'downstream', 'distribute', 'barcode']:
         raise ValueError("silent_mutation_mode must be one of: 'close', 'upstream', 'downstream', 'distribute', 'barcode'.")
-    cmd = f'python -m edms.bio.dmsdesign -f {file}'
+    cmd = f'{shlex.quote(sys.executable)} -m edms.bio.dmsdesign -f {file}'
     if saturation_mutagenesis is not None:
         cmd += f' -sat_mut {saturation_mutagenesis}'
     if silent_mutation != 0:
@@ -569,7 +567,7 @@ def dms_designer(in_file: str = None, target_name: str = None, flank5_sequence: 
         in_file = f'./{"_".join(target_name.split(" "))}.csv'
         dms_design_input(target_name=target_name, flank5_sequence=flank5_sequence, target_sequence=target_sequence,
                          flank3_sequence=flank3_sequence, index=index, silent_mutation=silent_mutation,
-                         silent_mutation_mode=silent_mutation_mode, dir='.', file=os.path.basename(in_file))
+                         silent_mutation_mode=silent_mutation_mode, file=os.path.join('.', os.path.basename(in_file)))
         generated_input = True
     elif silent_mutation > 0:
         in_file_df = io.get(pt=in_file)
@@ -599,19 +597,18 @@ def dms_designer(in_file: str = None, target_name: str = None, flank5_sequence: 
         if target_name is None and not generated_input:
             target_name = os.path.splitext(os.path.basename(in_file))[0]
         save_file = f'{"_".join(str(target_name).split(" "))}_DMSDesign.csv'
-    io.save(obj=df, dir=save_dir, file=save_file)
+    io.save(obj=df, file=os.path.join(save_dir, save_file))
     return df
 
 
-def merge(dms_designs: str | dict | list | pd.DataFrame, dir: str = None, file: str = None,
+def merge(dms_designs: str | dict | list | pd.DataFrame, file: str = None,
           literal_eval: bool = False) -> pd.DataFrame:
     '''
     merge(): combine one or more DMSDesign outputs into one edit-sequence library.
 
     Parameters:
     dms_designs (str | dict | list | pd.DataFrame): dataframe, path, directory, list of paths/dataframes, or dict of dataframes
-    dir (str, optional): output directory
-    file (str, optional): output filename
+    file (str, optional): output file path
     literal_eval (bool, optional): convert string representations when loading files
     '''
     frames = []
@@ -633,8 +630,8 @@ def merge(dms_designs: str | dict | list | pd.DataFrame, dir: str = None, file: 
     out = pd.concat(frames, ignore_index=True)
     if 'DMS_number' not in out.columns:
         out.insert(0, 'DMS_number', np.arange(1, len(out) + 1))
-    if dir is not None and file is not None:
-        io.save(obj=out, dir=dir, file=file)
+    if file is not None:
+        io.save(obj=out, file=file)
     return out
 
 
@@ -738,8 +735,7 @@ def dms_signature(df: pd.DataFrame | str, config_key: str=None,
     memories.append(memory_timer(task=f"dms_signature(): {len(df)} out of {len(df)}"))
     if out_dir is not None and out_file is not None:
         io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
-                dir=os.path.join(out_dir,f'.dms_signature'),
-                file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
-        io.save(obj=df, dir=out_dir, file=out_file)
+                file=os.path.join(out_dir,f'.dms_signature', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv'))
+        io.save(obj=df, file=os.path.join(out_dir, out_file))
     if return_df==True: 
         return df

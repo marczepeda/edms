@@ -230,8 +230,7 @@ def test_pymol_ssa_writes_script_with_fetch_for_pdb_id(tmp_path, mocker):
     dssp.pymol_ssa(
         dssp_file=dssp_path,
         chain_id="A",
-        dir=str(tmp_path),
-        file="script.pml",
+        file=str(tmp_path / "script.pml"),
         pdb_id_or_filename="1ABC",
         execute=False,
     )
@@ -253,8 +252,7 @@ def test_pymol_ssa_execute_true_invokes_subprocess(tmp_path, mocker):
     dssp.pymol_ssa(
         dssp_file=dssp_path,
         chain_id="A",
-        dir=str(tmp_path),
-        file="script.pml",
+        file=str(tmp_path / "script.pml"),
         pdb_id_or_filename="1ABC",
         execute=True,
     )
@@ -275,6 +273,5 @@ def test_pymol_ssa_missing_chain_raises_value_error(tmp_path, mocker):
         dssp.pymol_ssa(
             dssp_file=dssp_path,
             chain_id="Z",
-            dir=str(tmp_path),
-            file="script.pml",
+            file=str(tmp_path / "script.pml"),
         )

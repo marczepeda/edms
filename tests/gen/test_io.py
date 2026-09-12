@@ -105,14 +105,14 @@ def test_get_dir(tmp_path):
 
 def test_save_dataframe_csv(tmp_path):
     df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
-    io.save(obj=df, file="out.csv", dir=str(tmp_path))
+    io.save(obj=df, file=str(tmp_path / "out.csv"))
     out = pd.read_csv(tmp_path / "out.csv")
     pd.testing.assert_frame_equal(out, df)
 
 
 def test_save_dataframe_isolate_cols(tmp_path):
     df = pd.DataFrame({"a": [1, 2], "b": [3, 4], "c": [5, 6]})
-    io.save(obj=df, file="out.csv", dir=str(tmp_path), cols=["a", "c"])
+    io.save(obj=df, file=str(tmp_path / "out.csv"), cols=["a", "c"])
     out = pd.read_csv(tmp_path / "out.csv")
     assert list(out.columns) == ["a", "c"]
 
@@ -120,51 +120,51 @@ def test_save_dataframe_isolate_cols(tmp_path):
 def test_save_dataframe_invalid_cols_type_raises(tmp_path):
     df = pd.DataFrame({"a": [1]})
     with pytest.raises(ValueError):
-        io.save(obj=df, file="out.csv", dir=str(tmp_path), cols=[1, 2])
+        io.save(obj=df, file=str(tmp_path / "out.csv"), cols=[1, 2])
 
 
 def test_save_dataframe_tsv(tmp_path):
     df = pd.DataFrame({"a": [1], "b": [2]})
-    io.save(obj=df, file="out.tsv", dir=str(tmp_path))
+    io.save(obj=df, file=str(tmp_path / "out.tsv"))
     out = pd.read_csv(tmp_path / "out.tsv", sep="\t")
     pd.testing.assert_frame_equal(out, df)
 
 
 def test_save_dataframe_xlsx(tmp_path):
     df = pd.DataFrame({"a": [1], "b": [2]})
-    io.save(obj=df, file="out.xlsx", dir=str(tmp_path))
+    io.save(obj=df, file=str(tmp_path / "out.xlsx"))
     out = pd.read_excel(tmp_path / "out.xlsx")
     pd.testing.assert_frame_equal(out, df)
 
 
 def test_save_dataframe_with_index(tmp_path):
     df = pd.DataFrame({"a": [1, 2]}, index=["r1", "r2"])
-    io.save(obj=df, file="out.csv", dir=str(tmp_path), id=True)
+    io.save(obj=df, file=str(tmp_path / "out.csv"), id=True)
     out = pd.read_csv(tmp_path / "out.csv", index_col=0)
     assert list(out.index) == ["r1", "r2"]
 
 
 def test_save_list_sorted(tmp_path):
-    io.save(obj=[3, 1, 2], file="out.csv", dir=str(tmp_path))
+    io.save(obj=[3, 1, 2], file=str(tmp_path / "out.csv"))
     content = (tmp_path / "out.csv").read_text().strip()
     assert content == "1,2,3"
 
 
 def test_save_list_unsorted(tmp_path):
-    io.save(obj=[3, 1, 2], file="out.csv", dir=str(tmp_path), sort=False)
+    io.save(obj=[3, 1, 2], file=str(tmp_path / "out.csv"), sort=False)
     content = (tmp_path / "out.csv").read_text().strip()
     assert content == "3,1,2"
 
 
 def test_save_set(tmp_path):
-    io.save(obj={2, 1, 3}, file="out.csv", dir=str(tmp_path))
+    io.save(obj={2, 1, 3}, file=str(tmp_path / "out.csv"))
     content = (tmp_path / "out.csv").read_text().strip()
     assert content == "1,2,3"
 
 
 def test_save_dict_to_xlsx(tmp_path):
     dc = {"a": pd.DataFrame({"x": [1]}), "b": pd.DataFrame({"x": [2]})}
-    io.save(obj=dc, file="out.xlsx", dir=str(tmp_path))
+    io.save(obj=dc, file=str(tmp_path / "out.xlsx"))
     result = pd.read_excel(tmp_path / "out.xlsx", sheet_name=None)
     assert set(result.keys()) == {"a", "b"}
     assert result["a"]["x"].iloc[0] == 1
@@ -173,7 +173,7 @@ def test_save_dict_to_xlsx(tmp_path):
 
 def test_save_unsupported_type_raises(tmp_path):
     with pytest.raises(ValueError):
-        io.save(obj=42, file="out.csv", dir=str(tmp_path))
+        io.save(obj=42, file=str(tmp_path / "out.csv"))
 
 
 def test_save_dir(tmp_path):
@@ -184,9 +184,9 @@ def test_save_dir(tmp_path):
 
 
 def test_save_file_none_returns_without_error(tmp_path, capsys):
-    # file=None -> check_outpath returns (None, None); save() should warn
+    # file=None -> check_outpath returns None; save() should warn
     # and return without raising.
-    io.save(obj=pd.DataFrame({"a": [1]}), file=None, dir=str(tmp_path))
+    io.save(obj=pd.DataFrame({"a": [1]}), file=None)
     captured = capsys.readouterr()
     assert "not saved" in captured.out
 
@@ -295,7 +295,7 @@ def test_out_subs_invalid_dir_raises():
 # --------------------------------------------------------------------------- #
 
 def test_create_sh_writes_expected_content(tmp_path):
-    io.create_sh(dir=str(tmp_path), file="job.sh", cores=2, mem=2000, email="test@example.com")
+    io.create_sh(file=str(tmp_path / "job.sh"), cores=2, mem=2000, email="test@example.com")
     content = (tmp_path / "job.sh").read_text()
     assert "#!/bin/bash" in content
     assert "-n 2" in content
@@ -305,7 +305,7 @@ def test_create_sh_writes_expected_content(tmp_path):
 
 def test_create_sh_requires_sh_extension(tmp_path):
     with pytest.raises(ValueError):
-        io.create_sh(dir=str(tmp_path), file="job.txt", email="test@example.com")
+        io.create_sh(file=str(tmp_path / "job.txt"), email="test@example.com")
 
 
 # --------------------------------------------------------------------------- #
@@ -548,11 +548,11 @@ def test_create_pipeline_requires_step_and_command_columns(tmp_path):
 
 def test_create_sh_cmd_and_log_prefix_are_backward_compatible(tmp_path):
     # Default: still runs the same-named python script
-    io.create_sh(dir=str(tmp_path), file="legacy.sh", email="test@example.com")
+    io.create_sh(file=str(tmp_path / "legacy.sh"), email="test@example.com")
     assert "python legacy.py" in (tmp_path / "legacy.sh").read_text()
 
     # cmd= replaces the body, log_prefix= names the SLURM logs
-    io.create_sh(dir=str(tmp_path), file="job.sh", email="test@example.com",
+    io.create_sh(file=str(tmp_path / "job.sh"), email="test@example.com",
                  cmd="edms fastq trim -q /raw", log_prefix="job")
     text = (tmp_path / "job.sh").read_text()
     assert "edms fastq trim -q /raw" in text

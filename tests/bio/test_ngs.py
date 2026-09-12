@@ -226,5 +226,5 @@ def test_hamming_distance_matrix_is_symmetric_with_zero_diagonal():
 def test_hamming_distance_matrix_saves_file(tmp_path):
     df = pd.DataFrame({"ID": ["a", "b"], "seq": ["ACGT", "ACGA"]})
     out_dir = tmp_path / "out"
-    ngs.hamming_distance_matrix(df=df, id="ID", seqs="seq", dir=str(out_dir), file="dm.csv")
+    ngs.hamming_distance_matrix(df=df, id="ID", seqs="seq", file=str(out_dir / "dm.csv"))
     assert (out_dir / "dm.csv").is_file()

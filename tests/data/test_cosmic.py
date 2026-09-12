@@ -53,7 +53,7 @@ def test_mutations_accepts_string_path(mocker):
 
 def test_mutations_saves_to_tmp_path(tmp_path):
     df = pd.DataFrame({"AA Mutation": ["p.R123H"], "Type": ["Substitution - Missense"]})
-    cosmic.mutations(df=df, dir=str(tmp_path), file="out.csv")
+    cosmic.mutations(df=df, file=str(tmp_path / "out.csv"))
     assert (tmp_path / "out.csv").exists()
 
 

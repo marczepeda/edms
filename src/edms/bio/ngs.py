@@ -259,7 +259,7 @@ def pcr_mm_ultra(primers: pd.Series, template: str, template_uL: int,
                                                      },index=pd.Index(list(np.arange(1,7)), name=f"{pcr1_fwd}_{pcr1_rev}"))
     return pcr_mm_dc
 
-def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col: str='ID', 
+def pcrs(df: pd.DataFrame | str, file:str=None, gDNA_id_col: str='ID', 
          pcr1_id_col: str='PCR1 ID', pcr1_fwd_col: str='PCR1 FWD', pcr1_rev_col: str='PCR1 REV', 
          pcr2_id_col: str='PCR2 ID', pcr2_fwd_col: str='PCR2 FWD', pcr2_rev_col: str='PCR2 REV', umi_col: str='UMI',
          Q5_mm_x_stock: int=5, dNTP_mM_stock: int=10, fwd_uM_stock: int=10, rev_uM_stock: int=10, Q5_U_uL_stock: int=2,
@@ -271,8 +271,7 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col: str='
     
     Parameters:
     df (DataFrame | str): NGS samples dataframe (or file path)
-    dir (str, optional): save directory
-    file (str, optional): save file
+    file (str, optional): output file path
     gDNA_id_col (str, optional): gDNA ID column name (Default: 'ID')
     pcr1_id_col (str, optional): PCR1 ID column name (Default: 'PCR1 ID')
     pcr1_fwd_col (str, optional): PCR1 FWD column name (Default: 'PCR1 FWD')
@@ -507,9 +506,9 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col: str='
         pcr2_thermo = thermocycler(df=df, n='2', cycles=pcr2_cycles, pcr_fwd_col=pcr2_fwd_col, pcr_rev_col=pcr2_rev_col)
 
         # Save all tables to Excel file if save path provided
-        file, dir = check_outpath(file=file, dir=dir)
-        if dir is not None and file is not None:
-            with pd.ExcelWriter(os.path.join(dir,file)) as writer:
+        pt = check_outpath(file=file)
+        if pt is not None:
+            with pd.ExcelWriter(pt) as writer:
                 sr = 0 # starting row
                 for key,pivot in pivots.items():
                     pivot.to_excel(writer,sheet_name='NGS Plan',startrow=sr) # Sheet with all pivots
@@ -591,9 +590,9 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col: str='
         pcr2_thermo = thermocycler(df=df, n='2', cycles=pcr2_cycles, pcr_fwd_col=pcr2_fwd_col, pcr_rev_col=pcr2_rev_col)
 
         # Save all tables to Excel file if save path provided
-        file, dir = check_outpath(file=file, dir=dir)
-        if dir is not None and file is not None:
-            with pd.ExcelWriter(os.path.join(dir,file)) as writer:
+        pt = check_outpath(file=file)
+        if pt is not None:
+            with pd.ExcelWriter(pt) as writer:
                 sr = 0 # starting row
                 for key,pivot in pivots.items():
                     pivot.to_excel(writer,sheet_name='NGS Plan',startrow=sr) # Sheet with all pivots
@@ -672,7 +671,7 @@ def hamming_distance(seq1: str | Seq, seq2: str | Seq) -> int:
     return sum(c1 != c2 for c1, c2 in zip(seq1, seq2))
 
 
-def hamming_distance_matrix(df: pd.DataFrame | str, id: str, seqs: str, dir:str=None, file:str=None) -> pd.DataFrame:
+def hamming_distance_matrix(df: pd.DataFrame | str, id: str, seqs: str, file:str=None) -> pd.DataFrame:
     """
     hamming_distance_matrix(): compute pairwise Hamming distance matrix for a list of sequences stored in a dataframe
 
@@ -680,8 +679,7 @@ def hamming_distance_matrix(df: pd.DataFrame | str, id: str, seqs: str, dir:str=
     df (dataframe | str): pandas dataframe (or file path)
     id (str): id column name
     seqs (str): sequences column name
-    dir (str, optional): save directory
-    file (str, optional): save file
+    file (str, optional): output file path
 
     Dependencies: pandas
     """
@@ -705,5 +703,5 @@ def hamming_distance_matrix(df: pd.DataFrame | str, id: str, seqs: str, dir:str=
     
     # Save & return hamming distance matrix
     df_matrix = pd.DataFrame(matrix,columns=df[id],index=df[seqs])
-    io.save(obj=df_matrix.reset_index(drop=False), dir=dir, file=file)  
+    io.save(obj=df_matrix.reset_index(drop=False), file=file)  
     return df_matrix

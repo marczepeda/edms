@@ -123,5 +123,5 @@ def test_ddCq_reads_from_csv_path(tmp_path, two_sample_two_target_df):
 
 def test_ddCq_saves_file(tmp_path, two_sample_two_target_df):
     out_dir = tmp_path / "out"
-    qPCR.ddCq(data=two_sample_two_target_df, dir=str(out_dir), file="ddcq.csv")
+    qPCR.ddCq(data=two_sample_two_target_df, file=str(out_dir / "ddcq.csv"))
     assert (out_dir / "ddcq.csv").is_file()

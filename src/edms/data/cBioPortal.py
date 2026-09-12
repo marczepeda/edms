@@ -14,7 +14,7 @@ import os
 
 from ..gen import io, tidy as t
 
-def mutations(df: pd.DataFrame | str, wt: str, config: bool=True, dir: str=None, file: str=None) -> pd.DataFrame:
+def mutations(df: pd.DataFrame | str, wt: str, config: bool=True, file: str=None) -> pd.DataFrame:
     ''' 
     mutations(): Process cBioPortal mutation data for a single protein-coding gene. Retrieve cBioPortal mutation data from https://www.cbioportal.org/ (GENIE Cohort v18.0-public).
 
@@ -22,8 +22,7 @@ def mutations(df: pd.DataFrame | str, wt: str, config: bool=True, dir: str=None,
     df (dataframe or str): DataFrame or path to cBioPortal mutation data TSV file
     wt (str): Wild-type amino acid sequence
     config (bool, optional): Save to configuration directory (Default: True)
-    dir (str, optional): Directory to save output file (Default: None)
-    file (str, optional): Output filename (Default: None)
+    file (str, optional): Output file path (Default: None)
 
     Dependencies: pandas, re, io
     '''
@@ -115,10 +114,10 @@ def mutations(df: pd.DataFrame | str, wt: str, config: bool=True, dir: str=None,
 
         # Per-gene dataframe 
         if config==True: # saved to config directory
-            io.save(obj=df_cts_gene,dir=os.path.expanduser("~/.config/edms/cBioPortal_mutations"), file=f'{gene}.csv')
+            io.save(obj=df_cts_gene,file=os.path.join(os.path.expanduser("~/.config/edms/cBioPortal_mutations"), f'{gene}.csv'))
         dc_df_cts[gene] = df_cts_gene # stored in dictionary
     
     # Concatenate all genes; save & return
     df_cts = pd.concat(dc_df_cts.values(), ignore_index=True)
-    io.save(obj=df_cts, dir=dir, file=file)
+    io.save(obj=df_cts, file=file)
     return df_cts

@@ -22,7 +22,7 @@ Usage:
 
 [Make directories]
 - mkdir(): make directory if it does not exist (including parent directories)
-- check_outpath(): determine output file path and ensure output directory exists
+- check_outpath(): resolve an output file path and ensure its directory exists
 
 [Filter dataframes]
 - apply_filters(): apply pandas query strings and drop_duplicates to a dataframe, reporting row counts
@@ -208,26 +208,22 @@ def mkdir(dir: str | Path, sep: str='/'):
             os.mkdir(check_dir)
             print(f'Created {check_dir}')
 
-def check_outpath(file: str | None, dir: str | None):
+def check_outpath(file: str | Path | None) -> str | None:
     '''
-    check_outpath(): determine output file path and ensure output directory exists
-    
+    check_outpath(): resolve an output file path and ensure its directory exists
+
     Parameters:
-    file (str | None): output file path (if None, no output will be saved)
-    dir (str | None): output directory (if None, will be determined from file path or default to current directory)
+    file (str | Path | None): output file path (if None, no output will be saved)
+
+    Dependencies: os & mkdir()
     '''
-    if file is None or isinstance(file, str)==False:
-        return None, None
-    elif dir is None or isinstance(dir, str)==False:
-        dir = os.path.dirname(os.path.abspath(file))
-        file = os.path.basename(os.path.abspath(file))
-        if dir == '':
-            print(f"No directory specified in file path; saving to current directory.\ndir = {dir}\nfile = {file}")
-            dir = '.'
+    if file is None or isinstance(file, (str, Path))==False:
+        return None
 
-    mkdir(dir)  # Ensure output directory exists
+    file = os.path.abspath(str(file))
+    mkdir(os.path.dirname(file))  # Ensure output directory exists
 
-    return file, dir
+    return file
 
 # Filter dataframes
 def apply_filters(df: pd.DataFrame, query: list[str] | str = None, drop_duplicates: list[str] | str = None,

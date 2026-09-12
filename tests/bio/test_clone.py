@@ -185,7 +185,7 @@ class TestEpegRNAPool:
         out = clone.epegRNA_pool(
             df=df, barcode="Subpool",
             fwd_homology_t5_val="7SK", rev_homology_t3_val="tevopreQ1",
-            dir=None, file=None, return_df=True,
+            file=None, return_df=True,
         )
         assert len(out) == 2
         assert out["Extension_sequence"].tolist() == ["ATCGATCGCGTGCTCAGTCTGAAAA", "GATCGATCCGTGCTCAGTCTGCCCC"]
@@ -217,7 +217,7 @@ class TestDmsPool:
         out = clone.dms_pool(
             df=df, barcode="Subpool",
             fwd_homology_t5_val="FOXA1-S165", rev_homology_t3_val="FOXA1-P205",
-            dir=None, file=None, return_df=True,
+            file=None, return_df=True,
         )
         assert len(out) == 2
         # the trimmed template strips the flanks used to locate the insert boundaries

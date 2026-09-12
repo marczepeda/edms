@@ -210,7 +210,7 @@ def pcr_mm_ultra(primers: pd.Series, template: str, template_uL: int,
                                                         },index=pd.Index(list(np.arange(1,7)), name=f"{pcr1_fwd}_{pcr1_rev}"))
     return pcr_mm_dc
 
-def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col: str='ID', 
+def pcrs(df: pd.DataFrame | str, file:str=None, gDNA_id_col: str='ID', 
          pcr1_id_col: str='PCR1 ID', pcr1_fwd_col: str='PCR1 FWD', pcr1_rev_col: str='PCR1 REV', 
          Q5_mm_x_stock: int=5, dNTP_mM_stock: int=10, fwd_uM_stock: int=10, rev_uM_stock: int=10, Q5_U_uL_stock: int=2,
          Q5_mm_x_desired: int=1,dNTP_mM_desired: float=0.2, fwd_uM_desired: float=0.5, rev_uM_desired: float=0.5, Q5_U_uL_desired: float=0.02,
@@ -220,8 +220,7 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col: str='
     
     Parameters:
     df (DataFrame | str): Sanger samples dataframe (or file path)
-    dir (str, optional): save directory
-    file (str, optional): save file
+    file (str, optional): output file path
     gDNA_id_col (str, optional): gDNA ID column name (Default: 'ID')
     pcr1_id_col (str, optional): PCR1 ID column name (Default: 'PCR1 ID')
     pcr1_fwd_col (str, optional): PCR1 FWD column name (Default: 'PCR1 FWD')
@@ -336,10 +335,10 @@ def pcrs(df: pd.DataFrame | str, dir:str=None, file:str=None, gDNA_id_col: str='
     # Create thermocycler objects for PCR1 and PCR2
     pcr1_thermo = thermocycler(df=df, n=1, cycles=cycles, pcr_fwd_col=pcr1_fwd_col, pcr_rev_col=pcr1_rev_col)
     
-    # Save pivots, PCR master mix calculations, and thermocycler objects to Excel file if file and dir are specified
-    file, dir = check_outpath(file=file, dir=dir)
-    if dir is not None and file is not None:
-        with pd.ExcelWriter(os.path.join(dir,file)) as writer:
+    # Save pivots, PCR master mix calculations, and thermocycler objects to Excel file if a file path is specified
+    pt = check_outpath(file=file)
+    if pt is not None:
+        with pd.ExcelWriter(pt) as writer:
             sr = 0 # starting row
             for key,pivot in pivots.items():
                 pivot.to_excel(writer,sheet_name='Sanger Plan',startrow=sr) # Sheet with all pivots

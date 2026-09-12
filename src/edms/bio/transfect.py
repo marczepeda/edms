@@ -16,13 +16,13 @@ import numpy as np
 import os
 import re
 from ..gen import io
-from ..utils import mkdir
+from ..utils import mkdir, check_outpath
 import warnings
 warnings.filterwarnings("ignore")
 
 # Transfection calculation
 def PE3(plasmids: pd.DataFrame | str, epegRNAs: pd.DataFrame | str, ngRNAs: pd.DataFrame | str,
-        dir:str=None, file:str=None, 
+        file:str=None, 
         pegRNA_number_col: str='pegRNA_number', epegRNAs_name_col: str='Name', ngRNAs_name_col: str='Name',
         plasmid_col: str='Plasmid', description_col: str='Description', colony_col: str='Colony', ng_uL_col: str='ng/uL',
         PE_plasmid: str='pMUZ86.7', reps: int=3, mm_x: float=1.1, epegRNA_ng: int=66, ngRNA_ng: int=22, PE_ng: int=200, well_uL:int=10) -> dict[pd.DataFrame]:
@@ -33,8 +33,7 @@ def PE3(plasmids: pd.DataFrame | str, epegRNAs: pd.DataFrame | str, ngRNAs: pd.D
     plasmids (DataFrame | str): all nanodrop concentrations (Default: google sheets format) 
     epegRNAs (DataFrame | str): epegRNAs from PrimeDesign
     ngRNAs (DataFrame | str): ngRNAs from PrimeDesign
-    dir (optional): save directory
-    file (optional): save file
+    file (str, optional): output file path
     pegRNA_number_col (str, optional): pegRNA_number column name from PrimeDesign (Default: 'pegRNA_number')
     epegRNAs_name_col (str, optional): epegRNA column name (Default: 'Name')
     ngRNAs_name_col (str, optional): ngRNA column name (Default: 'Name')
@@ -140,9 +139,8 @@ def PE3(plasmids: pd.DataFrame | str, epegRNAs: pd.DataFrame | str, ngRNAs: pd.D
               '96-well plates': pd.pivot_table(data=tube_A,values='Tube',index=['plate','row'],columns='column',aggfunc='first'),
              }
     
-    if dir is not None and file is not None: # Save file if dir & file are specified
-        mkdir(dir=dir)
-        with pd.ExcelWriter(os.path.join(dir,file)) as writer:
+    if file is not None: # Save file if a file path is specified
+        with pd.ExcelWriter(check_outpath(file=file)) as writer:
             sr = 0 # starting row
             for key,pivot in pivots.items():
                 pivot.to_excel(writer,sheet_name='Tranfection Plan',startrow=sr) # Sheet with all pivots
@@ -153,7 +151,7 @@ def PE3(plasmids: pd.DataFrame | str, epegRNAs: pd.DataFrame | str, ngRNAs: pd.D
 def virus(plasmids: pd.DataFrame | str, plasmid_col: str='Plasmid', description_col: str='Description', colony_col: str='Colony',
           ng_uL_col: str='ng/uL', VSVG_plasmid: str='pMUZ26.6',GagPol_plasmid: str='pMUZ26.7',
           reps: int=1, mm_x: float=1.1, VSVG_ng: int=750, GagPol_ng: int=1500, transfer_ng: int=750, well_uL: int=500,
-          dir:str=None, file:str=None) -> pd.DataFrame:
+          file:str=None) -> pd.DataFrame:
     '''
     virus(): generates transfection plan for virus production from HEK293T cells (Default: 6-well plate using L3000)
 
@@ -171,8 +169,7 @@ def virus(plasmids: pd.DataFrame | str, plasmid_col: str='Plasmid', description_
     GagPol_ng (int, optional): ngRNA ngs per well (Default: 1500)
     transfer_ng (int, optional): PE ngs per well (Default: 750)
     well_uL (int, optional): uL transfection mix per well (Default: 500)
-    dir (optional): save directory
-    file (optional): save file
+    file (str, optional): output file path
 
     Dependencies: pandas,re
     '''
@@ -226,5 +223,5 @@ def virus(plasmids: pd.DataFrame | str, plasmid_col: str='Plasmid', description_
                                         'uL': [optimem_uL,L3000_uL],
                                         'Tube': ['B','B'],
                                         'Order': [3,3]})]).reset_index(drop=True)
-    io.save(obj=df_virus, dir=dir, file=file, id=True) 
+    io.save(obj=df_virus, file=file, id=True) 
     return df_virus

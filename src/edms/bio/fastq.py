@@ -34,6 +34,7 @@ Usage:
 - [Signature]
     - _signature_phred_summary() Return min/median/max Phred+33 qualities for bases changed in `signature`.
     - count_signatures(): generate signatures from fastq read region alignments to WT sequence; count signatures, plot and return fastq signatures dataframe
+    - count_signatures_dir(): count signatures from previously-generated signature dataframes; plot and return fastq signatures dataframe
 
 [Quantify edit outcomes]
 - trim_filter(): trim and filter fastq sequence based on quality scores
@@ -189,6 +190,7 @@ def savemoney(pt: str, fastq_dir: str='./fastq', fasta_dir: str='./fasta',
 
     Dependencies: pandas, os
     '''
+    if out_dir is None: out_dir = '.' # Save relative to the current directory
     mkdir(out_dir) # Ensure the output directory exists
 
     # Make unzip fastq if needed
@@ -229,7 +231,7 @@ def savemoney(pt: str, fastq_dir: str='./fastq', fasta_dir: str='./fasta',
     df = pd.DataFrame({'group_name':group_name_ls,
                        'fastq_fname':fastq_fname_ls,
                        'ref_fname':ref_fname_ls})
-    io.save(obj=df, dir=out_dir, file=out_file)
+    io.save(obj=df, file=os.path.join(out_dir, out_file))
     if return_df: return df
 
 # Input/Output
@@ -691,18 +693,16 @@ def count_motif(fastq_dir: str, pattern: str, out_dir: str, motif: str="motif",
 
         # Save & append fastq dataframe to final dataframe
         print('Save & append fastq dataframe to final dataframe')
-        io.save(obj=reads, dir=os.path.join(out_dir,motif), file=f'{fastq_name}.csv') # Save checkpoint
+        io.save(obj=reads, file=os.path.join(out_dir,motif, f'{fastq_name}.csv')) # Save checkpoint
         df = pd.concat([df,reads]).reset_index(drop=True) # save to final dataframe
     
     # Save & return
     memories.append(memory_timer(task='count_motif()'))
     io.save(obj=pd.DataFrame(stats, columns=['file','reads','reads_w_motif','reads_wo_motif']),
-            dir=os.path.join(out_dir,f'.count_{motif}'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_stats.csv')
+            file=os.path.join(out_dir,f'.count_{motif}', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_stats.csv'))
     io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
-            dir=os.path.join(out_dir,f'.count_{motif}'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
-    io.save(obj=df, dir=out_dir, file=f'{motif}.csv')
+            file=os.path.join(out_dir,f'.count_{motif}', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv'))
+    io.save(obj=df, file=os.path.join(out_dir, f'{motif}.csv'))
     if sh == True: io.combine(in_dir=os.path.join(out_dir,f'.count_{motif}'), out_dir=f'./count_{motif}', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
     if return_df: return df # Return dataframe (optional)
 
@@ -727,6 +727,8 @@ def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.all',numeri
 
     Dependencies: count_motifs(), plot
     '''
+    if out_dir is None: out_dir = '.' # Save relative to the current directory
+
     # Get dataframe from file path if needed
     if type(df)==str:
         df = io.get(pt=df)
@@ -750,9 +752,9 @@ def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.all',numeri
     
     # ...save (optional)
     if out_dir is not None:
-        io.save(obj=df_mismatches, dir=out_dir, file=f"mismatches.csv")
-        io.save(obj=df_locations, dir=out_dir, file=f"locations.csv")
-        io.save(obj=df_windows, dir=out_dir, file=f"windows.csv")
+        io.save(obj=df_mismatches, file=os.path.join(out_dir, f"mismatches.csv"))
+        io.save(obj=df_locations, file=os.path.join(out_dir, f"locations.csv"))
+        io.save(obj=df_windows, file=os.path.join(out_dir, f"windows.csv"))
 
     # ...define cut() based on cutoff_frac
     def cut(df_vc: pd.DataFrame, col: str, off: bool=True):
@@ -799,31 +801,31 @@ def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.all',numeri
         p.stack(df=df_mismatches,x=id_col,y=numeric,cols='mismatches', y_axis='Reads',
                 title=f"{df.iloc[0]['motif']}: {df.iloc[0]['pattern']}", x_axis=id_axis,
                 vertical=False,figsize=stack_figsize,palette_or_cmap='tab20',
-                dir=out_dir,file=f"mismatches{plot_suf}",show=show)
+                file=os.path.join(out_dir, f"mismatches{plot_suf}"),show=show)
         
         p.stack(df=df_locations,x=id_col,y=numeric,cols='location', y_axis='Reads',
                 title=f"{df.iloc[0]['motif']}: {df.iloc[0]['pattern']}", x_axis=id_axis,
                 vertical=False,figsize=stack_figsize,palette_or_cmap='tab20',
-                dir=out_dir,file=f"locations{plot_suf}",show=show)
+                file=os.path.join(out_dir, f"locations{plot_suf}"),show=show)
         
         p.heat(df=df_windows,x=id_col,y='window',vars='motif',vals=numeric,x_axis=id_axis,y_ticks_font='Courier New',
                figsize=heat_figsize,x_ticks_rot=45,title=f"{df.iloc[0]['motif']}: {df.iloc[0]['pattern']}",sq=False,
-               dir=out_dir,file=f"windows{plot_suf}",show=show)
+               file=os.path.join(out_dir, f"windows{plot_suf}"),show=show)
     
     else: # fraction
         p.stack(df=df_mismatches,x=id_col,y=numeric,cols='mismatches', y_axis='Reads fraction',
                 title=f"{df.iloc[0]['motif']}: {df.iloc[0]['pattern']}", x_axis=id_axis,
                 vertical=False,figsize=stack_figsize,palette_or_cmap='tab20',
-                dir=out_dir,file=f"mismatches{plot_suf}",show=show)
+                file=os.path.join(out_dir, f"mismatches{plot_suf}"),show=show)
         
         p.stack(df=df_locations,x=id_col,y=numeric,cols='location', y_axis='Reads fraction',
                 title=f"{df.iloc[0]['motif']}: {df.iloc[0]['pattern']}", x_axis=id_axis,
                 vertical=False,figsize=stack_figsize,palette_or_cmap='tab20',
-                dir=out_dir,file=f"locations{plot_suf}",show=show)
+                file=os.path.join(out_dir, f"locations{plot_suf}"),show=show)
         
         p.heat(df=df_windows,x=id_col,y='window',vars='motif',vals=numeric,x_axis=id_axis,y_ticks_font='Courier New',
                figsize=heat_figsize,x_ticks_rot=45,title=f"{df.iloc[0]['motif']}: {df.iloc[0]['pattern']}",sq=False,
-               dir=out_dir,file=f"windows{plot_suf}",vals_dims=(0,1),show=show)
+               file=os.path.join(out_dir, f"windows{plot_suf}"),vals_dims=(0,1),show=show)
     
     # Return value_counts() dataframes (optional)
     if return_df: return (df_mismatches,df_locations,df_windows)
@@ -879,7 +881,7 @@ def mismatch_alignments(align_col: str, out_dir: str, fastq_name: str,
     
     # Save & return fastq dataframe
     print('Save & return fastq dataframe')
-    io.save(obj=df_fastq, dir=out_dir, file=f'{fastq_name}.csv')
+    io.save(obj=df_fastq, file=os.path.join(out_dir, f'{fastq_name}.csv'))
     if return_df: return df_fastq
 
 def perform_alignments(align_col: str, out_dir: str, fastq_name: str, fastq_df_ref: pd.DataFrame,
@@ -1013,18 +1015,18 @@ def plot_alignments(fastq_alignments: dict | str, align_col: str, id_col: str,
 
                 p.scat(graph='line',df=df_fastq_plot_align,x='mismatch_pos',y='mismatch_pos_per_alignment', # Plot mismatches for each alignment
                     title=f'{fastq_name} {id}',x_axis='Alignment Position',y_axis='Mismatches/Alignment',y_axis_dims=(0,1),
-                    dir=out_dir_fastq_name,file=f'{id.replace(".","_")}{plot_suf}',
+                    file=os.path.join(out_dir_fastq_name, f'{id.replace(".","_")}{plot_suf}'),
                     show=show,**plot_kwargs)
                 
                 df_fastq_plot = pd.concat(objs=[df_fastq_plot,df_fastq_plot_align]).reset_index(drop=True) # Group alignment mismatches
 
             p.scat(graph='line',df=df_fastq_plot,x='mismatch_pos',y='mismatch_pos_per_alignment',cols=id_col, # Plot mismatches for each alignment
                 title=f'{fastq_name}',x_axis='Alignment Position',y_axis='Mismatches/Alignment',y_axis_dims=(0,1),
-                dir=out_dir_fastq_name,file=f'alignment_mismatches{plot_suf}',legend_ncol=int(math.ceil(len(df_fastq_plot[id_col].value_counts())/20)),
+                file=os.path.join(out_dir_fastq_name, f'alignment_mismatches{plot_suf}'),legend_ncol=int(math.ceil(len(df_fastq_plot[id_col].value_counts())/20)),
                 show=show,**plot_kwargs)
 
         p.dist(graph='hist',df=df_fastq,x='alignments',x_axis_dims=(0,max(df_fastq['alignments'])),
-               title=f'{fastq_name}',dir=out_dir_fastq_name,file=f'alignments{plot_suf}',
+               title=f'{fastq_name}',file=os.path.join(out_dir_fastq_name, f'alignments{plot_suf}'),
                show=show,**plot_kwargs)
 
 def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
@@ -1246,11 +1248,9 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
     io.save(obj=pd.DataFrame(stats, columns=['file', 'reads_total', 'reads_processed',
                                             'reads_w_region', 'reads_wo_motif5', 'reads_wo_motif3', 'reads_w_motif_overlap',
                                             'reads_processed_fraction', 'reads_w_region_fraction']),
-            dir=os.path.join(out_dir,'.count_region'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_stats.csv')
+            file=os.path.join(out_dir,'.count_region', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_stats.csv'))
     io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
-            dir=os.path.join(out_dir,'.count_region'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
+            file=os.path.join(out_dir,'.count_region', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv'))
     if sh == True: io.combine(in_dir=os.path.join(out_dir,'.count_region'), out_dir='./count_region', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
     if return_dc: return fastqs
 
@@ -1411,11 +1411,9 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
     io.save(obj=pd.DataFrame(stats, columns=['file', 'reads_total', 
                                             'reads_processed', 'reads_empty', 'reads_nonempty', 'reads_aligned',
                                             'reads_processed_fraction', 'reads_empty_fraction', 'reads_nonempty_fraction', 'reads_aligned_fraction']),
-            dir=os.path.join(out_dir,'.count_alignments'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_stats.csv')
+            file=os.path.join(out_dir,'.count_alignments', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_stats.csv'))
     io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
-            dir=os.path.join(out_dir,'.count_alignments'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
+            file=os.path.join(out_dir,'.count_alignments', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv'))
     if sh == True: io.combine(in_dir=os.path.join(out_dir,'.count_alignments'), out_dir='./count_alignments', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
     if return_dc: return fastqs
 
@@ -1447,11 +1445,11 @@ def plot_paired(df: pd.DataFrame | str, title: str, out_dir: str,
     paired_regions_alignment_status_df_sum = sum(paired_regions_alignment_status_df['count'])
     paired_regions_alignment_status_df['fraction'] = [count/paired_regions_alignment_status_df_sum for count in paired_regions_alignment_status_df['count']]
     
-    io.save(obj=paired_regions_alignment_status_df, dir=os.path.join(out_dir, title), file='alignment_status.csv')
+    io.save(obj=paired_regions_alignment_status_df, file=os.path.join(out_dir, title, 'alignment_status.csv'))
     
     p.stack(df=paired_regions_alignment_status_df,x='alignment_status',y=y,
             cols=desired_col,cols_order=[True,False],vertical=False,figsize=(6,2),
-            title=title,dir=os.path.join(out_dir, title),file=f'alignment_status{plot_suf}',show=show,**plot_kwargs)
+            title=title,file=os.path.join(out_dir, title, f'alignment_status{plot_suf}'),show=show,**plot_kwargs)
 
     # Create, save & plot alignment distribution
     paired_regions_alignment_distribution_df = df[df['alignment_status']=='region 1 & 2']
@@ -1461,19 +1459,19 @@ def plot_paired(df: pd.DataFrame | str, title: str, out_dir: str,
         else: desired_ID.append('not chimera')
     paired_regions_alignment_distribution_df[id_col] = desired_ID
 
-    io.save(obj=paired_regions_alignment_distribution_df, dir=os.path.join(out_dir, title), file='alignment_distribution_per_read.csv')
+    io.save(obj=paired_regions_alignment_distribution_df, file=os.path.join(out_dir, title, 'alignment_distribution_per_read.csv'))
 
     paired_regions_alignment_distribution_df = paired_regions_alignment_distribution_df[[id_col,desired_col]].value_counts().reset_index()
     paired_regions_alignment_distribution_df_sum = sum(paired_regions_alignment_distribution_df['count'])
     paired_regions_alignment_distribution_df['fraction'] = [count/paired_regions_alignment_distribution_df_sum for count in paired_regions_alignment_distribution_df['count']]
     
-    io.save(obj=paired_regions_alignment_distribution_df, dir=os.path.join(out_dir, title), file='alignment_distribution.csv')
+    io.save(obj=paired_regions_alignment_distribution_df, file=os.path.join(out_dir, title, 'alignment_distribution.csv'))
 
     p.stack(df=paired_regions_alignment_distribution_df,
             x=desired_col,y=y,cols=id_col,palette_or_cmap='Spectral',x_ord=[True,False],vertical=False,
             cols_order=list(paired_regions_alignment_distribution_df[id_col]),
             legend_ncol=4,legend_bbox_to_anchor=(0,-.3),figsize=(10,2),
-            title=title,dir=os.path.join(out_dir, title),file=f'alignment_distribution{plot_suf}',show=show,**plot_kwargs)
+            title=title,file=os.path.join(out_dir, title, f'alignment_distribution{plot_suf}'),show=show,**plot_kwargs)
 
 def paired_regions(meta_dir: str, region1_dir: str, region2_dir: str, out_dir: str, 
                    id_col: str='ID', desired_col: str='desired', 
@@ -1588,7 +1586,7 @@ def paired_regions(meta_dir: str, region1_dir: str, region2_dir: str, out_dir: s
 
         # Memory reporting, save, & plot
         memories.append(memory_timer(task=meta_file_name[0:file_name_mismatch_ls[i]]))
-        io.save(obj=paired_regions_file_df, dir=out_dir, file=meta_file_name)
+        io.save(obj=paired_regions_file_df, file=os.path.join(out_dir, meta_file_name))
         plot_paired(df=paired_regions_file_df, title=meta_file_name[0:file_name_mismatch_ls[i]], out_dir=out_dir,
                     id_col=id_col, desired_col=desired_col, y=y, plot_suf=plot_suf, show=show, **plot_kwargs)
         if return_dc: paired_regions_dc[meta_file_name] = paired_regions_file_df
@@ -1596,8 +1594,7 @@ def paired_regions(meta_dir: str, region1_dir: str, region2_dir: str, out_dir: s
     # Save & return
     memories.append(memory_timer(task='paired_regions()'))
     io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
-            dir=os.path.join(out_dir,'.paired_regions'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
+            file=os.path.join(out_dir,'.paired_regions', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv'))
     if sh == True: io.combine(in_dir=os.path.join(out_dir,'.paired_regions'), out_dir='./paired_regions', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
     if return_dc: return paired_regions_dc  
 
@@ -2068,8 +2065,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                                             'Signature_Phred_median': signature_phred_median_ls,
                                             'Signature_Phred_mean': signature_phred_mean_ls,
                                             'Signature_Phred_max': signature_phred_max_ls}),
-                            dir=os.path.join(out_dir,'Signature'), 
-                            file=f'{fastq_name}.csv')
+                            file=os.path.join(out_dir,'Signature', f'{fastq_name}.csv'))
                 else:
                     io.save(obj=pd.DataFrame({'Read_i': np.arange(0+align_dims[0],s+align_dims[0]),
                                             'Signature': signature_ls,
@@ -2084,8 +2080,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                                             'Signature_Phred_median': signature_phred_median_ls,
                                             'Signature_Phred_mean': signature_phred_mean_ls,
                                             'Signature_Phred_max': signature_phred_max_ls}),
-                            dir=os.path.join(out_dir,'Signature'), 
-                            file=f'{fastq_name}.csv')
+                            file=os.path.join(out_dir,'Signature', f'{fastq_name}.csv'))
                 memories.append(memory_timer(task=f"{fastq_name} (alignment/signature {s+1} out of {len(seqs)})"))
 
             # Alignment -> Signature -> Genotype ID
@@ -2214,8 +2209,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
             }) 
         
         io.save(obj=df_fastq,
-                dir=os.path.join(out_dir,'Signature'), 
-                file=f'{fastq_name}.csv')
+                file=os.path.join(out_dir,'Signature', f'{fastq_name}.csv'))
         memories.append(memory_timer(task=f"{fastq_name} (alignment/signature)"))
 
         # Remove None
@@ -2317,33 +2311,323 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
     # Save, plot, and return
     memories.append(memory_timer(task='count_signature()'))
     io.save(obj=pd.DataFrame(stats, columns=['file','reads_total','reads_processed','reads_w_region','reads_wo_motif5','reads_wo_motif3','reads_w_motif_overlap']),
-            dir=os.path.join(out_dir,'.count_signature'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_stats.csv')
+            file=os.path.join(out_dir,'.count_signature', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_stats.csv'))
     io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
-            dir=os.path.join(out_dir,'.count_signature'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
+            file=os.path.join(out_dir,'.count_signature', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv'))
     if sh == True: io.combine(in_dir=os.path.join(out_dir,'.count_signature'), out_dir='./count_signature', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
     
-    io.save(obj=out_df, dir=out_dir, file=out_file)
-    io.save(obj=out_df2, dir=out_dir, file=f"{'.'.join(out_file.split('.')[:-1])}_aggregate.{out_file.split('.')[-1]}")
+    io.save(obj=out_df, file=os.path.join(out_dir, out_file))
+    io.save(obj=out_df2, file=os.path.join(out_dir, f"{'.'.join(out_file.split('.')[:-1])}_aggregate.{out_file.split('.')[-1]}"))
     if plot_suf is not None: 
         stack(df=out_df,x='fastq_file',y='fraction',cols=edit_col,vertical=False,
             palette_or_cmap='tab20',repeats=math.ceil(len(out_df[edit_col].unique())/20),cutoff_group='fastq_file',cutoff_value=0,legend_bbox_to_anchor=(0,-.1),legend_ncol=8,
-            figsize=(15,10), title='Edit Outcomes', dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}{plot_suf}", show=show, **plot_kwargs)
+            figsize=(15,10), title='Edit Outcomes', file=os.path.join(out_dir, f"{'.'.join(out_file.split('.')[:-1])}{plot_suf}"), show=show, **plot_kwargs)
         stack(df=out_df2,x='fastq_file',y='fraction',cols=edit_col,vertical=False,
             palette_or_cmap='tab20',repeats=1,cutoff_group='fastq_file',cutoff_value=0,legend_bbox_to_anchor=(0,-.1),legend_ncol=3,
-            figsize=(15,10), title='Edit Outcomes', dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}_aggregate{plot_suf}", show=show, **plot_kwargs)
+            figsize=(15,10), title='Edit Outcomes', file=os.path.join(out_dir, f"{'.'.join(out_file.split('.')[:-1])}_aggregate{plot_suf}"), show=show, **plot_kwargs)
     
     if n_extra_nt>0:
-        io.save(obj=out_df3, dir=out_dir, file=f"{'.'.join(out_file.split('.')[:-1])}_wo_{n_extra_nt}_extra_nt.{out_file.split('.')[-1]}")
-        io.save(obj=out_df4, dir=out_dir, file=f"{'.'.join(out_file.split('.')[:-1])}_wo_{n_extra_nt}_extra_nt_aggregate.{out_file.split('.')[-1]}")
+        io.save(obj=out_df3, file=os.path.join(out_dir, f"{'.'.join(out_file.split('.')[:-1])}_wo_{n_extra_nt}_extra_nt.{out_file.split('.')[-1]}"))
+        io.save(obj=out_df4, file=os.path.join(out_dir, f"{'.'.join(out_file.split('.')[:-1])}_wo_{n_extra_nt}_extra_nt_aggregate.{out_file.split('.')[-1]}"))
         if plot_suf is not None: 
             stack(df=out_df3,x='fastq_file',y='fraction',cols=edit_col,vertical=False,
                 palette_or_cmap='tab20',repeats=math.ceil(len(out_df3[edit_col].unique())/20),cutoff_group='fastq_file',cutoff_value=0,legend_bbox_to_anchor=(0,-.1),legend_ncol=8,
-                figsize=(15,10), title='Edit Outcomes', dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}_wo_{n_extra_nt}_extra_nt{plot_suf}", show=show, **plot_kwargs)
+                figsize=(15,10), title='Edit Outcomes', file=os.path.join(out_dir, f"{'.'.join(out_file.split('.')[:-1])}_wo_{n_extra_nt}_extra_nt{plot_suf}"), show=show, **plot_kwargs)
             stack(df=out_df4,x='fastq_file',y='fraction',cols=edit_col,vertical=False,
                 palette_or_cmap='tab20',repeats=1,cutoff_group='fastq_file',cutoff_value=0,legend_bbox_to_anchor=(0,-.1),legend_ncol=3,
-                figsize=(15,10), title='Edit Outcomes', dir=out_dir,file=f"{'.'.join(out_file.split('.')[:-1])}_wo_{n_extra_nt}_extra_nt_aggregate{plot_suf}", show=show, **plot_kwargs)
+                figsize=(15,10), title='Edit Outcomes', file=os.path.join(out_dir, f"{'.'.join(out_file.split('.')[:-1])}_wo_{n_extra_nt}_extra_nt_aggregate{plot_suf}"), show=show, **plot_kwargs)
+
+    if return_df: return out_df
+
+def count_signatures_dir(df_ref: pd.DataFrame | str, signature_col: str, id_col: str, edit_col: str,
+                    signature_dir: dict[str, pd.DataFrame] | str, out_dir: str, out_file: str,
+                    n_extra_nt: int=0, fastq_col: str=None, meta: pd.DataFrame | str=None,
+                    stats: pd.DataFrame | str=None, fastq_suf: str='.fastq.gz', align_dims: tuple=(0,0),
+                    return_df: bool=False, literal_eval: bool=True, plot_suf: str=None, show: bool=False,
+                    sh: bool=False, **plot_kwargs) -> pd.DataFrame:
+    '''
+    count_signatures_dir(): count signatures from previously-generated signature dataframes; plot and return fastq signatures dataframe
+
+    Note: skips fastq processing & alignments performed by count_signatures() by loading the per-fastq signature
+          dataframes that it saved to the 'Signature' directory; recomputes the count_signatures and
+          count_signatures_aggregate outputs by merging the counts with the annotated reference library.
+          The signature -> genotype ID assignment (including near-matching) is not redone here; it is read from
+          the 'ID' & 'Exact_match' columns assigned by count_signatures().
+
+    Parameters:
+    df_ref (dataframe | str): annotated reference library dataframe (or file path)
+    signature_col (str): signature column name in the annotated reference library
+    id_col (str): id column name in the annotated reference library
+    edit_col (str): edit column name in the annotated reference library
+    signature_dir (dict | str): dictionary of signature dataframes (or directory with signature .csv files) from count_signatures()
+    out_dir (str): directory for output files
+    out_file (str): output filename
+
+    n_extra_nt (int, optional): number of extra nucleotide differences that were allowed for Signature match by
+                                count_signatures(); >0 additionally writes the 'Exact_match' outputs (Default: 0)
+    fastq_col (str, optional): fastq column name in the annotated reference library (Default: None)
+    meta (dataframe | str, optional): meta dataframe (or file path) must have 'fastq_file' column (Default: None)
+    stats (dataframe | str, optional): count_signatures() stats dataframe (or file path) with 'file', 'reads_total',
+                                       & 'reads_processed' columns (Default: None => inferred from signature dataframes)
+    fastq_suf (str, optional): fastq file suffix appended to the signature dataframe keys to recover 'fastq_file' (Default: '.fastq.gz')
+    align_dims (tuple, optional): (start_i, end_i) alignments per fastq file used by count_signatures() (Default: (0,0))
+    return_df (bool, optional): return dataframe (Default: False)
+    literal_eval (bool, optional): convert string representations (Default: True)
+    plot_suf (str, optional): plot type suffix with '.' (Default: None => no plots, '.all' => .png, .pdf, & .svg)
+    show (bool, optional): show plots (Default: False)
+    sh (bool, optional): combine output log files into a single file in working directory (Default: False)
+
+    **plot_kwargs (optional): plot keyword arguments
+    '''
+    # Initialize timer
+    memory_timer(reset=True)
+
+    # Get dataframe from file path if needed
+    if type(df_ref)==str:
+        df_ref = io.get(df_ref,literal_eval=literal_eval)
+
+    # Check dataframe for alignment, id, & fastq columns
+    if signature_col not in df_ref.columns.tolist():
+        raise Exception(f'Missing signature column: {signature_col}')
+    if id_col not in df_ref.columns.tolist():
+        raise Exception(f'Missing id column: {id_col}')
+    if edit_col not in df_ref.columns.tolist():
+        raise Exception(f'Missing edit column: {edit_col}')
+    if fastq_col is not None:
+        if fastq_col not in df_ref.columns.tolist():
+            raise Exception(f'Missing fastq column: {fastq_col}')
+
+    # Get signature dataframes dictionary from directory path if needed
+    if type(signature_dir)==str:
+        signature_dc = io.get_dir(dir=signature_dir, suf='.csv')
+    elif isinstance(signature_dir, dict):
+        signature_dc = signature_dir
+    else:
+        raise ValueError(f"signature_dir needs to be a directory path or dictionary of dataframes; got {type(signature_dir)}")
+    if len(signature_dc)==0:
+        raise ValueError(f"No signature dataframes found: {signature_dir}")
+
+    # Get meta dataframe from file path if needed & check for 'fastq_file' column
+    if meta is not None:
+        if type(meta)==str:
+            meta = io.get(pt=meta)
+        if id_col in list(meta.columns):
+            meta = meta.drop(columns=[id_col])
+        if 'fastq_file' not in list(meta.columns):
+            print(f"Warning: Did not merge with meta.\nmeta needs 'fastq_file' column.\nDetected columns: {list(meta.columns)}")
+            meta = None
+
+    # Get stats dataframe from file path if needed & check for 'file' column
+    if stats is not None:
+        if type(stats)==str:
+            stats = io.get(pt=stats)
+        if 'file' not in list(stats.columns):
+            print(f"Warning: Did not obtain reads_total & reads_processed from stats.\nstats needs 'file' column.\nDetected columns: {list(stats.columns)}")
+            stats = None
+
+    # Check if align_dims is a tuple of length 2 with start_i greater than end_i
+    if align_dims is None:
+        align_dims=(0,0)
+    elif not isinstance(align_dims, tuple) or len(align_dims) != 2:
+        raise ValueError(f"align_dims={align_dims} was not a tuple of length 2")
+    else:
+        if align_dims[0]<0 or align_dims[1]<0:
+            raise ValueError(f"align_dims={align_dims} needs to be greater than 0")
+        if align_dims[1]<align_dims[0]:
+            raise ValueError(f"align_dims={align_dims} needs to be in the form (start_i, end_i)")
+
+    # Memory reporting
+    memories = []
+
+    # Phred+33 quality summary statistics columns saved by count_signatures()
+    phred_cols = ['Read_Phred_min','Read_Phred_median','Read_Phred_mean','Read_Phred_max',
+                  'Signature_Phred_min','Signature_Phred_median','Signature_Phred_mean','Signature_Phred_max']
+
+    # Create output dataframe with counts and fraction from signature dataframes and reference dataframe
+    out_df = pd.DataFrame() # Individual edits
+    out_df2 = pd.DataFrame() # Aggregate edits
+    if n_extra_nt>0:
+        out_df3 = pd.DataFrame() # Individual edits minus extra nt differences
+        out_df4 = pd.DataFrame() # Aggregate edits minus extra nt differences
+    for fastq_name in sorted(signature_dc.keys(), key=t.natural_key): # Iterate through signature dataframes
+
+        print(f"Processing {fastq_name}...")
+        df_fastq = signature_dc[fastq_name].copy()
+        fastq_file = f"{fastq_name}{fastq_suf}" if fastq_suf else fastq_name
+
+        # Check signature dataframe for signature, id, & edit columns
+        if signature_col in df_fastq.columns.tolist():
+            fastq_signature_col = signature_col
+        elif 'Signature' in df_fastq.columns.tolist(): # count_signatures() always saves 'Signature'
+            fastq_signature_col = 'Signature'
+        else:
+            raise Exception(f'Missing signature column in {fastq_name}: {signature_col}')
+        if id_col not in df_fastq.columns.tolist():
+            raise Exception(f'Missing id column in {fastq_name}: {id_col}')
+        if edit_col not in df_fastq.columns.tolist():
+            raise Exception(f'Missing edit column in {fastq_name}: {edit_col}')
+
+        # Get # of reads from stats (if provided) or the signature dataframe
+        reads_processed = len(df_fastq)
+        reads = reads_processed
+        if stats is not None:
+            fastq_stats = stats[stats['file'].isin([fastq_name,fastq_file])].reset_index(drop=True)
+            if len(fastq_stats)>0:
+                if 'reads_total' in fastq_stats.columns.tolist():
+                    reads = int(fastq_stats.iloc[0]['reads_total'])
+                if 'reads_processed' in fastq_stats.columns.tolist():
+                    reads_processed = int(fastq_stats.iloc[0]['reads_processed'])
+            else:
+                print(f"Warning: {fastq_name} not found in stats; inferred reads from the signature dataframe.")
+
+        if fastq_col is not None:
+            fastq_df_ref = df_ref[df_ref[fastq_col]==fastq_file].reset_index(drop=True) # Isolate fastq reference library info (if needed)
+        else:
+            fastq_df_ref = df_ref.copy()
+
+        # Append # of reads & alignment range to fastq_df_ref
+        previous_cols = list(fastq_df_ref.columns) # remove previous columns when duplicating metadata for WT & Not WT
+        fastq_df_ref['reads_total']= [reads]*len(fastq_df_ref)
+        fastq_df_ref['reads_processed']= [reads_processed]*len(fastq_df_ref)
+        if align_dims==(0,0):
+            fastq_df_ref['align_dims']= [(0,reads)]*len(fastq_df_ref)
+        else:
+            fastq_df_ref['align_dims']= [(align_dims[0],align_dims[1])] * len(fastq_df_ref)
+
+        # Append metadata...
+        fastq_df_ref['fastq_file'] = [fastq_file]*len(fastq_df_ref)
+
+        if meta is not None: # ...and merge with meta on 'fastq_file' column
+            fastq_df_ref = pd.merge(left=fastq_df_ref,right=meta,on='fastq_file',how='left')
+
+        # Add WT & Not WT
+        Not_WT_WT_df = pd.concat([fastq_df_ref.iloc[0:1][[col for col in fastq_df_ref.columns if col not in previous_cols]]]*2, ignore_index=True)
+        Not_WT_WT_df[id_col] = ['Not WT', 'WT']
+        Not_WT_WT_df[edit_col] = ['Not WT', 'WT']
+        fastq_df_ref = pd.concat([fastq_df_ref, Not_WT_WT_df], ignore_index=True)
+
+        # Remove None
+        df_fastq.dropna(subset=[fastq_signature_col], inplace=True, ignore_index=True)
+
+        # Calculate Phred+33 quality summary statistics by genotype ID
+        phred_aggs = {f"{col}_median": (col,'median') for col in phred_cols if col in df_fastq.columns.tolist()}
+        if len(phred_aggs)>0:
+            phred_by_id = (
+                df_fastq
+                .groupby(id_col, dropna=False)
+                .agg(**phred_aggs)
+                .reset_index()
+            )
+        else:
+            print(f"Warning: {fastq_name} is missing Phred+33 quality columns; skipped quality summary statistics.")
+            phred_by_id = None
+
+        # Merge ID counts with reference dataframe [ID column], calculate fraction, include phred stats & append to out dataframe
+        fastq_df_ref_by_id = pd.merge(
+            left=fastq_df_ref,
+            right=df_fastq[id_col].value_counts().reset_index(),
+            on=id_col,
+            how='left')
+        fastq_df_ref_by_id[edit_col] = [id if isinstance(edit, float) else edit for edit,id in t.zip_cols(
+            df=fastq_df_ref_by_id, cols=[edit_col, id_col])]
+        fastq_df_ref_by_id.fillna(value={'count': 0},inplace=True)
+        total_count = sum(fastq_df_ref_by_id['count'])
+        fastq_df_ref_by_id['fraction'] = [cts/total_count for cts in fastq_df_ref_by_id['count']]
+        if phred_by_id is not None:
+            fastq_df_ref_by_id = pd.merge(
+                left=fastq_df_ref_by_id,
+                right=phred_by_id,
+                on=id_col,
+                how="left",)
+        fastq_df_ref_by_id['fastq_file'] = [fastq_file]*len(fastq_df_ref_by_id)
+        out_df = pd.concat([out_df,fastq_df_ref_by_id], ignore_index=True)
+
+        # Total Editing Outcomes
+        cts = 0
+        fracs = 0
+        for edit,count,fraction in t.zip_cols(df=fastq_df_ref_by_id,cols=[edit_col,'count','fraction']):
+            if edit!='WT' and edit!='Not WT':
+                cts += count
+                fracs += fraction
+
+        fastq_df_ref_by_id_agg = fastq_df_ref_by_id[fastq_df_ref_by_id[id_col].isin(['WT','Not WT'])].reset_index(drop=True)
+        fastq_df_ref_by_id_agg = pd.concat([fastq_df_ref_by_id_agg,
+                                            pd.DataFrame({id_col: ['Edit'],
+                                                        edit_col: ['Edit'],
+                                                        'count': [cts],
+                                                        'fraction': [fracs],
+                                                        'fastq_file': [fastq_file]})], ignore_index=True)
+        out_df2 = pd.concat([out_df2,fastq_df_ref_by_id_agg], ignore_index=True)
+
+        # Save memory & clear for next use
+        del total_count
+        del fastq_df_ref_by_id
+        del fastq_df_ref_by_id_agg
+
+        # Merge Exact_match counts with reference dataframe [ID column], calculate fraction, & append to out dataframe
+        if n_extra_nt>0:
+            if 'Exact_match' not in df_fastq.columns.tolist():
+                raise Exception(f"Missing Exact_match column in {fastq_name}; required when n_extra_nt>0")
+            fastq_df_ref_by_exact = pd.merge(left=fastq_df_ref,right=df_fastq['Exact_match'].value_counts().reset_index(), left_on=id_col, right_on="Exact_match", how='left')
+            fastq_df_ref_by_exact[edit_col] = [id if isinstance(edit, float) else edit for edit,id in t.zip_cols(df=fastq_df_ref_by_exact, cols=[edit_col, id_col])]
+            fastq_df_ref_by_exact.fillna(value={'count': 0},inplace=True)
+            total_count = sum(fastq_df_ref_by_exact['count'])
+            fastq_df_ref_by_exact['fraction'] = [cts/total_count for cts in fastq_df_ref_by_exact['count']]
+            fastq_df_ref_by_exact['fastq_file'] = [fastq_file]*len(fastq_df_ref_by_exact)
+            out_df3 = pd.concat([out_df3,fastq_df_ref_by_exact], ignore_index=True)
+
+            # Total Editing Outcomes minus extra nt differences
+            cts = 0
+            fracs = 0
+            for edit,count,fraction in t.zip_cols(df=fastq_df_ref_by_exact,cols=[edit_col,'count','fraction']):
+                if edit!='WT' and edit!='Not WT':
+                    cts += count
+                    fracs += fraction
+
+            fastq_df_ref_by_exact_agg = fastq_df_ref_by_exact[fastq_df_ref_by_exact[id_col].isin(['WT','Not WT'])].reset_index(drop=True)
+            fastq_df_ref_by_exact_agg = pd.concat([fastq_df_ref_by_exact_agg,
+                                                    pd.DataFrame({id_col: ['Edit'],
+                                                                edit_col: ['Edit'],
+                                                                'count': [cts],
+                                                                'fraction': [fracs],
+                                                                'fastq_file': [fastq_file]})], ignore_index=True)
+            out_df4 = pd.concat([out_df4,fastq_df_ref_by_exact_agg], ignore_index=True)
+
+            # Save memory & clear for next use
+            del total_count
+            del fastq_df_ref_by_exact
+            del fastq_df_ref_by_exact_agg
+
+        # Save memory & clear for next use
+        memories.append(memory_timer(task=f"{fastq_name} (count)"))
+        del df_fastq
+
+    # Save, plot, and return
+    memories.append(memory_timer(task='count_signatures_dir()'))
+    io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
+            file=os.path.join(out_dir,'.count_signatures_dir', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv'))
+    if sh == True: io.combine(in_dir=os.path.join(out_dir,'.count_signatures_dir'), out_dir='./count_signatures_dir', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
+
+    io.save(obj=out_df, file=os.path.join(out_dir, out_file))
+    io.save(obj=out_df2, file=os.path.join(out_dir, f"{'.'.join(out_file.split('.')[:-1])}_aggregate.{out_file.split('.')[-1]}"))
+    if plot_suf is not None:
+        stack(df=out_df,x='fastq_file',y='fraction',cols=edit_col,vertical=False,
+            palette_or_cmap='tab20',repeats=math.ceil(len(out_df[edit_col].unique())/20),cutoff_group='fastq_file',cutoff_value=0,legend_bbox_to_anchor=(0,-.1),legend_ncol=8,
+            figsize=(15,10), title='Edit Outcomes', file=os.path.join(out_dir, f"{'.'.join(out_file.split('.')[:-1])}{plot_suf}"), show=show, **plot_kwargs)
+        stack(df=out_df2,x='fastq_file',y='fraction',cols=edit_col,vertical=False,
+            palette_or_cmap='tab20',repeats=1,cutoff_group='fastq_file',cutoff_value=0,legend_bbox_to_anchor=(0,-.1),legend_ncol=3,
+            figsize=(15,10), title='Edit Outcomes', file=os.path.join(out_dir, f"{'.'.join(out_file.split('.')[:-1])}_aggregate{plot_suf}"), show=show, **plot_kwargs)
+
+    if n_extra_nt>0:
+        io.save(obj=out_df3, file=os.path.join(out_dir, f"{'.'.join(out_file.split('.')[:-1])}_wo_{n_extra_nt}_extra_nt.{out_file.split('.')[-1]}"))
+        io.save(obj=out_df4, file=os.path.join(out_dir, f"{'.'.join(out_file.split('.')[:-1])}_wo_{n_extra_nt}_extra_nt_aggregate.{out_file.split('.')[-1]}"))
+        if plot_suf is not None:
+            stack(df=out_df3,x='fastq_file',y='fraction',cols=edit_col,vertical=False,
+                palette_or_cmap='tab20',repeats=math.ceil(len(out_df3[edit_col].unique())/20),cutoff_group='fastq_file',cutoff_value=0,legend_bbox_to_anchor=(0,-.1),legend_ncol=8,
+                figsize=(15,10), title='Edit Outcomes', file=os.path.join(out_dir, f"{'.'.join(out_file.split('.')[:-1])}_wo_{n_extra_nt}_extra_nt{plot_suf}"), show=show, **plot_kwargs)
+            stack(df=out_df4,x='fastq_file',y='fraction',cols=edit_col,vertical=False,
+                palette_or_cmap='tab20',repeats=1,cutoff_group='fastq_file',cutoff_value=0,legend_bbox_to_anchor=(0,-.1),legend_ncol=3,
+                figsize=(15,10), title='Edit Outcomes', file=os.path.join(out_dir, f"{'.'.join(out_file.split('.')[:-1])}_wo_{n_extra_nt}_extra_nt_aggregate{plot_suf}"), show=show, **plot_kwargs)
 
     if return_df: return out_df
 
@@ -2479,7 +2763,7 @@ def get_fastqs(in_dir: str, qall:int=10, qavg:int=30, qtrim:int=0, qmask:int=0, 
 
     if save==True: 
         if out_dir is None: out_dir = '.'
-        io.save(obj=out, dir=os.path.join(out_dir,'.genotyping'), file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_get_fastqs.csv')
+        io.save(obj=out, file=os.path.join(out_dir,'.genotyping', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_get_fastqs.csv'))
     
     if return_memories: return fastqs,memories
     else: return fastqs
@@ -2610,7 +2894,7 @@ def region(fastqs: dict, flank5: str='', flank3: str='', save: bool=True, masks:
     
     if save==True: 
         if out_dir is None: out_dir = '.'
-        io.save(obj=out, dir=os.path.join(out_dir,'.genotyping'), file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_region.csv')
+        io.save(obj=out, file=os.path.join(out_dir,'.genotyping', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_region.csv'))
     
     if return_memories: return fastqs_1,memories
     else: return fastqs_1
@@ -2909,7 +3193,7 @@ def genotype(fastqs: dict, res: int, wt: str, save: bool=False, masks: bool=Fals
     
     if save==True: 
         if out_dir is None: out_dir = '.'
-        io.save(obj=t.reorder_cols(df=t.join(dc=fastqs,col='fastq_file'),cols=['fastq_file']), dir=os.path.join(out_dir,'.genotyping'), file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_genotype.csv')
+        io.save(obj=t.reorder_cols(df=t.join(dc=fastqs,col='fastq_file'),cols=['fastq_file']), file=os.path.join(out_dir,'.genotyping', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_genotype.csv'))
     
     if return_memories: return fastqs,memories
     else: return fastqs
@@ -3035,11 +3319,10 @@ def genotyping(in_dir: str, config_key: str=None, sequence: str=None, res: int=N
     if out_file_prefix is None: 
         out_file_prefix = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
-            dir=os.path.join(out_dir,'.genotyping'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
+            file=os.path.join(out_dir,'.genotyping', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv'))
 
-    io.save(obj=df_edits, dir=out_dir, file=f'{out_file_prefix}_edit_outcomes.csv') # Edit outcomes
-    io.save(obj=df_categories, dir=out_dir, file=f'{out_file_prefix}_category_outcomes.csv') # Edit categoy outcomes
+    io.save(obj=df_edits, file=os.path.join(out_dir, f'{out_file_prefix}_edit_outcomes.csv')) # Edit outcomes
+    io.save(obj=df_categories, file=os.path.join(out_dir, f'{out_file_prefix}_category_outcomes.csv')) # Edit categoy outcomes
 
     if sh == True: io.combine(in_dir=os.path.join(out_dir,'.genotyping'), out_dir='./genotyping', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
     
@@ -3150,12 +3433,12 @@ def editing_per_library(edit_dc: dict | str, paired_regions_dc: dict | str, fast
         # Save the edited dataframe to the output dictionary
         out_dc[edit_fq] = edit_df
         if out_dir is not None:
-            io.save(obj=edit_df, dir=os.path.join(out_dir,'split'), file=f"{edit_fq}.csv")
+            io.save(obj=edit_df, file=os.path.join(out_dir,'split', f"{edit_fq}.csv"))
 
     # Save the output dictionary as a single dataframe
     out_df = t.join(dc=out_dc, col='fastq_file')
     if out_dir is not None:
-        io.save(obj=out_df, dir=out_dir, file='editing_per_library.csv')
+        io.save(obj=out_df, file=os.path.join(out_dir, 'editing_per_library.csv'))
     if return_df:
         return out_df
 
@@ -3206,8 +3489,7 @@ def extract_umis(fastq_dir: str, out_dir: str='./extract_umis',
     # Memory reporting
     memories.append(memory_timer(task='extract_umis()'))
     io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
-            dir=os.path.join(out_dir,'.extract_umis'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
+            file=os.path.join(out_dir,'.extract_umis', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv'))
     if sh == True: io.combine(in_dir=os.path.join(out_dir,'.extract_umis'), out_dir='./extract_umis', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv', '.log']) 
     
 def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs', 
@@ -3286,8 +3568,7 @@ def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs',
     # Memory reporting
     memories.append(memory_timer(task='trim_motifs()'))
     io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
-            dir=os.path.join(out_dir,'.trim_motifs'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
+            file=os.path.join(out_dir,'.trim_motifs', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv'))
 
     if sh == True: io.combine(in_dir=os.path.join(out_dir,'.trim_motifs'), out_dir='./trim_motifs', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv', '.log']) 
 
@@ -3378,8 +3659,7 @@ def make_sams(fastq_dir: str, out_dir: str='./make_sams',
     # Memory reporting
     memories.append(memory_timer(task='make_sams()'))
     io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
-            dir=os.path.join(out_dir,'.make_sams'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
+            file=os.path.join(out_dir,'.make_sams', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv'))
     if sh == True: io.combine(in_dir=os.path.join(out_dir,'.make_sams'), out_dir='./make_sams', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv', '.log'])
 
 def make_bams(sam_dir: str, out_dir: str='./make_bams', env: str='umi_tools', sh: bool=False):
@@ -3432,8 +3712,7 @@ def make_bams(sam_dir: str, out_dir: str='./make_bams', env: str='umi_tools', sh
     # Memory reporting
     memories.append(memory_timer(task='make_bams()'))
     io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
-            dir=os.path.join(out_dir,'.make_bams'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
+            file=os.path.join(out_dir,'.make_bams', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv'))
     if sh == True: io.combine(in_dir=os.path.join(out_dir,'.make_bams'), out_dir='./make_bams', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv', '.log'])
 
 def bam_umi_tags(bam_dir: str, out_dir: str='./bam_umi_tags',
@@ -3472,8 +3751,7 @@ def bam_umi_tags(bam_dir: str, out_dir: str='./bam_umi_tags',
     # Memory reporting
     memories.append(memory_timer(task='bam_umi_tags()'))
     io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
-            dir=os.path.join(out_dir,'.bam_umi_tags'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
+            file=os.path.join(out_dir,'.bam_umi_tags', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv'))
     if sh == True: io.combine(in_dir=os.path.join(out_dir,'.bam_umi_tags'), out_dir='./bam_umi_tags', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
 
 def group_umis(bam_dir: str, out_dir: str='./group_umis', 
@@ -3529,8 +3807,7 @@ def group_umis(bam_dir: str, out_dir: str='./group_umis',
     # Memory reporting
     memories.append(memory_timer(task='group_umis()'))
     io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
-            dir=os.path.join(out_dir,'.group_umis'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
+            file=os.path.join(out_dir,'.group_umis', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv'))
     if sh == True: io.combine(in_dir=os.path.join(out_dir,'.group_umis'), out_dir='./group_umis', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
 
 def consensus_umis(bam_dir: str, out_dir: str='./consensus_umis', 
@@ -3570,8 +3847,7 @@ def consensus_umis(bam_dir: str, out_dir: str='./consensus_umis',
     # Memory reporting
     memories.append(memory_timer(task='consensus_umis()'))
     io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
-            dir=os.path.join(out_dir,'.consensus_umis'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
+            file=os.path.join(out_dir,'.consensus_umis', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv'))
     if sh == True: io.combine(in_dir=os.path.join(out_dir,'.consensus_umis'), out_dir='./consensus_umis', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
 
 def bam_to_fastq(bam_dir: str, out_dir: str='./bam_to_fastq', env: str='umi_tools', sh: bool=False):
@@ -3609,8 +3885,7 @@ def bam_to_fastq(bam_dir: str, out_dir: str='./bam_to_fastq', env: str='umi_tool
     # Memory reporting
     memories.append(memory_timer(task='bam_to_fastq()'))
     io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
-            dir=os.path.join(out_dir,'.bam_to_fastq'),
-            file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv')
+            file=os.path.join(out_dir,'.bam_to_fastq', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv'))
     if sh == True: io.combine(in_dir=os.path.join(out_dir,'.bam_to_fastq'), out_dir='./bam_to_fastq', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv'])
 
 # Supporting methods for plots
@@ -4272,7 +4547,7 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
 # Plot methods
 def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_order: list = None, cats_exclude: list|str = None, cols: str=None, cols_order: list=None, cols_exclude: list|str=None, PDB_pt: str=None, line: float = None,
         facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
-        file: str=None, dir: str=None, palette_or_cmap: str='colorblind', alpha: float=1.0, dodge: bool=True, jitter: bool=True, size: float=5, edgecol: str='black', lw: int=1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
+        file: str=None, palette_or_cmap: str='colorblind', alpha: float=1.0, dodge: bool=True, jitter: bool=True, size: float=5, edgecol: str='black', lw: int=1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
         figsize: tuple=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_scale: str='linear', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_scale: str='linear', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
@@ -4300,8 +4575,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_order: li
     facetx_order (list, optional): order of facet columns
     facety_order (list, optional): order of facet rows
     subplot_titles (str | list, optional): Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none
-    file (str, optional): save plot to filename
-    dir (str, optional): save plot to directory
+    file (str, optional): output plot file path
     palette_or_cmap (str, optional): seaborn color palette or matplotlib color map
     alpha (float, optional): Alpha (transparency) for scatter points (0 to 1)
     dodge (bool, optional): whether to separate points by color category
@@ -4395,7 +4669,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_order: li
 
     p.cat(graph=graph,df=df,x=x,y=y,cats_order=cats_order,cats_exclude=cats_exclude,cols=cols,cols_order=cols_order,cols_exclude=cols_exclude,PDB_pt=PDB_pt,line=line,
           facetx=facetx,facety=facety,facetx_order=facetx_order,facety_order=facety_order,subplot_titles=subplot_titles,
-          file=file,dir=dir,palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
+          file=file,palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
           figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
           x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_axis_pad=x_axis_pad,x_ticks_size=x_ticks_size,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,x_ticks=x_ticks,
           y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_scale=y_axis_scale,y_axis_dims=y_axis_dims,y_axis_pad=y_axis_pad,y_ticks_size=y_ticks_size,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,y_ticks=y_ticks,
@@ -4404,8 +4678,8 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_order: li
           dpi=dpi,transparent=transparent,show=show,space_capitalize=space_capitalize,**kwargs)
 
 def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: str='Edit', cutoff_group: str='fastq_file', cutoff_value: float=0, cutoff_keep: bool=True, 
-          cols_order: list=[], x_ord: list=[], facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values', PDB_pt: str=None,
-          file: str=None, dir: str=None, palette_or_cmap: str='tab20', repeats: int=1, errcap: int=4, vertical: bool=True,
+          cols_order: list=[], x_order: list=[], facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values', PDB_pt: str=None,
+          file: str=None, palette_or_cmap: str='tab20', repeats: int=1, errcap: int=4, vertical: bool=True,
           figsize: tuple=(6,6), title: str='Editing Outcomes', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
           x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial',
           y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial',
@@ -4424,15 +4698,14 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
     cutoff_value (float, optional): y-axis values needs be greater than (Default: 0)
     cutoff_keep (bool, optional): keep cutoff group even if below cutoff (Default: True)
     cols_order (list, optional): color column values order
-    x_ord (list, optional): x-axis column values order
+    x_order (list, optional): x-axis column values order
     facetx (str, optional): column name for x-axis faceting
     facety (str, optional): column name for y-axis faceting
     facetx_order (list, optional): order of x-axis facet values
     facety_order (list, optional): order of y-axis facet values
     subplot_titles (str | list, optional): Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none
     PDB_pt (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
-    file (str, optional): save plot to filename
-    dir (str, optional): save plot to directory
+    file (str, optional): output plot file path
     palette_or_cmap (str, optional): seaborn palette or matplotlib color map
     repeats (int, optional): number of color palette or map repeats (Default: 1)
     errcap (int, optional): error bar cap line width
@@ -4518,8 +4791,8 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
         cols_order = list(assign.sort_values(by='positions')['genotypes'])
 
     # Make stacked barplot
-    p.stack(df=df_cut,x=x,y=y,cols=cols,cutoff_group=cutoff_group,cutoff_value=0,cutoff_keep=cutoff_keep,cols_order=cols_order,x_ord=x_ord,facetx=facetx,facety=facety,facetx_order=facetx_order,facety_order=facety_order,subplot_titles=subplot_titles,
-            file=file,dir=dir,palette_or_cmap=palette_or_cmap,repeats=repeats,errcap=errcap,vertical=vertical,
+    p.stack(df=df_cut,x=x,y=y,cols=cols,cutoff_group=cutoff_group,cutoff_value=0,cutoff_keep=cutoff_keep,cols_order=cols_order,x_order=x_order,facetx=facetx,facety=facety,facetx_order=facetx_order,facety_order=facety_order,subplot_titles=subplot_titles,
+            file=file,palette_or_cmap=palette_or_cmap,repeats=repeats,errcap=errcap,vertical=vertical,
             figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
             x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_pad=x_axis_pad,x_ticks_size=x_ticks_size,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,
             y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_dims=y_axis_dims,y_axis_pad=y_axis_pad,y_ticks_size=y_ticks_size,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,
@@ -4531,7 +4804,7 @@ def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple
         label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None, DSSP: str=None, chain_id: str=None,
         x_threshold: float = 0, y_threshold: float = 0, bidirectional_x_threshold: bool = True, bidirectional_y_threshold: bool = False,
         facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
-        file: str=None, dir: str=None, color: str='lightgray', alpha: float=0.5, edgecol: str='black', vertical: bool=True,
+        file: str=None, color: str='lightgray', alpha: float=0.5, edgecol: str='black', vertical: bool=True,
         figsize: tuple=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
@@ -4570,8 +4843,7 @@ def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple
     facetx_order (list, optional): order of facet columns
     facety_order (list, optional): order of facet rows
     subplot_titles (str | list, optional): Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none
-    file (str, optional): save plot to filename
-    dir (str, optional): save plot to directory
+    file (str, optional): output plot file path
     color (str, optional): matplotlib color for nonsignificant values
     alpha (float, optional): transparency for nonsignificant values (Default: 0.5)
     edgecol (str, optional): point edge color
@@ -4660,7 +4932,7 @@ def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple
     p.vol(df=df, x=x, y=y, size=size, stys='Change', size_dims=size_dims, label=label, stys_order=stys_order, mark_order=mark_order,
           x_threshold=x_threshold, y_threshold=y_threshold, bidirectional_x_threshold=bidirectional_x_threshold, bidirectional_y_threshold=bidirectional_y_threshold,
           facetx=facetx, facety=facety, facetx_order=facetx_order, facety_order=facety_order, subplot_titles=subplot_titles,
-          file=file, dir=dir, color=color, alpha=alpha, edgecol=edgecol, vertical=vertical,
+          file=file, color=color, alpha=alpha, edgecol=edgecol, vertical=vertical,
           figsize=figsize, title=title, title_size=title_size, title_weight=title_weight, title_font=title_font, 
           x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad, x_ticks_size = x_ticks_size, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
           y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font, y_axis_dims=y_axis_dims, y_axis_pad=y_axis_pad, y_ticks_size=y_ticks_size, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
@@ -4673,7 +4945,7 @@ def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple
 def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, size_dims: tuple=None, label: str='Edit', label_size: int=16,
         label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None, DSSP: str=None, chain_id: str=None, ss_h: int=None, ss_y: int=None,
         facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
-        file: str=None, dir: str=None, edgecol: str='black', figsize: tuple=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
+        file: str=None, edgecol: str='black', figsize: tuple=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
         legend_title: str='',legend_title_size: int=12, legend_title_weight: str='bold', legend_size: int = 12, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1, legend_mode: str = "figure",
@@ -4708,8 +4980,7 @@ def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, siz
     facetx_order (list, optional): order of facet columns
     facety_order (list, optional): order of facet rows
     subplot_titles (str | list, optional): Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none
-    file (str, optional): save plot to filename
-    dir (str, optional): save plot to directory
+    file (str, optional): output plot file path
     edgecol (str, optional): point edge color
     figsize (tuple, optional): figure size
     title (str, optional): plot title
@@ -5265,7 +5536,6 @@ def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, siz
     _final_save_show(
         fig,
         file=file,
-        dir=dir,
         dpi=dpi,
         transparent=transparent,
         PDB_pt=PDB_pt,
@@ -5282,7 +5552,7 @@ def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, siz
 def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, scores_col: str, size: str =None, size_dims: tuple=None,
         conservative: bool=True, method: str='pearson', weighted: bool=True, label: str='Edit', label_size: int=16,
         label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None, DSSP: str=None, chain_id: str=None,
-        file: str=None, dir: str=None, edgecol: str='black', figsize: tuple=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
+        file: str=None, edgecol: str='black', figsize: tuple=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
         legend_title: str='',legend_title_size: int=12, legend_title_weight: str = 'bold', legend_size: int = 12, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1,
@@ -5314,8 +5584,7 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, scores_col: str
     PDB_neighbors (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
     DSSP (str, optional): DSSP ID (if saved to ~/.config/edms/DSSP) or file path for DSSP structure file. See edms.dat.dssp.retrieve() or edms dssp retrieve -h for more information.
     chain_id (str, optional): chain ID for DSSP structure file (Default: None)
-    file (str, optional): save plot to filename
-    dir (str, optional): save plot to directory
+    file (str, optional): output plot file path
     edgecol (str, optional): point edge color
     figsize (tuple, optional): figure size
     title (str, optional): plot title
@@ -5652,7 +5921,7 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, scores_col: str
     plt.title(title, fontsize=title_size, fontweight=title_weight, family=title_font)
 
     # Save & show fig; return dataframe
-    p.save_fig(file=file, dir=dir, fig=fig, dpi=dpi, transparent=transparent, PDB_pt=PDB_pt, icon='scatter')
+    p.save_fig(file=file, fig=fig, dpi=dpi, transparent=transparent, PDB_pt=PDB_pt, icon='scatter')
     if show:
         ext = file.split('.')[-1].lower() if file is not None else ''
         if ext not in ('html', 'json'):
@@ -5664,7 +5933,7 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, scores_col: str
 
 def heat(df: pd.DataFrame | str, scores_col: str, wt_prot: str, wt_res: int, cutoff_col: str=None, cutoff: float=0, aa: str='aa', label: str='Edit',
         facetx: str=None, facety: str=None, facetx_order: list=None, facety_order: list=None, subplot_titles: str="facet_values",
-        file: str=None, dir: str=None, edgecol: str='black', lw: int=1, center: float=0, cmap: str="seismic", cmap_WT: str='forestgreen', cmap_not_WT: str='lightgray', sq: bool=False, 
+        file: str=None, edgecol: str='black', lw: int=1, center: float=0, cmap: str="seismic", cmap_WT: str='forestgreen', cmap_not_WT: str='lightgray', sq: bool=False, 
         cbar: bool=True, cbar_label: str=None, cbar_label_size: int=None, cbar_label_weight: str='bold', cbar_tick_size: int=None, cbar_shrink: float=None, cbar_aspect: int=None, cbar_pad: float=None, cbar_orientation: str=None, cbar_mode: str = "figure",
         title: str='', title_size: int=12, title_weight: str='bold', title_font: str='Arial',  figsize: tuple=(6,6), vertical: bool=True,
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=None, x_ticks_font: str='Arial',
@@ -5687,8 +5956,7 @@ def heat(df: pd.DataFrame | str, scores_col: str, wt_prot: str, wt_res: int, cut
     facetx_order (list, optional): order of facet columns
     facety_order (list, optional): order of facet rows
     subplot_titles (str, optional): Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none
-    file (str, optional): save plot to filename
-    dir (str, optional): save plot to directory
+    file (str, optional): output plot file path
     edgecol (str, optional): point edge color
     lw (int, optional): line width
     center (float, optional): center value for colormap
@@ -6207,7 +6475,7 @@ def heat(df: pd.DataFrame | str, scores_col: str, wt_prot: str, wt_res: int, cut
     else:
         fig.tight_layout()
 
-    p.save_fig(file=file, dir=dir, fig=fig, dpi=dpi, transparent=transparent, icon='heat')
+    p.save_fig(file=file, fig=fig, dpi=dpi, transparent=transparent, icon='heat')
 
     if show:
         ext = file.split('.')[-1].lower() if file is not None else ''

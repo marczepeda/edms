@@ -32,7 +32,7 @@ def cfx_Cq(pt: str, sample_col:str='Sample', cols: list=['Well','Fluor','Target'
     return data
 
 def ddCq(data: pd.DataFrame | str, sample_col:str='Sample', target_col:str='Target', Cq_col:str='Cq',
-         dir:str=None, file:str=None) -> pd.DataFrame:
+         file:str=None) -> pd.DataFrame:
     ''' 
     ddCq(): computes ΔΔCq mean and error for all samples holding target pairs constant
     
@@ -41,8 +41,7 @@ def ddCq(data: pd.DataFrame | str, sample_col:str='Sample', target_col:str='Targ
     sample_col (str, optional): column name with cDNA sample identifier (Default: Sample)
     target_col (str, optional): column name with target identifier (Default: Target)
     Cq_col (str, optional): column name with Cq value (Default: Cq)
-    dir (str, optional): save directory
-    file (str, optional): save file
+    file (str, optional): output file path
 
     Dependencies: pandas, numpy, & itertools
     '''
@@ -111,5 +110,5 @@ def ddCq(data: pd.DataFrame | str, sample_col:str='Sample', target_col:str='Targ
     data4 = pd.DataFrame({'Samples':samples_pairs,'Sample 1':sample1s,'Sample 2': sample2s,'Targets':target_pairs,'Target 1':target1s,'Target 2':target2s,'ddCq_mean':ddCq_means,'ddCq_err':ddCq_errs,'RQ_mean':RQ_means,'RQ_err':RQ_errs})
 
     # Save & return analyzed qPCR data
-    io.save(obj=data4, dir=dir, file=file) 
+    io.save(obj=data4, file=file) 
     return data4

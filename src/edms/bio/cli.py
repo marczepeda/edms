@@ -53,8 +53,7 @@ def add_subparser(subparsers, formatter_class=None):
     # pcrs(): Core parameters
     parser_ngs_pcrs.add_argument("-i","--df", help="Input file", type=str, required=True)
     
-    parser_ngs_pcrs.add_argument("-o","--dir", help="Output directory path", type=str, default='.')
-    parser_ngs_pcrs.add_argument("-f","--file", help="Output file name (.xlsx)", type=str, default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_NGS_plan.xlsx')
+    parser_ngs_pcrs.add_argument("-f","--file", help="Output file path (.xlsx)", type=str, default=f'./{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_NGS_plan.xlsx')
     parser_ngs_pcrs.add_argument("-u","--ultra", help="Using NEB Ultra II reagents", action="store_true")
     parser_ngs_pcrs.add_argument("-1c","--pcr1_cycles", help="Number of cycles for PCR1", type=str, default='30')
     parser_ngs_pcrs.add_argument("-2c","--pcr2_cycles", help="Number of cycles for PCR2", type=str, default='8')
@@ -110,8 +109,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_ngs_hamming.add_argument("-I","--id", help="ID column name", type=str, required=True)
     parser_ngs_hamming.add_argument("-s","--seqs", help="Sequences column name", type=str, required=True)
     
-    parser_ngs_hamming.add_argument("-o","--dir", help="Output directory path", type=str, default='../out')
-    parser_ngs_hamming.add_argument("-f","--file", help="Output file name", type=str, default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_hamming.csv')
+    parser_ngs_hamming.add_argument("-f","--file", help="Output file path", type=str, default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_hamming.csv')
     
     parser_ngs_hamming.set_defaults(func=ngs.hamming_distance_matrix)
 
@@ -127,8 +125,7 @@ def add_subparser(subparsers, formatter_class=None):
 
     # pcrs(): Core parameters
     parser_sanger_pcrs.add_argument("-i", "--df", help="Input file", type=str, required=True)
-    parser_sanger_pcrs.add_argument("--dir", help="Output directory path", type=str, default='../out')
-    parser_sanger_pcrs.add_argument("--file", help="Output file name (.xlsx)", type=str, default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_Sanger_plan.xlsx')
+    parser_sanger_pcrs.add_argument("--file", help="Output file path (.xlsx)", type=str, default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_Sanger_plan.xlsx')
     parser_sanger_pcrs.add_argument("--cycles", help="Number of cycles for PCR1", type=str, default='30')
     parser_sanger_pcrs.add_argument("--ultra", help="Using NEB Ultra II reagents", action="store_true")
     parser_sanger_pcrs.add_argument('--total_uL', type=int, default=20, help='Total reaction volume (uL)')
@@ -175,8 +172,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_clone_sgRNAs.add_argument("-i", "--df", type=str, help="Input file path",required=True)
     parser_clone_sgRNAs.add_argument("-I", "--id", type=str, help="Column name for unique sgRNA identifier",required=True)
 
-    parser_clone_sgRNAs.add_argument("-o", "--dir", type=str, help="Output directory", default='../out')
-    parser_clone_sgRNAs.add_argument("-f", "--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_sgRNAs.csv')
+    parser_clone_sgRNAs.add_argument("-f", "--file", type=str, help="Output file path", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_sgRNAs.csv')
 
     parser_clone_sgRNAs.add_argument("-dg","--dont_tG", dest="tG", default=True, action="store_false", help="Don't add 5' G to spacer if needed")
     parser_clone_sgRNAs.add_argument("-do","--dont_order", dest="order", default=True, action="store_false", help="Don't format output for ordering oligos")
@@ -194,8 +190,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_clone_epegRNAs.add_argument("-i", "--df", type=str, help="Input file path", required=True)
     parser_clone_epegRNAs.add_argument("-I", "--id", type=str, help="Column name for unique sequence identifier",required=True)
 
-    parser_clone_epegRNAs.add_argument("-o", "--dir", help="Output directory path", type=str, default='.')
-    parser_clone_epegRNAs.add_argument("-f", "--file", help="Output file name", type=str, default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_epegRNAs.csv')
+    parser_clone_epegRNAs.add_argument("-f", "--file", help="Output file path", type=str, default=f'./{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_epegRNAs.csv')
 
     parser_clone_epegRNAs.add_argument("-dg", "--dont_tG", dest="tG", default=True, action="store_false", help="Don't add 5' G to spacer if needed")
     parser_clone_epegRNAs.add_argument("-do", "--dont_order", dest="order", default=True, action="store_false", help="Don't format output for ordering oligos")
@@ -223,8 +218,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_clone_ngRNAs.add_argument("-i", "--df", type=str, help="Input file path", required=True)
     parser_clone_ngRNAs.add_argument("-I", "--id", type=str, help="Column name for unique sequence identifier",required=True)
 
-    parser_clone_ngRNAs.add_argument("-o", "--dir", help="Output directory path", type=str, default='.')
-    parser_clone_ngRNAs.add_argument("-f", "--file", help="Output file name", type=str, default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_epegRNAs.csv')
+    parser_clone_ngRNAs.add_argument("-f", "--file", help="Output file path", type=str, default=f'./{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_epegRNAs.csv')
     
     parser_clone_ngRNAs.add_argument("-dg", "--dont_tG", dest="tG", default=True, action="store_false", help="Don't add 5' G to spacer if needed")
     parser_clone_ngRNAs.add_argument("-do", "--dont_order", dest="order", default=True, action="store_false", help="Don't format output for ordering oligos")
@@ -243,8 +237,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_clone_epegRNA_pool.add_argument("-i", "--df", type=str, help="Input file path", required=True)
     parser_clone_epegRNA_pool.add_argument("-b", "--barcode", type=str, help="subpool barcode column name", required=True)
     
-    parser_clone_epegRNA_pool.add_argument("-o", "--dir", type=str, help="Output directory", default='../out')
-    parser_clone_epegRNA_pool.add_argument("-f", "--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_epegRNA_pool.csv')
+    parser_clone_epegRNA_pool.add_argument("-f", "--file", type=str, help="Output file path", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_epegRNA_pool.csv')
 
     parser_clone_epegRNA_pool.add_argument("-tG", "--tG", action="store_true", help="Add 5' G(s) to spacers if needed; leading G yields optimal expression and G(s) may be added to avoid creating an Esp3I site at promoter-spacer junction")
     parser_clone_epegRNA_pool.add_argument("-me", "--make_extension", action="store_true", help="Build extension from RTT, PBS, and linker")
@@ -281,8 +274,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_clone_dms_pool.add_argument("-rht3v", "--rev_homology_t3_val", type=str, nargs="+", help="Reverse homology value to check for in PCR_df (Examples: 'FOXA1-P205', 'FOXA1-G239', 'FOXA1-P272')", required=True)
     
     parser_clone_dms_pool.add_argument("-bv", "--barcode_val", type=str, nargs="+", default=argparse.SUPPRESS, help="subpool barcode column values in df[barcode] (Examples: ['1', '2', '3'] or None)")
-    parser_clone_dms_pool.add_argument("-o", "--dir", type=str, help="Output directory", default='../out')
-    parser_clone_dms_pool.add_argument("-f", "--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_dms_pool.csv')
+    parser_clone_dms_pool.add_argument("-f", "--file", type=str, help="Output file path", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_dms_pool.csv')
 
     parser_clone_dms_pool.add_argument("-U", "--UMI_df", type=str, help="UMI sequences file path", default=argparse.SUPPRESS)
     parser_clone_dms_pool.add_argument("-P", "--PCR_df", type=str, help="PCR primer and subpool barcode file path", default=argparse.SUPPRESS)
@@ -320,8 +312,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_clone_pcrsim.add_argument("-fb", "--fwd_bind_col", type=str, help="Column name for forward primer binding region", required=True)
     parser_clone_pcrsim.add_argument("-rb", "--rev_bind_col", type=str, help="Column name for reverse primer binding region", required=True)
 
-    parser_clone_pcrsim.add_argument("-o", "--dir", type=str, help="Output directory", default='../out')
-    parser_clone_pcrsim.add_argument("-f", "--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_pcr_sim.csv')
+    parser_clone_pcrsim.add_argument("-f", "--file", type=str, help="Output file path", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_pcr_sim.csv')
 
     parser_clone_pcrsim.add_argument("-e", "--fwd_ext_col", type=str, help="Column name for forward primer extension region")
     parser_clone_pcrsim.add_argument("-v", "--rev_ext_col", type=str, help="Column name for reverse primer extension region")
@@ -360,8 +351,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_transfect_PE3.add_argument("-e", "--epegRNAs", type=str, help="Path to epegRNAs file", required=True)
     parser_transfect_PE3.add_argument("-n", "--ngRNAs", type=str, help="Path to ngRNAs file", required=True)
 
-    parser_transfect_PE3.add_argument("-o", "--dir", type=str, help="Output directory", default='../out')
-    parser_transfect_PE3.add_argument("-f", "--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_transfect_PE3.csv')
+    parser_transfect_PE3.add_argument("-f", "--file", type=str, help="Output file path", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_transfect_PE3.csv')
 
     parser_transfect_PE3.add_argument("-r", "--pegRNA_number_col", type=str, default="pegRNA_number", help="Column name for pegRNA number")
     parser_transfect_PE3.add_argument("-a", "--epegRNAs_name_col", type=str, default="Name", help="Column name for epegRNA name")
@@ -385,8 +375,7 @@ def add_subparser(subparsers, formatter_class=None):
 
     parser_transfect_virus.add_argument("-p", "--plasmids", type=str, help="Path to plasmids file", required=True)
 
-    parser_transfect_virus.add_argument("-o", "--dir", type=str, help="Output directory", default='../out')
-    parser_transfect_virus.add_argument("-f", "--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_transfect_virus.csv')
+    parser_transfect_virus.add_argument("-f", "--file", type=str, help="Output file path", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_transfect_virus.csv')
 
     parser_transfect_virus.add_argument("-P", "--plasmid_col", type=str, default="Plasmid", help="Column name for plasmid name")
     parser_transfect_virus.add_argument("-d", "--description_col", type=str, default="Description", help="Column name for plasmid description")
@@ -412,8 +401,7 @@ def add_subparser(subparsers, formatter_class=None):
     
     parser_ddcq.add_argument("-i","--data", type=str, help="Input Cq file from CFX instrument",required=True)
 
-    parser_ddcq.add_argument("-o", "--dir", type=str, help="Output directory (Default: ../out)",default='../out')
-    parser_ddcq.add_argument("-f", "--file", type=str, help="Output file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_qPCR_ddCq.csv')
+    parser_ddcq.add_argument("-f", "--file", type=str, help="Output file path",default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_qPCR_ddCq.csv')
 
     parser_ddcq.add_argument("-s", "--sample_col", type=str, default="Sample", help="Column name for sample ID")
     parser_ddcq.add_argument("-t", "--target_col", type=str, default="Target", help="Column name for target gene ID")
@@ -442,6 +430,7 @@ def add_subparser(subparsers, formatter_class=None):
     - paired_regions(): quantify, plot, & return (un)paired regions that aligned to the annotated library
     
     - count_signatures() [signatures]: generate signatures from fastq read region alignments to WT sequence; count signatures, plot and return fastq signatures dataframe
+    - count_signatures_dir() [signatures_dir]: count signatures from previously-generated signature dataframes; plot and return fastq signatures dataframe
     - editing_per_library(): Determine editing relative library abundance
     
     - extract_umis(): extract UMIs using umi_tools
@@ -482,6 +471,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_paired_regions = subparsers_fastq.add_parser("paired_regions", help="Extract paired regions from FASTQ files", description="Extract paired regions from FASTQ files", formatter_class=formatter_class)
     
     parser_fastq_count_signatures = subparsers_fastq.add_parser("signatures", help="Generate signatures from fastq read region alignments to WT sequence", description="Generate signatures from fastq read region alignments to WT sequence", formatter_class=formatter_class)
+    parser_fastq_count_signatures_dir = subparsers_fastq.add_parser("signatures_dir", help="Count signatures from previously-generated signature dataframes", description="Count signatures from previously-generated signature dataframes (skips fastq processing & alignments)", formatter_class=formatter_class)
     parser_fastq_editing_per_library = subparsers_fastq.add_parser("editing_per_library", help="Determine editing relative library abundance", description="Determine editing relative library abundance", formatter_class=formatter_class)
     
     parser_fastq_extract_umis = subparsers_fastq.add_parser("extract_umis", help="Extract UMIs using umi_tools", description="Extract UMIs using umi_tools", formatter_class=formatter_class)
@@ -556,7 +546,7 @@ def add_subparser(subparsers, formatter_class=None):
     # count_motif() [motif]:
     parser_fastq_count_motif.add_argument("-q","--fastq_dir", help="Path to directory containing FASTQ files", required=True)
     parser_fastq_count_motif.add_argument("-p","--pattern", help="Motif sequence pattern to search for", required=True)
-    parser_fastq_count_motif.add_argument("-o","--out_dir", help="Output directory to save results", default=f'../out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
+    parser_fastq_count_motif.add_argument("-o","--out_dir", help="Output directory to save results", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
 
     parser_fastq_count_motif.add_argument("-m","--motif", default="motif", help="Name of the motif (Default: 'motif')")
     parser_fastq_count_motif.add_argument("-md","--max_distance", type=int, default=0, help="Maximum Levenshtein distance allowed (i.e., # of mismatches, Default: 0)")
@@ -567,7 +557,7 @@ def add_subparser(subparsers, formatter_class=None):
     # plot_motif():
     parser_fastq_plot_motif.add_argument("-i", "--df", help="Path to count_motif() output file", required=True)
 
-    parser_fastq_plot_motif.add_argument("-o","--out_dir", type=str, help="Directory to save plots", default=f'../out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
+    parser_fastq_plot_motif.add_argument("-o","--out_dir", type=str, help="Directory to save plots", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
     parser_fastq_plot_motif.add_argument("-s","--plot_suf", type=str, default='.all', help="Plot file suffix (Default: '.all' => .png, .pdf, & .svg)")
     parser_fastq_plot_motif.add_argument("-n","--numeric", choices=["count", "fraction"], default="count", help="Numeric column to use for plotting (Default: 'count')")
     parser_fastq_plot_motif.add_argument("-I","--id_col", default="fastq_file", help="Column used for sample ID (Default: 'fastq_file')")
@@ -581,7 +571,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_plot_alignments.add_argument("-a","--align_col", help="Align column name in the annotated library reference file", required=True)
     parser_fastq_plot_alignments.add_argument("-I","--id_col", help="ID column name in the annotated library reference file", required=True)
 
-    parser_fastq_plot_alignments.add_argument("-o","--out_dir", help="Output directory for plots", default=f'../out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
+    parser_fastq_plot_alignments.add_argument("-o","--out_dir", help="Output directory for plots", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
     parser_fastq_plot_alignments.add_argument("-p","--plot_suf", default='.all', help="Plot file suffix (Default: '.all' => .png, .pdf, & .svg)")
     parser_fastq_plot_alignments.add_argument("-s","--show", action="store_true", help="Display plots interactively",default=False)
 
@@ -593,7 +583,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_count_region.add_argument("-m5","--df_motif5", help="5' motif file path", required=True)
     parser_fastq_count_region.add_argument("-m3","--df_motif3", help="3' motif file path", required=True)
 
-    parser_fastq_count_region.add_argument("-o","--out_dir", help="Output directory", default=f'../out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
+    parser_fastq_count_region.add_argument("-o","--out_dir", help="Output directory", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
     parser_fastq_count_region.add_argument("-fc","--fastq_col", help="Fastq column name in the annotated reference library (Default: None)", default=None)
     parser_fastq_count_region.add_argument("-ms","--match_score", type=float, default=2, help="Score for matches (Default: 2)")
     parser_fastq_count_region.add_argument("-mms","--mismatch_score", type=float, default=-1, help="Score for mismatches (Default: -1)")
@@ -612,7 +602,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_count_alignments.add_argument("-I","--id_col", help="ID column name in the annotated reference library", required=True)
     parser_fastq_count_alignments.add_argument("-q", "--fastq_dir", help="Directory containing FASTQ files", required=True)
 
-    parser_fastq_count_alignments.add_argument("-o","--out_dir", help="Output directory", default=f'../out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
+    parser_fastq_count_alignments.add_argument("-o","--out_dir", help="Output directory", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
     parser_fastq_count_alignments.add_argument("-qc","--fastq_col", help="Fastq column name in the annotated reference library (Default: None)", default=None)
     parser_fastq_count_alignments.add_argument("-ms","--match_score", type=float, default=2, help="Match score (Default: 2)")
     parser_fastq_count_alignments.add_argument("-mms","--mismatch_score", type=float, default=-1, help="Mismatch penalty (Default: -1)")
@@ -629,7 +619,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_plot_paired.add_argument("-i", "--df", help="Paired region file path", required=True)
     parser_fastq_plot_paired.add_argument("-t", "--title", help="Plot title and output filename (without extension)", required=True)
     
-    parser_fastq_plot_paired.add_argument("-o", "--out_dir", help="Output directory", default=f'../out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
+    parser_fastq_plot_paired.add_argument("-o", "--out_dir", help="Output directory", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
     parser_fastq_plot_paired.add_argument("-I", "--id_col", default="ID", help="Column name for ID (Default: 'ID')")
     parser_fastq_plot_paired.add_argument("-d", "--desired_col", default="desired", help="Column name for desired sequences (Default: 'desired')")
     parser_fastq_plot_paired.add_argument("-y", "--y", default="count", help="y axis for plots (Default: 'count'; Options: 'count' & 'fraction')")
@@ -641,7 +631,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_paired_regions.add_argument("-r1", "--region1_dir", help="Directory with region 1 alignment files", required=True)
     parser_fastq_paired_regions.add_argument("-r2", "--region2_dir", help="Directory with region 2 alignment files", required=True)
 
-    parser_fastq_paired_regions.add_argument("-o", "--out_dir", help="Output directory", default=f'../out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
+    parser_fastq_paired_regions.add_argument("-o", "--out_dir", help="Output directory", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')
     parser_fastq_paired_regions.add_argument("-I", "--id_col", default="ID", help="Column name for unique identifiers (Default: 'ID')")
     parser_fastq_paired_regions.add_argument("-d", "--desired_col", default="desired", help="Column name for desired sequences (Default: 'desired')")
     parser_fastq_paired_regions.add_argument("-r1a", "--region1_alignment_col", default="r1_alignment", help="Column name for region 1 alignment data")
@@ -665,7 +655,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_count_signatures.add_argument("-m5", "--df_motif5", help="5' motif file path", default=argparse.SUPPRESS)
     parser_fastq_count_signatures.add_argument("-m3", "--df_motif3", help="3' motif file path", default=argparse.SUPPRESS)
     parser_fastq_count_signatures.add_argument("-m", "--meta", help="Meta file path", default=argparse.SUPPRESS)
-    parser_fastq_count_signatures.add_argument("-o", "--out_dir", help="Output directory", default='../out/')
+    parser_fastq_count_signatures.add_argument("-o", "--out_dir", help="Output directory", default='./out/')
     parser_fastq_count_signatures.add_argument("-f", "--out_file", help="Output filename", default=f"{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_count_signatures.csv")
     parser_fastq_count_signatures.add_argument("-sc", "--signature_col", help="Signature column name in the annotated reference library (Default: 'Signature')", default='Signature')
     parser_fastq_count_signatures.add_argument("-I", "--id_col", help="ID column name in the annotated reference library (Default: 'ID')", default='ID')
@@ -683,12 +673,32 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_count_signatures.add_argument("-s", "--show", action="store_true", help="Display plots interactively", default=False)
     parser_fastq_count_signatures.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
 
+    # count_signatures_dir() [signatures_dir]:
+    parser_fastq_count_signatures_dir.add_argument("-i", "--df_ref", help="Annotated reference library file path", required=True)
+    parser_fastq_count_signatures_dir.add_argument("-sd", "--signature_dir", help="Directory containing signature .csv files from 'edms fastq signatures' (Default: the 'Signature' directory in its out_dir)", required=True)
+
+    parser_fastq_count_signatures_dir.add_argument("-n", "--n_extra_nt", type=int, help="Number of extra nucleotide differences that were allowed for Signature match; >0 also writes the 'Exact_match' outputs (Default: 0)", default=0)
+    parser_fastq_count_signatures_dir.add_argument("-qc", "--fastq_col", help="Fastq column name in the annotated reference library (Default: None)", default=None)
+    parser_fastq_count_signatures_dir.add_argument("-m", "--meta", help="Meta file path", default=argparse.SUPPRESS)
+    parser_fastq_count_signatures_dir.add_argument("-st", "--stats", help="'edms fastq signatures' stats file path with 'file', 'reads_total', & 'reads_processed' columns (Default: None => inferred from the signature dataframes)", default=argparse.SUPPRESS)
+    parser_fastq_count_signatures_dir.add_argument("-qs", "--fastq_suf", help="Fastq file suffix appended to the signature filenames to recover 'fastq_file' (Default: '.fastq.gz')", default='.fastq.gz')
+    parser_fastq_count_signatures_dir.add_argument("-o", "--out_dir", help="Output directory", default='./out/')
+    parser_fastq_count_signatures_dir.add_argument("-f", "--out_file", help="Output filename", default=f"{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_count_signatures.csv")
+    parser_fastq_count_signatures_dir.add_argument("-sc", "--signature_col", help="Signature column name in the annotated reference library (Default: 'Signature')", default='Signature')
+    parser_fastq_count_signatures_dir.add_argument("-I", "--id_col", help="ID column name in the annotated reference library (Default: 'ID')", default='ID')
+    parser_fastq_count_signatures_dir.add_argument("-e", "--edit_col", help="Edit column name in the annotated reference library (Default: 'Edit')", default='Edit')
+    parser_fastq_count_signatures_dir.add_argument("-ad", "--align_dims", type=parse_tuple_int, default=(0, 0), help="Alignment range that was used formatted as 'start,end' (Default: 0,0 = all reads)")
+    parser_fastq_count_signatures_dir.add_argument("-l", "--literal_eval", action='store_true', dest='literal_eval', help="Convert string representations", default=False)
+    parser_fastq_count_signatures_dir.add_argument("-p", "--plot_suf", type=str, help="Plot file suffix (Default: None => no plot, '.all' => .png, .pdf, & .svg)", default=argparse.SUPPRESS)
+    parser_fastq_count_signatures_dir.add_argument("-s", "--show", action="store_true", help="Display plots interactively", default=False)
+    parser_fastq_count_signatures_dir.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
+
     # editing_per_library():
     parser_fastq_editing_per_library.add_argument("-e", "--edit_dc", help="Path to directory with edit outcomes files", required=True)
     parser_fastq_editing_per_library.add_argument("-p", "--paired_regions_dc", help="Path to directory with paired regions files", required=True)
     parser_fastq_editing_per_library.add_argument("-qi", "--fastq_ids", help="Path to file containing fastq IDs for 'genotyping' and 'paired_regions'", required=True)
 
-    parser_fastq_editing_per_library.add_argument("-o", "--out_dir", type=str, help="Output directory to save results (Default: ../out/date_time)", default=f"../out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}")
+    parser_fastq_editing_per_library.add_argument("-o", "--out_dir", type=str, help="Output directory to save results (Default: ./out/date_time)", default=f"./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}")
     parser_fastq_editing_per_library.add_argument("-c", "--count", default="count", help="Column to use for epeg-ngRNA counts (Default: 'count')")
     parser_fastq_editing_per_library.add_argument("-ps", "--psuedocount", type=int, default=1, help="Pseudocount to add to all counts (Default: 1)")
 
@@ -801,6 +811,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_plot_paired.set_defaults(func=fq.plot_paired)
     parser_fastq_paired_regions.set_defaults(func=fq.paired_regions)
     parser_fastq_count_signatures.set_defaults(func=fq.count_signatures)
+    parser_fastq_count_signatures_dir.set_defaults(func=fq.count_signatures_dir)
     parser_fastq_editing_per_library.set_defaults(func=fq.editing_per_library)
     parser_fastq_extract_umis.set_defaults(func=fq.extract_umis)
     parser_fastq_trim_motifs.set_defaults(func=fq.trim_motifs)
@@ -966,8 +977,7 @@ Examples:[/red]
     parser_pe_merge.add_argument("-g", "--ngRNAs_groups", type=str, dest='ngRNAs_groups_max', help="Maximum # of ngRNAs per epegRNA (Default: 3)", default=3)
     parser_pe_merge.add_argument("-es", "--epegRNA_suffix", type=str, help="Suffix for epegRNAs columns (Default: _epegRNA)", default='_epegRNA')
     parser_pe_merge.add_argument("-ns", "--ngRNA_suffix", type=str, help="Suffix for ngRNAs columns (Default: _ngRNA)", default='_ngRNA')
-    parser_pe_merge.add_argument("-o", "--out_dir", type=str, dest='dir', help="Output directory (Default: ../epeg_ngRNAs)", default='../epeg_ngRNAs')
-    parser_pe_merge.add_argument("-f", "--out_file", type=str, dest='file', help="Name of the output file (Default: epeg_ngRNAs.csv)", default='epeg_ngRNAs.csv')
+    parser_pe_merge.add_argument("-f", "--out_file", type=str, dest='file', help="Output file path (Default: ../epeg_ngRNAs/epeg_ngRNAs.csv)", default='../epeg_ngRNAs/epeg_ngRNAs.csv')
     parser_pe_merge.add_argument("-l", "--literal_eval", action='store_true', dest='literal_eval', help="Convert string representations", default=False)
 
     # sensor_designer() [sensor]:
@@ -1121,8 +1131,7 @@ Examples:[/red]
     # merge():
     parser_dms_merge.add_argument("-d", "--dms_designs", type=str, help="Directory or file with DMS designs", required=True)
     
-    parser_dms_merge.add_argument("-o", "--out_dir", type=str, dest='dir', help="Output directory (Default: ../DMSDesign_combined)", default='../DMSDesign_combined')
-    parser_dms_merge.add_argument("-f", "--out_file", type=str, dest='file', help="Name of the output file (Default: DMSDesign_combined.csv)", default='DMSDesign_combined.csv')
+    parser_dms_merge.add_argument("-f", "--out_file", type=str, dest='file', help="Output file path (Default: ../DMSDesign_combined/DMSDesign_combined.csv)", default='../DMSDesign_combined/DMSDesign_combined.csv')
     parser_dms_merge.add_argument("-l", "--literal_eval", action='store_true', dest='literal_eval', help="Convert string representations", default=False)
 
     # dms_signature() [signature]:
@@ -1163,8 +1172,7 @@ Examples:[/red]
     # parse_csv_to_tidy():
     parser_plate_parse_csv_to_tidy.add_argument("-i","--csv_pt", type=str, help="Path to input CSV file", required=True)
 
-    parser_plate_parse_csv_to_tidy.add_argument("-o","--dir", type=str, help="Path to output directory", default=f'../out')
-    parser_plate_parse_csv_to_tidy.add_argument("-f","--file", type=str, help="Output filename", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_make_plate.csv')
+    parser_plate_parse_csv_to_tidy.add_argument("-f","--file", type=str, help="Output file path", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_make_plate.csv')
     parser_plate_parse_csv_to_tidy.add_argument("-p","--default_plate_name", type=str, help="Default plate name formatting (Default: '{well}-well {index}')", default=argparse.SUPPRESS)
     
     # make_plate():
@@ -1173,8 +1181,7 @@ Examples:[/red]
 
     parser_plate_make.add_argument("-I","--index", type=str, nargs="+", help="Columns to use as index (default: 'plate' 'row').", default=['plate', 'row'])
     parser_plate_make.add_argument("-c","--columns", type=str, help=" Column to use as columns (default: 'col').", default='col')
-    parser_plate_make.add_argument("-o","--dir", type=str, help="Path to output directory", default=f'../out')
-    parser_plate_make.add_argument("-f","--file", type=str, help="Output filename", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_make_plate.csv')
+    parser_plate_make.add_argument("-f","--file", type=str, help="Output file path", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_make_plate.csv')
 
     # Set defaults
     parser_plate_parse_csv_to_tidy.set_defaults(func=pt.parse_csv_to_tidy)
@@ -1250,8 +1257,7 @@ Examples:[/red]
     
     parser_pwes_heatmap.add_argument("-m", "--mask_on", action="store_true", help="Whether to mask the lower triangle of the heatmap (Default: False)", default=False)
     parser_pwes_heatmap.add_argument("-b", "--blackout", type=str, nargs="+", help="List of prefixes for rows/columns to blackout (e.g., 'X' for non-protein residues) (Default: None)", default=argparse.SUPPRESS)
-    parser_pwes_heatmap.add_argument("-o", "--dir", type=str, help="Directory to save heatmap (Default: ../out)", default='../out')
-    parser_pwes_heatmap.add_argument("-f", "--file", type=str, help="Filename to save heatmap (Default: timestamp_heatmap.all => .png, .pdf, & .svg)", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_heatmap.all')
+    parser_pwes_heatmap.add_argument("-f", "--file", type=str, help="Path to save heatmap (Default: ./out/timestamp_heatmap.all => .png, .pdf, & .svg)", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_heatmap.all')
     parser_pwes_heatmap.add_argument("-fs", "--figsize", type=parse_tuple_float, help="Figure size per subplot as x,y", default=argparse.SUPPRESS)
     parser_pwes_heatmap.add_argument("-c", "--color", type=str, help="Face color for heatmap rectangles", default=argparse.SUPPRESS)
     parser_pwes_heatmap.add_argument("-ec", "--edgecol", type=str, help="Edge color for heatmap cells", default=argparse.SUPPRESS)
@@ -1273,8 +1279,7 @@ Examples:[/red]
     
     # heatmap_cbar():
     parser_pwes_heatmap_cbar.add_argument("-O", "--orientation", type=str, help="Orientation of the colorbar ('vertical' or 'horizontal')", default="vertical")
-    parser_pwes_heatmap_cbar.add_argument("-o", "--dir", type=str, help="Directory to save heatmap colorbar (Default: ../out)", default='../out')
-    parser_pwes_heatmap_cbar.add_argument("-f", "--file", type=str, help="Filename to save heatmap colorbar (Default: timestamp_heatmap_cbar.all => .png, .pdf, & .svg)", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_heatmap_cbar.all')
+    parser_pwes_heatmap_cbar.add_argument("-f", "--file", type=str, help="Path to save heatmap colorbar (Default: ./out/timestamp_heatmap_cbar.all => .png, .pdf, & .svg)", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_heatmap_cbar.all')
     parser_pwes_heatmap_cbar.add_argument("-fs", "--figsize", type=parse_tuple_float, help="Figure size as x,y (Default: (0.25, 2))", default=(0.25, 2))
     parser_pwes_heatmap_cbar.add_argument("-c", "--cmap", type=str, help="Colormap to use for heatmap colorbar (Default: 'RdBu_r')", default='RdBu_r')
     parser_pwes_heatmap_cbar.add_argument("-vn", "--vmin", type=float, help="Minimum value for heatmap colorbar (Default: -1)", default=-1)
@@ -1293,8 +1298,7 @@ Examples:[/red]
     parser_pwes_clustermap.add_argument("-c", "--df_clusters", type=str, help="Path to input file with cluster assignments for rows (e.g., output from clustering())", required=True)
     
     parser_pwes_clustermap.add_argument("-cl", "--color_list", type=str, nargs="+", help="List of colors for clusters (e.g., 'blue', 'red', ...). If not provided, default colors will be used.", default=argparse.SUPPRESS)
-    parser_pwes_clustermap.add_argument("-o", "--dir", type=str, help="Directory to save clustermap (Default: ../out)", default='../out')
-    parser_pwes_clustermap.add_argument("-f", "--file", type=str, help="Filename to save clustermap (Default: timestamp_clustermap.all => .png, .pdf, & .svg)", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_clustermap.all')
+    parser_pwes_clustermap.add_argument("-f", "--file", type=str, help="Path to save clustermap (Default: ./out/timestamp_clustermap.all => .png, .pdf, & .svg)", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_clustermap.all')
     parser_pwes_clustermap.add_argument("-fs", "--figsize", type=parse_tuple_float, help="Figure size as x,y (Default: (4, 2.2))", default=(4, 2.2))
     parser_pwes_clustermap.add_argument("-ct", "--center", type=float, help="Value at which to center the colormap (Default: 0)", default=0)
     parser_pwes_clustermap.add_argument("-cm", "--cmap", type=str, help="Colormap to use for heatmap (Default: 'RdBu_r')", default='RdBu_r')

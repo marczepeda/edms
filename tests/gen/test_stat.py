@@ -41,7 +41,7 @@ def test_describe_from_file(tmp_path):
 
 def test_describe_save(tmp_path):
     df = pd.DataFrame({"a": [1.0, 2.0, 3.0]})
-    st.describe(df, cols=["a"], dir=str(tmp_path), file="out.csv")
+    st.describe(df, cols=["a"], file=str(tmp_path / "out.csv"))
     assert (tmp_path / "out.csv").exists()
 
 
@@ -155,7 +155,7 @@ def test_correlation_tidy_pivot():
 
 def test_correlation_save(tmp_path):
     df = pd.DataFrame({"x": [1, 2, 3], "y": [1, 2, 3]})
-    st.correlation(df, value_cols=["x", "y"], plot=False, dir=str(tmp_path), file_data="corr.csv")
+    st.correlation(df, value_cols=["x", "y"], plot=False, file_data=str(tmp_path / "corr.csv"))
     assert (tmp_path / "corr.csv").exists()
 
 
@@ -386,6 +386,6 @@ def test_zscore_custom_out_col_and_save(tmp_path):
         "val": [1.0, 3.0],
     })
     out = st.zscore(df, val="val", cond_col="cond", var_col="kind", var="base",
-                     out_col="z_custom", dir=str(tmp_path), file="z.csv")
+                     out_col="z_custom", file=str(tmp_path / "z.csv"))
     assert "z_custom" in out.columns
     assert (tmp_path / "z.csv").exists()

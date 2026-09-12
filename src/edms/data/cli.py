@@ -44,8 +44,7 @@ def add_subparser(subparsers, formatter_class=None):
 
     parser_cosmic_mutations.add_argument("-d", "--df", type=str, help="Input file path", required=True)
 
-    parser_cosmic_mutations.add_argument("-o", "--dir", type=str, help="Output directory", default='../out')
-    parser_cosmic_mutations.add_argument("-f", "--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_cosmic_mutations.csv')
+    parser_cosmic_mutations.add_argument("-f", "--file", type=str, help="Output file path", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_cosmic_mutations.csv')
 
     parser_cosmic_mutations.set_defaults(func=co.mutations)
     
@@ -65,8 +64,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_cosmic_priority_muts.add_argument("-P", "--pegRNAs_shared", type=str, help="Shared pegRNAs library dataframe file path", required=True)
     parser_cosmic_priority_muts.add_argument("-c", "--df_cosmic", type=str, help="COSMIC mutations() dataframe file path", required=True)
 
-    parser_cosmic_priority_muts.add_argument("-o", "--dir", type=str, help="Output directory", default='../out')
-    parser_cosmic_priority_muts.add_argument("-f", "--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_pegRNAs_shared_mutations.csv')
+    parser_cosmic_priority_muts.add_argument("-f", "--file", type=str, help="Output file path", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_pegRNAs_shared_mutations.csv')
 
     parser_cosmic_priority_muts.set_defaults(func=co.priority_muts)
 
@@ -77,8 +75,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_cosmic_priority_edits.add_argument("-P", "--pegRNAs_shared", type=str, help="Shared pegRNAs library dataframe file path", required=True)
     parser_cosmic_priority_edits.add_argument("-c", "--df_cosmic", type=str, help="COSMIC mutations() dataframe file path", required=True)
     
-    parser_cosmic_priority_edits.add_argument("-o", "--dir", type=str, help="Output directory", default='../out')
-    parser_cosmic_priority_edits.add_argument("-f", "--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_pegRNAs_priority.csv')
+    parser_cosmic_priority_edits.add_argument("-f", "--file", type=str, help="Output file path", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_pegRNAs_priority.csv')
 
     parser_cosmic_priority_edits.set_defaults(func=co.priority_edits)
 
@@ -107,8 +104,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_cvar_mutations.add_argument("-d", "--df", type=str, help="Input file path", required=True)
     parser_cvar_mutations.add_argument("-g", "--gene_name", type=str, help="Gene name", required=True)
 
-    parser_cvar_mutations.add_argument("-o", "--dir", type=str, help="Output directory", default='../out')
-    parser_cvar_mutations.add_argument("-f", "--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_cvar_mutations.csv')
+    parser_cvar_mutations.add_argument("-f", "--file", type=str, help="Output file path", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_cvar_mutations.csv')
 
     parser_cvar_mutations.set_defaults(func=cvar.mutations)
 
@@ -118,8 +114,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_cvar_priority_muts.add_argument("-P", "--pegRNAs_shared", type=str, help="Shared pegRNAs library dataframe file path", required=True)
     parser_cvar_priority_muts.add_argument("-c", "--df_clinvar", type=str, help="ClinVar mutations() dataframe file path", required=True)
 
-    parser_cvar_priority_muts.add_argument("-o", "--dir", type=str, help="Output directory", default='../out')
-    parser_cvar_priority_muts.add_argument("-f", "--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_pegRNAs_shared_mutations.csv')
+    parser_cvar_priority_muts.add_argument("-f", "--file", type=str, help="Output file path", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_pegRNAs_shared_mutations.csv')
 
     parser_cvar_priority_muts.set_defaults(func=cvar.priority_muts)
 
@@ -130,8 +125,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_cvar_priority_edits.add_argument("-P", "--pegRNAs_shared", type=str, help="Shared pegRNAs library dataframe file path", required=True)
     parser_cvar_priority_edits.add_argument("-c", "--df_clinvar", type=str, help="ClinVar mutations() dataframe file path", required=True)
 
-    parser_cvar_priority_edits.add_argument("-o", "--dir", type=str, help="Output directory", default='../out')
-    parser_cvar_priority_edits.add_argument("-f", "--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_pegRNAs_priority.csv')
+    parser_cvar_priority_edits.add_argument("-f", "--file", type=str, help="Output file path", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_pegRNAs_priority.csv')
 
     parser_cvar_priority_edits.set_defaults(func=cvar.priority_edits)
 
@@ -148,8 +142,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_cBP_mutations.add_argument("-d", "--df", type=str, help="Path to cBioPortal mutation data TSV file", required=True)
     parser_cBP_mutations.add_argument("-w", "--wt", type=str, help="Wild-type amino acid sequence", required=True)
     parser_cBP_mutations.add_argument("-C", "--config", type=bool, help="Save to configuration directory", default=True)
-    parser_cBP_mutations.add_argument("-o", "--dir", type=str, help="Output directory", default='../out')
-    parser_cBP_mutations.add_argument("-f", "--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_cBioPortal_mutations.csv')
+    parser_cBP_mutations.add_argument("-f", "--file", type=str, help="Output file path", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_cBioPortal_mutations.csv')
 
     parser_cBP_mutations.set_defaults(func=cBP.mutations)
 
@@ -194,8 +187,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_uniprot_draw_ss_track.add_argument("-hlp", "--helix_loop_pad", type=float, help="Padding to apply to the start/end of helices when auto-drawing loops between elements, to make the sine wave connect more nicely; applied as a subtraction from the end of the current element and an addition to the start of the next element when determining loop start and end positions", default=argparse.SUPPRESS)
     parser_uniprot_draw_ss_track.add_argument("-slp", "--strand_loop_pad", type=float, help="Padding to apply to the start/end of strands when auto-drawing loops between elements, to make the sine wave connect more nicely; applied as a subtraction from the end of the current element and an addition to the start of the next element when determining loop start and end positions", default=argparse.SUPPRESS)
     parser_uniprot_draw_ss_track.add_argument("-fs","--figsize", type=parse_tuple_float, help="Size of the figure to create (width, height)", default=(10, 2))
-    parser_uniprot_draw_ss_track.add_argument("-o", "--dir", type=str, help="Output directory", default='../out')
-    parser_uniprot_draw_ss_track.add_argument("-f", "--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_uniprot_ss_track.all')
+    parser_uniprot_draw_ss_track.add_argument("-f", "--file", type=str, help="Output file path", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_uniprot_ss_track.all')
     parser_uniprot_draw_ss_track.add_argument("-d", "--dpi", type=int, help="Figure dpi (Default: 600)", default=argparse.SUPPRESS)
     parser_uniprot_draw_ss_track.add_argument("-s", "--show", action="store_true", help="Show plot", default=False)
 
@@ -250,8 +242,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_dssp_plot_ss_color_key.add_argument("-sw", "--swatch_width", type=float, help="Width of color box", default=argparse.SUPPRESS)
     parser_dssp_plot_ss_color_key.add_argument("-sh", "--swatch_height", type=float, help="Height of color box", default=argparse.SUPPRESS)
     parser_dssp_plot_ss_color_key.add_argument("-a", "--alpha", type=float, help="Transparency of color boxes", default=argparse.SUPPRESS)
-    parser_dssp_plot_ss_color_key.add_argument("-o", "--dir", type=str, help="Directory to save the figure (Default: '../out')", default='../out')
-    parser_dssp_plot_ss_color_key.add_argument("-f", "--file", type=str, help="Filename to save the figure (Default: 'dssp_color_key.all')", default='dssp_color_key.all')
+    parser_dssp_plot_ss_color_key.add_argument("-f", "--file", type=str, help="Path to save the figure (Default: './out/dssp_color_key.all')", default='./out/dssp_color_key.all')
     parser_dssp_plot_ss_color_key.add_argument("-d", "--dpi", type=int, help="Resolution for saving the figure (Default: 1200)", default=argparse.SUPPRESS)
     parser_dssp_plot_ss_color_key.add_argument("-nt", "--not_transparent", dest='transparent', action="store_false", help="Don't save plot with transparent background", default=True)
     parser_dssp_plot_ss_color_key.add_argument("-s", "--show", action="store_true", help="Show plot", default=False)
@@ -265,8 +256,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_dssp_plot_ssa.add_argument("-c", "--chain_id", type=str, help="Chain identifier to extract from the DSSP file (e.g. 'A')", required=True)
     parser_dssp_plot_ssa.add_argument("-a", "--artist", type=str, help="Optional secstructartist ElementArtist to use for plotting; if not provided, the default edms custom style will be used", default=argparse.SUPPRESS)
     parser_dssp_plot_ssa.add_argument("-fs", "--figsize", type=parse_tuple_float, help="Figure size (width, height)", default=(8, 0.5))
-    parser_dssp_plot_ssa.add_argument("-o", "--dir", type=str, help="Directory to save the figure (Default: '../out')", default='../out')
-    parser_dssp_plot_ssa.add_argument("-f", "--file", type=str, help="Filename to save the figure (Default: 'dssp_ssa.all'; all => .svg, .pdf, .png)", default='dssp_ssa.all')
+    parser_dssp_plot_ssa.add_argument("-f", "--file", type=str, help="Path to save the figure (Default: './out/dssp_ssa.all'; all => .svg, .pdf, .png)", default='./out/dssp_ssa.all')
     parser_dssp_plot_ssa.add_argument("-d", "--dpi", type=int, help="Resolution for saving the figure (Default: 1200)", default=1200)
     parser_dssp_plot_ssa.add_argument("-nt", "--not_transparent", dest='transparent', action="store_false", help="Don't save plot with transparent background", default=True)
     parser_dssp_plot_ssa.add_argument("-s", "--show", action="store_true", help="Show plot", default=True)
@@ -278,8 +268,7 @@ def add_subparser(subparsers, formatter_class=None):
     
     parser_dssp_pymol_ssa.add_argument("-i", "--dssp_file", type=str, help="Path to the DSSP file to plot", required=True)  
     parser_dssp_pymol_ssa.add_argument("-c", "--chain_id", type=str, help="Chain identifier to extract from the DSSP file (e.g. 'A')", required=True)
-    parser_dssp_pymol_ssa.add_argument("-o", "--dir", type=str, help="Directory to save the PyMOL script (Default: '../out')", default='../out')
-    parser_dssp_pymol_ssa.add_argument("-f", "--file", type=str, help="Filename to save the PyMOL script (Default: 'dssp_ssa.pml')", default='dssp_ssa.pml')
+    parser_dssp_pymol_ssa.add_argument("-f", "--file", type=str, help="Path to save the PyMOL script (Default: './out/dssp_ssa.pml')", default='./out/dssp_ssa.pml')
     parser_dssp_pymol_ssa.add_argument("-p", "--pdb_id_or_filename", type=str, help="PDB ID or path to the structure file to load in PyMOL.")
     parser_dssp_pymol_ssa.add_argument("-n", "--object_name", type=str, help="Name of the PyMOL object to create (Default: 'prot')", default='prot')
     parser_dssp_pymol_ssa.add_argument("-b", "--base_color", type=str, help="Base color to apply to the structure before DSSP coloring (Default: 'white')", default='white')

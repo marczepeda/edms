@@ -126,5 +126,5 @@ def test_viewer_return_features_false_returns_none(gb_path):
 
 def test_viewer_saves_plot_file(gb_path, tmp_path):
     out_dir = tmp_path / "plots"
-    genbank.viewer(pt=gb_path, show=False, dir=str(out_dir), file="construct.png", return_features=False)
+    genbank.viewer(pt=gb_path, show=False, file=str(out_dir / "construct.png"), return_features=False)
     assert os.path.isfile(out_dir / "construct.png")

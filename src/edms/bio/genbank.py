@@ -15,10 +15,11 @@ import matplotlib.pyplot as plt
 import os
 from ..gen import io
 from ..gen import plot as p
+from ..utils import check_outpath
 
 # Visualize
 def viewer(pt: str, feature_colors: dict=None, exclude: list=[], region:tuple=None,
-           file: str=None, dir: str=None, fig_width: int=10,
+           file: str=None, fig_width: int=10,
            title: str='',title_size: int=18, title_weight: str='bold',
            x_axis: str='bp', x_axis_size: int=12, x_axis_weight: str='bold', xticks: list=[],
            legend_title: str=None, legend_title_size: int=12,legend_bbox_to_anchor: tuple=(0.5,-0.25),
@@ -32,8 +33,7 @@ def viewer(pt: str, feature_colors: dict=None, exclude: list=[], region:tuple=No
     feature_colors (dict, optional): dictionary of features and corresponding hexadecimal colors (Default: None; Ex: {'feature':'#000000'})
     exclude (list, optional): list of excluded features/annotations (Default: [])
     region (tuple, optional): (start, end) coordinates for highlighed region (Default: None)
-    file (str, optional): save plot to filename (Default: None)
-    dir (str, optional): save plot to directory (Default: None)
+    file (str, optional): output plot file path (Default: None)
     fig_width (int | float, optional): figure width (Default: 10)
     title (str, optional): plot title (Default: '')
     title_size (int, optional): plot title font size (Default: 18)
@@ -147,8 +147,8 @@ def viewer(pt: str, feature_colors: dict=None, exclude: list=[], region:tuple=No
 
 
     # Save, show fig, & return features
-    if file is not None and dir is not None:
-        io.mkdir(dir) # Make output directory if it does not exist
-        plt.savefig(fname=os.path.join(dir, file), dpi=600, bbox_inches='tight', format=f'{file.split(".")[-1]}')
+    if file is not None:
+        pt = check_outpath(file=file) # Make output directory if it does not exist
+        plt.savefig(fname=pt, dpi=600, bbox_inches='tight', format=f'{file.split(".")[-1]}')
     if show: plt.show()
     if return_features: return features

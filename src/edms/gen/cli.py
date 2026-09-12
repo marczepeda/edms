@@ -101,8 +101,7 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
             subparser.add_argument("-ss_h", "--ss_h", type=int, help="Height for secondary structure in the plot (Default: autogenerate)", default=argparse.SUPPRESS)
             subparser.add_argument("-ss_y", "--ss_y", type=int, help="Y position for secondary structure track in the plot (Default: autogenerate)", default=argparse.SUPPRESS)
 
-    subparser.add_argument("-o", "--dir", help="Output directory path", type=str, default='./out')
-    subparser.add_argument("-f", "--file", help="Output file name", type=str, required=False, default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_scat.all')
+    subparser.add_argument("-f", "--file", help="Output file path", type=str, required=False, default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_scat.all')
     if fastq_torn_parser == False and fastq_corr_parser == False:
         subparser.add_argument("-pc", "--palette_or_cmap", type=str, default="colorblind", help="Seaborn palette or matplotlib colormap")
     if fastq_torn_parser == False and fastq_corr_parser == False and pwes_torn_parser == False:
@@ -202,8 +201,7 @@ def add_common_plot_cat_args(subparser, fastq_parser=False, pwes_parsers=False):
     if fastq_parser == True:
         subparser.add_argument("-PDB_pt", "--PDB_pt", type=str, help="PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information", default=argparse.SUPPRESS)
 
-    subparser.add_argument("-o", "--dir", type=str, help="Output directory", default='./out')
-    subparser.add_argument("-f", "--file", type=str, help="Output filename", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_cat.all')
+    subparser.add_argument("-f", "--file", type=str, help="Output file path", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_cat.all')
     subparser.add_argument("-pc", "--palette_or_cmap", type=str, default="colorblind", help="Seaborn color palette or matplotlib colormap")
     subparser.add_argument('-a', "--alpha", type=float, default=1, help="Alpha (transparency) for scatter points (0 to 1)")
     subparser.add_argument("-do", "--dodge", action='store_false', default=False, help="Separate points by color category")
@@ -283,8 +281,7 @@ def add_common_plot_dist_args(subparser):
     subparser.add_argument("-x", "--x", type=str, help="X-axis column name", required=True)
 
     # File output
-    subparser.add_argument("-o", "--dir", type=str, help="Output directory", default='./out')
-    subparser.add_argument("-f", "--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_dist.all')
+    subparser.add_argument("-f", "--file", type=str, help="Output file path", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_dist.all')
 
     # Optional core arguments
     subparser.add_argument("-c", "--cols", type=str, help="Color column name for grouping")
@@ -383,8 +380,7 @@ def add_common_plot_heat_args(subparser, fastq_parser=False, stat_parser=False):
         subparser.add_argument("-l", "--label", type=str, help="Label column name (Default: 'Edit'). Can't be None.", default='Edit')
     
     if stat_parser == False:
-        subparser.add_argument("-o", "--dir", type=str, help="Output directory path", default='./out')
-        subparser.add_argument("-f", "--file", type=str, help="Output filename", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_heat.all')
+        subparser.add_argument("-f", "--file", type=str, help="Output file path", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_heat.all')
     subparser.add_argument("-ec", "--edgecol", type=str, default="black", help="Color of cell edges")
     subparser.add_argument("-lw", "--lw", type=int, default=1, help="Line width for cell borders")
 
@@ -454,14 +450,13 @@ def add_common_plot_stack_args(subparser, fastq_parser=False):
     subparser.add_argument("-c", "--cols", type=str, help="Color column name (categorical)", required=True)
 
     # Optional parameters
-    subparser.add_argument("-o", "--dir", type=str, help="Output directory path", default='./out')
-    subparser.add_argument("-f", "--file", type=str, help="Output filename", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_stack.all')
+    subparser.add_argument("-f", "--file", type=str, help="Output file path", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_stack.all')
     
     subparser.add_argument("-cg", "--cutoff_group", type=str, default=argparse.SUPPRESS, help="Column name to group by when applying cutoff")
     subparser.add_argument("-cv", "--cutoff_value", type=float, default=0, help="Y-axis values needs be greater than (e.g. 0)")
     subparser.add_argument("-cr", "--cutoff_remove", dest="cutoff_keep",action="store_false", help="Remove values below cutoff", default=True)
     subparser.add_argument("-co", "--cols_order", nargs="+", help="Order of values in the color column")
-    subparser.add_argument("-xo", "--x_ord", nargs="+", help="Custom order of X-axis categories")
+    subparser.add_argument("-xo", "--x_order", nargs="+", help="Custom order of X-axis categories")
     subparser.add_argument("-fx", "--facetx", type=str, help="Column name for facet columns (creates one subplot per category in this column, arranged in separate columns)")
     subparser.add_argument("-fy", "--facety", type=str, help="Column name for facet rows (creates one subplot per category in this column, arranged in seperate rows)")
     subparser.add_argument("-fxo", "--facetx_order", nargs="+", help="Order of facet columns")
@@ -557,8 +552,7 @@ def add_common_plot_vol_args(subparser, fastq_parser=False):
     subparser.add_argument("-spt", "--subplot_titles", type=str, nargs="+", default='facet_values', help="Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none")
 
     # Output
-    subparser.add_argument("-o", "--dir", type=str, help="Output directory path", default='./out')
-    subparser.add_argument("-f", "--file", type=str, help="Output file name", default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_vol.all')
+    subparser.add_argument("-f", "--file", type=str, help="Output file path", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_vol.all')
 
     # Aesthetics
     subparser.add_argument("-c","--color", type=str, default="lightgray", help="Color for non-significant points")
@@ -708,8 +702,7 @@ def add_subparser(subparsers, formatter_class=None):
 
     parser_stat_describe.add_argument("-i", "--df", type=str, help="Input file path", required=True)
 
-    parser_stat_describe.add_argument("-o", "--dir", type=str, help="Output directory (Default: ../out)",default='../out')
-    parser_stat_describe.add_argument("-f", "--file", type=str, help="Output file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_descriptive.csv')
+    parser_stat_describe.add_argument("-f", "--file", type=str, help="Output file path",default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_descriptive.csv')
     
     parser_stat_describe.add_argument("-c","--cols", nargs="+", help="List of numerical columns to describe")
     parser_stat_describe.add_argument("-g","--group", type=str, help="Column name to group by")
@@ -724,8 +717,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_stat_difference.add_argument("-c","--compare_col", type=str, help="Name of column used for grouping/comparisons",required=True)
     parser_stat_difference.add_argument("-p","--compare", nargs="+", help="List of groups to compare (e.g. A B)",required=True)
 
-    parser_stat_difference.add_argument("-o", "--dir", type=str, help="Output directory (Default: ../out)",default='../out')
-    parser_stat_difference.add_argument("-f", "--file", type=str, help="Output file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_difference.csv')
+    parser_stat_difference.add_argument("-f", "--file", type=str, help="Output file path",default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_difference.csv')
 
     parser_stat_difference.add_argument("-s","--same", action="store_true", help="Same subjects (paired test)")
     parser_stat_difference.add_argument("-r","--para", action="store_true", help="Use parametric test (Default: True)")
@@ -744,9 +736,8 @@ def add_subparser(subparsers, formatter_class=None):
                                          help="Correlation method to use (Default: pearson)")
     parser_stat_correlation.add_argument("-n","--numeric_only", action="store_true", help="Only use numeric columns (Default: True)")
     parser_stat_correlation.add_argument("-N","--no_plot", dest="plot", action="store_false", help="Don't generate correlation matrix plot", default=True)
-    parser_stat_correlation.add_argument("-o", "--dir", type=str, help="Output directory (Default: ../out)",default='../out')
-    parser_stat_correlation.add_argument("-F", "--file_data", type=str, help="Output data file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_correlation.csv')
-    parser_stat_correlation.add_argument("-P", "--file_plot", type=str, help="Output plot file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_correlation.all')
+    parser_stat_correlation.add_argument("-F", "--file_data", type=str, help="Output data file path",default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_correlation.csv')
+    parser_stat_correlation.add_argument("-P", "--file_plot", type=str, help="Output plot file path",default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_correlation.all')
     add_common_plot_heat_args(parser_stat_correlation, stat_parser=True)
 
     parser_stat_correlation.set_defaults(func=st.correlation)
@@ -764,8 +755,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_stat_compare.add_argument("-r","--replicate", type=str, help="Replicate column name (use pairwise comparisons instead of aggregate)", default=argparse.SUPPRESS)
     parser_stat_compare.add_argument("-a","--alternative", type=str, default="two-sided", choices=["two-sided", "less", "greater"], help="Alternative hypothesis for Fisher's exact test (Default: two-sided)")
     parser_stat_compare.add_argument("-cp", "--column_prefix", type=str, default=argparse.SUPPRESS, help="Prefix for new columns (_ is added between prefix and stat name if provided prefix does not end with _)")
-    parser_stat_compare.add_argument("-o", "--dir", type=str, help="Output directory (Default: ../out)",default='../out')
-    parser_stat_compare.add_argument("-f", "--file", type=str, help="Output file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_compare.csv')
+    parser_stat_compare.add_argument("-f", "--file", type=str, help="Output file path",default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_compare.csv')
     parser_stat_compare.add_argument("-v","--verbose", action="store_true", help="Print progress to console", default=False)
 
     parser_stat_compare.set_defaults(func=st.compare)
@@ -782,8 +772,7 @@ def add_subparser(subparsers, formatter_class=None):
     
     parser_stat_odds_ratio.add_argument("-p","--pseudocount", type=int, default=1, help="Pseudocount to avoid /0 (Default: 1)")
     parser_stat_odds_ratio.add_argument("-a","--alternative", type=str, default="two-sided", choices=["two-sided", "less", "greater"], help="Alternative hypothesis for Fisher's exact test (Default: two-sided)")
-    parser_stat_odds_ratio.add_argument("-o", "--dir", type=str, help="Output directory (Default: ../out)",default='../out')
-    parser_stat_odds_ratio.add_argument("-f", "--file", type=str, help="Output file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_odds_ratio.csv')
+    parser_stat_odds_ratio.add_argument("-f", "--file", type=str, help="Output file path",default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_odds_ratio.csv')
     parser_stat_odds_ratio.add_argument("-v","--verbose", action="store_true", help="Print progress to console", default=False)
 
     parser_stat_odds_ratio.set_defaults(func=st.odds_ratio)
@@ -799,8 +788,7 @@ def add_subparser(subparsers, formatter_class=None):
 
     parser_stat_zscore.add_argument("-oc","--out_col", type=str, help="Name for output Z-score column", default=argparse.SUPPRESS)
     parser_stat_zscore.add_argument("-d","--ddof", type=float, help="Delta degrees of freedom for std (0 = population, 1 = sample [default]).", default=1)
-    parser_stat_zscore.add_argument("-o", "--dir", type=str, help="Output directory (Default: ../out)",default='../out')
-    parser_stat_zscore.add_argument("-f", "--file", type=str, help="Output file name",default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_zscore.csv')
+    parser_stat_zscore.add_argument("-f", "--file", type=str, help="Output file path",default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_zscore.csv')
     
     parser_stat_zscore.set_defaults(func=st.zscore)
 
@@ -838,8 +826,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_io_in_subs.add_argument("-l", "--prefix_len", help="Number of characters to use as prefix.", type=int, default=argparse.SUPPRESS)
     
     # create_sh() [sh]: creates a shell script with SLURM job submission parameters for Harvard FASRC cluster.
-    parser_io_create_sh.add_argument('-o', '--dir', type=str, help='Directory to save the shell script.', default='.')
-    parser_io_create_sh.add_argument('-f', '--file', type=str, help='Name of the shell script file to create.',default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.sh')
+    parser_io_create_sh.add_argument('-f', '--file', type=str, help='Output shell script path.',default=f'./{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.sh')
     parser_io_create_sh.add_argument('-c', '--cores', type=int, default=1, help='Number of CPU cores to request.')
     parser_io_create_sh.add_argument('-p', '--partition', type=str, default='serial_requeue', help='SLURM partition to use.')
     parser_io_create_sh.add_argument('-t', '--time', type=str, default='0-00:10', help='Job run time in D-HH:MM format.')

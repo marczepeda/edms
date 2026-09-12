@@ -144,7 +144,7 @@ def test_seaborn_palettes_smoke():
 def test_save_fig_png(tmp_path):
     fig, ax = plt.subplots()
     ax.plot([0, 1], [0, 1])
-    p.save_fig(file="plot.png", dir=str(tmp_path), fig=fig, dpi=72)
+    p.save_fig(file=str(tmp_path / "plot.png"), fig=fig, dpi=72)
     assert (tmp_path / "plot.png").exists()
     plt.close(fig)
 
@@ -152,7 +152,7 @@ def test_save_fig_png(tmp_path):
 def test_save_fig_all_formats(tmp_path):
     fig, ax = plt.subplots()
     ax.plot([0, 1], [0, 1])
-    p.save_fig(file="plot.all", dir=str(tmp_path), fig=fig, dpi=72)
+    p.save_fig(file=str(tmp_path / "plot.all"), fig=fig, dpi=72)
     for ext in ("png", "pdf", "svg"):
         assert (tmp_path / f"plot.{ext}").exists()
     plt.close(fig)
@@ -161,7 +161,7 @@ def test_save_fig_all_formats(tmp_path):
 def test_save_fig_html(tmp_path):
     fig, ax = plt.subplots()
     ax.scatter([0, 1, 2], [0, 1, 2])
-    p.save_fig(file="plot.html", dir=str(tmp_path), fig=fig)
+    p.save_fig(file=str(tmp_path / "plot.html"), fig=fig)
     assert (tmp_path / "plot.html").exists()
     plt.close(fig)
 
@@ -169,8 +169,8 @@ def test_save_fig_html(tmp_path):
 def test_save_fig_none_file_is_noop(tmp_path):
     fig, ax = plt.subplots()
     ax.plot([0, 1], [0, 1])
-    # file=None -> check_outpath returns (None, None); should return quietly.
-    p.save_fig(file=None, dir=str(tmp_path), fig=fig)
+    # file=None -> check_outpath returns None; should return quietly.
+    p.save_fig(file=None, fig=fig)
     assert list(tmp_path.iterdir()) == []
     plt.close(fig)
 
@@ -198,7 +198,7 @@ def test_scat_basic_returns_fig_axes(scat_df):
 
 def test_scat_with_color_column_and_save(tmp_path, scat_df):
     fig, axes = p.scat("scat", scat_df, x="x", y="y", cols="grp",
-                        file="scat.png", dir=str(tmp_path), show=False)
+                        file=str(tmp_path / "scat.png"), show=False)
     assert (tmp_path / "scat.png").exists()
     plt.close(fig)
 
@@ -232,7 +232,7 @@ def test_cat_bar(cat_df):
 
 
 def test_cat_box_and_save(tmp_path, cat_df):
-    fig, axes = p.cat("box", cat_df, x="grp", y="val", file="cat.png", dir=str(tmp_path), show=False)
+    fig, axes = p.cat("box", cat_df, x="grp", y="val", file=str(tmp_path / "cat.png"), show=False)
     assert (tmp_path / "cat.png").exists()
     plt.close(fig)
 
@@ -272,7 +272,7 @@ def test_dist_hist(dist_df):
 
 
 def test_dist_kde_with_cols_and_save(tmp_path, dist_df):
-    fig, axes = p.dist("kde", dist_df, x="val", cols="grp", file="dist.png", dir=str(tmp_path), show=False)
+    fig, axes = p.dist("kde", dist_df, x="val", cols="grp", file=str(tmp_path / "dist.png"), show=False)
     assert (tmp_path / "dist.png").exists()
     plt.close(fig)
 
@@ -296,7 +296,7 @@ def test_heat_tidy_input_and_save(tmp_path):
         "y": ["r1", "r2", "r1", "r2"],
         "vals": [1.0, 2.0, 3.0, 4.0],
     })
-    fig, axes = p.heat(df, x="x", y="y", vals="vals", file="heat.png", dir=str(tmp_path), show=False)
+    fig, axes = p.heat(df, x="x", y="y", vals="vals", file=str(tmp_path / "heat.png"), show=False)
     assert (tmp_path / "heat.png").exists()
     plt.close(fig)
 
@@ -317,7 +317,7 @@ def test_stack_basic(stack_df):
 
 
 def test_stack_save(tmp_path, stack_df):
-    fig, axes = p.stack(stack_df, x="x", y="y", cols="cols", file="stack.png", dir=str(tmp_path), show=False)
+    fig, axes = p.stack(stack_df, x="x", y="y", cols="cols", file=str(tmp_path / "stack.png"), show=False)
     assert (tmp_path / "stack.png").exists()
     plt.close(fig)
 
@@ -344,5 +344,5 @@ def test_vol_return_df_false_returns_fig_axes(vol_df):
 
 
 def test_vol_save(tmp_path, vol_df):
-    out = p.vol(vol_df, x="log2fc", y="neglog10p", file="vol.png", dir=str(tmp_path), show=False, return_df=False)
+    out = p.vol(vol_df, x="log2fc", y="neglog10p", file=str(tmp_path / "vol.png"), show=False, return_df=False)
     assert (tmp_path / "vol.png").exists()

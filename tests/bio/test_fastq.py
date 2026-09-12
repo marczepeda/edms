@@ -603,7 +603,7 @@ def test_extract_umis_constructs_umi_tools_command(tmp_path, mocker):
     command = mock_run.call_args[0][0]
     assert "conda run -n myenv umi_tools extract" in command
     assert "--bc-pattern=NNNN" in command
-    assert f"--stdin={os.path.join(str(fastq_dir), 'sample1.fastq')}" in command
+    assert f"--stdin={str(fastq_dir / 'sample1.fastq')}" in command
     assert mock_run.call_args.kwargs["shell"] is True
 
 
