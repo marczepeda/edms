@@ -675,12 +675,14 @@ def add_subparser(subparsers, formatter_class=None):
 
     # count_signatures_dir() [signatures_dir]:
     parser_fastq_count_signatures_dir.add_argument("-i", "--df_ref", help="Annotated reference library file path", required=True)
-    parser_fastq_count_signatures_dir.add_argument("-sd", "--signature_dir", help="Directory containing signature .csv files from 'edms fastq signatures' (Default: the 'Signature' directory in its out_dir)", required=True)
+    parser_fastq_count_signatures_dir.add_argument("-sd", "--signature_dir", help="Directory containing signature .csv files from 'edms fastq signatures' (Default: the 'Signature' directory in its out_dir); searched recursively with -r", required=True)
 
+    parser_fastq_count_signatures_dir.add_argument("-r", "--recursive", action="store_true", help="Search signature_dir recursively for signature folders & combine them into a single output (Default: False)", default=False)
+    parser_fastq_count_signatures_dir.add_argument("-sf", "--signature_folder", help="Signature directory name to search for with -r (Default: 'Signature')", default='Signature')
     parser_fastq_count_signatures_dir.add_argument("-n", "--n_extra_nt", type=int, help="Number of extra nucleotide differences that were allowed for Signature match; >0 also writes the 'Exact_match' outputs (Default: 0)", default=0)
     parser_fastq_count_signatures_dir.add_argument("-qc", "--fastq_col", help="Fastq column name in the annotated reference library (Default: None)", default=None)
     parser_fastq_count_signatures_dir.add_argument("-m", "--meta", help="Meta file path", default=argparse.SUPPRESS)
-    parser_fastq_count_signatures_dir.add_argument("-st", "--stats", help="'edms fastq signatures' stats file path with 'file', 'reads_total', & 'reads_processed' columns (Default: None => inferred from the signature dataframes)", default=argparse.SUPPRESS)
+    parser_fastq_count_signatures_dir.add_argument("-st", "--stats", help="'edms fastq signatures' stats file path (or a directory searched recursively for '*_stats.csv') with 'file', 'reads_total', & 'reads_processed' columns (Default: None => inferred from the signature dataframes)", default=argparse.SUPPRESS)
     parser_fastq_count_signatures_dir.add_argument("-qs", "--fastq_suf", help="Fastq file suffix appended to the signature filenames to recover 'fastq_file' (Default: '.fastq.gz')", default='.fastq.gz')
     parser_fastq_count_signatures_dir.add_argument("-o", "--out_dir", help="Output directory", default='./out/')
     parser_fastq_count_signatures_dir.add_argument("-f", "--out_file", help="Output filename", default=f"{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_count_signatures.csv")

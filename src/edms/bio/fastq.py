@@ -9,6 +9,7 @@ Usage:
 - fuzzy_substring_search: retuns a dataframe containing all substrings in 'text' that resemble 'pattern' within the Levenshtein 'max_distance'.
 - _iter_fastq_files: Yield paths to .fastq and .fastq.gz files under `root` (recursive).
 - _natural_sorted_paths: Natural-sort file paths using t.natural_key on a stable, readable key.
+- _iter_signature_dirs: Yield paths to signature directories (e.g. 'Signature') under `root` (recursive).
 
 [Input/Output]
 - revcom_fastqs(): write reverse complement of fastqs to a new directory
@@ -100,6 +101,7 @@ import mpld3
 from scipy.stats import ttest_ind
 import Levenshtein
 from typing import Literal, Iterable
+from collections import Counter
 import math
 import subprocess
 import itertools
@@ -173,6 +175,23 @@ def _natural_sorted_paths(paths: list[str], key_root: str | None = None) -> list
     if key_root is not None:
         return sorted(paths, key=lambda p: t.natural_key(os.path.relpath(p, start=key_root)))
     return sorted(paths, key=lambda p: t.natural_key(os.path.basename(p)))
+
+def _iter_signature_dirs(root: str, signature_folder: str='Signature') -> Iterable[str]:
+    """
+    _iter_signature_dirs: Yield paths to signature directories (e.g. 'Signature') under `root` (recursive).
+        - if `root` is itself a `signature_folder` directory, only `root` is yielded
+
+    Parameters:
+    root (str): root directory to search for signature directories
+    signature_folder (str, optional): signature directory name written by count_signatures() (Default: 'Signature')
+    """
+    if os.path.basename(os.path.normpath(root))==signature_folder:
+        yield os.path.normpath(root)
+        return
+    for dirpath, dirnames, _ in os.walk(root):
+        for dn in dirnames:
+            if dn==signature_folder:
+                yield os.path.join(dirpath, dn)
 
 # Nanopore
 def savemoney(pt: str, fastq_dir: str='./fastq', fasta_dir: str='./fasta', 
@@ -2341,6 +2360,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
 
 def count_signatures_dir(df_ref: pd.DataFrame | str, signature_col: str, id_col: str, edit_col: str,
                     signature_dir: dict[str, pd.DataFrame] | str, out_dir: str, out_file: str,
+                    recursive: bool=False, signature_folder: str='Signature',
                     n_extra_nt: int=0, fastq_col: str=None, meta: pd.DataFrame | str=None,
                     stats: pd.DataFrame | str=None, fastq_suf: str='.fastq.gz', align_dims: tuple=(0,0),
                     return_df: bool=False, literal_eval: bool=True, plot_suf: str=None, show: bool=False,
@@ -2363,12 +2383,17 @@ def count_signatures_dir(df_ref: pd.DataFrame | str, signature_col: str, id_col:
     out_dir (str): directory for output files
     out_file (str): output filename
 
+    recursive (bool, optional): search 'signature_dir' recursively for 'signature_folder' directories & combine them
+                                into a single output; adds a 'signature_folder' column identifying the source
+                                directory of each row (Default: False => 'signature_dir' holds the .csv files)
+    signature_folder (str, optional): signature directory name written by count_signatures() (Default: 'Signature')
     n_extra_nt (int, optional): number of extra nucleotide differences that were allowed for Signature match by
                                 count_signatures(); >0 additionally writes the 'Exact_match' outputs (Default: 0)
     fastq_col (str, optional): fastq column name in the annotated reference library (Default: None)
     meta (dataframe | str, optional): meta dataframe (or file path) must have 'fastq_file' column (Default: None)
-    stats (dataframe | str, optional): count_signatures() stats dataframe (or file path) with 'file', 'reads_total',
-                                       & 'reads_processed' columns (Default: None => inferred from signature dataframes)
+    stats (dataframe | str, optional): count_signatures() stats dataframe, file path, or (with recursive=True) a
+                                       directory searched for '*_stats.csv'; needs 'file', 'reads_total', &
+                                       'reads_processed' columns (Default: None => inferred from signature dataframes)
     fastq_suf (str, optional): fastq file suffix appended to the signature dataframe keys to recover 'fastq_file' (Default: '.fastq.gz')
     align_dims (tuple, optional): (start_i, end_i) alignments per fastq file used by count_signatures() (Default: (0,0))
     return_df (bool, optional): return dataframe (Default: False)
@@ -2397,15 +2422,39 @@ def count_signatures_dir(df_ref: pd.DataFrame | str, signature_col: str, id_col:
         if fastq_col not in df_ref.columns.tolist():
             raise Exception(f'Missing fastq column: {fastq_col}')
 
-    # Get signature dataframes dictionary from directory path if needed
-    if type(signature_dir)==str:
-        signature_dc = io.get_dir(dir=signature_dir, suf='.csv')
-    elif isinstance(signature_dir, dict):
-        signature_dc = signature_dir
+    # Get signature dataframes from dictionary or directory path as (fastq_name, signature_folder, dataframe) records
+    signature_records = []
+    if isinstance(signature_dir, dict):
+        signature_records = [(fastq_name, None, df_signature) for fastq_name,df_signature in signature_dir.items()]
+    elif type(signature_dir)==str:
+        if recursive==True: # Search signature_dir recursively for signature_folder directories
+            found_dirs = _natural_sorted_paths(list(_iter_signature_dirs(root=signature_dir, signature_folder=signature_folder)),
+                                               key_root=signature_dir)
+            if len(found_dirs)==0:
+                raise ValueError(f"No '{signature_folder}' directories found in {signature_dir}")
+            print(f"Found {len(found_dirs)} '{signature_folder}' directories:\n" + '\n'.join(found_dirs))
+        else: # signature_dir holds the signature .csv files
+            found_dirs = [signature_dir]
+
+        for found_dir in found_dirs:
+            found_label = os.path.relpath(found_dir, start=signature_dir)
+            if found_label=='.':
+                found_label = None
+            signature_records.extend([(fastq_name, found_label, df_signature)
+                                      for fastq_name,df_signature in io.get_dir(dir=found_dir, suf='.csv').items()])
     else:
         raise ValueError(f"signature_dir needs to be a directory path or dictionary of dataframes; got {type(signature_dir)}")
-    if len(signature_dc)==0:
+    if len(signature_records)==0:
         raise ValueError(f"No signature dataframes found: {signature_dir}")
+
+    # Sort records & warn about fastq names found in more than one signature_folder directory
+    signature_records = sorted(signature_records,
+                               key=lambda record: t.natural_key(os.path.join(record[1],record[0]) if record[1] else record[0]))
+    duplicate_names = [fastq_name for fastq_name,cts in Counter([record[0] for record in signature_records]).items() if cts>1]
+    if len(duplicate_names)>0:
+        print(f"Warning: {len(duplicate_names)} fastq name(s) were found in more than one '{signature_folder}' directory; "
+              f"their rows share a 'fastq_file' value & are only distinguished by the 'signature_folder' column.\n"
+              f"Duplicates: {', '.join(duplicate_names)}")
 
     # Get meta dataframe from file path if needed & check for 'fastq_file' column
     if meta is not None:
@@ -2417,10 +2466,19 @@ def count_signatures_dir(df_ref: pd.DataFrame | str, signature_col: str, id_col:
             print(f"Warning: Did not merge with meta.\nmeta needs 'fastq_file' column.\nDetected columns: {list(meta.columns)}")
             meta = None
 
-    # Get stats dataframe from file path if needed & check for 'file' column
+    # Get stats dataframe from file (or directory) path if needed & check for 'file' column
     if stats is not None:
         if type(stats)==str:
-            stats = io.get(pt=stats)
+            if os.path.isdir(stats): # Search directory recursively for stats files & combine them
+                stats_files = _natural_sorted_paths([os.path.join(dirpath,fn) for dirpath,_,filenames in os.walk(stats)
+                                                     for fn in filenames if fn.endswith('_stats.csv')], key_root=stats)
+                if len(stats_files)==0:
+                    raise ValueError(f"No '*_stats.csv' files found in {stats}")
+                print(f"Found {len(stats_files)} stats files:\n" + '\n'.join(stats_files))
+                stats = pd.concat([io.get(pt=stats_file) for stats_file in stats_files],
+                                  ignore_index=True).drop_duplicates(ignore_index=True)
+            else:
+                stats = io.get(pt=stats)
         if 'file' not in list(stats.columns):
             print(f"Warning: Did not obtain reads_total & reads_processed from stats.\nstats needs 'file' column.\nDetected columns: {list(stats.columns)}")
             stats = None
@@ -2449,10 +2507,10 @@ def count_signatures_dir(df_ref: pd.DataFrame | str, signature_col: str, id_col:
     if n_extra_nt>0:
         out_df3 = pd.DataFrame() # Individual edits minus extra nt differences
         out_df4 = pd.DataFrame() # Aggregate edits minus extra nt differences
-    for fastq_name in sorted(signature_dc.keys(), key=t.natural_key): # Iterate through signature dataframes
+    for fastq_name, found_label, df_signature in signature_records: # Iterate through signature dataframes
 
-        print(f"Processing {fastq_name}...")
-        df_fastq = signature_dc[fastq_name].copy()
+        print(f"Processing {os.path.join(found_label,fastq_name) if found_label else fastq_name}...")
+        df_fastq = df_signature.copy()
         fastq_file = f"{fastq_name}{fastq_suf}" if fastq_suf else fastq_name
 
         # Check signature dataframe for signature, id, & edit columns
@@ -2496,6 +2554,8 @@ def count_signatures_dir(df_ref: pd.DataFrame | str, signature_col: str, id_col:
 
         # Append metadata...
         fastq_df_ref['fastq_file'] = [fastq_file]*len(fastq_df_ref)
+        if found_label is not None: # ...including the source signature directory when searched recursively
+            fastq_df_ref['signature_folder'] = [found_label]*len(fastq_df_ref)
 
         if meta is not None: # ...and merge with meta on 'fastq_file' column
             fastq_df_ref = pd.merge(left=fastq_df_ref,right=meta,on='fastq_file',how='left')
@@ -2550,13 +2610,11 @@ def count_signatures_dir(df_ref: pd.DataFrame | str, signature_col: str, id_col:
                 cts += count
                 fracs += fraction
 
+        edit_row = {id_col: ['Edit'], edit_col: ['Edit'], 'count': [cts], 'fraction': [fracs], 'fastq_file': [fastq_file]}
+        if found_label is not None:
+            edit_row['signature_folder'] = [found_label]
         fastq_df_ref_by_id_agg = fastq_df_ref_by_id[fastq_df_ref_by_id[id_col].isin(['WT','Not WT'])].reset_index(drop=True)
-        fastq_df_ref_by_id_agg = pd.concat([fastq_df_ref_by_id_agg,
-                                            pd.DataFrame({id_col: ['Edit'],
-                                                        edit_col: ['Edit'],
-                                                        'count': [cts],
-                                                        'fraction': [fracs],
-                                                        'fastq_file': [fastq_file]})], ignore_index=True)
+        fastq_df_ref_by_id_agg = pd.concat([fastq_df_ref_by_id_agg, pd.DataFrame(edit_row)], ignore_index=True)
         out_df2 = pd.concat([out_df2,fastq_df_ref_by_id_agg], ignore_index=True)
 
         # Save memory & clear for next use
@@ -2584,13 +2642,11 @@ def count_signatures_dir(df_ref: pd.DataFrame | str, signature_col: str, id_col:
                     cts += count
                     fracs += fraction
 
+            edit_row = {id_col: ['Edit'], edit_col: ['Edit'], 'count': [cts], 'fraction': [fracs], 'fastq_file': [fastq_file]}
+            if found_label is not None:
+                edit_row['signature_folder'] = [found_label]
             fastq_df_ref_by_exact_agg = fastq_df_ref_by_exact[fastq_df_ref_by_exact[id_col].isin(['WT','Not WT'])].reset_index(drop=True)
-            fastq_df_ref_by_exact_agg = pd.concat([fastq_df_ref_by_exact_agg,
-                                                    pd.DataFrame({id_col: ['Edit'],
-                                                                edit_col: ['Edit'],
-                                                                'count': [cts],
-                                                                'fraction': [fracs],
-                                                                'fastq_file': [fastq_file]})], ignore_index=True)
+            fastq_df_ref_by_exact_agg = pd.concat([fastq_df_ref_by_exact_agg, pd.DataFrame(edit_row)], ignore_index=True)
             out_df4 = pd.concat([out_df4,fastq_df_ref_by_exact_agg], ignore_index=True)
 
             # Save memory & clear for next use
@@ -2599,7 +2655,7 @@ def count_signatures_dir(df_ref: pd.DataFrame | str, signature_col: str, id_col:
             del fastq_df_ref_by_exact_agg
 
         # Save memory & clear for next use
-        memories.append(memory_timer(task=f"{fastq_name} (count)"))
+        memories.append(memory_timer(task=f"{os.path.join(found_label,fastq_name) if found_label else fastq_name} (count)"))
         del df_fastq
 
     # Save, plot, and return
