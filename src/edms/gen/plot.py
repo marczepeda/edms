@@ -1710,7 +1710,7 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
                 i=i,
                 ncols=ncols,
                 nrows=nrows,
-                space_capitalize=True
+                space_capitalize=space_capitalize
             )
 
             # apply formatter with the appropriate subset of data and parameters for this panel
@@ -2163,7 +2163,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
                 i=i,
                 ncols=ncols,
                 nrows=nrows,
-                space_capitalize=True
+                space_capitalize=space_capitalize
             )
 
             # apply formatter with the appropriate subset of data and parameters for this panel

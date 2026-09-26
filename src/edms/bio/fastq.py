@@ -794,6 +794,7 @@ def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.all',numeri
             # Group by id and calculate fraction
             df_vc_id = df_vc[df_vc[id_col]==id]
             df_vc_id['fraction'] = df_vc_id['count']/sum(df_vc_id['count'])
+            df_vc_id['percent'] = df_vc_id['fraction']*100
             if off: # Apply cutoff_fract
                 # Append greater than cutoff_frac
                 df_vc_cutoff = pd.concat([df_vc_cutoff,df_vc_id[df_vc_id['fraction']>=cutoff_frac]]).reset_index(drop=True)
@@ -802,6 +803,7 @@ def plot_motif(df: pd.DataFrame | str, out_dir: str=None, plot_suf='.all',numeri
                 if df_vc_id_other.empty==False:
                     df_vc_id_other['count']=sum(df_vc_id_other['count'])
                     df_vc_id_other['fraction']=sum(df_vc_id_other['fraction'])
+                    df_vc_id_other['percent']=df_vc_id_other['fraction']*100
                     df_vc_id_other[col]=f'<{cutoff_frac*100}%'
                     df_vc_cutoff = pd.concat([df_vc_cutoff,df_vc_id_other.iloc[:1]]).reset_index(drop=True)
             else: # Do not apply cutoff_fract
@@ -883,6 +885,7 @@ def mismatch_alignments(align_col: str, out_dir: str, fastq_name: str,
     df_alignments_mismatch_pos = pd.DataFrame(dc_alignments_mismatch_pos.items(),columns=[align_col,'mismatch_pos']) 
     df_fastq = pd.merge(left=fastq_df_ref,right=df_alignments,on=align_col)
     df_fastq['alignments_fraction'] = [alignments/reads_processed for (alignments,reads_processed) in t.zip_cols(df=df_fastq,cols=['alignments','reads_processed'])]
+    df_fastq['alignments_percent'] = [frac*100 for frac in df_fastq['alignments_fraction']]
     df_fastq = pd.merge(left=df_fastq,right=df_aligned_reads,on=align_col)
     df_fastq = pd.merge(left=df_fastq,right=df_alignments_mismatch_num,on=align_col)
     df_fastq = pd.merge(left=df_fastq,right=df_alignments_mismatch_pos,on=align_col)
@@ -1244,7 +1247,8 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
         print(f'{fastq_name}:\t{len(seqs)} reads\t=>\t{regions} reads;\t{missing5} missing motif5;\t{missing3} missing motif3;\t{overlap53} motif overlaps')
         stats.append((fastq_name, reads, processed_reads,
                     regions, missing5, missing3, overlap53,
-                    processed_reads/reads, regions/processed_reads))
+                    processed_reads/reads, regions/processed_reads,
+                    processed_reads/reads*100, regions/processed_reads*100))
         memories.append(memory_timer(task=f"{fastq_file} (region)"))
 
         # Append # of reads & alignment range to fastq_df_ref
@@ -1270,7 +1274,8 @@ def count_region(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
     memories.append(memory_timer(task='count_region()'))
     io.save(obj=pd.DataFrame(stats, columns=['file', 'reads_total', 'reads_processed',
                                             'reads_w_region', 'reads_wo_motif5', 'reads_wo_motif3', 'reads_w_motif_overlap',
-                                            'reads_processed_fraction', 'reads_w_region_fraction']),
+                                            'reads_processed_fraction', 'reads_w_region_fraction',
+                                            'reads_processed_percent', 'reads_w_region_percent']),
             file=os.path.join(out_dir,'.count_region', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_stats.csv'))
     io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
             file=os.path.join(out_dir,'.count_region', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv'))
@@ -1422,7 +1427,8 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
         print(f'{fastq_name}:\t{reads} reads;\t {processed_reads} processed reads;\t {aligned_reads} aligned reads')
         stats.append((fastq_name, reads, 
                     processed_reads, empty_reads, nonempty_reads, aligned_reads, 
-                    processed_reads/reads, empty_reads/processed_reads, nonempty_reads/processed_reads, aligned_reads/processed_reads))
+                    processed_reads/reads, empty_reads/processed_reads, nonempty_reads/processed_reads, aligned_reads/processed_reads,
+                    processed_reads/reads*100, empty_reads/processed_reads*100, nonempty_reads/processed_reads*100, aligned_reads/processed_reads*100))
 
         # Plot mismatch position per alignment
         if plot_suf is not None: 
@@ -1433,7 +1439,8 @@ def count_alignments(df_ref: pd.DataFrame | str, align_col: str, id_col: str,
     memories.append(memory_timer(task='count_alignments()'))
     io.save(obj=pd.DataFrame(stats, columns=['file', 'reads_total', 
                                             'reads_processed', 'reads_empty', 'reads_nonempty', 'reads_aligned',
-                                            'reads_processed_fraction', 'reads_empty_fraction', 'reads_nonempty_fraction', 'reads_aligned_fraction']),
+                                            'reads_processed_fraction', 'reads_empty_fraction', 'reads_nonempty_fraction', 'reads_aligned_fraction',
+                                            'reads_processed_percent', 'reads_empty_percent', 'reads_nonempty_percent', 'reads_aligned_percent']),
             file=os.path.join(out_dir,'.count_alignments', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_stats.csv'))
     io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
             file=os.path.join(out_dir,'.count_alignments', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv'))
@@ -1467,6 +1474,7 @@ def plot_paired(df: pd.DataFrame | str, title: str, out_dir: str,
     paired_regions_alignment_status_df = df[[desired_col,'alignment_status']].value_counts().reset_index()
     paired_regions_alignment_status_df_sum = sum(paired_regions_alignment_status_df['count'])
     paired_regions_alignment_status_df['fraction'] = [count/paired_regions_alignment_status_df_sum for count in paired_regions_alignment_status_df['count']]
+    paired_regions_alignment_status_df['percent'] = [frac*100 for frac in paired_regions_alignment_status_df['fraction']]
     
     io.save(obj=paired_regions_alignment_status_df, file=os.path.join(out_dir, title, 'alignment_status.csv'))
     
@@ -1487,6 +1495,7 @@ def plot_paired(df: pd.DataFrame | str, title: str, out_dir: str,
     paired_regions_alignment_distribution_df = paired_regions_alignment_distribution_df[[id_col,desired_col]].value_counts().reset_index()
     paired_regions_alignment_distribution_df_sum = sum(paired_regions_alignment_distribution_df['count'])
     paired_regions_alignment_distribution_df['fraction'] = [count/paired_regions_alignment_distribution_df_sum for count in paired_regions_alignment_distribution_df['count']]
+    paired_regions_alignment_distribution_df['percent'] = [frac*100 for frac in paired_regions_alignment_distribution_df['fraction']]
     
     io.save(obj=paired_regions_alignment_distribution_df, file=os.path.join(out_dir, title, 'alignment_distribution.csv'))
 
@@ -2266,6 +2275,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
         fastq_df_ref_by_id.fillna(value={'count': 0},inplace=True)
         total_count = sum(fastq_df_ref_by_id['count'])
         fastq_df_ref_by_id['fraction'] = [cts/total_count for cts in fastq_df_ref_by_id['count']]
+        fastq_df_ref_by_id['percent'] = [frac*100 for frac in fastq_df_ref_by_id['fraction']]
         fastq_df_ref_by_id = pd.merge(
             left=fastq_df_ref_by_id,
             right=phred_by_id,
@@ -2288,6 +2298,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                                                         edit_col: ['Edit'],
                                                         'count': [cts],
                                                         'fraction': [fracs],
+                                                        'percent': [fracs*100],
                                                         'fastq_file': [fastq_file]})], ignore_index=True)
         out_df2 = pd.concat([out_df2,fastq_df_ref_by_id_agg], ignore_index=True)
 
@@ -2303,6 +2314,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
             fastq_df_ref_by_exact.fillna(value={'count': 0},inplace=True)
             total_count = sum(fastq_df_ref_by_exact['count'])
             fastq_df_ref_by_exact['fraction'] = [cts/total_count for cts in fastq_df_ref_by_exact['count']]
+            fastq_df_ref_by_exact['percent'] = [frac*100 for frac in fastq_df_ref_by_exact['fraction']]
             fastq_df_ref_by_exact['fastq_file'] = [fastq_file]*len(fastq_df_ref_by_exact)
             out_df3 = pd.concat([out_df3,fastq_df_ref_by_exact], ignore_index=True)
 
@@ -2320,6 +2332,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                                                                 edit_col: ['Edit'],
                                                                 'count': [cts],
                                                                 'fraction': [fracs],
+                                                                'percent': [fracs*100],
                                                                 'fastq_file': [fastq_file]})], ignore_index=True)
             out_df4 = pd.concat([out_df4,fastq_df_ref_by_exact_agg], ignore_index=True)
 
@@ -2597,6 +2610,7 @@ def count_signatures_dir(df_ref: pd.DataFrame | str, signature_col: str, id_col:
         fastq_df_ref_by_id.fillna(value={'count': 0},inplace=True)
         total_count = sum(fastq_df_ref_by_id['count'])
         fastq_df_ref_by_id['fraction'] = [cts/total_count for cts in fastq_df_ref_by_id['count']]
+        fastq_df_ref_by_id['percent'] = [frac*100 for frac in fastq_df_ref_by_id['fraction']]
         if phred_by_id is not None:
             fastq_df_ref_by_id = pd.merge(
                 left=fastq_df_ref_by_id,
@@ -2614,7 +2628,7 @@ def count_signatures_dir(df_ref: pd.DataFrame | str, signature_col: str, id_col:
                 cts += count
                 fracs += fraction
 
-        edit_row = {id_col: ['Edit'], edit_col: ['Edit'], 'count': [cts], 'fraction': [fracs], 'fastq_file': [fastq_file]}
+        edit_row = {id_col: ['Edit'], edit_col: ['Edit'], 'count': [cts], 'fraction': [fracs], 'percent': [fracs*100], 'fastq_file': [fastq_file]}
         if found_label is not None:
             edit_row['signature_folder'] = [found_label]
         fastq_df_ref_by_id_agg = fastq_df_ref_by_id[fastq_df_ref_by_id[id_col].isin(['WT','Not WT'])].reset_index(drop=True)
@@ -2635,6 +2649,7 @@ def count_signatures_dir(df_ref: pd.DataFrame | str, signature_col: str, id_col:
             fastq_df_ref_by_exact.fillna(value={'count': 0},inplace=True)
             total_count = sum(fastq_df_ref_by_exact['count'])
             fastq_df_ref_by_exact['fraction'] = [cts/total_count for cts in fastq_df_ref_by_exact['count']]
+            fastq_df_ref_by_exact['percent'] = [frac*100 for frac in fastq_df_ref_by_exact['fraction']]
             fastq_df_ref_by_exact['fastq_file'] = [fastq_file]*len(fastq_df_ref_by_exact)
             out_df3 = pd.concat([out_df3,fastq_df_ref_by_exact], ignore_index=True)
 
@@ -2646,7 +2661,7 @@ def count_signatures_dir(df_ref: pd.DataFrame | str, signature_col: str, id_col:
                     cts += count
                     fracs += fraction
 
-            edit_row = {id_col: ['Edit'], edit_col: ['Edit'], 'count': [cts], 'fraction': [fracs], 'fastq_file': [fastq_file]}
+            edit_row = {id_col: ['Edit'], edit_col: ['Edit'], 'count': [cts], 'fraction': [fracs], 'percent': [fracs*100], 'fastq_file': [fastq_file]}
             if found_label is not None:
                 edit_row['signature_folder'] = [found_label]
             fastq_df_ref_by_exact_agg = fastq_df_ref_by_exact[fastq_df_ref_by_exact[id_col].isin(['WT','Not WT'])].reset_index(drop=True)
@@ -3277,7 +3292,8 @@ def outcomes(fastqs: dict, col: str='Edit', return_memories: bool=False) -> tupl
         temp=pd.DataFrame({'fastq_file':[file]*len(fastq[col].value_counts()),
                            col:list(fastq[col].value_counts().keys()),
                            'count':fastq[col].value_counts(),
-                           'fraction':fastq[col].value_counts()/len(fastq[col])})
+                           'fraction':fastq[col].value_counts()/len(fastq[col]),
+                           'percent':fastq[col].value_counts()/len(fastq[col])*100})
         df=pd.concat([df,temp]).reset_index(drop=True)
         memories.append(memory_timer(task=file))
 
@@ -6170,7 +6186,7 @@ def heat(df: pd.DataFrame | str, scores_col: str, wt_prot: str, wt_res: int, cut
         title: str='', title_size: int=12, title_weight: str='bold', title_font: str='Arial',  figsize: tuple=(6,6), vertical: bool=True,
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=None, x_ticks_font: str='Arial',
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=None, y_ticks_font: str='Arial',
-        dpi: int=0, transparent: bool=True, show: bool=True, **kwargs):
+        dpi: int=0, transparent: bool=True, show: bool=True, space_capitalize: bool = True, **kwargs):
     ''' 
     heat(): creates heatmap plot
     
@@ -6231,6 +6247,7 @@ def heat(df: pd.DataFrame | str, scores_col: str, wt_prot: str, wt_res: int, cut
     transparent (bool, optional): whether to make the background transparent when saving the plot (Default: True)
     dpi (int, optional): figure dpi (Default: 1200 for non-HTML, 150 for HTML)
     show (bool, optional): show plot (Default: True)
+    space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     
     Dependencies: matplotlib, seaborn, pandas, & aa_props
     '''
@@ -6548,7 +6565,7 @@ def heat(df: pd.DataFrame | str, scores_col: str, wt_prot: str, wt_res: int, cut
                 i=i,
                 ncols=ncols,
                 nrows=nrows,
-                space_capitalize=True
+                space_capitalize=space_capitalize
             )
 
             ax.set_xlabel(x_axis_panel, fontsize=x_axis_size, fontweight=x_axis_weight, fontfamily=x_axis_font, labelpad=x_axis_pad)
@@ -6626,7 +6643,7 @@ def heat(df: pd.DataFrame | str, scores_col: str, wt_prot: str, wt_res: int, cut
                 i=i,
                 ncols=ncols,
                 nrows=nrows,
-                space_capitalize=True
+                space_capitalize=space_capitalize
             )
 
             ax.set_ylabel(x_axis_panel, fontsize=x_axis_size, fontweight=x_axis_weight, fontfamily=x_axis_font, labelpad=x_axis_pad)
