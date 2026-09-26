@@ -56,6 +56,9 @@ Usage:
 - _env(): is env variable path or name
 - extract_umis(): extract UMIs using umi_tools
 - trim_motifs(): trimming motifs with cutadapt
+- _cutadapt_logs(): returns trim_motifs() cutadapt logs from a directory or a combined sh log file
+- _parse_cutadapt_log(): parse 'Total reads processed' and 'Reads with adapters' from a cutadapt log
+- trim_motifs_summary(): summarize trim_motifs() cutadapt logs as a .csv file & stacked bar plot
 - make_sams(): generates alignments saved as a SAM files using bowtie2
 - make_bams(): converts SAM files to BAM files using samtools
 - bam_umi_tags(): copy UMI in read ID to RX tag in BAM files using fgbio
@@ -105,6 +108,7 @@ from collections import Counter
 import math
 import subprocess
 import itertools
+import shutil
 from pathlib import Path
 
 from ..bio.signature import parse_signature_literal, signature_from_alignment, expand_signature_units, is_reference_match_with_n_extra_nt_or_less
@@ -3551,7 +3555,7 @@ def extract_umis(fastq_dir: str, out_dir: str='./extract_umis',
 def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs', 
                 config_key: str = None, in_file: pd.DataFrame | str = None, motif5: str=None, motif3: str=None, 
                 motif_length: int=21, error_rate: float=0.1, max_expected_errors: float=None,
-                env: str='umi_tools', sh: bool=False):
+                env: str='umi_tools', sh: bool=False, summary: bool=True, **summary_kwargs):
     ''' 
     trim_motifs(): trimming motifs with cutadapt
 
@@ -3568,7 +3572,9 @@ def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs',
     error_rate (float, optional): maximum error rate allowed in each motif (Default: 0.1)
     max_expected_errors (float, optional): maximum expected errors after trimming motifs (Default: None; 0.2 recomended)
     env (str, optional): Conda environment with cutadapt installed (name or path, Default: umi_tools)
-    sh (bool, optional): combine output log files into a single file in working directory (Default: False)
+    sh (bool, optional): combine output log files into a single file in working directory; also saves the summary there as {date_time}.csv & {date_time}.pdf (Default: False)
+    summary (bool, optional): summarize cutadapt logs as a .csv file & stacked bar plot via trim_motifs_summary() (Default: True)
+    **summary_kwargs: additional keyword arguments for trim_motifs_summary()
     '''
     # Memory reporting
     memory_timer(reset=True)
@@ -3621,12 +3627,180 @@ def trim_motifs(fastq_dir: str, out_dir: str='./trim_motifs',
             # Memory reporting
             memories.append(memory_timer(task=f'cutadapt: {file}'))
 
+    # Summarize cutadapt logs as a .csv file & stacked bar plot
+    csv_file = summary_kwargs.pop('csv_file', 'trim_motifs_summary.csv')
+    plot_file = summary_kwargs.pop('plot_file', 'trim_motifs_summary.pdf')
+    if summary == True:
+        trim_motifs_summary_df = trim_motifs_summary(pt=os.path.join(out_dir,'.trim_motifs'),
+                                                     csv_file=csv_file, plot_file=plot_file, **summary_kwargs)
+
     # Memory reporting
     memories.append(memory_timer(task='trim_motifs()'))
     io.save(obj=pd.DataFrame(memories, columns=['Task','Memory, MB','Time, s']),
             file=os.path.join(out_dir,'.trim_motifs', f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_memories.csv'))
 
-    if sh == True: io.combine(in_dir=os.path.join(out_dir,'.trim_motifs'), out_dir='./trim_motifs', out_file=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.log', suffixes=['.csv', '.log']) 
+    if sh == True:
+        date_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S") # Shared timestamp groups the combined log & summary files
+        io.combine(in_dir=os.path.join(out_dir,'.trim_motifs'), out_dir='./trim_motifs', out_file=f'{date_time}.log', suffixes=['.csv', '.log'])
+
+        # Save the summary alongside the combined log
+        if summary == True:
+            io.save(obj=trim_motifs_summary_df, file=os.path.join('./trim_motifs', f'{date_time}.csv'))
+            shutil.copy(os.path.join(out_dir,'.trim_motifs',plot_file),
+                        os.path.join('./trim_motifs', f'{date_time}{os.path.splitext(plot_file)[1]}')) 
+
+def _cutadapt_logs(pt: str) -> dict:
+    '''
+    _cutadapt_logs(): returns trim_motifs() cutadapt logs from a directory or a combined sh log file
+
+    Parameters:
+    pt (str): trim_motifs() output directory, its '.trim_motifs' log subdirectory, or a combined sh log file
+
+    Returns: dictionary of {cutadapt log file name: cutadapt log text}
+
+    Dependencies: os & re
+    '''
+    suffixes = ('_trim5.log','_trim53.log')
+
+    if os.path.isdir(pt): # Directory with individual cutadapt logs
+        log_dir = os.path.join(pt,'.trim_motifs') if os.path.isdir(os.path.join(pt,'.trim_motifs')) else pt
+        logs = dict()
+        for name in os.listdir(log_dir):
+            if name.endswith(suffixes):
+                with open(os.path.join(log_dir,name), 'r', encoding='utf-8', errors='replace') as f:
+                    logs[name] = f.read()
+        return logs
+
+    elif os.path.isfile(pt): # Combined sh log file with '### SOURCE_FILE: ' headers per io.combine()
+        with open(pt, 'r', encoding='utf-8', errors='replace') as f:
+            sections = re.split(r'^### SOURCE_FILE: (.+)$', f.read(), flags=re.MULTILINE)
+        return {sections[i].strip(): sections[i+1] # sections[0] is the preamble; names & texts alternate afterwards
+                for i in range(1,len(sections)-1,2)
+                if sections[i].strip().endswith(suffixes)}
+
+    else:
+        raise ValueError(f"Error: cutadapt log directory or file not found: {pt}")
+
+def _parse_cutadapt_log(log: str) -> dict:
+    '''
+    _parse_cutadapt_log(): parse 'Total reads processed' and 'Reads with adapters' from a cutadapt log
+
+    Parameters:
+    log (str): cutadapt log text
+
+    Returns: dictionary with 'total_reads_processed', 'reads_with_adapters', & 'reads_with_adapters_percent' (None when absent)
+
+    Dependencies: re
+    '''
+    total_match = re.search(r'Total reads processed:\s*([\d,]+)', log)
+    adapters_match = re.search(r'Reads with adapters?:\s*([\d,]+)\s*\(\s*([\d.]+|nan)%\s*\)', log)
+
+    total = int(total_match.group(1).replace(',','')) if total_match else None
+    adapters = int(adapters_match.group(1).replace(',','')) if adapters_match else None
+
+    if adapters_match is not None and adapters_match.group(2)!='nan': # Percentage reported by cutadapt
+        percent = float(adapters_match.group(2))
+    elif adapters is not None and total: # cutadapt reports 'nan' when no reads were processed
+        percent = round(100*adapters/total, 1)
+    else:
+        percent = None
+
+    return {'total_reads_processed': total,
+            'reads_with_adapters': adapters,
+            'reads_with_adapters_percent': percent}
+
+def trim_motifs_summary(pt: str='./trim_motifs', out_dir: str=None,
+                        csv_file: str='trim_motifs_summary.csv', plot_file: str='trim_motifs_summary.pdf',
+                        palette_or_cmap: str | list | dict | mcolors.Colormap = ['#D1495B','#EDAE49','#4EC569'],
+                        figsize_width: float=6, figsize_height_per_fastq: float=0.35, figsize_height_pad: float=1.5,
+                        legend_loc: str='upper center', legend_bbox_to_anchor: tuple=(0.5,0), legend_ncol: int=3,
+                        title: str='Cutadapt Summary', show: bool=False, **plot_kwargs) -> pd.DataFrame:
+    '''
+    trim_motifs_summary(): summarize trim_motifs() cutadapt logs as a .csv file & stacked bar plot
+
+    Parameters:
+    pt (str, optional): trim_motifs() output directory, its '.trim_motifs' log subdirectory, or a combined sh log file (Default: ./trim_motifs)
+    out_dir (str, optional): output directory (Default: None; the '.trim_motifs' log subdirectory or the combined sh log file's directory)
+    csv_file (str, optional): summary .csv file name (Default: trim_motifs_summary.csv)
+    plot_file (str, optional): summary plot file name (Default: trim_motifs_summary.pdf)
+    palette_or_cmap (str | list | dict | Colormap, optional): adapter status colors (Default: red, yellow, green)
+    figsize_width (float, optional): figure width (Default: 6)
+    figsize_height_per_fastq (float, optional): figure height per FASTQ file (Default: 0.35)
+    figsize_height_pad (float, optional): additional figure height for axis labels & legend (Default: 1.5)
+    legend_loc (str, optional): legend location (Default: upper center)
+    legend_bbox_to_anchor (tuple, optional): coordinates for bbox anchor (Default: (0.5,0))
+    legend_ncol (int, optional): # of legend columns (Default: 3)
+    title (str, optional): plot title (Default: Cutadapt Summary)
+    show (bool, optional): show plot (Default: False)
+    **plot_kwargs: additional keyword arguments for plot.stack()
+
+    Returns: summary dataframe (1 row per FASTQ file)
+
+    Dependencies: os, re, pandas, matplotlib.colors, io, tidy, plot, _cutadapt_logs(), & _parse_cutadapt_log()
+    '''
+    # Get cutadapt logs & the fastq file names they correspond to
+    logs = _cutadapt_logs(pt=pt)
+    fastq_files = sorted({name.removesuffix('_trim5.log') for name in logs if name.endswith('_trim5.log')},
+                         key=t.natural_key)
+    if not fastq_files:
+        raise ValueError(f"Error: no '*_trim5.log' cutadapt logs found in {pt}")
+
+    # Determine output directory
+    if out_dir is None:
+        if os.path.isdir(pt): out_dir = os.path.join(pt,'.trim_motifs') if os.path.isdir(os.path.join(pt,'.trim_motifs')) else pt
+        else: out_dir = os.path.dirname(pt) or '.'
+
+    # Parse the 5' and 3' trim log for each fastq file
+    summaries = []
+    for fastq_file in fastq_files:
+        if f'{fastq_file}_trim53.log' not in logs:
+            print(f"Warning: 3' trim log not found for {fastq_file}; excluded from summary.")
+            continue
+
+        trim5 = _parse_cutadapt_log(log=logs[f'{fastq_file}_trim5.log'])
+        trim3 = _parse_cutadapt_log(log=logs[f'{fastq_file}_trim53.log'])
+
+        if any(trim[key] is None for trim in (trim5,trim3) for key in ('total_reads_processed','reads_with_adapters')):
+            print(f"Warning: could not parse cutadapt logs for {fastq_file}; excluded from summary.")
+            continue
+
+        summaries.append({'fastq_file': fastq_file,
+                          'trim5_total_reads_processed': trim5['total_reads_processed'],
+                          'trim5_reads_with_adapters': trim5['reads_with_adapters'],
+                          'trim5_reads_with_adapters_percent': trim5['reads_with_adapters_percent'],
+                          'trim3_total_reads_processed': trim3['total_reads_processed'],
+                          'trim3_reads_with_adapters': trim3['reads_with_adapters'],
+                          'trim3_reads_with_adapters_percent': trim3['reads_with_adapters_percent'],
+                          # Read fates that sum to trim5_total_reads_processed since the 3' trim input is the 5' trim output
+                          "missing 5' trim adapter": trim5['total_reads_processed'] - trim5['reads_with_adapters'],
+                          "missing 3' trim adapter": trim3['total_reads_processed'] - trim3['reads_with_adapters'],
+                          "found 5' and 3' adapters": trim3['reads_with_adapters']})
+
+    if not summaries:
+        raise ValueError(f"Error: no cutadapt logs could be summarized from {pt}")
+
+    # Save summary dataframe
+    trim_motifs_summary_df = pd.DataFrame(summaries)
+    io.save(obj=trim_motifs_summary_df, file=os.path.join(out_dir,csv_file))
+
+    # Melt read fates into tidy format for the stacked bar plot; shorten the column names for the legend
+    adapter_statuses = {"missing 5' trim adapter": "missing 5'",
+                        "missing 3' trim adapter": "missing 3'",
+                        "found 5' and 3' adapters": "found 5' and 3'"}
+    trim_motifs_summary_tidy_df = trim_motifs_summary_df.melt(id_vars='fastq_file', value_vars=list(adapter_statuses.keys()),
+                                                              var_name='adapter_status', value_name='reads')
+    trim_motifs_summary_tidy_df['adapter_status'] = trim_motifs_summary_tidy_df['adapter_status'].map(adapter_statuses)
+
+    # Scale figure height with the number of fastq files; barh draws the first index at the bottom, so reverse for top-to-bottom order
+    p.stack(df=trim_motifs_summary_tidy_df, x='fastq_file', y='reads', cols='adapter_status',
+            cols_order=list(adapter_statuses.values()), x_order=list(trim_motifs_summary_df['fastq_file'])[::-1],
+            vertical=False, palette_or_cmap=palette_or_cmap,
+            figsize=(figsize_width, figsize_height_pad + figsize_height_per_fastq*len(trim_motifs_summary_df)),
+            x_axis='FASTQ File', y_axis='Total Reads', legend_title='Adapter Status',
+            legend_loc=legend_loc, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_ncol=legend_ncol, title=title,
+            file=os.path.join(out_dir,plot_file), show=show, **plot_kwargs)
+
+    return trim_motifs_summary_df
 
 def make_sams(fastq_dir: str, out_dir: str='./make_sams', 
               in_file: pd.DataFrame | str = None, fasta: str=None,

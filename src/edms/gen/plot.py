@@ -53,6 +53,7 @@ Usage:
 - heat(): creates heat plot related graphs
 - stack(): creates stacked bar plot
 - vol(): creates volcano plot
+- caterpillar(): creates caterpillar plot (estimates ranked along x with error bars)
 
 [Color display methods]
 - matplotlib_cmaps(): view all matplotlib color maps
@@ -1349,7 +1350,7 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
         cols: str = None, cols_order: list = None, cols_exclude: list | str = None,
         stys: str = None, stys_order: list = None, mark_order: list = None, label: str | None = None,
         facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
-        file: str = None, palette_or_cmap: str | list | dict | mcolors.Colormap = 'colorblind', alpha: float = 1.0, edgecol: str = 'black',
+        file: str = None, palette_or_cmap: str | list | dict | mcolors.Colormap = 'colorblind', alpha: float = 1.0, size: float | str = None, edgecol: str = 'black',
         figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
         x_axis: str | list = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial',
         x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None,
@@ -1392,6 +1393,9 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
                                                             list of colors (i.e., ['#4EC569','red']),
                                                             or {category: color} dictionary
     alpha (float, optional): Alpha (transparency) for scatter points (0 to 1)
+    size (float | str, optional): marker size as diameter in points, matching cat(),
+                                  or a column name to scale marker size by that column's values
+                                  (Default: None; seaborn default)
     edgecol (str, optional): point edge color
     figsize (tuple, optional): figure size
     title (str, optional): plot title
@@ -1511,6 +1515,23 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
     )
     axes = np.array(axes).reshape(nrows, ncols)
 
+    # Marker size: column name scales size by that column, number sets a fixed
+    # diameter in points (matching cat()); omitted when unspecified
+    if size is None:
+        scat_size_kwargs = {}
+        line_size_kwargs = {}
+    elif isinstance(size, str):
+        if size not in df.columns:
+            raise ValueError(f"size column '{size}' is not in the dataframe!")
+        scat_size_kwargs = {'size': size}
+        line_size_kwargs = {'size': size}
+    else:
+        scat_size_kwargs = {'s': size ** 2}
+        line_size_kwargs = {'markersize': size}
+
+    # Column driving the legend; the size column stands in when it is the only one mapped
+    legend_col = cols if cols is not None else (size if isinstance(size, str) else None)
+
     def _draw_panel(df_sub: pd.DataFrame, ax: plt.Axes):
         '''
         _draw_panel(): Helper to draw one panel
@@ -1524,33 +1545,33 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
             if graph == 'scat':
                 sns.scatterplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_order,
                                 style=stys, style_order=stys_order, markers=mark_order,
-                                edgecolor=edgecol, alpha=alpha, palette=palette, ax=ax, **kwargs)
+                                edgecolor=edgecol, alpha=alpha, palette=palette, ax=ax, **scat_size_kwargs, **kwargs)
             elif graph == 'line':
                 sns.lineplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_order,
                              style=stys, style_order=stys_order, markers=mark_order,
-                             palette=palette, ax=ax, **kwargs)
+                             palette=palette, ax=ax, **line_size_kwargs, **kwargs)
             elif graph == 'line_scat':
                 sns.lineplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_order,
                              style=stys, style_order=stys_order, markers=mark_order,
-                             palette=palette, ax=ax, **kwargs)
+                             palette=palette, ax=ax, **line_size_kwargs, **kwargs)
                 sns.scatterplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_order,
                                 style=stys, style_order=stys_order, markers=mark_order,
-                                edgecolor=edgecol, alpha=alpha, palette=palette, ax=ax, **kwargs)
+                                edgecolor=edgecol, alpha=alpha, palette=palette, ax=ax, **scat_size_kwargs, **kwargs)
             else:
                 raise ValueError("Invalid graph! scat, line, or line_scat")
 
         elif cols is not None:
             if graph == 'scat':
                 sns.scatterplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_order,
-                                edgecolor=edgecol, alpha=alpha, palette=palette, ax=ax, **kwargs)
+                                edgecolor=edgecol, alpha=alpha, palette=palette, ax=ax, **scat_size_kwargs, **kwargs)
             elif graph == 'line':
                 sns.lineplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_order,
-                             ax=ax, palette=palette, **kwargs)
+                             ax=ax, palette=palette, **line_size_kwargs, **kwargs)
             elif graph == 'line_scat':
                 sns.lineplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_order,
-                             palette=palette, ax=ax, **kwargs)
+                             palette=palette, ax=ax, **line_size_kwargs, **kwargs)
                 sns.scatterplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_order,
-                                edgecolor=edgecol, alpha=alpha, palette=palette, ax=ax, **kwargs)
+                                edgecolor=edgecol, alpha=alpha, palette=palette, ax=ax, **scat_size_kwargs, **kwargs)
             else:
                 raise ValueError("Invalid graph! scat, line, or line_scat")
 
@@ -1558,29 +1579,29 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
             if graph == 'scat':
                 sns.scatterplot(data=df_sub, x=x, y=y, style=stys, style_order=stys_order,
                                 markers=mark_order, edgecolor=edgecol, palette=palette,
-                                alpha=alpha, ax=ax, **kwargs)
+                                alpha=alpha, ax=ax, **scat_size_kwargs, **kwargs)
             elif graph == 'line':
                 sns.lineplot(data=df_sub, x=x, y=y, style=stys, style_order=stys_order,
-                             markers=mark_order, palette=palette, ax=ax, **kwargs)
+                             markers=mark_order, palette=palette, ax=ax, **line_size_kwargs, **kwargs)
             elif graph == 'line_scat':
                 sns.lineplot(data=df_sub, x=x, y=y, style=stys, style_order=stys_order,
-                             markers=mark_order, palette=palette, ax=ax, **kwargs)
+                             markers=mark_order, palette=palette, ax=ax, **line_size_kwargs, **kwargs)
                 sns.scatterplot(data=df_sub, x=x, y=y, style=stys, style_order=stys_order,
                                 markers=mark_order, edgecolor=edgecol, palette=palette,
-                                alpha=alpha, ax=ax, **kwargs)
+                                alpha=alpha, ax=ax, **scat_size_kwargs, **kwargs)
             else:
                 raise ValueError("Invalid graph! scat, line, or line_scat")
 
         else:
             if graph == 'scat':
                 sns.scatterplot(data=df_sub, x=x, y=y, edgecolor=edgecol, palette=palette,
-                                alpha=alpha, ax=ax, **kwargs)
+                                alpha=alpha, ax=ax, **scat_size_kwargs, **kwargs)
             elif graph == 'line':
-                sns.lineplot(data=df_sub, x=x, y=y, palette=palette, ax=ax, **kwargs)
+                sns.lineplot(data=df_sub, x=x, y=y, palette=palette, ax=ax, **line_size_kwargs, **kwargs)
             elif graph == 'line_scat':
-                sns.lineplot(data=df_sub, x=x, y=y, palette=palette, ax=ax, **kwargs)
+                sns.lineplot(data=df_sub, x=x, y=y, palette=palette, ax=ax, **line_size_kwargs, **kwargs)
                 sns.scatterplot(data=df_sub, x=x, y=y, edgecolor=edgecol, palette=palette,
-                                alpha=alpha, ax=ax, **kwargs)
+                                alpha=alpha, ax=ax, **scat_size_kwargs, **kwargs)
             else:
                 raise ValueError("Invalid graph! scat, line, or line_scat")
 
@@ -1695,7 +1716,7 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
             # apply formatter with the appropriate subset of data and parameters for this panel
             _apply_formatter_on_ax(
                 ax=ax, df_sub=df_sub, graph=graph,
-                x=x, y=y, cols=cols, file=file, 
+                x=x, y=y, cols=legend_col, file=file, 
                 title=title_sub if corr_method is not None else '', title_size=title_size, title_weight=title_weight, title_font=title_font,
                 x_axis=x_axis_panel, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font,
                 x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad,
@@ -1731,7 +1752,7 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
                     fontfamily=title_font
                 )
 
-            if cols is not None and legend_mode != "figure":
+            if legend_col is not None and legend_mode != "figure":
                 _handle_panel_legend(ax, legend_mode=legend_mode, i=i, j=j)
 
             if j != 0:
@@ -1744,9 +1765,9 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
         fig.suptitle(title, fontsize=title_size, fontweight=title_weight, family=title_font)
 
     # Build single shared legend for entire figure
-    if cols is not None and legend_mode == "figure":
+    if legend_col is not None and legend_mode == "figure":
         if legend_title == '':
-            legend_title = cols
+            legend_title = legend_col
 
         _make_figure_legend(
             fig, axes,
@@ -4032,6 +4053,134 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
     if return_df:
         return df
     return fig, axes
+
+def caterpillar(df: pd.DataFrame | str, y: str, yerr: str = None, lower: str = None, upper: str = None, label: str = None, cols: str = None,
+                sort: bool = True, ascending: bool = True, reference: float = None, reference_color: str = 'black', reference_style: str = '--', reference_width: float = 1,
+                palette_or_cmap='Set2', color: str = 'tab:blue', marker: str = 'o', marker_size: float = 3, alpha: float = 0.9,
+                err_color: str = 'gray', err_width: float = 0.8, err_alpha: float = 0.4, err_capsize: float = 0,
+                file: str = None, figsize: tuple = (8, 5), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
+                x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
+                y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
+                legend_title: str = '', legend_title_size: int = 12, legend_title_weight: str = 'bold', legend_size: int = 12, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_ncol: int = 1,
+                legend_columnspacing: int = -4, legend_handletextpad: float = 0.5, legend_labelspacing: float = 0.5, legend_borderpad: float = 0.5, legend_handlelength: float = 0.5,
+                display_labels: bool = None, return_df: bool = True, dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True,
+                PDB_pt: str = None) -> pd.DataFrame:
+    '''
+    caterpillar(): creates caterpillar plot (estimates ranked along x with error bars)
+
+    Parameters:
+    df (dataframe | str): pandas dataframe (or file path) from st.shrink_estimates()
+    y (str): estimate column name (i.e., mean or shrunk)
+    yerr (str, optional): symmetric error column name (i.e., se or shrunk_se); scaled by 1 SE
+    lower (str, optional): lower bound column name (i.e., ci_lower); overrides yerr
+    upper (str, optional): upper bound column name (i.e., ci_upper); overrides yerr
+    label (str, optional): entity column name used for x-axis tick labels
+    cols (str, optional): color column name (i.e., n)
+    sort (bool, optional): rank entities by the estimate (Default: True)
+    ascending (bool, optional): rank from smallest to largest (Default: True)
+    reference (float, optional): draws a horizontal reference line (i.e., the grand mean)
+    reference_color (str, optional): matplotlib color for the reference line
+    reference_style (str, optional): matplotlib line style for the reference line
+    reference_width (float, optional): line width for the reference line
+    palette_or_cmap (str | list | dict | Colormap, optional): colors for the color column
+    color (str, optional): matplotlib color for points when cols is not provided
+    marker (str, optional): matplotlib marker style
+    marker_size (float, optional): marker size
+    alpha (float, optional): marker transparency
+    err_color (str, optional): matplotlib color for the error bars
+    err_width (float, optional): error bar line width
+    err_alpha (float, optional): error bar transparency
+    err_capsize (float, optional): error bar cap size
+    file (str, optional): output plot file path
+    figsize (tuple, optional): figure size
+    display_labels (bool, optional): show x-axis tick labels (Default: None; shown when label is provided and there are <= 50 entities)
+    return_df (bool, optional): return the ranked dataframe (Default: True)
+
+    Dependencies: pandas, numpy, matplotlib, io, resolve_palette(), & formatter()
+
+    Note: error bars are only as good as their source. Bars built from each entity's own
+          1-2 replicates are unusable; pass columns derived from the pooled within-group
+          noise instead (st.shrink_estimates() produces these). State which the bars are
+          (SE or CI) in the figure caption.
+    '''
+    # Get dataframe from file path if needed
+    if type(df) == str:
+        df = io.get(pt=df)
+    else:
+        df = df.copy()
+
+    # Rank entities along the x-axis
+    df = df.dropna(subset=[y])
+    if sort:
+        df = df.sort_values(by=y, ascending=ascending)
+    df = df.reset_index(drop=True)
+    df['rank'] = np.arange(len(df))
+
+    # Resolve error bars: explicit bounds take priority over a symmetric error column
+    if (lower is not None) and (upper is not None):
+        err = np.vstack([(df[y] - df[lower]).to_numpy(), (df[upper] - df[y]).to_numpy()])
+    elif yerr is not None:
+        err = df[yerr].to_numpy()
+    else:
+        err = None
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    # Error bars first so the markers sit on top
+    if err is not None:
+        ax.errorbar(df['rank'], df[y], yerr=err, fmt='none',
+                    ecolor=err_color, elinewidth=err_width, alpha=err_alpha, capsize=err_capsize, zorder=1)
+
+    # Markers, optionally colored by category
+    if cols is not None:
+        cats = df[cols].drop_duplicates().tolist()
+        try: cats = sorted(cats)
+        except TypeError: pass
+        palette = resolve_palette(palette_or_cmap, cats=cats)
+        if not isinstance(palette, dict): # seaborn palette names pass through resolve_palette() untouched
+            palette = dict(zip(cats, palette_colors(palette_or_cmap, n_colors=len(cats))))
+        for cat in cats:
+            sub = df[df[cols] == cat]
+            ax.plot(sub['rank'], sub[y], linestyle='none', marker=marker, markersize=marker_size,
+                    color=palette[cat], alpha=alpha, label=str(cat), zorder=2)
+    else:
+        ax.plot(df['rank'], df[y], linestyle='none', marker=marker, markersize=marker_size,
+                color=color, alpha=alpha, zorder=2)
+
+    # Reference line (i.e., the grand mean)
+    if reference is not None:
+        ax.axhline(reference, color=reference_color, linestyle=reference_style, linewidth=reference_width, zorder=0)
+
+    # Tick labels are unreadable past a few dozen entities
+    if display_labels is None:
+        display_labels = (label is not None) and (len(df) <= 50)
+    if display_labels and (label is not None):
+        ax.set_xticks(df['rank'])
+        ax.set_xticklabels(df[label].astype(str))
+    else:
+        ax.set_xticks([])
+
+    # Format, save & display plot
+    if x_axis == '':
+        x_axis = 'rank'
+    formatter(graph='scat', ax=ax, df=df, x='rank', y=y, cols=cols, file=file,
+              title=title, title_size=title_size, title_weight=title_weight, title_font=title_font,
+              x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font,
+              x_axis_scale='linear', x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad,
+              x_ticks_size=x_ticks_size, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=x_ticks,
+              y_axis=y_axis, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font,
+              y_axis_scale='linear', y_axis_dims=y_axis_dims, y_axis_pad=y_axis_pad,
+              y_ticks_size=y_ticks_size, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=y_ticks,
+              legend_title=legend_title if legend_title != '' else (cols if cols is not None else ''),
+              legend_title_size=legend_title_size, legend_title_weight=legend_title_weight, legend_size=legend_size,
+              legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_items=(0, 0), legend_ncol=legend_ncol,
+              legend_columnspacing=legend_columnspacing, legend_handletextpad=legend_handletextpad,
+              legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad, legend_handlelength=legend_handlelength,
+              dpi=dpi, transparent=transparent, show=show, space_capitalize=space_capitalize, PDB_pt=PDB_pt)
+
+    if return_df:
+        return df
+
 
 # Color display methods
 def matplotlib_cmaps():

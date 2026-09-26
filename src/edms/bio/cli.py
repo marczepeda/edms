@@ -435,6 +435,7 @@ def add_subparser(subparsers, formatter_class=None):
     
     - extract_umis(): extract UMIs using umi_tools
     - trim_motifs() [trim]: trimming motifs with cutadapt
+    - trim_motifs_summary() [trim_summary]: summarize trim_motifs() cutadapt logs as a .csv file & stacked bar plot
     - make_sams(): generates alignments saved as a SAM files using bowtie2
     - make_bams(): converts SAM files to BAM files using samtools
     - bam_umi_tags(): copy UMI in read ID to RX tag in BAM files using fgbio
@@ -476,6 +477,7 @@ def add_subparser(subparsers, formatter_class=None):
     
     parser_fastq_extract_umis = subparsers_fastq.add_parser("extract_umis", help="Extract UMIs using umi_tools", description="Extract UMIs using umi_tools", formatter_class=formatter_class)
     parser_fastq_trim_motifs = subparsers_fastq.add_parser("trim", help="Trim motifs with cutadapt", description="Trim motifs with cutadapt", formatter_class=formatter_class)
+    parser_fastq_trim_motifs_summary = subparsers_fastq.add_parser("trim_summary", help="Summarize trim motifs cutadapt logs", description="Summarize trim motifs cutadapt logs as a .csv file and stacked bar plot", formatter_class=formatter_class)
     parser_fastq_make_sams = subparsers_fastq.add_parser("make_sams", help="Generate alignments saved as SAM files using bowtie2", description="Generate alignments saved as SAM files using bowtie2", formatter_class=formatter_class)
     parser_fastq_make_bams = subparsers_fastq.add_parser("make_bams", help="Convert SAM files to BAM files using samtools", description="Convert SAM files to BAM files using samtools", formatter_class=formatter_class)
     parser_fastq_bam_umi_tags = subparsers_fastq.add_parser("bam_umi_tags", help="Copy UMI in read ID to RX tag in BAM files using fgbio", description="Copy UMI in read ID to RX tag in BAM files using fgbio", formatter_class=formatter_class)
@@ -727,6 +729,17 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_trim_motifs.add_argument("-E", "--max_expected_errors", type=float, help="Maximum expected errors after trimming motifs (Default: None; 0.2 recommended)", default=argparse.SUPPRESS)
     parser_fastq_trim_motifs.add_argument("-e", "--env", help="Conda environment with cutadapt installed (name or path, Default: umi_tools)", default="umi_tools")
     parser_fastq_trim_motifs.add_argument("-sh", "--sh", action="store_true", help="Combine output log files into a single file in working directory (Default: False)", default=False)
+    parser_fastq_trim_motifs.add_argument("-S", "--no_summary", dest="summary", action="store_false", help="Skip summarizing cutadapt logs as a .csv file and stacked bar plot (Default: False)", default=True)
+
+    # trim_motifs_summary() [trim_summary]:
+    parser_fastq_trim_motifs_summary.add_argument("-p", "--pt", help="Trim motifs output directory, its '.trim_motifs' log subdirectory, or a combined sh log file (Default: ./trim_motifs)", default='./trim_motifs')
+    parser_fastq_trim_motifs_summary.add_argument("-o", "--out_dir", help="Output directory (Default: the '.trim_motifs' log subdirectory or the combined sh log file's directory)", default=None)
+    parser_fastq_trim_motifs_summary.add_argument("-c", "--csv_file", help="Summary .csv file name (Default: trim_motifs_summary.csv)", default='trim_motifs_summary.csv')
+    parser_fastq_trim_motifs_summary.add_argument("-f", "--plot_file", help="Summary plot file name (Default: trim_motifs_summary.pdf)", default='trim_motifs_summary.pdf')
+    parser_fastq_trim_motifs_summary.add_argument("-W", "--figsize_width", type=float, help="Figure width (Default: 6)", default=6)
+    parser_fastq_trim_motifs_summary.add_argument("-H", "--figsize_height_per_fastq", type=float, help="Figure height per FASTQ file (Default: 0.35)", default=0.35)
+    parser_fastq_trim_motifs_summary.add_argument("-P", "--figsize_height_pad", type=float, help="Additional figure height for axis labels and legend (Default: 1.5)", default=1.5)
+    parser_fastq_trim_motifs_summary.add_argument("-s", "--show", action="store_true", help="Show plot (Default: False)", default=False)
 
     # make_sams():
     parser_fastq_make_sams.add_argument("-q", "--fastq_dir", help="Directory containing FASTQ files", required=True)
@@ -817,6 +830,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_fastq_editing_per_library.set_defaults(func=fq.editing_per_library)
     parser_fastq_extract_umis.set_defaults(func=fq.extract_umis)
     parser_fastq_trim_motifs.set_defaults(func=fq.trim_motifs)
+    parser_fastq_trim_motifs_summary.set_defaults(func=fq.trim_motifs_summary)
     parser_fastq_make_sams.set_defaults(func=fq.make_sams)
     parser_fastq_make_bams.set_defaults(func=fq.make_bams)
     parser_fastq_bam_umi_tags.set_defaults(func=fq.bam_umi_tags)

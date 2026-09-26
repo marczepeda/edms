@@ -10,6 +10,7 @@ Usage:
 - difference(): computes the appropriate statistical test(s) and returns the p-value(s)
 - correlation(): returns a correlation matrix
 - weighted_correlation(): computes the weighted correlation
+- group_stats(): computes statistics per group & merges them back onto the original dataframe
 
 [Statistics & Plotting]
 - corr_line(): compute linear regression line and add it to the scatter plot 
@@ -19,13 +20,20 @@ Usage:
 - compare(): computes FC, pval, and log transformations relative to a specified condition
 - odds_ratio(): computes odds ratio relative to a specified condition (OR = (A/B)/(C/D))
 - zscore(): Z-score `FC` within each `cond_col` using stats computed from rows where `var_col == var`.
+
+[Reproducibility]
+- replicate_variance(): computes pooled within-replicate variance for values measured 1-3 times
+- replication_bias(): tests whether replicated entities differ from singletons, and whether within-group noise depends on replicate count
+- icc_oneway(): one-way random effects ICC(1,1) for values measured 1-3 times
+- group_variance(): computes within-group variance for values measured 1-3 times
+- shrink_estimates(): computes empirical Bayes (BLUP) entity estimates shrunk toward the grand mean
 '''
 
 # Import packages
 import itertools
 import pandas as pd
 import numpy as np
-from scipy.stats import skew, kurtosis, ttest_ind, ttest_rel, f_oneway, ttest_ind, ttest_rel, mannwhitneyu, wilcoxon, rankdata, fisher_exact
+from scipy.stats import skew, kurtosis, ttest_ind, ttest_rel, f_oneway, ttest_ind, ttest_rel, mannwhitneyu, wilcoxon, rankdata, fisher_exact, spearmanr, f, norm
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
 from statsmodels.stats.anova import AnovaRM
 from statsmodels.stats.multitest import multipletests
@@ -446,6 +454,70 @@ def weighted_corr_line(df: pd.DataFrame, x: str, y: str, weight: str, ax=None,
     if ax is not None:
         ax.plot(xx, yy, color=color, linestyle=linestyle, linewidth=linewidth, alpha=alpha)
     return a, b
+
+def group_stats(df: pd.DataFrame | str, group, value_cols=[], stats: list=['count','mean','std'],
+                keep_values: bool=False, dedupe: bool=False, ddof: int=1, label: str='',
+                prefix_sep: str='_', file: str=None) -> pd.DataFrame:
+    '''
+    group_stats(): computes statistics per group & merges them back onto the original dataframe
+
+    Parameters:
+    df (dataframe | str): pandas dataframe (or file path)
+    group (str | list): column name(s) to group by
+    value_cols (str | list, optional): numerical column name(s) to summarize
+                                       (Default: []; all numeric columns not in group)
+    stats (list, optional): statistics per value column (Default: ['count','mean','std'];
+                            options: count, mean, median, std, var, sem, min, max, sum,
+                            or any pandas aggregation name)
+    keep_values (bool, optional): keep the original value column(s) (Default: False)
+    dedupe (bool, optional): drop duplicate rows after merging (Default: False)
+    ddof (int, optional): delta degrees of freedom for std, var, & sem (Default: 1)
+    label (str, optional): tag inserted into the new column names (i.e., mean_<label>_<col>);
+                           use it to keep repeated calls on the same value column distinct
+    prefix_sep (str, optional): separator between the statistic and the column name (Default: '_')
+    file (str, optional): output file path
+
+    Dependencies: pandas, numpy, & io
+
+    Note: std/var/sem return NaN for groups of 1 at ddof=1 (correct: a single observation has
+          no spread). `count` is included by default so those groups are visible. Dropping the
+          value columns (keep_values=False) leaves one identical row per original observation;
+          set dedupe=True for one row per group. Repeated calls on the same value column
+          collide and get pandas' _x/_y suffixes unless you pass distinct labels.
+    '''
+    # Get dataframe from file path if needed
+    if type(df) == str:
+        df = io.get(pt=df)
+    else:
+        df = df.copy()
+
+    if type(group) == str: group = [group]
+    if type(value_cols) == str: value_cols = [value_cols]
+    if len(value_cols) == 0: # Default to every numeric column that is not a grouping column
+        value_cols = [col for col in df.select_dtypes(include=np.number).columns if col not in group]
+
+    # Map statistic names to aggregations (ddof-aware where it matters)
+    fns = {'count': 'count', 'mean': 'mean', 'median': 'median', 'min': 'min', 'max': 'max', 'sum': 'sum',
+           'std': lambda s: s.std(ddof=ddof),
+           'var': lambda s: s.var(ddof=ddof),
+           'sem': lambda s: s.std(ddof=ddof) / np.sqrt(s.count())}
+
+    # Aggregate per group, then flatten (value_col, stat) to stat_value_col
+    agg = df.groupby(group, dropna=False)[value_cols].agg(
+        [(stat, fns.get(stat, stat)) for stat in stats])
+    tag = f'{label}{prefix_sep}' if label else ''
+    agg.columns = [f'{stat}{prefix_sep}{tag}{col}' for col, stat in agg.columns]
+    agg = agg.reset_index()
+
+    # Merge back onto the original rows
+    out = df if keep_values else df.drop(columns=value_cols)
+    out = pd.merge(out, agg, how='left', on=group)
+    if dedupe: out = out.drop_duplicates().reset_index(drop=True)
+
+    # Save & return dataframe
+    if file is not None:
+        io.save(obj=out, file=file)
+    return out
 
 # Comparison
 def compare(df: pd.DataFrame | str, sample: str, cond: str, cond_comp: str, 
@@ -961,4 +1033,263 @@ def zscore(
     # Save & return dataframe
     if file is not None:
         io.save(obj=out, file=file)  
+    return out
+
+# Reproducibility
+def replicate_variance(df: pd.DataFrame | str, var_col: str, value_col: str,
+                       file: str=None) -> tuple[pd.DataFrame, pd.DataFrame]:
+    '''
+    replicate_variance(): computes pooled within-replicate variance for values measured 1-3 times
+
+    Parameters:
+    df (dataframe | str): pandas dataframe (or file path)
+    var_col (str): column name identifying the measured entity (groups replicates)
+    value_col (str): column name containing the numerical values
+    file (str, optional): output file path
+
+    Dependencies: pandas, numpy, scipy.stats, & io
+    '''
+    if type(df) == str:
+        df = io.get(pt=df)
+    else:
+        df = df.copy()
+
+    df = df.dropna(subset=[value_col])
+
+    # Per-entity statistics (var/std use ddof=1 -> NaN for n=1, which is correct)
+    g = df.groupby(var_col)[value_col]
+    per = pd.DataFrame({'n': g.count(), 'mean': g.mean(),
+                        'variance': g.var(), 'std_dev': g.std(),
+                        'range': g.max() - g.min()}).reset_index()
+
+    # Pool across entities with >=2 measurements, weighting by degrees of freedom
+    rep = per[per['n'] >= 2]
+    dof = int((rep['n'] - 1).sum())
+    pooled_var = float(((rep['n'] - 1) * rep['variance']).sum() / dof)
+    s_w = float(np.sqrt(pooled_var))
+    grand_mean = float(rep['mean'].mean())
+    crosses_zero = bool((df[value_col].min() < 0) and (df[value_col].max() > 0))
+
+    # Does spread scale with magnitude? (rho >> 0 -> log-transform and recompute)
+    rho, rho_pval = spearmanr(rep['mean'], rep['std_dev'])
+
+    summary = pd.DataFrame({
+        'entities_total': [len(per)],
+        'entities_replicated': [len(rep)],
+        'dof': [dof],                              # effective n, NOT the row count
+        'pooled_variance': [pooled_var],
+        'within_std_dev': [s_w],
+        'cv': [np.nan if (crosses_zero or not grand_mean) else s_w / grand_mean], # ratio-scale only
+        'repeatability_coef': [2.77 * s_w],        # 95% of replicate pairs differ by less
+        'sd_vs_mean_rho': [rho],
+        'sd_vs_mean_pval': [rho_pval]})
+
+    if file is not None:
+        io.save(obj=per, file=file)
+    return summary, per
+
+def replication_bias(df: pd.DataFrame | str, var_col: str, value_col: str,
+                     file: str=None) -> tuple[pd.DataFrame, pd.DataFrame]:
+    '''
+    replication_bias(): tests whether replicated entities differ from singletons,
+                        and whether within-group noise depends on replicate count
+
+    Parameters:
+    df (dataframe | str): pandas dataframe (or file path)
+    var_col (str): column name identifying the group (replicates of one measurement)
+    value_col (str): column name containing the numerical values
+    file (str, optional): output file path
+
+    Dependencies: pandas, numpy, scipy.stats, & io
+    '''
+    if type(df) == str:
+        df = io.get(pt=df)
+    else:
+        df = df.copy()
+
+    df = df.dropna(subset=[value_col])
+    g = df.groupby(var_col)[value_col]
+    per = pd.DataFrame({'n': g.count(), 'mean': g.mean(), 'variance': g.var()}).reset_index()
+
+    # (a) Are the values of replicated entities distributed like the singletons?
+    single = per.loc[per['n'] == 1, 'mean']
+    repl = per.loc[per['n'] >= 2, 'mean']
+    u_stat, u_pval = mannwhitneyu(repl, single, alternative='two-sided')
+    rho_n, rho_n_pval = spearmanr(per['n'], per['mean'])          # does n track value?
+    rho_a, rho_a_pval = spearmanr(per['n'], per['mean'].abs())    # does n track magnitude?
+
+    # (b) Pooled within-group noise, stratified by replicate count
+    rows = []
+    for n_val, sub in per[per['n'] >= 2].groupby('n'):
+        dof = int((sub['n'] - 1).sum())
+        var = float(((sub['n'] - 1) * sub['variance']).sum() / dof)
+        rows.append({'n': int(n_val), 'entities': len(sub), 'dof': dof,
+                     'pooled_variance': var, 'within_std_dev': np.sqrt(var),
+                     'mean': sub['mean'].mean()})
+    by_n = pd.DataFrame(rows)
+
+    # F-test comparing the two replicate strata (variance ratio, larger over smaller)
+    f_stat = f_pval = np.nan
+    if len(by_n) == 2:
+        a, b = by_n.iloc[0], by_n.iloc[1]
+        hi, lo = (a, b) if a['pooled_variance'] >= b['pooled_variance'] else (b, a)
+        f_stat = hi['pooled_variance'] / lo['pooled_variance']
+        f_pval = 2 * (1 - f.cdf(f_stat, hi['dof'], lo['dof']))
+
+    summary = pd.DataFrame({
+        'n_singleton': [len(single)], 'n_replicated': [len(repl)],
+        'mean_singleton': [single.mean()], 'mean_replicated': [repl.mean()],
+        'median_singleton': [single.median()], 'median_replicated': [repl.median()],
+        'mannwhitney_u': [u_stat], 'mannwhitney_pval': [u_pval],
+        'n_vs_value_rho': [rho_n], 'n_vs_value_pval': [rho_n_pval],
+        'n_vs_absvalue_rho': [rho_a], 'n_vs_absvalue_pval': [rho_a_pval],
+        'f_stat': [f_stat], 'f_pval': [f_pval]})
+
+    if file is not None:
+        io.save(obj=summary, file=file)
+    return summary, by_n
+
+def icc_oneway(df: pd.DataFrame | str, var_col: str, value_col: str,
+               file: str=None) -> pd.DataFrame:
+    '''
+    icc_oneway(): one-way random effects ICC(1,1) for values measured 1-3 times
+
+    Parameters:
+    df (dataframe | str): pandas dataframe (or file path)
+    var_col (str): column name identifying the group (replicates of one measurement)
+    value_col (str): column name containing the numerical values
+    file (str, optional): output file path
+
+    Dependencies: pandas, numpy, & io
+    '''
+    if type(df) == str:
+        df = io.get(pt=df)
+    else:
+        df = df.copy()
+
+    df = df.dropna(subset=[value_col])
+    g = df.groupby(var_col)[value_col]
+    n_i = g.count().to_numpy()
+    mean_i = g.mean().to_numpy()
+
+    N = int(n_i.sum())
+    k = len(n_i)
+    grand = float(df[value_col].mean())
+
+    ssb = float((n_i * (mean_i - grand) ** 2).sum())
+    ssw = float(((df[value_col] - df[var_col].map(g.mean())) ** 2).sum())
+    msb = ssb / (k - 1)
+    msw = ssw / (N - k)
+
+    n0 = (N - (n_i ** 2).sum() / N) / (k - 1)   # adjusted group size (unbalanced)
+    var_b = max((msb - msw) / n0, 0.0)          # variance components cannot be negative
+
+    summary = pd.DataFrame({
+        'observations': [N], 'entities': [k], 'n0': [n0],
+        'var_between': [var_b], 'var_within': [msw],
+        'std_between': [np.sqrt(var_b)], 'std_within': [np.sqrt(msw)],
+        'icc_1_1': [var_b / (var_b + msw) if (var_b + msw) else np.nan]})
+
+    if file is not None:
+        io.save(obj=summary, file=file)
+    return summary
+
+def group_variance(df: pd.DataFrame | str, var_col: str, value_col: str,
+                   ddof: int=1, d0: float=2, file: str=None) -> pd.DataFrame:
+    '''
+    group_variance(): computes within-group variance for values measured 1-3 times
+
+    Parameters:
+    df (dataframe | str): pandas dataframe (or file path)
+    var_col (str): column name identifying the group (replicates of one measurement)
+    value_col (str): column name containing the numerical values
+    ddof (int, optional): 1 estimates group noise, 0 describes observed spread (Default: 1)
+    d0 (float, optional): prior degrees of freedom for the moderated variance (Default: 2)
+    file (str, optional): output file path
+
+    Dependencies: pandas, numpy, & io
+
+    Note: a variance on 1-2 degrees of freedom is extremely noisy (the 95% CI on 1 df spans
+          ~0.2x to ~1000x the true value), so do not rank or threshold groups on `variance`.
+          Use `variance_mod`, which shrinks each group toward the pooled variance.
+    '''
+    # Get dataframe from file path if needed
+    if type(df) == str:
+        df = io.get(pt=df)
+    else:
+        df = df.copy()
+
+    df = df.dropna(subset=[value_col])
+    g = df.groupby(var_col)[value_col]
+
+    # Per-group statistics
+    per = pd.DataFrame({'n': g.count(), 'mean': g.mean(),
+                        'variance': g.var(ddof=ddof), 'std_dev': g.std(ddof=ddof),
+                        'range': g.max() - g.min()}).reset_index()
+    per.loc[per['n'] < 2, ['variance', 'std_dev', 'range']] = np.nan # undefined, not zero
+    per['cv'] = per['std_dev'] / per['mean'] # only meaningful for ratio-scale values
+
+    # Pooled variance (df-weighted) & empirical Bayes moderated per-group variance
+    rep = per[per['n'] >= 2]
+    pooled = float(((rep['n'] - 1) * rep['variance']).sum() / (rep['n'] - 1).sum())
+    per['variance_mod'] = ((per['n'] - 1) * per['variance'].fillna(0) + d0 * pooled) / \
+                          ((per['n'] - 1).clip(lower=0) + d0)
+    per['std_dev_mod'] = np.sqrt(per['variance_mod'])
+
+    # Save & return per-group statistics
+    if file is not None:
+        io.save(obj=per, file=file)
+    return per
+
+def shrink_estimates(df: pd.DataFrame | str, var_col: str, value_col: str,
+                     ci: float=0.95, file: str=None) -> pd.DataFrame:
+    '''
+    shrink_estimates(): computes empirical Bayes (BLUP) entity estimates shrunk toward the
+                        grand mean, plus pooled-noise error bars for the raw means
+
+    Parameters:
+    df (dataframe | str): pandas dataframe (or file path)
+    var_col (str): column name identifying the group (replicates of one measurement)
+    value_col (str): column name containing the numerical values
+    ci (float, optional): confidence level for the error bars (Default: 0.95)
+    file (str, optional): output file path
+
+    Dependencies: pandas, numpy, scipy.stats, io, & icc_oneway()
+
+    Note: `se` uses the pooled within-group noise rather than each group's own replicates,
+          so singletons get an error bar and n=2/3 groups avoid 1-2 df noise. This is only
+          valid when replication is unrelated to the measurement; check replication_bias().
+    '''
+    # Get dataframe from file path if needed
+    if type(df) == str:
+        df = io.get(pt=df)
+    else:
+        df = df.copy()
+
+    df = df.dropna(subset=[value_col])
+
+    # Variance components from the one-way random effects model
+    comps = icc_oneway(df=df, var_col=var_col, value_col=value_col)
+    var_b = float(comps['var_between'].iloc[0])
+    var_w = float(comps['var_within'].iloc[0])
+    grand = float(df[value_col].mean())
+    z = norm.ppf(0.5 + ci / 2)
+
+    # Raw group means with pooled-noise error bars
+    g = df.groupby(var_col)[value_col]
+    out = pd.DataFrame({'n': g.count(), 'mean': g.mean()}).reset_index()
+    out['se'] = np.sqrt(var_w / out['n'])
+    out['ci_lower'] = out['mean'] - z * out['se']
+    out['ci_upper'] = out['mean'] + z * out['se']
+
+    # Shrunk (BLUP) estimates: grand mean + shrink_factor*(group mean - grand mean)
+    out['shrink_factor'] = var_b / (var_b + var_w / out['n']) if var_b > 0 else 0.0
+    out['shrunk'] = grand + out['shrink_factor'] * (out['mean'] - grand)
+    out['shrunk_se'] = np.sqrt(out['shrink_factor'] * var_w / out['n'])
+    out['shrunk_ci_lower'] = out['shrunk'] - z * out['shrunk_se']
+    out['shrunk_ci_upper'] = out['shrunk'] + z * out['shrunk_se']
+
+    # Save & return entity estimates
+    if file is not None:
+        io.save(obj=out, file=file)
     return out
