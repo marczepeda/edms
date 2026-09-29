@@ -1672,11 +1672,11 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
             
             if np.isfinite(a) and np.isfinite(b):
                 if a >= 0:
-                    return f"y = {b:.2f}·x + {a:.2f}; {m}² = {coeff**2:.1g}"
+                    return f"y = {b:.2f}·x + {a:.2f}; {m}² = {coeff**2:.2g}"
                 else:
-                    return f"y = {b:.2f}·x - {abs(a):.2f}; {m}² = {coeff**2:.1g}"
+                    return f"y = {b:.2f}·x - {abs(a):.2f}; {m}² = {coeff**2:.2g}"
             else:
-                return f"y = {b:.2f}·x + {a:.2f}; {m}² = {coeff**2:.1g}"
+                return f"y = {b:.2f}·x + {a:.2f}; {m}² = {coeff**2:.2g}"
         
         elif df_sub.empty:
             return ""

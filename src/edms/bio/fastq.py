@@ -6073,19 +6073,19 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, scores_col: str
     if is_html:
         if np.isfinite(a) and np.isfinite(b):
             if a >= 0:
-                corr_eq = f" (y = {b:.2f}·x + {a:.2f}; {m}² = {coeff**2:.1g})"
+                corr_eq = f" (y = {b:.2f}·x + {a:.2f}; {m}² = {coeff**2:.2g})"
             else:
-                corr_eq = f" (y = {b:.2f}·x - {abs(a):.2f}; {m}² = {coeff**2:.1g})"
+                corr_eq = f" (y = {b:.2f}·x - {abs(a):.2f}; {m}² = {coeff**2:.2g})"
         else:
-            corr_eq = f" (undefined; {m}² = {coeff**2:.1g})"
+            corr_eq = f" (undefined; {m}² = {coeff**2:.2g})"
     else:
         if np.isfinite(a) and np.isfinite(b):
             if a >= 0:
-                corr_eq = f"\n(y = {b:.2f}·x + {a:.2f}; {m}² = {coeff**2:.1g})"
+                corr_eq = f"\n(y = {b:.2f}·x + {a:.2f}; {m}² = {coeff**2:.2g})"
             else:
-                corr_eq = f"\n(y = {b:.2f}·x - {abs(a):.2f}; {m}² = {coeff**2:.1g})"
+                corr_eq = f"\n(y = {b:.2f}·x - {abs(a):.2f}; {m}² = {coeff**2:.2g})"
         else:
-            corr_eq = f"\n(undefined; {m}² = {coeff**2:.1g})"
+            corr_eq = f"\n(undefined; {m}² = {coeff**2:.2g})"
 
     # with legend
     if display_legend == True:
