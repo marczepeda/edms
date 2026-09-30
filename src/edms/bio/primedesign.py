@@ -405,6 +405,38 @@ def codon_columns(target_design_entry, silent_selected):
 		ref, codon_dict[ref][1], codon_dict[ref][2], number, start,
 		edit, codon_dict[edit][1], codon_dict[edit][2], number, start]
 
+def pam_spacer_annotation(reference_sequence, allele, pe_nick_ref_idx, pe_nick_edit_idx, strand,
+	pam_search, cut_idx, spacer_end_idx, pam_start_idx, pam_end_idx):
+	"""Classify what the pegRNA can no longer re-cut in the final allele.
+
+		'PAM_disrupted'        the PAM no longer matches the PAM pattern
+		'Spacer_disrupted'     the PAM still matches, but spacer bases 3' of the cut have changed
+		'PAM_&_Spacer_Intact'  neither
+
+	The protospacer core 5' of the cut must match the edited allele for the pegRNA to exist
+	at all, so the only spacer bases that can differ are those between the cut and the PAM.
+	Reference and allele are each read around their own nick in (+) orientation, which keeps
+	the comparison valid when an indel shifts downstream coordinates.
+	"""
+	pam_lo, pam_hi = pam_start_idx - cut_idx, pam_end_idx - cut_idx
+	tail = spacer_end_idx - cut_idx
+	if strand == '+':
+		allele_pam = allele[pe_nick_edit_idx + pam_lo:pe_nick_edit_idx + pam_hi]
+		allele_tail = allele[pe_nick_edit_idx:pe_nick_edit_idx + tail]
+		reference_tail = reference_sequence[pe_nick_ref_idx:pe_nick_ref_idx + tail]
+		pattern = pam_search
+	else:
+		allele_pam = allele[pe_nick_edit_idx - pam_hi:pe_nick_edit_idx - pam_lo]
+		allele_tail = allele[pe_nick_edit_idx - tail:pe_nick_edit_idx]
+		reference_tail = reference_sequence[pe_nick_ref_idx - tail:pe_nick_ref_idx]
+		pattern = reverse_complement(pam_search)
+
+	if not re.search(pattern, allele_pam.upper()):
+		return 'PAM_disrupted'
+	if allele_tail.upper() != reference_tail.upper():
+		return 'Spacer_disrupted'
+	return 'PAM_&_Spacer_Intact'
+
 ##### Extract reference and edited sequence information
 def process_sequence(input_sequence):
 
@@ -1064,16 +1096,17 @@ def main():
 								if silent_mutation_selected['disrupts_pam']:
 									pe_pam_ref_silent_mutation = pe_pam_ref + '-to-' + silent_mutation_edit_sequence[pe_nick_edit_idx + 3:pe_nick_edit_idx + 6].lower()
 
-								if ('PAM_disrupted' in pe_annotate_constant) or silent_mutation_selected['disrupts_pam']:
-									pe_annotate = 'silent_mutation_and_PAM_disrupted'
-								else:
-									pe_annotate = 'silent_mutation_and_PAM_intact'
 
 								if silent_mutation_selected['codon_start_abs'] >= edit_stop_abs:
 									silent_mutation_relative_to_edit = 'downstream'
 								else:
 									silent_mutation_relative_to_edit = 'upstream'
 
+						# Classify the final allele: what can this pegRNA no longer re-cut?
+						pe_annotate = pam_spacer_annotation(reference_sequence,
+							silent_mutation_edit_sequence if silent_mutation_edit_sequence else edit_sequence,
+							pe_nick_ref_idx, pe_nick_edit_idx, '+', pam_search,
+							cut_idx, spacer_end_idx, pam_start_idx, pam_end_idx)
 						# Enforce saturation-mutagenesis silent mutation boundaries.
 						# If the extra silent mutation falls outside the parenthesized region,
 						# revert to the original edit sequence and original PAM annotation.
@@ -1086,14 +1119,12 @@ def main():
 							silent_mutation_relative_to_edit = None
 
 						# Create pegRNA ID based on annotation
-						if 'PAM_disrupted' in pe_annotate and 'silent_mutation' in pe_annotate:
+						if pe_annotate == 'PAM_disrupted':
 							pe_annotate_code = 0
-						elif 'silent_mutation' in pe_annotate:
+						elif pe_annotate == 'Spacer_disrupted':
 							pe_annotate_code = 1
-						elif 'PAM_disrupted' in pe_annotate:
-							pe_annotate_code = 2
 						else:
-							pe_annotate_code = 3
+							pe_annotate_code = 2
 
 						pegid = '_'.join(map(str, [str(pe_annotate_code) + '0'*(3 - len(str(abs(nick2lastedit_length)))) + str(abs(nick2lastedit_length)), pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '+']))
 					
@@ -1199,16 +1230,17 @@ def main():
 								if silent_mutation_selected['disrupts_pam']:
 									pe_pam_ref_silent_mutation = reverse_complement(pe_pam_ref) + '-to-' + reverse_complement(silent_mutation_edit_sequence[pe_nick_edit_idx - 6:pe_nick_edit_idx - 3]).lower()
 
-								if ('PAM_disrupted' in pe_annotate_constant) or silent_mutation_selected['disrupts_pam']:
-									pe_annotate = 'silent_mutation_and_PAM_disrupted'
-								else:
-									pe_annotate = 'silent_mutation_and_PAM_intact'
 
 								if silent_mutation_selected['codon_start_abs'] >= edit_stop_abs:
 									silent_mutation_relative_to_edit = 'downstream'
 								else:
 									silent_mutation_relative_to_edit = 'upstream'
 
+						# Classify the final allele: what can this pegRNA no longer re-cut?
+						pe_annotate = pam_spacer_annotation(reference_sequence,
+							silent_mutation_edit_sequence if silent_mutation_edit_sequence else edit_sequence,
+							pe_nick_ref_idx, pe_nick_edit_idx, '-', pam_search,
+							cut_idx, spacer_end_idx, pam_start_idx, pam_end_idx)
 						# Enforce saturation-mutagenesis silent mutation boundaries.
 						# If the extra silent mutation falls outside the parenthesized region,
 						# revert to the original edit sequence and original PAM annotation.
@@ -1221,14 +1253,12 @@ def main():
 							silent_mutation_relative_to_edit = None
 
 						# Create pegRNA ID based on annotation
-						if 'PAM_disrupted' in pe_annotate and 'silent_mutation' in pe_annotate:
+						if pe_annotate == 'PAM_disrupted':
 							pe_annotate_code = 0
-						elif 'silent_mutation' in pe_annotate:
+						elif pe_annotate == 'Spacer_disrupted':
 							pe_annotate_code = 1
-						elif 'PAM_disrupted' in pe_annotate:
-							pe_annotate_code = 2
 						else:
-							pe_annotate_code = 3
+							pe_annotate_code = 2
 
 						pegid = '_'.join(map(str, [str(pe_annotate_code) + '0'*(3 - len(str(abs(nick2lastedit_length)))) + str(abs(nick2lastedit_length)), pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '-']))
 					
@@ -1347,16 +1377,17 @@ def main():
 										if silent_mutation_selected['disrupts_pam']:
 											pe_pam_ref_silent_mutation = pe_pam_ref + '-to-' + silent_mutation_edit_sequence[pe_nick_edit_idx + 3:pe_nick_edit_idx + 6].lower()
 
-										if ('PAM_disrupted' in pe_annotate_constant) or silent_mutation_selected['disrupts_pam']:
-											pe_annotate = 'silent_mutation_and_PAM_disrupted'
-										else:
-											pe_annotate = 'silent_mutation_and_PAM_intact'
 
 										if silent_mutation_selected['codon_start_abs'] >= edit_stop_abs:
 											silent_mutation_relative_to_edit = 'downstream'
 										else:
 											silent_mutation_relative_to_edit = 'upstream'
 								
+								# Classify the final allele: what can this pegRNA no longer re-cut?
+								pe_annotate = pam_spacer_annotation(reference_sequence,
+									silent_mutation_edit_sequence if silent_mutation_edit_sequence else edit_sequence,
+									pe_nick_ref_idx, pe_nick_edit_idx, '+', pam_search,
+									cut_idx, spacer_end_idx, pam_start_idx, pam_end_idx)
 								# Check to see if pegRNA extension is within input sequence
 								if len(pegRNA_ext) == (pbs_length + rtt_length):
 
@@ -1449,16 +1480,17 @@ def main():
 										if silent_mutation_selected['disrupts_pam']:
 											pe_pam_ref_silent_mutation = reverse_complement(pe_pam_ref) + '-to-' + reverse_complement(silent_mutation_edit_sequence[pe_nick_edit_idx - 6:pe_nick_edit_idx - 3]).lower()
 
-										if ('PAM_disrupted' in pe_annotate_constant) or silent_mutation_selected['disrupts_pam']:
-											pe_annotate = 'silent_mutation_and_PAM_disrupted'
-										else:
-											pe_annotate = 'silent_mutation_and_PAM_intact'
 
 										if silent_mutation_selected['codon_start_abs'] >= edit_stop_abs:
 											silent_mutation_relative_to_edit = 'downstream'
 										else:
 											silent_mutation_relative_to_edit = 'upstream'
 								
+								# Classify the final allele: what can this pegRNA no longer re-cut?
+								pe_annotate = pam_spacer_annotation(reference_sequence,
+									silent_mutation_edit_sequence if silent_mutation_edit_sequence else edit_sequence,
+									pe_nick_ref_idx, pe_nick_edit_idx, '-', pam_search,
+									cut_idx, spacer_end_idx, pam_start_idx, pam_end_idx)
 								# Check to see if pegRNA extension is within input sequence
 								if len(pegRNA_ext) == (pbs_length + rtt_length):
 
