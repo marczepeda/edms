@@ -369,16 +369,27 @@ SILENT_CODON_COLUMNS = [
 	'Silent_edit_AA_number', 'Silent_edit_codon_index',
 ]
 
-def codon_annotation(sequence, codon_start):
+def target_aa_number(target_design_entry, codon_start):
+	"""Amino acid number for an in-frame codon, matching the Edit column convention.
+
+	Numbering runs from the user-supplied index in the third input column. Under saturation
+	mutagenesis that index names the first residue of the parenthesized region; otherwise it
+	names the first residue of the target sequence. With no index the numbering starts at 1.
+	"""
+	allowed_range = target_design_entry.get('silent_mutation_allowed_range', None)
+	origin = allowed_range[0] if allowed_range is not None else 0
+	return (codon_start - origin) // 3 + int(target_design_entry.get('aa_index', 1))
+
+def codon_annotation(sequence, codon_start, aa_number):
 	"""[codon, amino acid, human codon usage, AA number, nt index] for one in-frame codon.
 
-	AA number is 1-indexed within the target sequence and carries no user index offset.
-	nt index is the 0-indexed start of the codon in the target sequence.
+	nt index is the 0-indexed start of the codon in the target sequence, so it indexes
+	Reference_sequence and Edit_sequence directly.
 	"""
 	codon = str(sequence)[codon_start:codon_start + 3].upper()
 	if len(codon) != 3 or codon not in codon_dict:
 		return ['', '', '', '', '']
-	return [codon, codon_dict[codon][1], codon_dict[codon][2], int(codon_start / 3) + 1, codon_start]
+	return [codon, codon_dict[codon][1], codon_dict[codon][2], aa_number, codon_start]
 
 def codon_columns(target_design_entry, silent_selected):
 	"""The 20 codon columns: the intended edit's codon, then the silent mutation's codon.
@@ -392,14 +403,15 @@ def codon_columns(target_design_entry, silent_selected):
 		target_cols = [''] * 10
 	else:
 		codon_start = int(int(edit_start) / 3) * 3
-		target_cols = (codon_annotation(target_design_entry['reference_sequence'], codon_start) +
-			codon_annotation(target_design_entry['edit_sequence'], codon_start))
+		number = target_aa_number(target_design_entry, codon_start)
+		target_cols = (codon_annotation(target_design_entry['reference_sequence'], codon_start, number) +
+			codon_annotation(target_design_entry['edit_sequence'], codon_start, number))
 
 	if not silent_selected:
 		return target_cols + [''] * 10
 
 	start = silent_selected['codon_start_abs']
-	number = silent_selected['aa_number']
+	number = target_aa_number(target_design_entry, start)
 	ref, edit = silent_selected['codon_ref'], silent_selected['codon_edit']
 	return target_cols + [
 		ref, codon_dict[ref][1], codon_dict[ref][2], number, start,
@@ -759,6 +771,17 @@ def main():
 			target_name = parts[0].strip()
 			target_sequence = parts[1].strip()
 
+			# Optional third column: the amino acid number of the first residue the index
+			# refers to. Under saturation mutagenesis that is the first residue of the
+			# parenthesized region; otherwise it is the first residue of the target sequence.
+			aa_index = 1
+			if len(parts) > 2 and parts[2].strip():
+				try:
+					aa_index = int(parts[2].strip())
+				except ValueError:
+					logger.error("Third column '%s' in %s is not an integer amino acid index ..." % (parts[2].strip(), str(file_in)))
+					sys.exit(1)
+
 			target_sequence = target_sequence.upper()
 		
 			if saturation_mutagenesis:
@@ -770,13 +793,13 @@ def main():
 					editformat2sequence, editnumber2sequence, reference_sequence, edit_sequence, editnumber_sequence, edit_span_length_w_ref, edit_span_length_w_edit, edit_start_in_ref, edit_stop_in_ref_rev = process_sequence(sm_target_sequence)
 
 					# Initialize dictionary for the design of pegRNA spacers for each target sequence and intended edit(s)
-					target_design[sm_target_name] = {'target_sequence':sm_target_sequence, 'editformat2sequence': editformat2sequence, 'editnumber2sequence': editnumber2sequence, 'reference_sequence': reference_sequence, 'edit_sequence': edit_sequence, 'editnumber_sequence': editnumber_sequence, 'edit_span_length': [edit_span_length_w_ref, edit_span_length_w_edit], 'edit_start_in_ref': edit_start_in_ref, 'edit_stop_in_ref_rev': edit_stop_in_ref_rev, 'pegRNA':{'+':[], '-':[]}, 'ngRNA':{'+':[], '-':[]}, 'output_target_name': sm_output_target_name, 'internal_target_name': sm_target_name, 'silent_mutation_allowed_range': sm_allowed_range}
+					target_design[sm_target_name] = {'target_sequence':sm_target_sequence, 'editformat2sequence': editformat2sequence, 'editnumber2sequence': editnumber2sequence, 'reference_sequence': reference_sequence, 'edit_sequence': edit_sequence, 'editnumber_sequence': editnumber_sequence, 'edit_span_length': [edit_span_length_w_ref, edit_span_length_w_edit], 'edit_start_in_ref': edit_start_in_ref, 'edit_stop_in_ref_rev': edit_stop_in_ref_rev, 'pegRNA':{'+':[], '-':[]}, 'ngRNA':{'+':[], '-':[]}, 'output_target_name': sm_output_target_name, 'internal_target_name': sm_target_name, 'silent_mutation_allowed_range': sm_allowed_range, 'aa_index': aa_index}
 
 			else:
 				editformat2sequence, editnumber2sequence, reference_sequence, edit_sequence, editnumber_sequence, edit_span_length_w_ref, edit_span_length_w_edit, edit_start_in_ref, edit_stop_in_ref_rev = process_sequence(target_sequence)
 
 				# Initialize dictionary for the design of pegRNA spacers for each target sequence and intended edit(s)
-				target_design[target_name] = {'target_sequence':target_sequence, 'editformat2sequence': editformat2sequence, 'editnumber2sequence': editnumber2sequence, 'reference_sequence': reference_sequence, 'edit_sequence': edit_sequence, 'editnumber_sequence': editnumber_sequence, 'edit_span_length': [edit_span_length_w_ref, edit_span_length_w_edit], 'edit_start_in_ref': edit_start_in_ref, 'edit_stop_in_ref_rev': edit_stop_in_ref_rev, 'pegRNA':{'+':[], '-':[]}, 'ngRNA':{'+':[], '-':[]}, 'output_target_name': target_name, 'internal_target_name': target_name, 'silent_mutation_allowed_range': None}
+				target_design[target_name] = {'target_sequence':target_sequence, 'editformat2sequence': editformat2sequence, 'editnumber2sequence': editnumber2sequence, 'reference_sequence': reference_sequence, 'edit_sequence': edit_sequence, 'editnumber_sequence': editnumber_sequence, 'edit_span_length': [edit_span_length_w_ref, edit_span_length_w_edit], 'edit_start_in_ref': edit_start_in_ref, 'edit_stop_in_ref_rev': edit_stop_in_ref_rev, 'pegRNA':{'+':[], '-':[]}, 'ngRNA':{'+':[], '-':[]}, 'output_target_name': target_name, 'internal_target_name': target_name, 'silent_mutation_allowed_range': None, 'aa_index': aa_index}
 
 	if len(target_design) == 0:
 		logger.error('Input file %s does not have any entries. Make sure a column header is included (target_name,target_sequence) ...' % str(file_in))
