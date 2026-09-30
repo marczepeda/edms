@@ -352,6 +352,13 @@ EXPECTED_COLUMNS = [
 ]
 
 
+def _expected_columns():
+    # primedesign is imported lazily (see module docstring), so the codon annotation
+    # column names are pulled from the module rather than duplicated here.
+    import edms.bio.primedesign as primedesign
+    return EXPECTED_COLUMNS + primedesign.SILENT_CODON_COLUMNS
+
+
 def _write_input_csv(tmp_path, rows):
     p = tmp_path / "input.csv"
     lines = ["target_name,target_sequence"]
@@ -377,7 +384,7 @@ class TestMainSubstitution:
     def test_produces_nonempty_output_with_expected_columns(self, tmp_path, monkeypatch):
         input_csv = _write_input_csv(tmp_path, [("target_01", SUBSTITUTION_SEQ)])
         df = _run_main(monkeypatch, tmp_path, input_csv)
-        assert list(df.columns) == EXPECTED_COLUMNS
+        assert list(df.columns) == _expected_columns()
         assert len(df) > 0
         assert set(df['Target_name'].unique()) == {"target_01"}
         # Edit_type is only populated on pegRNA rows (ngRNA rows carry NaN there)
