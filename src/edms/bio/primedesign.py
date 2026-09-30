@@ -282,6 +282,82 @@ def silent_mutation_edit_sequence_in_allowed_range(target_design_entry, edit_seq
 			changed_codons.add((codon_start, codon_start + 3))
 	return all(silent_codon_in_allowed_range(target_design_entry, start, end) for start, end in changed_codons)
 
+def ranked_silent_mutations(target_design_entry, edit_sequence, pe_nick_edit_idx, rtt_length,
+	strand, pam_search, edit_start_abs, edit_stop_abs):
+	"""Enumerate every silent codon substitution the RTT can encode, best candidate first.
+
+	Replaces the previous approach of inspecting only the one or two codons adjacent to
+	the PAM: every in-frame codon lying wholly inside the RTT (and, under saturation
+	mutagenesis, inside the allowed region) is considered.
+
+	Candidates are ranked by, in order:
+		1. disrupts the PAM
+		2. disrupts the portion of the spacer the RTT can reach
+		3. number of nucleotide differences from the reference codon, most first
+		4. human codon usage of the replacement codon, most frequent first
+
+	Coordinates are 0-indexed, half-open, and in edit_sequence space. The RTT runs 3' of
+	the nick on the (+) strand and 5' of the nick on the (-) strand, so the PAM and the
+	reachable spacer bases sit at mirrored offsets.
+	"""
+	if strand == '+':
+		rtt_lo, rtt_hi = pe_nick_edit_idx, pe_nick_edit_idx + rtt_length
+		pam_lo, pam_hi = pe_nick_edit_idx + 3, pe_nick_edit_idx + 6
+		spacer_lo, spacer_hi = pe_nick_edit_idx, pe_nick_edit_idx + 3
+		pam_pattern = pam_search
+	else:
+		rtt_lo, rtt_hi = pe_nick_edit_idx - rtt_length, pe_nick_edit_idx
+		pam_lo, pam_hi = pe_nick_edit_idx - 6, pe_nick_edit_idx - 3
+		spacer_lo, spacer_hi = pe_nick_edit_idx - 3, pe_nick_edit_idx
+		pam_pattern = reverse_complement(pam_search)
+
+	rtt_lo = max(rtt_lo, 0)
+	rtt_hi = min(rtt_hi, len(edit_sequence))
+	pam_intact_before = bool(re.search(pam_pattern, edit_sequence[pam_lo:pam_hi].upper())) if pam_lo >= 0 else False
+
+	candidates = []
+	first_codon = rtt_lo + ((3 - rtt_lo % 3) % 3)  # First in-frame codon start at or after rtt_lo
+	for codon_start in range(first_codon, rtt_hi - 2, 3):
+		codon_end = codon_start + 3
+
+		if codon_start < edit_stop_abs and codon_end > edit_start_abs:
+			continue  # Codon carries part of the intended edit
+		if not silent_codon_in_allowed_range(target_design_entry, codon_start, codon_end):
+			continue  # Outside the saturation mutagenesis region
+
+		codon_ref = edit_sequence[codon_start:codon_end].upper()
+		if codon_ref not in codon_dict:
+			continue  # Ambiguous or incomplete codon
+		aa_identity = codon_dict[codon_ref][1]
+
+		for codon_substitute in aa2codon[aa_identity]:
+			codon_edit = codon_substitute[0].upper()
+			if codon_edit == codon_ref:
+				continue
+
+			new_edit_sequence = edit_sequence[:codon_start] + codon_edit.lower() + edit_sequence[codon_end:]
+			disrupts_pam = pam_intact_before and not re.search(pam_pattern, new_edit_sequence[pam_lo:pam_hi].upper())
+			disrupts_spacer = any(edit_sequence[i].upper() != new_edit_sequence[i].upper()
+				for i in range(max(spacer_lo, codon_start), min(spacer_hi, codon_end)))
+
+			candidates.append({
+				'codon_start_abs': codon_start,
+				'codon_end_abs': codon_end,
+				'aa_number': int(codon_start / 3) + 1,
+				'codon_ref': codon_ref,
+				'codon_edit': codon_edit,
+				'aa_identity': aa_identity,
+				'usage_ref': codon_dict[codon_ref][2],
+				'usage_edit': codon_dict[codon_edit][2],
+				'nt_difference': codon_nt_difference(codon_ref, codon_edit),
+				'disrupts_pam': bool(disrupts_pam),
+				'disrupts_spacer': bool(disrupts_spacer),
+				'silent_mutation_edit_sequence': new_edit_sequence,
+			})
+
+	return sorted(candidates, key = lambda c: (-c['disrupts_pam'], -c['disrupts_spacer'],
+		-c['nt_difference'], -c['usage_edit'], c['codon_edit']))
+
 ##### Extract reference and edited sequence information
 def process_sequence(input_sequence):
 
