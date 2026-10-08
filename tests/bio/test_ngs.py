@@ -175,6 +175,203 @@ def test_pcr_mm_ultra_default_uL_calculations():
     assert uL_for("Total") == pytest.approx(20.0)
 
 
+def test_pcr_mm_syber_adds_stain_from_water():
+    primers = pd.Series([2], index=pd.MultiIndex.from_tuples([("F1", "R1")]))
+    plain = ngs.pcr_mm(primers=primers, template="gDNA", template_uL=5)[("F1", "R1")]
+    table = ngs.pcr_mm(primers=primers, template="gDNA", template_uL=5, syber=True)[("F1", "R1")]
+
+    def uL_for(t, component):
+        return t.loc[t["Component"] == component, "uL"].iloc[0]
+
+    assert list(table["Component"]).index("10x SYBR Green DNA Stain") == list(table["Component"]).index("gDNA") - 1
+    assert uL_for(table, "10x SYBR Green DNA Stain") == pytest.approx(2.5)   # 1/10*25
+    assert uL_for(table, "Nuclease-free H2O") == pytest.approx(uL_for(plain, "Nuclease-free H2O") - 2.5)
+    assert table["uL"].iloc[:-1].sum() == pytest.approx(25.0)
+    assert list(table.index) == list(range(1, 10))
+
+
+def test_pcr_mm_ultra_syber_adds_stain_from_water():
+    primers = pd.Series([2], index=pd.MultiIndex.from_tuples([("F1", "R1")]))
+    table = ngs.pcr_mm_ultra(primers=primers, template="gDNA", template_uL=5, syber=True)[("F1", "R1")]
+    assert table.loc[table["Component"] == "10x SYBR Green DNA Stain", "uL"].iloc[0] == pytest.approx(2.0)  # 1/10*20
+    assert table["uL"].iloc[:-1].sum() == pytest.approx(20.0)
+
+
+# --------------------------------------------------------------------------- #
+# pcrs()
+# --------------------------------------------------------------------------- #
+def _pcrs_df(n=3):
+    return pd.DataFrame({
+        "ID": [f"g{i}" for i in range(n)],
+        "PCR1 ID": [f"p1_{i}" for i in range(n)],
+        "PCR1 FWD": ["F1"] * n, "PCR1 REV": ["R1"] * n,
+        "PCR1 Tm": [65] * n, "PCR1 bp": [200] * n,
+        "PCR2 ID": [f"p2_{i}" for i in range(n)],
+        "PCR2 FWD": ["P5"] * n, "PCR2 REV": [f"P7_{i}" for i in range(n)],
+        "PCR2 Tm": [65] * n, "PCR2 bp": [300] * n,
+    })
+
+
+@pytest.mark.parametrize("ultra", [False, True])
+def test_pcrs_syber_only_in_pcr1(ultra):
+    out = ngs.pcrs(df=_pcrs_df(), syber=True, ultra=ultra)
+    pcr1_mms, pcr2_mms = out[1], out[2]
+    assert all("10x SYBR Green DNA Stain" in list(mm["Component"]) for mm in pcr1_mms.values())
+    assert not any("10x SYBR Green DNA Stain" in list(mm["Component"]) for mm in pcr2_mms.values())
+    for mm in pcr1_mms.values():
+        assert (mm["uL"] >= 0).all()
+
+
+def _rows_cols(pivot):
+    return set(pivot.index.get_level_values("row")), set(pivot.columns)
+
+
+@pytest.mark.parametrize("split", [True, False])
+def test_pcrs_uses_outer_wells_by_default(split):
+    pivots = ngs.pcrs(df=_pcrs_df(n=70), split_pcr1_primers=split)[0]
+    for key in (["96-well_PCR1 ID", "96-well_PCR2 ID"] if split else ["PCR1 ID", "PCR2 ID"]):
+        rows, cols = _rows_cols(pivots[key])
+        assert "A" in rows and 1 in cols
+
+
+@pytest.mark.parametrize("split", [True, False])
+@pytest.mark.parametrize("inner1,inner2", [(True, False), (False, True), (True, True)])
+def test_pcrs_inner_flags_exclude_outer_wells(split, inner1, inner2):
+    pivots = ngs.pcrs(df=_pcrs_df(n=70), split_pcr1_primers=split, inner1=inner1, inner2=inner2)[0]
+    keys = ["96-well_PCR1 ID", "96-well_PCR2 ID"] if split else ["PCR1 ID", "PCR2 ID"]
+    for key, inner in zip(keys, [inner1, inner2]):
+        rows, cols = _rows_cols(pivots[key])
+        if inner:
+            assert rows <= set("BCDEFG") and cols <= set(range(2, 12))
+        else:
+            assert "A" in rows and 1 in cols
+        assert pivots[key].notna().sum().sum() == 70   # 60 inner wells -> spills onto plate 2
+
+
+def _wells(pivot):
+    """{(row, column): value} for filled wells on the first plate"""
+    first = pivot.loc[pivot.index.get_level_values(0)[0]]
+    return {(r, c): v for r, row in first.iterrows() for c, v in row.items() if pd.notna(v)}
+
+
+@pytest.mark.parametrize("total_uL,expected", [
+    (100, [50, 50]),
+    (240, [50, 50, 50, 50, 40]),
+])
+def test_pcrs_splits_large_volumes_across_wells(total_uL, expected):
+    pivots = ngs.pcrs(df=_pcrs_df(n=1), pcr1_total_uL=total_uL)[0]
+    ids, uLs = _wells(pivots["96-well_PCR1 ID"]), _wells(pivots["96-well_PCR1 uL"])
+    wells = [("A", c) for c in range(1, len(expected) + 1)]
+    assert sorted(ids) == wells and set(ids.values()) == {"p1_0"}
+    assert [uLs[w] for w in wells] == expected
+    assert "96-well_PCR2 uL" not in pivots   # PCR2 stays at 20 uL -> 1 well each
+
+
+def test_pcrs_split_wells_wrap_to_next_row():
+    pivots = ngs.pcrs(df=_pcrs_df(n=3), pcr1_total_uL=240, split_pcr1_primers=False)[0]
+    ids, uLs = _wells(pivots["PCR1 ID"]), _wells(pivots["PCR1 uL"])
+    third = [("A", 11), ("A", 12), ("B", 1), ("B", 2), ("B", 3)]
+    assert [ids[w] for w in third] == ["p1_2"] * 5
+    assert [uLs[w] for w in third] == [50, 50, 50, 50, 40]
+
+
+def test_pcrs_split_wells_respect_inner():
+    pivots = ngs.pcrs(df=_pcrs_df(n=4), pcr2_total_uL=120, inner2=True)[0]   # 3 wells each; 10 inner wells per row
+    ids = _wells(pivots["96-well_PCR2 ID"])
+    assert [ids[w] for w in [("B", 11), ("C", 2), ("C", 3)]] == ["p2_3"] * 3
+    assert not any(r in ("A", "H") or c in (1, 12) for r, c in ids)
+
+
+def test_pcrs_no_uL_pivots_by_default():
+    pivots = ngs.pcrs(df=_pcrs_df())[0]
+    assert not any(k.endswith("uL") for k in pivots)
+
+
+def _pcr1_only_df(n=4):
+    df = _pcrs_df(n=n)
+    return df.drop(columns=[c for c in df.columns if c.startswith("PCR2")])
+
+
+@pytest.mark.parametrize("split", [True, False])
+@pytest.mark.parametrize("ultra", [False, True])
+def test_pcrs_without_pcr2_skips_pcr2_and_needs_no_pcr2_columns(tmp_path, split, ultra):
+    out_file = tmp_path / "plan.xlsx"
+    pivots, pcr1_mms, pcr2_mms, pcr1_thermo, pcr2_thermo = ngs.pcrs(
+        df=_pcr1_only_df(), pcr2=False, split_pcr1_primers=split, ultra=ultra, file=str(out_file), pcr2_total_uL=100,
+    )
+    assert pcr1_mms and pcr1_thermo
+    assert pcr2_mms == {} and pcr2_thermo == {}
+    assert not any("PCR2" in k for k in pivots)
+    assert not any("PCR2" in s for s in pd.ExcelFile(out_file).sheet_names)
+    # Extension time falls back to PCR1 bp (200 bp -> 30s)
+    assert list(pcr1_thermo.values())[0].loc["2", "Time"].tolist()[-1] == "30s"
+
+
+def test_pcrs_without_pcr2_umi():
+    df = _pcr1_only_df()
+    df["UMI"] = [True, False, True, False]
+    out = ngs.pcrs(df=df, pcr2=False)
+    assert out[2] == {} and out[-1] == {}
+    assert out[3] and out[4] and out[5]   # UMI PCR1, PCR1.5, & non-UMI PCR1 thermocyclers
+
+
+# --------------------------------------------------------------------------- #
+# excel_colors() / pcrs() Excel styling
+# --------------------------------------------------------------------------- #
+def test_excel_colors_cycles_set3_and_reuses_colors():
+    colors = ngs.excel_colors([f"v{i}" for i in range(13)] + ["v0"], "Set3")
+    assert len(colors) == 13
+    assert colors["v0"] == "#8dd3c7" and colors["v12"] == colors["v0"]   # Set3 has 12 colors -> cycles
+
+
+def test_excel_colors_accepts_color_list():
+    assert ngs.excel_colors(["x", "y", "z"], ["#ff0000", "blue"]) == {"x": "#ff0000", "y": "#0000ff", "z": "#ff0000"}
+
+
+def test_pcrs_excel_alternating_rows_and_value_colors(tmp_path):
+    openpyxl = pytest.importorskip("openpyxl")
+    df = _pcrs_df(n=4)
+    df.loc[3, "ID"] = "g0"   # same gDNA ID in two samples
+    out = tmp_path / "plan.xlsx"
+    ngs.pcrs(df=df, file=str(out), pcr1_total_uL=100)
+    wb = openpyxl.load_workbook(out)
+
+    def rgb(cell):
+        return cell.fill.start_color.rgb[-6:].upper() if cell.fill.fill_type else None
+
+    ws = wb["96-well_ID"]   # header row 1; A row 2: g0 g0 g1 g1 g2 g2 g0 g0
+    assert [ws.cell(row=2, column=c).value for c in range(3, 11)] == ["g0", "g0", "g1", "g1", "g2", "g2", "g0", "g0"]
+    fills = [rgb(ws.cell(row=2, column=c)) for c in range(3, 11)]
+    assert fills[0] == fills[1] == fills[6] == fills[7] == "8DD3C7"
+    assert len({fills[0], fills[2], fills[4]}) == 3
+
+    ws = wb["F1_R1"]   # master mix: alternating white / light gray rows
+    assert [rgb(ws.cell(row=r, column=2)) for r in range(2, 6)] == ["FFFFFF", "EDEDED", "FFFFFF", "EDEDED"]
+
+
+def test_pcrs_excel_autofit_and_left_aligned_thermocycler_reactions(tmp_path):
+    openpyxl = pytest.importorskip("openpyxl")
+    df = _pcrs_df(n=4)
+    df.loc[0, "ID"] = "MUZ360-701-long-gDNA-name"
+    out = tmp_path / "plan.xlsx"
+    ngs.pcrs(df=df, file=str(out))
+    wb = openpyxl.load_workbook(out)
+
+    ws = wb["96-well_ID"]   # columns: plate label, row, 1, 2, ...
+    assert ws.column_dimensions["C"].width >= len("MUZ360-701-long-gDNA-name")
+    assert ws.column_dimensions["A"].width >= len("96-well plate (PCR1)")
+    assert ws.column_dimensions["D"].width < ws.column_dimensions["C"].width   # fits per column
+
+    plan = wb["NGS Plan"]   # shared sheet keeps the widest fit across tables
+    assert plan.column_dimensions["C"].width >= len("MUZ360-701-long-gDNA-name")
+
+    ws = wb["F1_R1_65°C"]   # thermocycler: no autofit; reactions row left aligned
+    assert "A" not in ws.column_dimensions or not ws.column_dimensions["A"].customWidth
+    last = ws.cell(row=ws.max_row, column=1)
+    assert last.value == "F1_R1: p1_0 -> p1_3"
+    assert last.alignment.horizontal == "left"
+
+
 # --------------------------------------------------------------------------- #
 # umis()
 # --------------------------------------------------------------------------- #

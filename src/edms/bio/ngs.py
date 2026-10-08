@@ -25,10 +25,14 @@ import math
 from typing import Literal
 import numpy as np
 import pandas as pd
+import matplotlib.colors as mcolors
+from openpyxl.styles import PatternFill, Font, Alignment
+from openpyxl.utils import get_column_letter
 from Bio.Seq import Seq
 import os
 from ..gen import io
 from ..gen import tidy as t
+from ..gen import plot as p
 from ..utils import check_outpath
 
 # NGS Thermocycler
@@ -137,7 +141,7 @@ def thermocycler(df: pd.DataFrame, n: Literal['0','1.5','2'] = '1', cycles: int 
         # Group the IDs based on the set of primers; determine the temperature and anneal_time
         ls = group_boundaries(list(df[(df[pcr_fwd_col]==fwd) & (df[pcr_rev_col]==rev)]['ID'].keys()))
         tm = df[(df[pcr_fwd_col]==fwd) & (df[pcr_rev_col]==rev)].iloc[0][f'PCR{n} Tm']
-        bp = df[(df[pcr_fwd_col]==fwd) & (df[pcr_rev_col]==rev)].iloc[0]['PCR2 bp']
+        bp = df[(df[pcr_fwd_col]==fwd) & (df[pcr_rev_col]==rev)].iloc[0]['PCR2 bp' if 'PCR2 bp' in df.columns else 'PCR1 bp'] # Use PCR1 bp if no PCR2
         (min,sec) = min_sec(math.floor(bp/500)/2+0.5)
         if min == 0:
             anneal_time = f"{sec}s"
@@ -164,10 +168,45 @@ def thermocycler(df: pd.DataFrame, n: Literal['0','1.5','2'] = '1', cycles: int 
     return dc
 
 # NGS PCR calculation  
+def add_syber(mm: pd.DataFrame, template: str, primers_n: int, total_uL: int, mm_x: float=1.1,
+              syber_x_stock: int=10, syber_x_desired: int=1) -> pd.DataFrame:
+    '''
+    add_syber(): add SYBR Green DNA Stain to a PCR master mix table (inserted before the template; volume taken from H2O)
+
+    Parameters:
+    mm (DataFrame): PCR master mix table from pcr_mm() or pcr_mm_ultra()
+    template (str): template name
+    primers_n (int): # of reactions for this primer pair
+    total_uL (int): total uL per reaction
+    mm_x (float, optional): master mix multiplier (Default: 1.1)
+    syber_x_stock (int, optional): SYBR Green DNA Stain stock (Default: 10)
+    syber_x_desired (int, optional): SYBR Green DNA Stain desired (Default: 1)
+
+    Dependencies: pandas,numpy
+    '''
+    name = mm.index.name
+    mm = mm.reset_index(drop=True)
+    syber_uL = syber_x_desired/syber_x_stock*total_uL
+    
+    # Take SYBR volume from nuclease-free H2O
+    h2o = mm['Component']=='Nuclease-free H2O'
+    mm.loc[h2o,'uL'] = round(mm.loc[h2o,'uL'].iloc[0]-syber_uL,2)
+    mm.loc[h2o,'uL MM'] = round(mm.loc[h2o,'uL MM'].iloc[0]-syber_uL*primers_n*mm_x,2)
+    if mm.loc[h2o,'uL'].iloc[0] < 0:
+        raise ValueError(f"Not enough Nuclease-free H2O for {syber_x_stock}x SYBR Green DNA Stain ({round(syber_uL,2)} uL); decrease template or primer volumes.")
+
+    # Insert SYBR row before the template
+    i = mm.index[mm['Component']==template][0]
+    syber_row = pd.DataFrame({'Component':[f'{syber_x_stock}x SYBR Green DNA Stain'],'Stock':[syber_x_stock],'Desired':[syber_x_desired],'Unit':['x'],
+                              'uL':[round(syber_uL,2)],'uL MM':[round(syber_uL*primers_n*mm_x,2)]})
+    mm = pd.concat([mm.iloc[:i],syber_row,mm.iloc[i:]],ignore_index=True)
+    mm.index = pd.Index(list(np.arange(1,mm.shape[0]+1)), name=name)
+    return mm
+
 def pcr_mm(primers: pd.Series,  template: str, template_uL: int,
            Q5_mm_x_stock: int=5, dNTP_mM_stock: int=10, fwd_uM_stock: int=10, rev_uM_stock: int=10, Q5_U_uL_stock: int=2,
            Q5_mm_x_desired: int=1, dNTP_mM_desired: float=0.2,fwd_uM_desired: float=0.5, rev_uM_desired: float=0.5, Q5_U_uL_desired: float=0.02,
-           total_uL: int=25, mm_x: float=1.1) -> dict[pd.DataFrame]:
+           total_uL: int=25, mm_x: float=1.1, syber: bool=False, syber_x_stock: int=10, syber_x_desired: int=1) -> dict[pd.DataFrame]:
     '''
     pcr_mm(): NEB Q5 PCR master mix calculations
     
@@ -187,8 +226,11 @@ def pcr_mm(primers: pd.Series,  template: str, template_uL: int,
     Q5_U_uL_desired (float, optional): [Q5 Polymerase] desired in U/uL (Default: 0.02)
     total_uL (int, optional): total uL per reaction (Default: 20)
     mm_x (float, optional): master mix multiplier (Default: 1.1)
+    syber (bool, optional): include SYBR Green DNA Stain (Default: False)
+    syber_x_stock (int, optional): SYBR Green DNA Stain stock (Default: 10)
+    syber_x_desired (int, optional): SYBR Green DNA Stain desired (Default: 1)
 
-    Dependencies: pandas
+    Dependencies: pandas,add_syber()
     '''
     pcr_mm_dc = dict()
     for i,(pcr1_fwd,pcr1_rev) in enumerate(primers.keys()):
@@ -213,13 +255,16 @@ def pcr_mm(primers: pd.Series,  template: str, template_uL: int,
                                                                  round(Q5_U_uL_desired/Q5_U_uL_stock*total_uL*primers.iloc[i]*mm_x,2),
                                                                  round(total_uL*primers.iloc[i]*mm_x,2)]
                                                      },index=pd.Index(list(np.arange(1,9)), name=f"{pcr1_fwd}_{pcr1_rev}"))
+        if syber:
+            pcr_mm_dc[(pcr1_fwd,pcr1_rev)] = add_syber(mm=pcr_mm_dc[(pcr1_fwd,pcr1_rev)],template=template,primers_n=primers.iloc[i],total_uL=total_uL,mm_x=mm_x,
+                                                       syber_x_stock=syber_x_stock,syber_x_desired=syber_x_desired)
         
     return pcr_mm_dc
                                             
 def pcr_mm_ultra(primers: pd.Series, template: str, template_uL: int,
                  Q5_mm_x_stock: int=2, fwd_uM_stock: int=10, rev_uM_stock: int=10,
                  Q5_mm_x_desired: int=1,fwd_uM_desired: float=0.5, rev_uM_desired: float=0.5,
-                 total_uL: int=20, mm_x: float=1.1) -> dict[pd.DataFrame]:
+                 total_uL: int=20, mm_x: float=1.1, syber: bool=False, syber_x_stock: int=10, syber_x_desired: int=1) -> dict[pd.DataFrame]:
     '''
     pcr_mm_ultra(): NEBNext Ultra II Q5 PCR master mix calculations
     
@@ -235,8 +280,11 @@ def pcr_mm_ultra(primers: pd.Series, template: str, template_uL: int,
     rev_uM_desired (float, optional): [REV Primer] desired in mM (Default: 0.5)
     total_uL (int, optional): total uL per reaction (Default: 20)
     mm_x (float, optional): master mix multiplier (Default: 1.1)
+    syber (bool, optional): include SYBR Green DNA Stain (Default: False)
+    syber_x_stock (int, optional): SYBR Green DNA Stain stock (Default: 10)
+    syber_x_desired (int, optional): SYBR Green DNA Stain desired (Default: 1)
 
-    Dependencies: pandas
+    Dependencies: pandas,add_syber()
     '''
     pcr_mm_dc = dict()
     for i,(pcr1_fwd,pcr1_rev) in enumerate(primers.keys()):
@@ -257,14 +305,97 @@ def pcr_mm_ultra(primers: pd.Series, template: str, template_uL: int,
                                                                  round(template_uL*primers.iloc[i]*mm_x,2),
                                                                  round(total_uL*primers.iloc[i]*mm_x,2)]
                                                      },index=pd.Index(list(np.arange(1,7)), name=f"{pcr1_fwd}_{pcr1_rev}"))
+        if syber:
+            pcr_mm_dc[(pcr1_fwd,pcr1_rev)] = add_syber(mm=pcr_mm_dc[(pcr1_fwd,pcr1_rev)],template=template,primers_n=primers.iloc[i],total_uL=total_uL,mm_x=mm_x,
+                                                       syber_x_stock=syber_x_stock,syber_x_desired=syber_x_desired)
     return pcr_mm_dc
+
+# Excel styling
+def excel_colors(values: list | pd.Series, palette_or_cmap: str | list | dict = 'Set3') -> dict:
+    '''
+    excel_colors(): returns a {value: hex color} dictionary that cycles through a palette (same value -> same color)
+
+    Parameters:
+    values (list | Series): values to color (in order of appearance)
+    palette_or_cmap (str | list | dict, optional): seaborn palette name, matplotlib color map name, list of colors, or {value: color} dictionary (Default: 'Set3')
+
+    Dependencies: pandas,matplotlib,plot
+    '''
+    cats = pd.Series(list(values)).dropna().drop_duplicates().tolist()
+    if isinstance(palette_or_cmap, dict): # Already a {value: color} map
+        return {cat: mcolors.to_hex(color) for cat,color in palette_or_cmap.items()}
+    
+    colors = p.palette_colors(palette_or_cmap)
+    if len(colors) > 24: # Continuous color map; sample evenly instead of cycling through near-identical colors
+        colors = p.palette_colors(palette_or_cmap, n_colors=max(len(cats),1))
+    return {cat: mcolors.to_hex(colors[i % len(colors)]) for i,cat in enumerate(cats)}
+
+def to_excel_styled(table: pd.DataFrame, writer: pd.ExcelWriter, sheet_name: str, startrow: int=0,
+                    colors: dict=None, index_colors: dict=None, band_color: str='#EDEDED', autofit: bool=True, left_last_index: bool=False):
+    '''
+    to_excel_styled(): writes a table to an Excel sheet with alternating row colors (light gray and white) and optional value color coding
+
+    Parameters:
+    table (DataFrame): table to write (single header row)
+    writer (ExcelWriter): openpyxl Excel writer
+    sheet_name (str): sheet name
+    startrow (int, optional): starting row (Default: 0)
+    colors (dict, optional): {value: hex color} for table values (Default: None)
+    index_colors (dict, optional): {value: hex color} for the first index level (Default: None)
+    band_color (str, optional): alternating row color (Default: '#EDEDED')
+    autofit (bool, optional): widen columns so all text in this table fits (Default: True)
+    left_last_index (bool, optional): left align the last index label (i.e., thermocycler PCR reactions) (Default: False)
+
+    Dependencies: pandas,openpyxl
+    '''
+    table.to_excel(writer, sheet_name=sheet_name, startrow=startrow)
+    ws = writer.sheets[sheet_name]
+    nlevels = table.index.nlevels
+
+    def fill(cell, color: str):
+        cell.fill = PatternFill(start_color=color.lstrip('#').upper(), end_color=color.lstrip('#').upper(), fill_type='solid')
+        r,g,b = mcolors.to_rgb(color) # Use white font on dark colors
+        if 0.299*r + 0.587*g + 0.114*b < 0.5:
+            cell.font = Font(color='FFFFFF')
+
+    for i in range(table.shape[0]):
+        r = startrow+2+i # 1-based row after the header
+        row_color = band_color if i%2==1 else '#FFFFFF'
+        for c in range(1, nlevels+table.shape[1]+1):
+            fill(ws.cell(row=r, column=c), row_color)
+        if index_colors is not None: # Color first index level
+            v = table.index[i][0] if nlevels > 1 else table.index[i]
+            if v in index_colors:
+                fill(ws.cell(row=r, column=1), index_colors[v])
+        if colors is not None: # Color values
+            for j,v in enumerate(table.iloc[i]):
+                if pd.notna(v) and v in colors:
+                    fill(ws.cell(row=r, column=nlevels+1+j), colors[v])
+
+    if left_last_index and table.shape[0] > 0: # Left align last index label so it reads from the left edge
+        cell = ws.cell(row=startrow+1+table.shape[0], column=1)
+        cell.alignment = Alignment(horizontal='left', vertical=cell.alignment.vertical)
+
+    if autofit: # Widen columns to fit the longest text (never shrinks columns widened by other tables on the same sheet)
+        def text_len(v) -> int:
+            return 0 if v is None or (not isinstance(v,(list,tuple)) and pd.isna(v)) else len(str(v))
+        
+        index = table.index.to_frame(index=False)
+        lens = [max([text_len(name)]+[text_len(v) for v in index[col]]) for name,col in zip(table.index.names,index.columns)]
+        lens += [max([text_len(label)]+[text_len(v) for v in table[label]]) for label in table.columns]
+        if not hasattr(ws, 'fitted_widths'): # Track fitted widths per sheet (openpyxl reports unset columns as width 13)
+            ws.fitted_widths = dict()
+        for c,n in enumerate(lens, start=1):
+            width = max(n+2, ws.fitted_widths.get(c, 0))
+            ws.fitted_widths[c] = width
+            ws.column_dimensions[get_column_letter(c)].width = width
 
 def pcrs(df: pd.DataFrame | str, file:str=None, gDNA_id_col: str='ID', 
          pcr1_id_col: str='PCR1 ID', pcr1_fwd_col: str='PCR1 FWD', pcr1_rev_col: str='PCR1 REV', 
          pcr2_id_col: str='PCR2 ID', pcr2_fwd_col: str='PCR2 FWD', pcr2_rev_col: str='PCR2 REV', umi_col: str='UMI',
          Q5_mm_x_stock: int=5, dNTP_mM_stock: int=10, fwd_uM_stock: int=10, rev_uM_stock: int=10, Q5_U_uL_stock: int=2,
          Q5_mm_x_desired: int=1,dNTP_mM_desired: float=0.2, fwd_uM_desired: float=0.5, rev_uM_desired: float=0.5, Q5_U_uL_desired: float=0.02,
-         pcr1_total_uL: int=20, pcr2_total_uL: int=20, mm_x: float=1.1, ultra: bool=False, 
+         pcr1_total_uL: int=20, pcr2_total_uL: int=20, mm_x: float=1.1, ultra: bool=False, syber: bool=False, inner1: bool=False, inner2: bool=False, max_well_uL: float=50, palette_or_cmap: str | list | dict='Set3', pcr2: bool=True,
          pcr1_cycles: int | str = None, pcr2_cycles: int | str = None, umi_cycles: int | str = None, pcr1_5_Tm: int | str = None, split_pcr1_primers: bool=True) -> tuple[dict[pd.DataFrame]]:
     '''
     pcrs(): generates NGS PCR plan automatically
@@ -295,13 +426,19 @@ def pcrs(df: pd.DataFrame | str, file:str=None, gDNA_id_col: str='ID',
     pcr2_total_uL (int, optional): total uL per reaction (Default: 20)
     mm_x (float, optional): master mix multiplier (Default: 1.1)
     ultra (bool, optional): use NEB Ultra II reagents (Default: False)
+    syber (bool, optional): include 10x SYBR Green DNA Stain in PCR1 master mix but not PCR2 (Default: False)
+    inner1 (bool, optional): exclude outer wells of 96-well plate for PCR1 (Default: False)
+    inner2 (bool, optional): exclude outer wells of 96-well plate for PCR2 (Default: False)
+    max_well_uL (float, optional): max uL per well; larger reactions are split across consecutive wells (Default: 50)
+    palette_or_cmap (str | list | dict, optional): seaborn palette name, matplotlib color map name, or list of colors for Excel color coding of gDNA IDs, PCR IDs, & primers; same value -> same color (Default: 'Set3')
     pcr1_cycles (int | str): Number of cycles for the PCR1 process (Default: None -> 30).
     pcr2_cycles (int | str): Number of cycles for the PCR2 process (Default: None -> 8).
     umi_cycles (int | str): Number of cycles for the UMI PCR process (Default: None -> 3).
     pcr1_5_Tm (int | str): Annealing temperature for PCR1.5 process (Default: None -> 65; P5-FWD & P7-REV primers).
     split_pcr1_primers (bool, optional): whether to split PCR1 plate arragement based on primer (Default: True)
+    pcr2 (bool, optional): include PCR2 plates, master mixes, & thermocycler; PCR2 columns are not required if False (Default: True)
 
-    Dependencies: pandas,numpy,os,io,tidy,thermocycler(),pcr_mm(),pcr_mm_ultra()
+    Dependencies: pandas,numpy,os,io,tidy,thermocycler(),pcr_mm(),pcr_mm_ultra(),add_syber(),excel_colors(),to_excel_styled()
     '''
     # Get samples dataframe from file path if needed
     if type(df)==str:
@@ -313,13 +450,17 @@ def pcrs(df: pd.DataFrame | str, file:str=None, gDNA_id_col: str='ID',
     def plate(df: pd.DataFrame, group: Literal['96-well plate','8-strip_plate'], pcr: Literal['1','2']) -> pd.DataFrame:
         ''' 
         plate(): Creates a DataFrame representing a 96-well plate or 8-strip plate layout.
+        Reactions with total volume > max_well_uL are split across consecutive wells (right on the row, then leftmost on the next row).
 
         Parameters:
         df (pd.DataFrame): DataFrame containing PCR data.
         group (Literal['96-well plate','8-strip_plate']): Type of plate layout to create.
         pcr (Literal['1','2']): The PCR number to process.
         '''
-        if group == '96-well plate': # Define 96-well plate axis
+        if group == '96-well plate' and ((str(pcr)=='1' and inner1) or (str(pcr)=='2' and inner2)): # Define 96-well plate axis (excluding outer wells)
+            rows = ['B','C','D','E','F','G']
+            cols = np.arange(2,12,1)
+        elif group == '96-well plate': # Define 96-well plate axis
             rows = ['A','B','C','D','E','F','G','H']
             cols = np.arange(1,13,1)
         elif group == '8-strip plate': # Define PCR strip axis
@@ -329,153 +470,126 @@ def pcrs(df: pd.DataFrame | str, file:str=None, gDNA_id_col: str='ID',
             raise ValueError("group must be '96-well plate' or '8-strip plate'")
 
         if str(pcr)=='1':
-            
-            if split_pcr1_primers==True: # Split PCR1 plate by primer; fill plate sequentially based on unique FWD/REV combinations
+            total_uL = pcr1_total_uL
+        elif str(pcr)=='2':
+            total_uL = pcr2_total_uL
+        else:
+            raise ValueError("pcr must be '1' or '2'")
 
-                # Store gDNA and PCR locations on plate
-                ls_df_fwd_rev = []
-                primers_ls = []
-                plate_ls = []
-                row_ls = []
-                col_ls = []
+        # Split total volume per reaction into wells (e.g., 240 uL -> 50, 50, 50, 50, 40 uL)
+        well_uLs = [max_well_uL]*int(total_uL//max_well_uL)
+        if total_uL%max_well_uL > 0:
+            well_uLs.append(round(total_uL%max_well_uL,2))
 
-                plate_i = 1
-                for (fwd,rev) in t.unique_tuples(df=df,cols=[pcr1_fwd_col,pcr1_rev_col]):
-                    df_fwd_rev = df[(df[pcr1_fwd_col]==fwd) & (df[pcr1_rev_col]==rev)]
-                    ls_df_fwd_rev.append(df_fwd_rev)
-                    row_i = 0
-                    col_i = 0
-                    for i in range(df_fwd_rev.shape[0]):
-                        if col_i >= len(cols):
-                            if row_i >= len(rows)-1:
-                                row_i = 0
-                                col_i = 0
-                                plate_i += 1
-                            else:
-                                row_i += 1
-                                col_i = 0
-                        primers_ls.append(f"{fwd}_{rev}")
-                        plate_ls.append(plate_i)
-                        row_ls.append(rows[row_i])
-                        col_ls.append(cols[col_i])
-                        col_i += 1
-                    plate_i += 1
-                
-                df_plate = pd.concat(ls_df_fwd_rev,ignore_index=True) # Concatenate all PCR1 FWD/REV dataframes
-                df_plate[f'{group} (PCR1)'] = [f"{plate}_{primers}" for (primers,plate) in zip(primers_ls,plate_ls)]
-                df_plate['row'] = row_ls
-                df_plate['column'] = col_ls
+        def fill(df_fill: pd.DataFrame, plate_i: int) -> tuple[pd.DataFrame,int]:
+            '''
+            fill(): fill plate wells sequentially (one row per well) starting from plate_i; returns well dataframe and last plate number
+            '''
+            sample_ls = []
+            plate_ls = []
+            row_ls = []
+            col_ls = []
+            uL_ls = []
 
-                return df_plate
-            
-            else: # Don't split PCR1 plate by primer; fill plate sequentially based on ID order
-
-                # Copy dataframe to avoid modifying original
-                df2=df.copy()
-
-                # Define 96-well plate axis
-                rows_96_well = ['A','B','C','D','E','F','G','H']
-                cols_96_well = np.arange(1,13,1)
-
-                # Store gDNA and PCR locations on 96-well plate (excluding outer wells)
-                plate_ls = []
-                row_ls = []
-                col_ls = []
-
-                plate_i = 1
-                row_i = 0
-                col_i = 0
-                for i in range(df.shape[0]):
-                    if col_i >= len(cols_96_well):
-                        if row_i >= len(rows_96_well)-1:
+            row_i = 0
+            col_i = 0
+            for i in range(df_fill.shape[0]):
+                for uL in well_uLs:
+                    if col_i >= len(cols):
+                        if row_i >= len(rows)-1:
                             row_i = 0
                             col_i = 0
                             plate_i += 1
                         else:
                             row_i += 1
                             col_i = 0
+                    sample_ls.append(i)
                     plate_ls.append(plate_i)
-                    row_ls.append(rows_96_well[row_i])
-                    col_ls.append(cols_96_well[col_i])
+                    row_ls.append(rows[row_i])
+                    col_ls.append(cols[col_i])
+                    uL_ls.append(uL)
                     col_i += 1
-
-                df2[f'{group} (PCR1)'] = plate_ls
-                df2['row'] = row_ls
-                df2['column'] = col_ls
-
-                return df2
-        
-        elif str(pcr)=='2':
             
-            # Copy dataframe to avoid modifying original
-            df2=df.copy()
+            df_wells = df_fill.iloc[sample_ls].reset_index(drop=True)
+            df_wells['plate'] = plate_ls
+            df_wells['row'] = row_ls
+            df_wells['column'] = col_ls
+            df_wells['uL'] = uL_ls
+            return df_wells,plate_i
 
-            # Store gDNA and PCR locations on plate
-            plate_ls = []
-            row_ls = []
-            col_ls = []
-
+        if str(pcr)=='1' and split_pcr1_primers==True: # Split PCR1 plate by primer; fill plate sequentially based on unique FWD/REV combinations
+            ls_df_fwd_rev = []
             plate_i = 1
-            row_i = 0
-            col_i = 0
-            for i in range(df.shape[0]):
-                if col_i >= len(cols):
-                    if row_i >= len(rows)-1:
-                        row_i = 0
-                        col_i = 0
-                        plate_i += 1
-                    else:
-                        row_i += 1
-                        col_i = 0
-                plate_ls.append(plate_i)
-                row_ls.append(rows[row_i])
-                col_ls.append(cols[col_i])
-                col_i += 1
-
-            df2[f'{group} (PCR2)'] = plate_ls
-            df2['row'] = row_ls
-            df2['column'] = col_ls
-
-            return df2
+            for (fwd,rev) in t.unique_tuples(df=df,cols=[pcr1_fwd_col,pcr1_rev_col]):
+                df_fwd_rev,plate_i = fill(df_fill=df[(df[pcr1_fwd_col]==fwd) & (df[pcr1_rev_col]==rev)], plate_i=plate_i)
+                df_fwd_rev['plate'] = [f"{plate}_{fwd}_{rev}" for plate in df_fwd_rev['plate']]
+                ls_df_fwd_rev.append(df_fwd_rev)
+                plate_i += 1
+            df_plate = pd.concat(ls_df_fwd_rev,ignore_index=True) # Concatenate all PCR1 FWD/REV dataframes
         
-        else:
-            raise ValueError("pcr must be '1' or '2'")
+        else: # Fill plate sequentially based on ID order
+            df_plate,_ = fill(df_fill=df, plate_i=1)
+        
+        return df_plate.rename(columns={'plate':f'{group} (PCR{pcr})'})
 
     # Create 96-well and 8-strip plate layouts
     df_96_well_pcr1 = plate(df=df,group='96-well plate', pcr='1')
-    df_96_well_pcr2 = plate(df=df,group='96-well plate', pcr='2')
+    if pcr2:
+        df_96_well_pcr2 = plate(df=df,group='96-well plate', pcr='2')
     if split_pcr1_primers==True: # Include 8-strip option if pcr1 primers are split
         df_8_strip_pcr1 = plate(df=df,group='8-strip plate', pcr='1')
-        df_8_strip_pcr2 = plate(df=df,group='8-strip plate', pcr='2')
+        if pcr2:
+            df_8_strip_pcr2 = plate(df=df,group='8-strip plate', pcr='2')
 
     # Create pivot tables for gDNA, PCR1, and PCR2s
+    def pivot(data: pd.DataFrame, values: str, group: str, pcr: str) -> pd.DataFrame:
+        return pd.pivot_table(data=data,values=values,index=[f'{group} (PCR{pcr})','row'],columns='column',aggfunc='first')
+    
     if split_pcr1_primers==True:
-        pivots = {f"96-well_{gDNA_id_col}": pd.pivot_table(data=df_96_well_pcr1,values=gDNA_id_col,index=['96-well plate (PCR1)','row'],columns='column',aggfunc='first'),
-            f"96-well_{pcr1_id_col}": pd.pivot_table(data=df_96_well_pcr1,values=pcr1_id_col,index=['96-well plate (PCR1)','row'],columns='column',aggfunc='first'),
-            f"96-well_{pcr2_id_col}": pd.pivot_table(data=df_96_well_pcr2,values=pcr2_id_col,index=['96-well plate (PCR2)','row'],columns='column',aggfunc='first'),
-            f"96-well_{pcr2_fwd_col}": pd.pivot_table(data=df_96_well_pcr2,values=pcr2_fwd_col,index=['96-well plate (PCR2)','row'],columns='column',aggfunc='first'),
-            f"96-well_{pcr2_rev_col}": pd.pivot_table(data=df_96_well_pcr2,values=pcr2_rev_col,index=['96-well plate (PCR2)','row'],columns='column',aggfunc='first'),
-            f"8-strip_{gDNA_id_col}": pd.pivot_table(data=df_8_strip_pcr1,values=gDNA_id_col,index=['8-strip plate (PCR1)','row'],columns='column',aggfunc='first'),
-            f"8-strip_{pcr1_id_col}": pd.pivot_table(data=df_8_strip_pcr1,values=pcr1_id_col,index=['8-strip plate (PCR1)','row'],columns='column',aggfunc='first'),
-            f"8-strip_{pcr2_id_col}": pd.pivot_table(data=df_8_strip_pcr2,values=pcr2_id_col,index=['8-strip plate (PCR2)','row'],columns='column',aggfunc='first'),
-            f"8-strip_{pcr2_fwd_col}": pd.pivot_table(data=df_8_strip_pcr2,values=pcr2_fwd_col,index=['8-strip plate (PCR2)','row'],columns='column',aggfunc='first'),
-            f"8-strip_{pcr2_rev_col}": pd.pivot_table(data=df_8_strip_pcr2,values=pcr2_rev_col,index=['8-strip plate (PCR2)','row'],columns='column',aggfunc='first')
-            }
+        pivots = {f"96-well_{gDNA_id_col}": pivot(df_96_well_pcr1,gDNA_id_col,'96-well plate','1'),
+                  f"96-well_{pcr1_id_col}": pivot(df_96_well_pcr1,pcr1_id_col,'96-well plate','1')}
+        if pcr2:
+            pivots.update({f"96-well_{col}": pivot(df_96_well_pcr2,col,'96-well plate','2') for col in [pcr2_id_col,pcr2_fwd_col,pcr2_rev_col]})
+        pivots.update({f"8-strip_{gDNA_id_col}": pivot(df_8_strip_pcr1,gDNA_id_col,'8-strip plate','1'),
+                       f"8-strip_{pcr1_id_col}": pivot(df_8_strip_pcr1,pcr1_id_col,'8-strip plate','1')})
+        if pcr2:
+            pivots.update({f"8-strip_{col}": pivot(df_8_strip_pcr2,col,'8-strip plate','2') for col in [pcr2_id_col,pcr2_fwd_col,pcr2_rev_col]})
     
     else:
-        pivots = {gDNA_id_col: pd.pivot_table(data=df_96_well_pcr1,values=gDNA_id_col,index=['96-well plate (PCR1)','row'],columns='column',aggfunc='first'),
-            pcr1_id_col: pd.pivot_table(data=df_96_well_pcr1,values=pcr1_id_col,index=['96-well plate (PCR1)','row'],columns='column',aggfunc='first'),
-            pcr1_fwd_col: pd.pivot_table(data=df_96_well_pcr1,values=pcr1_fwd_col,index=['96-well plate (PCR1)','row'],columns='column',aggfunc='first'),
-            pcr1_rev_col: pd.pivot_table(data=df_96_well_pcr1,values=pcr1_rev_col,index=['96-well plate (PCR1)','row'],columns='column',aggfunc='first'),
-            pcr2_id_col: pd.pivot_table(data=df_96_well_pcr2,values=pcr2_id_col,index=['96-well plate (PCR2)','row'],columns='column',aggfunc='first'),
-            pcr2_fwd_col: pd.pivot_table(data=df_96_well_pcr2,values=pcr2_fwd_col,index=['96-well plate (PCR2)','row'],columns='column',aggfunc='first'),
-            pcr2_rev_col: pd.pivot_table(data=df_96_well_pcr2,values=pcr2_rev_col,index=['96-well plate (PCR2)','row'],columns='column',aggfunc='first')
-              }
+        pivots = {col: pivot(df_96_well_pcr1,col,'96-well plate','1') for col in [gDNA_id_col,pcr1_id_col,pcr1_fwd_col,pcr1_rev_col]}
+        if pcr2:
+            pivots.update({col: pivot(df_96_well_pcr2,col,'96-well plate','2') for col in [pcr2_id_col,pcr2_fwd_col,pcr2_rev_col]})
+
+    # Include uL per well pivots if reactions are split across wells
+    if pcr1_total_uL > max_well_uL:
+        if split_pcr1_primers==True:
+            pivots["96-well_PCR1 uL"] = pd.pivot_table(data=df_96_well_pcr1,values='uL',index=['96-well plate (PCR1)','row'],columns='column',aggfunc='first')
+            pivots["8-strip_PCR1 uL"] = pd.pivot_table(data=df_8_strip_pcr1,values='uL',index=['8-strip plate (PCR1)','row'],columns='column',aggfunc='first')
+        else:
+            pivots["PCR1 uL"] = pd.pivot_table(data=df_96_well_pcr1,values='uL',index=['96-well plate (PCR1)','row'],columns='column',aggfunc='first')
+    if pcr2 and pcr2_total_uL > max_well_uL:
+        if split_pcr1_primers==True:
+            pivots["96-well_PCR2 uL"] = pd.pivot_table(data=df_96_well_pcr2,values='uL',index=['96-well plate (PCR2)','row'],columns='column',aggfunc='first')
+            pivots["8-strip_PCR2 uL"] = pd.pivot_table(data=df_8_strip_pcr2,values='uL',index=['8-strip plate (PCR2)','row'],columns='column',aggfunc='first')
+        else:
+            pivots["PCR2 uL"] = pd.pivot_table(data=df_96_well_pcr2,values='uL',index=['96-well plate (PCR2)','row'],columns='column',aggfunc='first')
+
+    # Excel color coding per pivot (gDNA IDs, PCR IDs, & primers; PCR1 primers also color split PCR1 plate labels)
+    if isinstance(palette_or_cmap, (list,tuple)) and len(palette_or_cmap)==1:
+        palette_or_cmap = palette_or_cmap[0]
+    pcr1_primer_colors = excel_colors([f"{fwd}_{rev}" for (fwd,rev) in t.unique_tuples(df=df,cols=[pcr1_fwd_col,pcr1_rev_col])], palette_or_cmap)
+    pivot_colors = dict()
+    for key,pivot in pivots.items():
+        col = key.split('_',1)[1] if key.startswith(('96-well_','8-strip_')) else key
+        pivot_colors[key] = {'colors': excel_colors(df[col], palette_or_cmap) if col in df.columns else None, 'index_colors': None}
+        if split_pcr1_primers==True and pivot.index.names[0].endswith('(PCR1)'):
+            pivot_colors[key]['index_colors'] = {label: pcr1_primer_colors.get(label.split('_',1)[1]) for label in pivot.index.get_level_values(0).unique()}
 
     # Get unique primer pairs and their value counts for PCR1 and PCR2
-    df['PCR2 FWD MM'] = 'PCR2-FWD'
     pcr1_primers_vcs = t.vcs_ordered(df=df,cols=[pcr1_fwd_col,pcr1_rev_col])
-    pcr2_primers_vcs = t.vcs_ordered(df=df,cols=['PCR2 FWD MM',pcr2_rev_col])
+    if pcr2:
+        df['PCR2 FWD MM'] = 'PCR2-FWD'
+        pcr2_primers_vcs = t.vcs_ordered(df=df,cols=['PCR2 FWD MM',pcr2_rev_col])
 
     # Split dataframe into UMI and non-UMI if UMI column exists
     if umi_col not in df.columns: # UMI column does not exist
@@ -483,27 +597,27 @@ def pcrs(df: pd.DataFrame | str, file:str=None, gDNA_id_col: str='ID',
         # Make PCR master mixes for PCR1 and PCR2
         if ultra:
             Q5_mm_x_stock = 2 # NEBNext Ultra II Q5 master mix stock
-            pcr1_mms = pcr_mm_ultra(primers=pcr1_primers_vcs,template='gDNA Extract',template_uL=pcr1_total_uL-sum([Q5_mm_x_desired/Q5_mm_x_stock,fwd_uM_desired/fwd_uM_stock,rev_uM_desired/rev_uM_stock]*pcr1_total_uL),
+            pcr1_mms = pcr_mm_ultra(primers=pcr1_primers_vcs,template='gDNA Extract',template_uL=pcr1_total_uL-sum(([Q5_mm_x_desired/Q5_mm_x_stock,fwd_uM_desired/fwd_uM_stock,rev_uM_desired/rev_uM_stock]+([1/10] if syber else []))*pcr1_total_uL),
                                     Q5_mm_x_stock=Q5_mm_x_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
                                     Q5_mm_x_desired=Q5_mm_x_desired,fwd_uM_desired=fwd_uM_desired,rev_uM_desired=rev_uM_desired,
-                                    total_uL=pcr1_total_uL,mm_x=mm_x)
+                                    total_uL=pcr1_total_uL,mm_x=mm_x,syber=syber)
             pcr2_mms = pcr_mm_ultra(primers=pcr2_primers_vcs,template='PCR1 Product',template_uL=1,
                                     Q5_mm_x_stock=Q5_mm_x_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
                                     Q5_mm_x_desired=Q5_mm_x_desired,fwd_uM_desired=fwd_uM_desired,rev_uM_desired=rev_uM_desired,
-                                    total_uL=pcr2_total_uL,mm_x=mm_x)
+                                    total_uL=pcr2_total_uL,mm_x=mm_x) if pcr2 else dict()
         else:
             pcr1_mms = pcr_mm(primers=pcr1_primers_vcs,template='gDNA Extract',template_uL=5,
                             Q5_mm_x_stock=Q5_mm_x_stock,dNTP_mM_stock=dNTP_mM_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
                             Q5_U_uL_stock=Q5_U_uL_stock,Q5_mm_x_desired=Q5_mm_x_desired,dNTP_mM_desired=dNTP_mM_desired,fwd_uM_desired=fwd_uM_desired,
-                            rev_uM_desired=rev_uM_desired,Q5_U_uL_desired=Q5_U_uL_desired,total_uL=pcr1_total_uL,mm_x=mm_x)
+                            rev_uM_desired=rev_uM_desired,Q5_U_uL_desired=Q5_U_uL_desired,total_uL=pcr1_total_uL,mm_x=mm_x,syber=syber)
             pcr2_mms = pcr_mm(primers=pcr2_primers_vcs,template='PCR1 Product',template_uL=1,
                             Q5_mm_x_stock=Q5_mm_x_stock,dNTP_mM_stock=dNTP_mM_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
                             Q5_U_uL_stock=Q5_U_uL_stock,Q5_mm_x_desired=Q5_mm_x_desired,dNTP_mM_desired=dNTP_mM_desired,fwd_uM_desired=fwd_uM_desired,
-                            rev_uM_desired=rev_uM_desired,Q5_U_uL_desired=Q5_U_uL_desired,total_uL=pcr2_total_uL,mm_x=mm_x)
+                            rev_uM_desired=rev_uM_desired,Q5_U_uL_desired=Q5_U_uL_desired,total_uL=pcr2_total_uL,mm_x=mm_x) if pcr2 else dict()
 
         # Create thermocycler objects for PCR1 and PCR2
         pcr1_thermo = thermocycler(df=df, n='1', cycles=pcr1_cycles, pcr_fwd_col=pcr1_fwd_col, pcr_rev_col=pcr1_rev_col)
-        pcr2_thermo = thermocycler(df=df, n='2', cycles=pcr2_cycles, pcr_fwd_col=pcr2_fwd_col, pcr_rev_col=pcr2_rev_col)
+        pcr2_thermo = thermocycler(df=df, n='2', cycles=pcr2_cycles, pcr_fwd_col=pcr2_fwd_col, pcr_rev_col=pcr2_rev_col) if pcr2 else dict()
 
         # Save all tables to Excel file if save path provided
         pt = check_outpath(file=file)
@@ -511,24 +625,24 @@ def pcrs(df: pd.DataFrame | str, file:str=None, gDNA_id_col: str='ID',
             with pd.ExcelWriter(pt) as writer:
                 sr = 0 # starting row
                 for key,pivot in pivots.items():
-                    pivot.to_excel(writer,sheet_name='NGS Plan',startrow=sr) # Sheet with all pivots
-                    pivot.to_excel(writer,sheet_name=key) # Pivot per sheet
+                    to_excel_styled(table=pivot,writer=writer,sheet_name='NGS Plan',startrow=sr,**pivot_colors[key]) # Sheet with all pivots
+                    to_excel_styled(table=pivot,writer=writer,sheet_name=key,**pivot_colors[key]) # Pivot per sheet
                     sr += len(pivot)+2 # Skip 2 lines after each pivot
                 for key,pcr1_mm in pcr1_mms.items():
-                    pcr1_mm.to_excel(writer,sheet_name='NGS Plan',startrow=sr) # Sheet with all PCR MMs
-                    pcr1_mm.to_excel(writer,sheet_name='_'.join(key)) # PCR MM per sheet
+                    to_excel_styled(table=pcr1_mm,writer=writer,sheet_name='NGS Plan',startrow=sr) # Sheet with all PCR MMs
+                    to_excel_styled(table=pcr1_mm,writer=writer,sheet_name='_'.join(key)) # PCR MM per sheet
                     sr += pcr1_mm.shape[0]+2 # Skip 2 lines after each PCR MM
                 for key,pcr2_mm in pcr2_mms.items():
-                    pcr2_mm.to_excel(writer,sheet_name='NGS Plan',startrow=sr) # Sheet with all PCR MMs
-                    pcr2_mm.to_excel(writer,sheet_name='_'.join(key)) # PCR MM per sheet
+                    to_excel_styled(table=pcr2_mm,writer=writer,sheet_name='NGS Plan',startrow=sr) # Sheet with all PCR MMs
+                    to_excel_styled(table=pcr2_mm,writer=writer,sheet_name='_'.join(key)) # PCR MM per sheet
                     sr += pcr2_mm.shape[0]+2 # Skip 2 lines after each PCR MM
                 for key,thermo in pcr1_thermo.items():
-                    thermo.to_excel(writer,sheet_name='NGS Plan',startrow=sr) # Sheet with all thermocyler objects
-                    thermo.to_excel(writer,sheet_name=key) # Thermocyler object per sheet
+                    to_excel_styled(table=thermo,writer=writer,sheet_name='NGS Plan',startrow=sr,autofit=False,left_last_index=True) # Sheet with all thermocyler objects
+                    to_excel_styled(table=thermo,writer=writer,sheet_name=key,autofit=False,left_last_index=True) # Thermocyler object per sheet
                     sr += thermo.shape[0]+2 # Skip 2 lines after each thermocyler object
                 for key,thermo in pcr2_thermo.items():
-                    thermo.to_excel(writer,sheet_name='NGS Plan',startrow=sr) # Sheet with all thermocyler objects
-                    thermo.to_excel(writer,sheet_name=key) # Thermocyler object per sheet
+                    to_excel_styled(table=thermo,writer=writer,sheet_name='NGS Plan',startrow=sr,autofit=False,left_last_index=True) # Sheet with all thermocyler objects
+                    to_excel_styled(table=thermo,writer=writer,sheet_name=key,autofit=False,left_last_index=True) # Thermocyler object per sheet
                     sr += thermo.shape[0]+2 # Skip 2 lines after each thermocyler object
                 
         return pivots,pcr1_mms,pcr2_mms,pcr1_thermo,pcr2_thermo
@@ -552,10 +666,10 @@ def pcrs(df: pd.DataFrame | str, file:str=None, gDNA_id_col: str='ID',
         # Make PCR master mixes for PCR1 and PCR2
         if ultra:
             Q5_mm_x_stock = 2 # NEBNext Ultra II Q5 master mix stock
-            pcr1_mms = pcr_mm_ultra(primers=pcr1_primers_vcs,template='gDNA Extract',template_uL=pcr1_total_uL-sum([Q5_mm_x_desired/Q5_mm_x_stock,fwd_uM_desired/fwd_uM_stock,rev_uM_desired/rev_uM_stock]*pcr1_total_uL),
+            pcr1_mms = pcr_mm_ultra(primers=pcr1_primers_vcs,template='gDNA Extract',template_uL=pcr1_total_uL-sum(([Q5_mm_x_desired/Q5_mm_x_stock,fwd_uM_desired/fwd_uM_stock,rev_uM_desired/rev_uM_stock]+([1/10] if syber else []))*pcr1_total_uL),
                                     Q5_mm_x_stock=Q5_mm_x_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
                                     Q5_mm_x_desired=Q5_mm_x_desired,fwd_uM_desired=fwd_uM_desired,rev_uM_desired=rev_uM_desired,
-                                    total_uL=pcr1_total_uL,mm_x=mm_x)
+                                    total_uL=pcr1_total_uL,mm_x=mm_x,syber=syber)
             pcr1_5_mms = pcr_mm_ultra(primers=pcr1_5_primers_vcs,template='PCR1 Product',template_uL=1,
                                     Q5_mm_x_stock=Q5_mm_x_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
                                     Q5_mm_x_desired=Q5_mm_x_desired,fwd_uM_desired=fwd_uM_desired,rev_uM_desired=rev_uM_desired,
@@ -563,12 +677,12 @@ def pcrs(df: pd.DataFrame | str, file:str=None, gDNA_id_col: str='ID',
             pcr2_mms = pcr_mm_ultra(primers=pcr2_primers_vcs,template='PCR1.5 Product',template_uL=1,
                                     Q5_mm_x_stock=Q5_mm_x_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
                                     Q5_mm_x_desired=Q5_mm_x_desired,fwd_uM_desired=fwd_uM_desired,rev_uM_desired=rev_uM_desired,
-                                    total_uL=pcr2_total_uL,mm_x=mm_x)
+                                    total_uL=pcr2_total_uL,mm_x=mm_x) if pcr2 else dict()
         else:
             pcr1_mms = pcr_mm(primers=pcr1_primers_vcs,template='gDNA Extract',template_uL=5,
                             Q5_mm_x_stock=Q5_mm_x_stock,dNTP_mM_stock=dNTP_mM_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
                             Q5_U_uL_stock=Q5_U_uL_stock,Q5_mm_x_desired=Q5_mm_x_desired,dNTP_mM_desired=dNTP_mM_desired,fwd_uM_desired=fwd_uM_desired,
-                            rev_uM_desired=rev_uM_desired,Q5_U_uL_desired=Q5_U_uL_desired,total_uL=pcr1_total_uL,mm_x=mm_x)
+                            rev_uM_desired=rev_uM_desired,Q5_U_uL_desired=Q5_U_uL_desired,total_uL=pcr1_total_uL,mm_x=mm_x,syber=syber)
             pcr1_5_mms = pcr_mm(primers=pcr1_5_primers_vcs,template='PCR1 Product',template_uL=1,
                             Q5_mm_x_stock=Q5_mm_x_stock,dNTP_mM_stock=dNTP_mM_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
                             Q5_U_uL_stock=Q5_U_uL_stock,Q5_mm_x_desired=Q5_mm_x_desired,dNTP_mM_desired=dNTP_mM_desired,fwd_uM_desired=fwd_uM_desired,
@@ -576,7 +690,7 @@ def pcrs(df: pd.DataFrame | str, file:str=None, gDNA_id_col: str='ID',
             pcr2_mms = pcr_mm(primers=pcr2_primers_vcs,template='PCR1.5 Product',template_uL=1,
                             Q5_mm_x_stock=Q5_mm_x_stock,dNTP_mM_stock=dNTP_mM_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
                             Q5_U_uL_stock=Q5_U_uL_stock,Q5_mm_x_desired=Q5_mm_x_desired,dNTP_mM_desired=dNTP_mM_desired,fwd_uM_desired=fwd_uM_desired,
-                            rev_uM_desired=rev_uM_desired,Q5_U_uL_desired=Q5_U_uL_desired,total_uL=pcr2_total_uL,mm_x=mm_x)
+                            rev_uM_desired=rev_uM_desired,Q5_U_uL_desired=Q5_U_uL_desired,total_uL=pcr2_total_uL,mm_x=mm_x) if pcr2 else dict()
         
         # Create thermocycler objects for PCR1 and PCR2
         # UMI specific
@@ -587,7 +701,7 @@ def pcrs(df: pd.DataFrame | str, file:str=None, gDNA_id_col: str='ID',
         pcr1_thermo = thermocycler(df=df_non_umi, n='1', cycles=pcr1_cycles, pcr_fwd_col=pcr1_fwd_col, pcr_rev_col=pcr1_rev_col)
 
         # Common for UMI and non-UMI
-        pcr2_thermo = thermocycler(df=df, n='2', cycles=pcr2_cycles, pcr_fwd_col=pcr2_fwd_col, pcr_rev_col=pcr2_rev_col)
+        pcr2_thermo = thermocycler(df=df, n='2', cycles=pcr2_cycles, pcr_fwd_col=pcr2_fwd_col, pcr_rev_col=pcr2_rev_col) if pcr2 else dict()
 
         # Save all tables to Excel file if save path provided
         pt = check_outpath(file=file)
@@ -595,36 +709,36 @@ def pcrs(df: pd.DataFrame | str, file:str=None, gDNA_id_col: str='ID',
             with pd.ExcelWriter(pt) as writer:
                 sr = 0 # starting row
                 for key,pivot in pivots.items():
-                    pivot.to_excel(writer,sheet_name='NGS Plan',startrow=sr) # Sheet with all pivots
-                    pivot.to_excel(writer,sheet_name=key) # Pivot per sheet
+                    to_excel_styled(table=pivot,writer=writer,sheet_name='NGS Plan',startrow=sr,**pivot_colors[key]) # Sheet with all pivots
+                    to_excel_styled(table=pivot,writer=writer,sheet_name=key,**pivot_colors[key]) # Pivot per sheet
                     sr += len(pivot)+2 # Skip 2 lines after each pivot
                 for key,pcr1_mm in pcr1_mms.items():
-                    pcr1_mm.to_excel(writer,sheet_name='NGS Plan',startrow=sr) # Sheet with all PCR MMs
-                    pcr1_mm.to_excel(writer,sheet_name='_'.join(key)) # PCR MM per sheet
+                    to_excel_styled(table=pcr1_mm,writer=writer,sheet_name='NGS Plan',startrow=sr) # Sheet with all PCR MMs
+                    to_excel_styled(table=pcr1_mm,writer=writer,sheet_name='_'.join(key)) # PCR MM per sheet
                     sr += pcr1_mm.shape[0]+2 # Skip 2 lines after each PCR MM
                 for key,pcr1_5_mm in pcr1_5_mms.items():
-                    pcr1_5_mm.to_excel(writer,sheet_name='NGS Plan',startrow=sr) # Sheet with all PCR MMs
-                    pcr1_5_mm.to_excel(writer,sheet_name='_'.join(key)) # PCR MM per sheet
+                    to_excel_styled(table=pcr1_5_mm,writer=writer,sheet_name='NGS Plan',startrow=sr) # Sheet with all PCR MMs
+                    to_excel_styled(table=pcr1_5_mm,writer=writer,sheet_name='_'.join(key)) # PCR MM per sheet
                     sr += pcr1_5_mm.shape[0]+2 # Skip 2 lines after each PCR MM
                 for key,pcr2_mm in pcr2_mms.items():
-                    pcr2_mm.to_excel(writer,sheet_name='NGS Plan',startrow=sr) # Sheet with all PCR MMs
-                    pcr2_mm.to_excel(writer,sheet_name='_'.join(key)) # PCR MM per sheet
+                    to_excel_styled(table=pcr2_mm,writer=writer,sheet_name='NGS Plan',startrow=sr) # Sheet with all PCR MMs
+                    to_excel_styled(table=pcr2_mm,writer=writer,sheet_name='_'.join(key)) # PCR MM per sheet
                     sr += pcr2_mm.shape[0]+2 # Skip 2 lines after each PCR MM
                 for key,thermo in umi_pcr1_thermo.items():
-                    thermo.to_excel(writer,sheet_name='NGS Plan',startrow=sr) # Sheet with all thermocyler objects
-                    thermo.to_excel(writer,sheet_name=key) # Thermocyler object per sheet
+                    to_excel_styled(table=thermo,writer=writer,sheet_name='NGS Plan',startrow=sr,autofit=False,left_last_index=True) # Sheet with all thermocyler objects
+                    to_excel_styled(table=thermo,writer=writer,sheet_name=key,autofit=False,left_last_index=True) # Thermocyler object per sheet
                     sr += thermo.shape[0]+2 # Skip 2 lines after each thermocyler object
                 for key,thermo in umi_pcr1_5_thermo.items():
-                    thermo.to_excel(writer,sheet_name='NGS Plan',startrow=sr) # Sheet with all thermocyler objects
-                    thermo.to_excel(writer,sheet_name=key) # Thermocyler object per sheet
+                    to_excel_styled(table=thermo,writer=writer,sheet_name='NGS Plan',startrow=sr,autofit=False,left_last_index=True) # Sheet with all thermocyler objects
+                    to_excel_styled(table=thermo,writer=writer,sheet_name=key,autofit=False,left_last_index=True) # Thermocyler object per sheet
                     sr += thermo.shape[0]+2 # Skip 2 lines after each thermocyler object
                 for key,thermo in pcr1_thermo.items():
-                    thermo.to_excel(writer,sheet_name='NGS Plan',startrow=sr) # Sheet with all thermocyler objects
-                    thermo.to_excel(writer,sheet_name=key) # Thermocyler object per sheet
+                    to_excel_styled(table=thermo,writer=writer,sheet_name='NGS Plan',startrow=sr,autofit=False,left_last_index=True) # Sheet with all thermocyler objects
+                    to_excel_styled(table=thermo,writer=writer,sheet_name=key,autofit=False,left_last_index=True) # Thermocyler object per sheet
                     sr += thermo.shape[0]+2 # Skip 2 lines after each thermocyler object
                 for key,thermo in pcr2_thermo.items():
-                    thermo.to_excel(writer,sheet_name='NGS Plan',startrow=sr) # Sheet with all thermocyler objects
-                    thermo.to_excel(writer,sheet_name=key) # Thermocyler object per sheet
+                    to_excel_styled(table=thermo,writer=writer,sheet_name='NGS Plan',startrow=sr,autofit=False,left_last_index=True) # Sheet with all thermocyler objects
+                    to_excel_styled(table=thermo,writer=writer,sheet_name=key,autofit=False,left_last_index=True) # Thermocyler object per sheet
                     sr += thermo.shape[0]+2 # Skip 2 lines after each thermocyler object
                 
         return pivots,pcr1_mms,pcr2_mms,umi_pcr1_thermo,umi_pcr1_5_thermo,pcr1_thermo,pcr2_thermo

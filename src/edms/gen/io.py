@@ -870,7 +870,7 @@ def split_R1_R2(dir: str):
     print(f"Moved paired reads into {r1_dir} and {r2_dir}")
 
 def basespace(dir: str='.', suf: str='.fastq.gz', exclude: str | Iterable[str] | None='Undetermined',
-              prefix_sep: str='_', dry_run: bool=False) -> list[str]:
+              prefix_sep: str='_', comb: bool=True, dry_run: bool=False) -> list[str]:
     '''
     basespace(): reorganize an Illumina BaseSpace download into a parsable format.
 
@@ -880,6 +880,8 @@ def basespace(dir: str='.', suf: str='.fastq.gz', exclude: str | Iterable[str] |
         edms io split_R1_R2
         cd R1; edms io in -s .fastq.gz -g prefix -p _; edms fastq comb -r
         cd ../R2; edms io in -s .fastq.gz -g prefix -p _; edms fastq comb -r
+    The trailing 'edms fastq comb -r' is skipped when comb=False, which stops after the
+    per-sample subdirectories are made and leaves the lanes as separate fastqs.
 
     A 1st-layer folder is only processed if it contains at least one fastq that is not an
     undetermined read; folders holding only undetermined reads (e.g., "MUZ368_600_cycle_1-*")
@@ -893,6 +895,9 @@ def basespace(dir: str='.', suf: str='.fastq.gz', exclude: str | Iterable[str] |
         an empty list to let every fastq count.
     prefix_sep (str, optional): Delimiter splitting the sample name from the rest of the fastq
         filename (Default: '_'; e.g., MUZ350-201_S1_L001_R1_001.fastq.gz → MUZ350-201).
+    comb (bool, optional): Combine each sample's lanes into 1 fastq per sample under
+        '<read>/combine_fastqs' (Default: True). False stops after in_subs(), which also avoids
+        importing bio.fastq.
     dry_run (bool, optional): Print the commands that would be run for each folder without
         moving any files (Default: False).
 
@@ -901,7 +906,8 @@ def basespace(dir: str='.', suf: str='.fastq.gz', exclude: str | Iterable[str] |
     Dependencies: os, pathlib, tidy.natural_key(), out_subs(), split_R1_R2(), in_subs(),
         bio.fastq.comb_fastqs()
     '''
-    from ..bio import fastq as fq # deferred b/c bio.fastq imports gen.io
+    if comb:
+        from ..bio import fastq as fq # deferred b/c bio.fastq imports gen.io
 
     if not os.path.isdir(dir):
         raise ValueError(f"{dir} is not a valid directory.")
@@ -940,7 +946,8 @@ def basespace(dir: str='.', suf: str='.fastq.gz', exclude: str | Iterable[str] |
             for i,read in enumerate(['R1','R2']):
                 print(f"  cd {read}" if i==0 else f"  cd ../{read}")
                 print(f"  edms io in -s {suf} -g prefix -p '{prefix_sep}'")
-                print( "  edms fastq comb -r")
+                if comb:
+                    print( "  edms fastq comb -r")
             continue
 
         out_subs(dir=sub) # Flatten the BCLConvert/sample/report subdirectories
@@ -948,9 +955,10 @@ def basespace(dir: str='.', suf: str='.fastq.gz', exclude: str | Iterable[str] |
 
         for read in ['R1','R2']:
             read_dir = os.path.join(sub, read)
-            in_subs(dir=read_dir, suf=suf, group_by='prefix', prefix_sep=prefix_sep) # 1 subdirectory per sample
-            fq.comb_fastqs(in_dir=read_dir, out_dir=os.path.join(read_dir, 'combine_fastqs'),
-                           recursive=True) # 1 combined fastq per sample (across lanes)
+            if comb:
+                in_subs(dir=read_dir, suf=suf, group_by='prefix', prefix_sep=prefix_sep) # 1 subdirectory per sample
+                fq.comb_fastqs(in_dir=read_dir, out_dir=os.path.join(read_dir, 'combine_fastqs'),
+                               recursive=True) # 1 combined fastq per sample (across lanes)
 
     if not processed:
         print(f"\nNo folders in {os.path.abspath(dir)} contained sample fastqs.")

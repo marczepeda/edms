@@ -55,11 +55,17 @@ def add_subparser(subparsers, formatter_class=None):
     
     parser_ngs_pcrs.add_argument("-f","--file", help="Output file path (.xlsx)", type=str, default=f'./{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_NGS_plan.xlsx')
     parser_ngs_pcrs.add_argument("-u","--ultra", help="Using NEB Ultra II reagents", action="store_true")
+    parser_ngs_pcrs.add_argument("-sb","--syber", help="Include 10x SYBR Green DNA Stain in PCR1 master mix (not PCR2)", action="store_true")
+    parser_ngs_pcrs.add_argument("-i1","--inner1", help="Exclude outer wells of 96-well plate for PCR1", action="store_true")
+    parser_ngs_pcrs.add_argument("-i2","--inner2", help="Exclude outer wells of 96-well plate for PCR2", action="store_true")
+    parser_ngs_pcrs.add_argument("-mw","--max_well_uL", type=float, default=50, help="Max uL per well; larger reactions are split across consecutive wells")
+    parser_ngs_pcrs.add_argument("-pc","--palette_or_cmap", type=str, nargs="+", default="Set3", help="Excel color coding for gDNA IDs, PCR IDs, & primers: seaborn palette, matplotlib colormap, or list of colors (e.g., -pc '#8DD3C7' '#FFFFB3')")
     parser_ngs_pcrs.add_argument("-1c","--pcr1_cycles", help="Number of cycles for PCR1", type=str, default='30')
     parser_ngs_pcrs.add_argument("-2c","--pcr2_cycles", help="Number of cycles for PCR2", type=str, default='8')
     parser_ngs_pcrs.add_argument("-uc","--umi_cycles", help="Number of cycles for PCR1", type=str, default='3')
     parser_ngs_pcrs.add_argument("-1.5T","--pcr1.5_Tm",dest='pcr1_5_Tm', help="Annealing temperature for PCR1.5", type=str, default='65')
     parser_ngs_pcrs.add_argument("-ds", "--dont_split_pcr1_primers", dest="split_pcr1_primers", help="Don't split PCR1 plate by primer", action="store_false", default=True)
+    parser_ngs_pcrs.add_argument("-n2", "--no_pcr2", dest="pcr2", help="Don't plan PCR2 (PCR2 columns are not required)", action="store_false", default=True)
     parser_ngs_pcrs.add_argument('-1v', '--pcr1_total_uL', type=int, default=20, help='PCR1 Total reaction volume (uL)')
     parser_ngs_pcrs.add_argument('-2v', '--pcr2_total_uL', type=int, default=20, help='PCR2 Total reaction volume (uL)')
     parser_ngs_pcrs.add_argument('-m', '--mm_x', type=float, default=1.1, help='Master mix multiplier')
@@ -395,11 +401,15 @@ def add_subparser(subparsers, formatter_class=None):
     '''
     edms.bio.qPCR:
     - ddCq(): computes ΔΔCq mean and error for all samples holding target pairs constant
+    - amp(): plot qPCR amplification (sigmoidal) curves (RFU vs. Cycle) with one line per well
     '''
+    parser_qPCR = subparsers.add_parser("qPCR", help="Quantitative polymerase chain reaction", description="Quantitative polymerase chain reaction", formatter_class=formatter_class)
+    subparsers_qPCR = parser_qPCR.add_subparsers()
+
     # ddCq(): computes ΔΔCq mean and error for all samples holding target pairs constant
-    parser_ddcq = subparsers.add_parser("ddCq", help="Compute ΔΔCq values for RT-qPCR data", description="Compute ΔΔCq values for RT-qPCR data", formatter_class=formatter_class)
+    parser_ddcq = subparsers_qPCR.add_parser("ddCq", help="Compute ΔΔCq values for RT-qPCR data", description="Compute ΔΔCq values for RT-qPCR data", formatter_class=formatter_class)
     
-    parser_ddcq.add_argument("-i","--data", type=str, help="Input Cq file from CFX instrument",required=True)
+    parser_ddcq.add_argument("-i","--data", type=str, help="Input Cq file from CFX instrument (Default: auto-detect '*Quantification Cq Results*.csv' in the current directory)", default=None)
 
     parser_ddcq.add_argument("-f", "--file", type=str, help="Output file path",default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_qPCR_ddCq.csv')
 
@@ -408,6 +418,20 @@ def add_subparser(subparsers, formatter_class=None):
     parser_ddcq.add_argument("-c", "--Cq_col", type=str, default="Cq", help="Column name for Cq values")
 
     parser_ddcq.set_defaults(func=qPCR.ddCq)
+
+    # amp(): plot qPCR amplification (sigmoidal) curves (RFU vs. Cycle) with one line per well
+    parser_qPCR_amp = subparsers_qPCR.add_parser("amp", help="Plot qPCR amplification curves", description="Plot qPCR amplification (sigmoidal) curves (RFU vs. Cycle) with one line per well from a CFX Quantification Amplification Results csv", formatter_class=formatter_class)
+
+    parser_qPCR_amp.add_argument("-an", "--annot", type=str, help="Well annotations file with a Well column (e.g., CFX Quantification Cq Results csv or a plate layout); other columns (Target, Sample, Cq, ...) can be used for -c, -fx, -fy (Default: auto-detect '*Quantification Cq Results*.csv' next to the -i file, if present)", default=argparse.SUPPRESS)
+    parser_qPCR_amp.add_argument("-w", "--wells", type=str, nargs="+", help="Wells to keep (e.g., -w A1 A2 B01; Default: all)", default=argparse.SUPPRESS)
+    parser_qPCR_amp.add_argument("-we", "--wells_exclude", type=str, nargs="+", help="Wells to exclude", default=argparse.SUPPRESS)
+    parser_qPCR_amp.add_argument("-b", "--baseline", type=parse_tuple_int, help="Baseline cycles as start,end; their mean RFU is subtracted from each well (Default: None; CFX exports are already baseline subtracted)", default=argparse.SUPPRESS)
+    parser_qPCR_amp.add_argument("-dnc", "--drop_no_Cq", action="store_true", help="Drop wells without a Cq value (requires --annot with a Cq column)", default=False)
+    parser_qPCR_amp.add_argument("-th", "--threshold", type=float, help="Draw a horizontal threshold line at this RFU", default=argparse.SUPPRESS)
+    parser_qPCR_amp.add_argument("-thc", "--threshold_color", type=str, help="Threshold line color (Default: black)", default="black")
+
+    add_common_plot_scat_args(parser_qPCR_amp, qPCR_amp_parser=True)
+    parser_qPCR_amp.set_defaults(func=qPCR.amp, x_axis="Cycle", y_axis="RFU", file=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_qPCR_amp.all')
 
     '''
     edms.bio.fastq:

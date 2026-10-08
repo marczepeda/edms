@@ -50,14 +50,20 @@ def add_common_fastq_label_args(subparser):
     subparser.add_argument("-ci", "--chain_id", type=str, help="Chain identifier to isolate for secondary structure analysis (Default: None)", default=argparse.SUPPRESS)
 
 # Plot subparser methods
-def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_parser=False, pwes_torn_parser=False):
+def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_parser=False, pwes_torn_parser=False, qPCR_amp_parser=False):
     '''
     add_common_plot_scat_args(subparser): Add common arguments for scatter plot related graphs
     '''
     # scat(): Required arguments
     if pwes_torn_parser == False:
-        subparser.add_argument("-i", "--df", help="Input dataframe file path", type=str, required=True)
-        if fastq_corr_parser == True:
+        if qPCR_amp_parser == True: # df is optional (auto-detected) & x & y are fixed (Cycle & RFU)
+            subparser.add_argument("-i", "--df", help="Quantification Amplification Results csv (Default: auto-detect '*Quantification Amplification Results*.csv' in the current directory)", type=str, default=None)
+        else:
+            subparser.add_argument("-i", "--df", help="Input dataframe file path", type=str, required=True)
+        
+        if qPCR_amp_parser == True:
+            pass
+        elif fastq_corr_parser == True:
             subparser.add_argument("-cc", "--cond_col", help="condition column name for comparison", type=str, required=True)
             subparser.add_argument("-cv", "--cond_vals", nargs="+", help="two condition values for comparison (x and y-axis)", type=str, required=True)
             subparser.add_argument("-scol", "--scores_col", help="column name for values to correlate (e.g. log2(FC))", type=str, required=True)
@@ -926,6 +932,7 @@ Pipeline .csv column reference:[/red]
     parser_io_basespace.add_argument('-s', '--suf', type=str, help="Fastq file suffix used to find & group reads (Default: '.fastq.gz').", default='.fastq.gz')
     parser_io_basespace.add_argument('-e', '--exclude', type=str, nargs='+', help="Filename prefix(es) marking reads that don't count as samples (Default: Undetermined; case-insensitive). Accepts multiple values, e.g. -e Undetermined PhiX.", default=['Undetermined'])
     parser_io_basespace.add_argument('-p', '--prefix_sep', type=str, help="Delimiter splitting the sample name from the rest of the fastq filename (Default: '_'; e.g., MUZ350-201_S1_L001_R1_001.fastq.gz -> MUZ350-201).", default='_')
+    parser_io_basespace.add_argument('-nc', '--no_comb', dest='comb', action='store_false', help="Don't combine each sample's lanes into 1 fastq per sample (i.e., skip \"edms fastq comb -r\"; Default: combine).", default=True)
     parser_io_basespace.add_argument('-d', '--dry_run', action='store_true', help='Print the commands that would be run for each folder without moving any files (Default: False).', default=False)
 
     # Call command functions

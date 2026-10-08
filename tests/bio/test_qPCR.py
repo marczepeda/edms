@@ -125,3 +125,88 @@ def test_ddCq_saves_file(tmp_path, two_sample_two_target_df):
     out_dir = tmp_path / "out"
     qPCR.ddCq(data=two_sample_two_target_df, file=str(out_dir / "ddcq.csv"))
     assert (out_dir / "ddcq.csv").is_file()
+
+
+# --------------------------------------------------------------------------- #
+# cfx_amp() & amp()
+# --------------------------------------------------------------------------- #
+@pytest.fixture
+def amp_csv(tmp_path):
+    # CFX amplification export: unnamed index column, Cycle, then one column per well
+    cycles = np.arange(1, 11)
+    sig = lambda mid: 1000 / (1 + np.exp(-(cycles - mid)))
+    csv_pt = tmp_path / "amp.csv"
+    pd.DataFrame({"Unnamed": "", "Cycle": cycles, "A1": sig(5), "A2": sig(7), "B1": np.zeros(10)}
+                 ).rename(columns={"Unnamed": ""}).to_csv(csv_pt, index=False)
+    return csv_pt
+
+
+@pytest.fixture
+def cq_csv(tmp_path):
+    csv_pt = tmp_path / "cq.csv"
+    pd.DataFrame({"Well": ["A01", "A02", "B01"], "Target": ["GeneA", "GeneA", np.nan],
+                  "Sample": [np.nan] * 3, "Cq": [5.0, 7.0, np.nan]}).to_csv(csv_pt)
+    return csv_pt
+
+
+def test_cfx_amp_tidy_format(amp_csv):
+    df = qPCR.cfx_amp(pt=str(amp_csv))
+    assert {"Well", "Row", "Column", "Cycle", "RFU"} <= set(df.columns)
+    assert not any(str(c).startswith("Unnamed") for c in df.columns)
+    assert len(df) == 30
+    assert set(df["Row"]) == {"A", "B"} and set(df["Column"]) == {1, 2}
+
+
+def test_cfx_amp_annot_merges_padded_wells_and_drops_empty_cols(amp_csv, cq_csv):
+    df = qPCR.cfx_amp(pt=str(amp_csv), annot=str(cq_csv))
+    assert "Sample" not in df.columns  # all-NaN column dropped
+    assert df.loc[df["Well"] == "A2", "Cq"].iloc[0] == 7.0  # A02 -> A2
+
+
+def test_cfx_amp_filters_wells_and_drop_no_Cq(amp_csv, cq_csv):
+    assert set(qPCR.cfx_amp(pt=str(amp_csv), wells=["A01", "B1"])["Well"]) == {"A1", "B1"}
+    assert set(qPCR.cfx_amp(pt=str(amp_csv), wells_exclude=["A1"])["Well"]) == {"A2", "B1"}
+    assert set(qPCR.cfx_amp(pt=str(amp_csv), annot=str(cq_csv), drop_no_Cq=True)["Well"]) == {"A1", "A2"}
+    with pytest.raises(ValueError):
+        qPCR.cfx_amp(pt=str(amp_csv), drop_no_Cq=True)
+
+
+def test_cfx_amp_baseline_subtraction(amp_csv):
+    df = qPCR.cfx_amp(pt=str(amp_csv), baseline=(1, 3))
+    base = df[(df["Well"] == "A2") & (df["Cycle"] <= 3)]["RFU"]
+    assert base.mean() == pytest.approx(0.0)
+
+
+def test_amp_one_line_per_well_and_saves(amp_csv, tmp_path):
+    out = tmp_path / "out" / "amp.png"
+    fig, axes = qPCR.amp(df=str(amp_csv), threshold=100, file=str(out), dpi=50, show=False)
+    assert out.is_file()
+    ax = axes.flat[0]
+    assert len([l for l in ax.lines if l.get_linestyle() == "-"]) == 3  # wells not aggregated
+    assert any(l.get_linestyle() == "--" for l in ax.lines)  # threshold
+
+
+def test_find_cfx_single_multiple_missing(tmp_path):
+    assert qPCR.find_cfx("Quantification Cq Results", dir=str(tmp_path), required=False) is None
+    with pytest.raises(FileNotFoundError):
+        qPCR.find_cfx("Quantification Cq Results", dir=str(tmp_path))
+    (tmp_path / "run -  Quantification Cq Results_0.csv").write_text("Well\n")
+    assert qPCR.find_cfx("Quantification Cq Results", dir=str(tmp_path)).endswith("Results_0.csv")
+    (tmp_path / "run2 -  Quantification Cq Results_0.csv").write_text("Well\n")
+    with pytest.raises(ValueError):
+        qPCR.find_cfx("Quantification Cq Results", dir=str(tmp_path))
+
+
+def test_amp_auto_detects_amp_and_cq_files(tmp_path, monkeypatch, amp_csv, cq_csv):
+    amp_csv.rename(tmp_path / "run -  Quantification Amplification Results_SYBR.csv")
+    cq_csv.rename(tmp_path / "run -  Quantification Cq Results_0.csv")
+    monkeypatch.chdir(tmp_path)
+    fig, axes = qPCR.amp(cols="Target", drop_no_Cq=True, show=False)  # Cq & Target come from auto-detected annot
+    assert len(axes.flat[0].lines) >= 2
+
+
+def test_ddCq_auto_detects_cq_file(tmp_path, monkeypatch, two_sample_two_target_df):
+    two_sample_two_target_df.to_csv(tmp_path / "run -  Quantification Cq Results_0.csv", index=False)
+    monkeypatch.chdir(tmp_path)
+    out = qPCR.ddCq()
+    assert np.allclose(out["RQ_mean"], 1.0)
