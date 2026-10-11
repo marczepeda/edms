@@ -5,6 +5,8 @@ I/O functions - all reads/writes are confined to tmp_path fixtures; nothing
 touches the real filesystem outside pytest's temp area.
 """
 import os
+import shlex
+import subprocess
 
 import pandas as pd
 import pytest
@@ -650,3 +652,153 @@ def test_create_pipeline_example_writes_template(tmp_path):
 def test_create_pipeline_requires_pt_without_example(tmp_path):
     with pytest.raises(ValueError, match="pt is required"):
         io.create_pipeline(dir=str(tmp_path / "out"), email="test@example.com")
+
+
+# ---------------------------------------------------------------------------
+# create_pipeline: the 'mkdir' column -> directory block in submit.sh
+# ---------------------------------------------------------------------------
+
+_MKDIR_COLS = ["step", "sample", "command", "scatter", "depends_on", "script", "mkdir",
+               "fastq_dir", "out_dir"]
+
+
+def _submit_text(tmp_path, rows, out="scripts"):
+    pt = _write_pipeline(tmp_path, rows, cols=_MKDIR_COLS)
+    io.create_pipeline(pt=pt, dir=str(tmp_path / out), email="test@example.com")
+    return (tmp_path / out / "submit.sh").read_text()
+
+
+def test_pipeline_mkdir_resolves_a_column_name_to_that_rows_value():
+    vals = {"out_dir": "./work/count", "fastq_dir": "./raw"}
+    assert io._pipeline_mkdir("out_dir", vals, lambda v: v) == ["./work/count"]
+
+
+def test_pipeline_mkdir_treats_an_unknown_token_as_a_literal_path():
+    assert io._pipeline_mkdir("./work/logs", {}, lambda v: v) == ["./work/logs"]
+
+
+def test_pipeline_mkdir_mixes_column_names_and_literal_paths():
+    vals = {"out_dir": "./work/count"}
+    assert io._pipeline_mkdir("out_dir;./work/logs", vals, lambda v: v) == ["./work/count", "./work/logs"]
+
+
+def test_pipeline_mkdir_substitutes_sample_in_both_forms():
+    vals = {"out_dir": "./count/{sample}"}
+    sub = lambda v: v.replace("{sample}", "A1")
+    assert io._pipeline_mkdir("out_dir;./logs/{sample}", vals, sub) == ["./count/A1", "./logs/A1"]
+
+
+def test_pipeline_mkdir_skips_blank_resolved_values_and_deduplicates():
+    vals = {"out_dir": "./work", "dir": "", "save_dir": "./work"}
+    assert io._pipeline_mkdir("out_dir;dir;save_dir", vals, lambda v: v) == ["./work"]
+
+
+def test_create_pipeline_without_mkdir_column_writes_no_directory_block(tmp_path):
+    submit = _submit_text(tmp_path, [
+        ["trim", "", "fastq trim", "", "", "", "", "./raw", "./work/trim"],
+    ])
+    assert "---------- directories ----------" not in submit
+
+
+def test_create_pipeline_mkdir_block_runs_before_the_first_sbatch(tmp_path):
+    submit = _submit_text(tmp_path, [
+        ["trim", "", "fastq trim", "", "", "", "out_dir", "./raw", "./work/trim"],
+    ])
+    # SLURM opens the .out/.err logs at submit time, so directories must come first
+    assert submit.index("---------- directories ----------") < submit.index("sbatch --parsable")
+    assert submit.index('cd "$(dirname') < submit.index("---------- directories ----------")
+
+
+def test_create_pipeline_mkdir_creates_outputs_but_never_inputs(tmp_path):
+    submit = _submit_text(tmp_path, [
+        ["trim", "", "fastq trim", "", "", "", "out_dir", "./raw", "./work/trim"],
+    ])
+    assert "./work/trim" in submit.split("---------- trim ----------")[0]
+    # fastq_dir is an input; creating it would hide a typo behind an empty folder
+    directories = submit.split("---------- directories ----------")[1].split("done")[0]
+    assert "./raw" not in directories
+
+
+def test_create_pipeline_mkdir_expands_per_scattered_sample(tmp_path):
+    submit = _submit_text(tmp_path, [
+        ["count", "", "fastq signatures", "A1;B2", "", "", "out_dir;./logs/{sample}",
+         "./work/trim/{sample}", "./work/count/{sample}"],
+    ])
+    directories = submit.split("---------- directories ----------")[1].split("done")[0]
+    for expected in ["./work/count/A1", "./work/count/B2", "./logs/A1", "./logs/B2"]:
+        assert expected in directories
+
+
+def test_create_pipeline_mkdir_deduplicates_across_steps_preserving_order(tmp_path):
+    submit = _submit_text(tmp_path, [
+        ["trim", "", "fastq trim", "", "", "", "out_dir", "./raw", "./shared"],
+        ["count", "", "fastq signatures", "", "trim", "", "out_dir", "./shared", "./shared"],
+    ])
+    directories = submit.split("---------- directories ----------")[1].split("done")[0]
+    assert directories.count("./shared") == 1
+
+
+def test_create_pipeline_mkdir_honors_an_override_row(tmp_path):
+    submit = _submit_text(tmp_path, [
+        ["count", "", "fastq signatures", "A1;B2", "", "", "out_dir", "", "./work/count/{sample}"],
+        ["count", "B2", "", "", "", "", "./scratch/B2", "", ""],
+    ])
+    directories = submit.split("---------- directories ----------")[1].split("done")[0]
+    assert "./work/count/A1" in directories
+    assert "./scratch/B2" in directories
+
+
+def test_create_pipeline_mkdir_quotes_paths_with_spaces(tmp_path):
+    submit = _submit_text(tmp_path, [
+        ["trim", "", "fastq trim", "", "", "", "out_dir", "./raw", "./my work/trim"],
+    ])
+    assert "'./my work/trim'" in submit
+
+
+def test_create_pipeline_mkdir_block_is_idempotent_and_survives_set_e(tmp_path):
+    """The generated block runs under `set -euo pipefail`; a missing directory makes
+    `[ -d ] && continue` return non-zero, which must not abort submit.sh."""
+    submit = _submit_text(tmp_path, [
+        ["trim", "", "fastq trim", "", "", "", "out_dir;./logs", "./raw", "./work/trim"],
+    ])
+    block = submit.split("---------- directories ----------")[1].split("done")[0] + "done"
+    script = tmp_path / "block.sh"
+    script.write_text("set -euo pipefail\ncd " + shlex.quote(str(tmp_path)) + "\n" + block + "\n")
+
+    first = subprocess.run(["bash", str(script)], capture_output=True, text=True)
+    assert first.returncode == 0, first.stderr
+    assert (tmp_path / "work" / "trim").is_dir()
+    assert (tmp_path / "logs").is_dir()
+
+    second = subprocess.run(["bash", str(script)], capture_output=True, text=True)
+    assert second.returncode == 0, second.stderr
+    assert "Created" not in second.stdout  # nothing left to do the second time
+
+
+def test_create_pipeline_dry_run_reports_the_directories(tmp_path, capsys):
+    pt = _write_pipeline(tmp_path, [
+        ["trim", "", "fastq trim", "", "", "", "out_dir", "./raw", "./work/trim"],
+    ], cols=_MKDIR_COLS)
+    io.create_pipeline(pt=pt, dir=str(tmp_path / "scripts"), email="test@example.com", dry_run=True)
+    out = capsys.readouterr().out
+    assert "directories submit.sh would create" in out
+    assert "./work/trim" in out
+    assert not (tmp_path / "scripts").exists()
+
+
+def test_create_pipeline_mkdir_is_not_passed_as_a_command_flag(tmp_path):
+    pt = _write_pipeline(tmp_path, [
+        ["trim", "", "fastq trim", "", "", "", "out_dir", "./raw", "./work/trim"],
+    ], cols=_MKDIR_COLS)
+    io.create_pipeline(pt=pt, dir=str(tmp_path / "scripts"), email="test@example.com")
+    assert "--mkdir" not in (tmp_path / "scripts" / "trim.sh").read_text()
+
+
+def test_bundled_example_pipeline_csv_declares_mkdir(tmp_path, capsys):
+    io.create_pipeline(dir=str(tmp_path), example=True)
+    capsys.readouterr()
+    pt = tmp_path / io.PIPELINE_EXAMPLE
+    assert "mkdir" in pd.read_csv(pt, dtype=str, keep_default_na=False).columns
+    io.create_pipeline(pt=str(pt), dir=str(tmp_path / "scripts"), email="test@example.com",
+                       dry_run=True)
+    assert "directories submit.sh would create" in capsys.readouterr().out

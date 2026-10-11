@@ -611,6 +611,7 @@ def cat(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new",scores_col: str
 
 def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="cl_new", scores_col: str="log2(FC)", individual: bool=True, size: str=None, size_dims: tuple=None, label: str='Edit', label_size: int=16,
         label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None, DSSP: str=None, chain_id: str=None, ss_h: int=None, ss_y: int=None,
+        y_err: str = None, err_capsize: float = 0.2, err_alpha: float = 1.0, err_color: str = 'black',
         file: str=None, palette_or_cmap: str | list | dict | mcolors.Colormap = 'turbo', edgecol: str='black', figsize=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
@@ -644,6 +645,10 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
     chain_id (str, optional): Chain identifier to isolate for secondary structure analysis (Default: None)
     ss_h (int, optional): height for secondary structure in the plot (Default: autogenerate)
     ss_y (int, optional): y position for secondary structure in the plot (Default: autogenerate)
+    y_err (str, optional): column name in df & df_clus for y error bars (i.e., standard error of scores_col)
+    err_capsize (float, optional): error bar cap size (Default: 0.2)
+    err_alpha (float, optional): error bar transparency for cluster points; background points use err_alpha*0.25 (Default: 1.0)
+    err_color (str, optional): error bar color (Default: 'black')
     file (str, optional): output plot file path
     palette_or_cmap (str | list | dict | Colormap, optional): seaborn palette name, matplotlib color map
                                                             (name or object), list of colors, or {category: color} dictionary
@@ -709,6 +714,19 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
     else:
         df_clus = df_clus.copy()
     
+    # Check error bar column
+    if y_err is not None:
+        if y_err not in df.columns:
+            raise ValueError(f"y_err column '{y_err}' not found in df columns: {list(df.columns)}")
+        if y_err not in df_clus.columns:
+            raise ValueError(f"y_err column '{y_err}' not found in df_clus columns: {list(df_clus.columns)}")
+
+    def _draw_err(ax, data, alpha):
+        if y_err is None or data.empty:
+            return
+        ax.errorbar(data['AA Number'], data[scores_col], yerr=data[y_err], fmt='none',
+                    ecolor=err_color, alpha=alpha, capsize=err_capsize, zorder=0)
+
     # Organize data by conservation (changed to)
     stys_order = ['Conserved','Basic','Acidic','Polar','Nonpolar','Complex']
     mark_order = ['D','^','v','<','>','o']
@@ -814,6 +832,10 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
                 legend=False, zorder = 3,
                 ax=ax, **kwargs)
             
+            # with y error bars (faded for background points)
+            _draw_err(ax, df, err_alpha*0.25)
+            _draw_err(ax, clus_df, err_alpha)
+
             # with x-axis line
             if display_axis == True:
                 ax.plot([x_axis_dims[0], x_axis_dims[1]], [0,0], color='black', linestyle='-', linewidth=1)
@@ -962,6 +984,10 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
             legend=False, zorder = 2,
             ax=ax, **kwargs)
         
+        # with y error bars (faded for background points)
+        _draw_err(ax, df, err_alpha*0.25)
+        _draw_err(ax, clus_df, err_alpha)
+
         # with x-axis line
         if display_axis == True:
             ax.plot([x_axis_dims[0], x_axis_dims[1]], [0,0], color='black', linestyle='-', linewidth=1)

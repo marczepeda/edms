@@ -432,7 +432,7 @@ PIPELINE_EXAMPLE = 'pipeline_example.csv'
 
 # Reserved pipeline .csv columns; every other column becomes a command line flag
 PIPELINE_RESERVED = {
-    'step', 'sample', 'command', 'scatter', 'depends_on', 'script',
+    'step', 'sample', 'command', 'scatter', 'depends_on', 'script', 'mkdir',
     'sbatch_cores', 'sbatch_partition', 'sbatch_time', 'sbatch_mem',
     'sbatch_email', 'sbatch_python', 'sbatch_env',
 }
@@ -494,6 +494,27 @@ def _pipeline_split(value: str) -> list:
     '''
     return [v.strip() for v in re.split(r'[;,]', value) if v.strip()]
 
+def _pipeline_mkdir(value: str, vals: dict, sub) -> list:
+    """
+    _pipeline_mkdir(): returns the directories one row asks submit.sh to create.
+
+    Each ';' or ',' separated token is either the name of another column in the .csv,
+    which resolves to that row's value for it (so a path is never typed twice), or a
+    literal path. Blank resolved values are skipped, and '{sample}' is substituted in
+    both cases.
+
+    Parameters:
+    value (str): the row's 'mkdir' cell
+    vals (dict): the row's resolved {column: value} pairs
+    sub (callable): '{sample}' substitution for this job
+    """
+    dirs = []
+    for token in _pipeline_split(value):
+        resolved = sub(vals[token]) if token in vals else sub(token)
+        if resolved and resolved not in dirs:
+            dirs.append(resolved)
+    return dirs
+
 def create_pipeline(pt: str = None, dir: str = '.', submit_file: str = 'submit.sh',
                     cores: int = 1, partition: str = 'serial_requeue', time: str = '0-00:10',
                     mem: int = 1000, email: str = None, python: str = 'python', env: str = 'edms',
@@ -515,6 +536,10 @@ def create_pipeline(pt: str = None, dir: str = '.', submit_file: str = 'submit.s
     - scatter: ';' or ',' separated sample names, or '@file' to read one name per line
     - depends_on: ';' or ',' separated names of earlier steps to wait on (afterok)
     - script: script filename override; may contain {sample}
+    - mkdir: ';' or ',' separated directories for submit.sh to create before it submits
+      anything. A token naming another column (i.e. 'out_dir') resolves to that row's
+      value for it; anything else is a literal path. Directories are never inferred,
+      because the same column is an input for one subcommand and an output for another.
     - sbatch_cores / sbatch_partition / sbatch_time / sbatch_mem / sbatch_email /
       sbatch_python / sbatch_env: per-step SLURM and environment settings
 
@@ -688,6 +713,7 @@ def create_pipeline(pt: str = None, dir: str = '.', submit_file: str = 'submit.s
             cmd = base + (' \\\n' + ' \\\n'.join(f'    {c}' for c in chunks) if chunks else '')
 
             jobs.append(dict(step=entry['name'], file=f'{stem}.sh',
+                             dirs=_pipeline_mkdir(vals.get('mkdir', ''), vals, sub),
                              cores=int(vals.get('sbatch_cores') or cores),
                              partition=vals.get('sbatch_partition') or partition,
                              time=vals.get('sbatch_time') or time,
@@ -699,6 +725,13 @@ def create_pipeline(pt: str = None, dir: str = '.', submit_file: str = 'submit.s
             written.append(stem)
             scripts.append(f'{stem}.sh')
         scripts_by_step[entry['name']] = scripts
+
+    # Every directory the .csv asked for, in first-seen order, created once up front
+    pipeline_dirs = []
+    for job in jobs:
+        for job_dir in job['dirs']:
+            if job_dir not in pipeline_dirs:
+                pipeline_dirs.append(job_dir)
 
     # Build submit.sh
     lines = [
@@ -715,6 +748,20 @@ def create_pipeline(pt: str = None, dir: str = '.', submit_file: str = 'submit.s
         f'echo "Submitting {len(written)} job(s) across {len(steps)} step(s)"',
         '',
     ]
+    if pipeline_dirs:
+        # Relative paths resolve against this directory, which is also the working
+        # directory every job inherits from sbatch. Done before the first sbatch so
+        # that SLURM can open its .out/.err logs even when a script name has a path.
+        lines += [
+            '# ---------- directories ----------',
+            'for _dir in \\',
+            ' \\\n'.join(f'    {shlex.quote(d)}' for d in pipeline_dirs) + '; do',
+            '  [ -d "$_dir" ] && continue',
+            '  mkdir -p "$_dir"',
+            '  echo "  Created $_dir"',
+            'done',
+            '',
+        ]
     for entry in steps:
         name = entry['name']
         var = _pipeline_var(name)
@@ -754,6 +801,11 @@ def create_pipeline(pt: str = None, dir: str = '.', submit_file: str = 'submit.s
                       f'{job["time"]}, {job["mem"]} MB, module {job["python"]}, env {job["env"]}]')
                 for ln in job['cmd'].splitlines():
                     print(f'      {ln}')
+            print()
+        if pipeline_dirs:
+            print(f'=== directories {submit_file} would create ===')
+            for job_dir in pipeline_dirs:
+                print(f'  {job_dir}{"" if os.path.isdir(job_dir) else "   (does not exist yet)"}')
             print()
         print(f'=== {submit_file} ===')
         for entry in steps:

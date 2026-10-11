@@ -39,7 +39,7 @@ def add_common_fastq_label_args(subparser):
     '''
     subparser.add_argument("-L", "--label_size", type=int, help="Label font size (Default: 16)", default=16)
     subparser.add_argument("-N", "--no_label_info", dest='label_info', action="store_false", help="Don't include additional info for labels if .html plot (Default: True)", default=True)
-    subparser.add_argument("-aa", "--aa_properties", nargs="+", help="Use aa_properties to format labels (Options: hydrophobicity, polarity, charge, vdw_volume, pKa_C_term, pKa_N_term, pKa_side_chain)", default=argparse.SUPPRESS)
+    subparser.add_argument("-aa", "--aa_properties", nargs="+", help="Use aa_properties to format labels (Options: True, False, or any of hydrophobicity, polarity, charge, vdw_volume, pKa_C_term, pKa_N_term, pKa_side_chain)", default=argparse.SUPPRESS)
     subparser.add_argument("-cBP", "--cBioPortal", type=str, help="Gene name (if saved to ~/.config/edms/cBioPortal_mutations) or file path for cBioPortal mutation data processed through edms.dat.cBioPortal.mutations()", default=argparse.SUPPRESS)
     subparser.add_argument("-oc", "--only_clinical", action="store_true", help="Only show clinical mutations from cBioPortal (Default: False)", default=argparse.SUPPRESS)
     subparser.add_argument("-UP", "--UniProt", type=str, help="UniProt accession (if saved to ~/.config/edms/UniProt) or file path for UniProt flat file. See edms.dat.uniprot.retrieve_flat_file() or edms uniprot retrieve -h for more information.", default=argparse.SUPPRESS)
@@ -93,12 +93,13 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
         subparser.add_argument("-fxo", "--facetx_order", nargs="+", help="Order of facet columns")
         subparser.add_argument("-fyo", "--facety_order", nargs="+", help="Order of facet rows")
         subparser.add_argument("-spt", "--subplot_titles", type=str, nargs="+", default='facet_values', help="Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none")
-        if fastq_torn_parser == False:
+        if fastq_torn_parser == False: # x error bars don't apply to tornado plots (x is AA position)
             subparser.add_argument("-xe", "--x_err", type=str, help="Column name for x error bars", default=argparse.SUPPRESS)
-            subparser.add_argument("-ye", "--y_err", type=str, help="Column name for y error bars", default=argparse.SUPPRESS)
-            subparser.add_argument("-ecap", "--err_capsize", type=float, help="Error bar cap size (Default: 0.2)", default=0.2)
-            subparser.add_argument("-ea", "--err_alpha", type=float, help="Error bar transparency (Default: 1)", default=1)
-            subparser.add_argument("-ecol", "--err_color", type=str, help="Error bar color (Default: black)", default="black")
+    if fastq_corr_parser==False:
+        subparser.add_argument("-ye", "--y_err", type=str, help="Column name for y error bars", default=argparse.SUPPRESS)
+        subparser.add_argument("-ecap", "--err_capsize", type=float, help="Error bar cap size (Default: 0.2)", default=0.2)
+        subparser.add_argument("-ea", "--err_alpha", type=float, help="Error bar transparency (Default: 1)", default=1)
+        subparser.add_argument("-ecol", "--err_color", type=str, help="Error bar color (Default: black)", default="black")
     
     # Additional annotation data sources
     if fastq_torn_parser==True or fastq_corr_parser==True or pwes_torn_parser==True:
@@ -881,6 +882,13 @@ Pipeline .csv column reference:[/red]
   |               --dependency=afterok on their job ids in submit.sh.        |
   |  script       Script filename override; may contain {sample}. Needed when|
   |               two scattered stages would otherwise write the same file.  |
+  |  mkdir        ';' or ',' separated directories for submit.sh to create   |
+  |               before it submits anything. A token naming another column  |
+  |               (i.e. 'out_dir') resolves to that row's value for it, so a |
+  |               path is never typed twice; anything else is a literal path.|
+  |               Directories are never inferred: the same column is an input|
+  |               for one subcommand and an output for another, and creating |
+  |               an input would hide a typo behind an empty folder.         |
   |                                                                          |
   ----------------------------------------------------------------------------
 

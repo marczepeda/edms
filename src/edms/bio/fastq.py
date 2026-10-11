@@ -4555,6 +4555,11 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
     Dependencies: make_label_info(), pandas
     '''
     # Determine AA properties to include
+    if isinstance(aa_properties, list) and len(aa_properties) == 1 and str(aa_properties[0]).lower() in ['true', 'false']:  # From CLI (i.e., -aa False)
+        aa_properties = str(aa_properties[0]).lower() == 'true'
+    elif isinstance(aa_properties, str) and aa_properties.lower() in ['true', 'false']:
+        aa_properties = aa_properties.lower() == 'true'
+
     if aa_properties == True:
         aa_properties = ['hydrophobicity', 'polarity', 'charge', 'vdw_volume', 'pKa_side_chain']  # All except terminal pKa
     elif aa_properties == False:  # No AA properties
@@ -4750,6 +4755,9 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
     if label_info == True:
 
         # Temporarily make None columns that don't exist
+        if aa_properties is None:
+            df['Before_AA_Properties'] = [{} for _ in range(len(df))]
+            df['After_AA_Properties'] = [{} for _ in range(len(df))]
         if cBioPortal is None:
             df['Patients'] = [None]*len(df)
             df['Cancer Types'] = [None]*len(df)
@@ -4772,6 +4780,8 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
                                 t.zip_cols(df=df, cols=[label,'Before_AA_Properties','After_AA_Properties','Patients','Cancer Types','2° structure','UniProt PTM','PhosphoSitePlus PTM','AA Contacts','DNA Contacts','AA Neighbors','DNA Neighbors'])]
         
         # Remove temporary None columns
+        if aa_properties is None:
+            df.drop(columns=['Before_AA_Properties','After_AA_Properties'], inplace=True)
         if cBioPortal is None:
             df.drop(columns=['Patients','Cancer Types'], inplace=True)
         if UniProt is None:
@@ -5173,7 +5183,10 @@ def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple
 
     if file is not None:
         if file.endswith('.html') == True:
-            if label_info == True: label = f'{label}_info'
+            if label_info == True:
+                if isinstance(display_labels, list): # Match specified labels to their detailed _info labels
+                    display_labels = df.loc[df[label].isin(display_labels), f'{label}_info'].tolist()
+                label = f'{label}_info'
             if legend_ncol == 1: legend_ncol = 3
 
     # Volcano plot
@@ -5193,6 +5206,7 @@ def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple
 def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, size_dims: tuple=None, label: str='Edit', label_size: int=16,
         label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None, DSSP: str=None, chain_id: str=None, ss_h: int=None, ss_y: int=None,
         facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
+        y_err: str = None, err_capsize: float = 0.2, err_alpha: float = 1.0, err_color: str = 'black',
         file: str=None, edgecol: str='black', figsize: tuple=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
@@ -5200,7 +5214,7 @@ def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, siz
         legend_columnspacing: int=-3, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, html_size_multiplier: float=1.5,
         display_legend: bool=True, display_labels: bool | list = False, display_axis: bool=True, return_df: bool=True, dpi: int = 0, transparent: bool=True, show: bool=True, space_capitalize: bool=True,
         **kwargs) -> pd.DataFrame:
-    ''' 
+    '''
     torn(): creates tornado plot
     
     Parameters:
@@ -5228,6 +5242,10 @@ def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, siz
     facetx_order (list, optional): order of facet columns
     facety_order (list, optional): order of facet rows
     subplot_titles (str | list, optional): Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none
+    y_err (str, optional): column name for y error bars (i.e., standard error of y)
+    err_capsize (float, optional): error bar cap size (Default: 0.2)
+    err_alpha (float, optional): error bar transparency (Default: 1.0)
+    err_color (str, optional): error bar color (Default: 'black')
     file (str, optional): output plot file path
     edgecol (str, optional): point edge color
     figsize (tuple, optional): figure size
@@ -5277,7 +5295,7 @@ def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, siz
     show (bool, optional): show plot (Default: True)
     transparent (bool, optional): whether to make the background transparent when saving the plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
-    
+
     Dependencies: os, matplotlib, seaborn, pandas, & edit_change()
     '''
     # Get dataframe from file path if needed
@@ -5286,11 +5304,21 @@ def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, siz
     else:
         df = df.copy()
 
-    # Set global autoscale limits if not provided
+    # Check error bar column
+    if y_err is not None and y_err not in df.columns:
+        raise ValueError(f"y_err column '{y_err}' not found in dataframe columns: {list(df.columns)}")
+
+    # Set global autoscale limits if not provided; include error bar extents in y-axis limits
     x_axis_dims, y_axis_dims = autoscale_xy(
-        df=df, x=x, y=y, x_axis_dims=x_axis_dims, y_axis_dims=y_axis_dims,
+        df=df, x=x, y=y if y_err is None else None, x_axis_dims=x_axis_dims, y_axis_dims=y_axis_dims,
         x_axis_scale='linear', y_axis_scale='linear'
     )
+    if y_err is not None:
+        _, y_axis_dims = autoscale_xy(
+            df=pd.DataFrame({y: pd.concat([df[y] - df[y_err], df[y] + df[y_err]], ignore_index=True).dropna()}),
+            x=None, y=y, x_axis_dims=x_axis_dims, y_axis_dims=y_axis_dims,
+            x_axis_scale='linear', y_axis_scale='linear'
+        )
 
     # Organize data by conservation (changed to)
     stys = 'Change'
@@ -5322,6 +5350,7 @@ def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, siz
 
     # Determine if we are saving to HTML (for interactive behavior)
     is_html = file is not None and file.endswith('.html')
+    tip_label = label
     if is_html: # Match title fontsize for html plots
         title_size = title_size * html_size_multiplier
         x_axis_size = x_axis_size * html_size_multiplier
@@ -5332,7 +5361,7 @@ def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, siz
         legend_size = legend_size * html_size_multiplier * 0.75
 
         if label_info: # Detailed labels for html plots
-            label = f'{label}_info'
+            tip_label = f'{label}_info' # Tooltip text; keep label for matching display_labels
 
     # Organize data by specified 'size' column, typically input abundance
     sizes = (1, 100)
@@ -5515,13 +5544,10 @@ def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, siz
                     )
 
     def _draw_labels(ax, df_sub):
-        if display_labels == False or not isinstance(display_labels, list | str): # Explicitly set to false or unrecognized type, so don't display labels
+        if display_labels is None or display_labels is False or display_labels in ['false', 'False']: # Explicitly set to false, so don't display labels
             return
-        
-        elif display_labels in ['false', 'False']: # Explicitly set to false, so don't display labels
-            return
-        
-        elif display_labels == True or display_labels in ['True', 'true']: # Display all labels
+
+        elif display_labels is True or display_labels in ['True', 'true']: # Display all labels
             if is_html:
                 pts = ax.scatter(
                     x=df_sub[x],
@@ -5529,7 +5555,7 @@ def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, siz
                     s=20,
                     alpha=0
                 )
-                labels_list = df_sub[label].fillna("").astype(str).tolist()
+                labels_list = df_sub[tip_label].fillna("").astype(str).tolist()
                 tooltip = p.SafeHTMLTooltip(pts, labels_list)
                 clicker = p.ClickTooltip(pts, labels_list)
                 mpld3.plugins.connect(fig, tooltip, clicker)
@@ -5552,7 +5578,7 @@ def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, siz
                     s=20,
                     alpha=0
                 )
-                labels_list = df_sub_labels[label].fillna("").astype(str).tolist()
+                labels_list = df_sub_labels[tip_label].fillna("").astype(str).tolist()
                 tooltip = p.SafeHTMLTooltip(pts, labels_list)
                 clicker = p.ClickTooltip(pts, labels_list)
                 mpld3.plugins.connect(fig, tooltip, clicker)
@@ -5663,6 +5689,19 @@ def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, siz
                 legend=False,
                 ax=ax,
                 **kwargs
+            )
+
+        # Add y error bars if specified
+        if y_err is not None:
+            ax.errorbar(
+                df_sub[x],
+                df_sub[y],
+                yerr=df_sub[y_err],
+                fmt='none',
+                ecolor=err_color,
+                alpha=err_alpha,
+                capsize=err_capsize,
+                zorder=0
             )
 
         if display_axis:
@@ -6269,6 +6308,11 @@ def heat(df: pd.DataFrame | str, scores_col: str, wt_prot: str, wt_res: int, cut
     # Add label info: Before, Number, After, AA properties
     df = add_label_info(df=df, label=label)
     df.drop(columns=[f'{label}_info'], inplace=True)
+
+    # No cutoff column: placeholder that never masks values
+    if cutoff_col is None:
+        cutoff_col = '_cutoff'
+        df[cutoff_col] = np.inf
 
     # Determine if we are saving to HTML (for interactive behavior)
     if file is not None:
