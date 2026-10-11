@@ -33,6 +33,8 @@ from edms.bio.primedesign import (
     codon_annotation,
     codon_columns,
     SILENT_CODON_COLUMNS,
+    NUCLEOTIDE_CHANGE_COLUMNS,
+    nucleotide_change_columns,
     codon_dict,
 )
 
@@ -361,7 +363,7 @@ EXPECTED_COLUMNS = [
 
 def _expected_columns():
     # pulled from the module rather than duplicated, so the two cannot drift
-    return EXPECTED_COLUMNS + SILENT_CODON_COLUMNS
+    return EXPECTED_COLUMNS + SILENT_CODON_COLUMNS + NUCLEOTIDE_CHANGE_COLUMNS
 
 
 def _write_input_csv(tmp_path, rows):
@@ -677,3 +679,117 @@ class TestCodonColumns:
         assert cols[10] == selected['codon_ref'] and cols[15] == selected['codon_edit']
         assert cols[11] == cols[16]                      # amino acid unchanged
         assert cols[13] == cols[18]                      # same residue number
+
+
+# ---------------------------------------------------------------------------
+# nucleotide_change_columns()
+# ---------------------------------------------------------------------------
+
+NT_REF = 'ATGCATTACGGCTAAGCCATGGTTCAGACCTGA'
+
+
+def _changes(reference, edit):
+    """Return the two index lists as ints."""
+    cols = nucleotide_change_columns(reference, edit)
+    return ([int(x) for x in cols[0].split(';') if x],
+            [int(x) for x in cols[1].split(';') if x])
+
+
+class TestNucleotideChangeColumns:
+    def test_identical_sequences_report_nothing(self):
+        assert nucleotide_change_columns(NT_REF, NT_REF) == ['', '']
+
+    def test_returns_one_value_per_declared_column(self):
+        assert len(nucleotide_change_columns(NT_REF, NT_REF)) == len(NUCLEOTIDE_CHANGE_COLUMNS) == 2
+
+    def test_single_substitution_is_reported_in_both_coordinate_systems(self):
+        edit = NT_REF[:10] + ('T' if NT_REF[10] != 'T' else 'A') + NT_REF[11:]
+        assert _changes(NT_REF, edit) == ([10], [10])
+
+    def test_separate_substitutions_are_all_reported(self):
+        # stands in for an intended edit plus a silent mutation elsewhere
+        edit = list(NT_REF)
+        for i in (4, 20, 21):
+            edit[i] = 'G' if NT_REF[i] != 'G' else 'C'
+        edit_positions, reference_positions = _changes(NT_REF, ''.join(edit))
+        assert edit_positions == reference_positions == [4, 20, 21]
+
+    def test_case_is_ignored(self):
+        # silent mutations are written in lowercase by PrimeDesign
+        edit = NT_REF[:10].lower() + NT_REF[10:]
+        assert nucleotide_change_columns(NT_REF, edit) == ['', '']
+
+    def test_deletion_has_reference_positions_but_no_edit_positions(self):
+        edit = NT_REF[:12] + NT_REF[17:]          # drops 5 reference bases
+        edit_positions, reference_positions = _changes(NT_REF, edit)
+        assert edit_positions == []
+        assert len(reference_positions) == 5
+        # alignment-agnostic: removing the reported reference bases must give the edit
+        kept = ''.join(c for i, c in enumerate(NT_REF) if i not in set(reference_positions))
+        assert kept == edit
+
+    def test_insertion_has_edit_positions_but_no_reference_positions(self):
+        edit = NT_REF[:12] + 'GGCTT' + NT_REF[12:]
+        edit_positions, reference_positions = _changes(NT_REF, edit)
+        assert reference_positions == []
+        assert len(edit_positions) == 5
+        kept = ''.join(c for i, c in enumerate(edit) if i not in set(edit_positions))
+        assert kept == NT_REF
+
+    def test_deletion_plus_a_distant_substitution(self):
+        # the realistic case: an indel edit and a silent mutation far from it
+        edit = NT_REF[:4] + ('G' if NT_REF[4] != 'G' else 'C') + NT_REF[5:12] + NT_REF[17:]
+        edit_positions, reference_positions = _changes(NT_REF, edit)
+        assert 4 in edit_positions and 4 in reference_positions
+        assert len(reference_positions) == len(edit_positions) + 5   # 5 deleted bases
+
+    def test_indexes_are_sorted_and_zero_based(self):
+        edit = list(NT_REF)
+        for i in (0, 7, len(NT_REF) - 1):
+            edit[i] = 'G' if NT_REF[i] != 'G' else 'C'
+        edit_positions, _ = _changes(NT_REF, ''.join(edit))
+        assert edit_positions == sorted(edit_positions)
+        assert edit_positions[0] == 0 and edit_positions[-1] == len(NT_REF) - 1
+
+    def test_values_contain_no_commas(self):
+        # the output is written as naive comma-joined CSV, so a comma would corrupt it
+        edit = list(NT_REF)
+        for i in (2, 9, 15):
+            edit[i] = 'G' if NT_REF[i] != 'G' else 'C'
+        for value in nucleotide_change_columns(NT_REF, ''.join(edit)):
+            assert ',' not in value
+
+
+# ---------------------------------------------------------------------------
+# number_of_pegrnas = 0 means "all"
+# ---------------------------------------------------------------------------
+
+class TestMainNumberOfPegrnas:
+    def _count(self, tmp_path, monkeypatch, extra):
+        tmp_path.mkdir(parents=True, exist_ok=True)
+        input_csv = _write_input_csv(tmp_path, [("target_01", SAT_MUT_SEQ)])
+        df = _run_main(monkeypatch, tmp_path, input_csv, extra_args=extra)
+        return df[df['gRNA_type'] == 'pegRNA']
+
+    def test_zero_means_all_not_none(self, tmp_path, monkeypatch):
+        # The selection slices the ranked pegRNAs, so a bare [:0] would silently return
+        # nothing. This fixture yields at most one pegRNA per design, so 0 and 1 give the
+        # same count here; what matters is that 0 is not read as "keep zero".
+        capped = self._count(tmp_path / 'capped', monkeypatch,
+                             ['-sat_mut', 'aa_subs', '-n_pegrnas', '1'])
+        every = self._count(tmp_path / 'every', monkeypatch,
+                            ['-sat_mut', 'aa_subs', '-n_pegrnas', '0'])
+        assert len(every) > 0
+        assert len(every) >= len(capped)
+
+    def test_an_explicit_cap_limits_pegrnas_per_design(self, tmp_path, monkeypatch):
+        capped = self._count(tmp_path / 'capped', monkeypatch,
+                             ['-sat_mut', 'aa_subs', '-n_pegrnas', '1'])
+        per_design = capped.groupby(['Target_name', 'Target_sequence'])['pegRNA_number'].nunique()
+        assert per_design.max() == 1
+
+    def test_zero_is_the_default(self, tmp_path, monkeypatch):
+        explicit = self._count(tmp_path / 'explicit', monkeypatch,
+                               ['-sat_mut', 'aa_subs', '-n_pegrnas', '0'])
+        default = self._count(tmp_path / 'default', monkeypatch, ['-sat_mut', 'aa_subs'])
+        assert len(default) == len(explicit)

@@ -371,3 +371,74 @@ def test_print_shared_sequences_mutant_outputs_expected_text(capsys):
     out = capsys.readouterr().out
     assert "A_mutant" in out
     assert "M1" in out
+
+
+# --------------------------------------------------------------------------- #
+# pegRNA_molecule_key / drop_duplicate_pegRNAs
+# --------------------------------------------------------------------------- #
+
+def _peg(spacer="ACGTACGTACGTACGTACGT", rtt="AAACCC", pbs="GGGTTT", edit="R1C", **kw):
+    row = {"Spacer_sequence": spacer, "Scaffold_sequence": "GTTTAAGAGC",
+           "RTT_sequence": rtt, "PBS_sequence": pbs, "Edit": edit}
+    row.update(kw)
+    return row
+
+
+class TestPegRNAMoleculeKey:
+    def test_identical_sequences_give_identical_keys(self):
+        df = pd.DataFrame([_peg(edit="R1C"), _peg(edit="R1H")])
+        key = pe.pegRNA_molecule_key(df)
+        assert key.iloc[0] == key.iloc[1]  # same molecule, different edit label
+
+    def test_a_different_rtt_gives_a_different_key(self):
+        df = pd.DataFrame([_peg(rtt="AAACCC"), _peg(rtt="AAACCG")])
+        key = pe.pegRNA_molecule_key(df)
+        assert key.iloc[0] != key.iloc[1]
+
+    def test_case_is_ignored(self):
+        df = pd.DataFrame([_peg(rtt="aaaccc"), _peg(rtt="AAACCC")])
+        key = pe.pegRNA_molecule_key(df)
+        assert key.iloc[0] == key.iloc[1]
+
+    def test_linker_is_included_when_present(self):
+        df = pd.DataFrame([_peg(Linker_sequence="AAAA"), _peg(Linker_sequence="TTTT")])
+        key = pe.pegRNA_molecule_key(df)
+        assert key.iloc[0] != key.iloc[1]
+
+    def test_missing_sequence_columns_raises(self):
+        with pytest.raises(ValueError, match="none of the sequence columns"):
+            pe.pegRNA_molecule_key(pd.DataFrame({"Edit": ["R1C"]}))
+
+
+class TestDropDuplicatePegRNAs:
+    def test_removes_duplicates_within_the_frame(self):
+        df = pd.DataFrame([_peg(edit="R1C"), _peg(edit="R1H"), _peg(rtt="AAACCG", edit="R1K")])
+        out = pe.drop_duplicate_pegRNAs(df)
+        assert len(out) == 2
+        assert out.iloc[0]["Edit"] == "R1C"  # first occurrence is kept
+
+    def test_removes_rows_already_present_in_existing(self):
+        existing = pd.DataFrame([_peg(rtt="AAACCC")])
+        new = pd.DataFrame([_peg(rtt="AAACCC", edit="R1H"), _peg(rtt="AAACCG", edit="R1K")])
+        out = pe.drop_duplicate_pegRNAs(new, existing=existing)
+        assert list(out["Edit"]) == ["R1K"]
+
+    def test_keeps_everything_when_nothing_collides(self):
+        existing = pd.DataFrame([_peg(rtt="TTTTTT")])
+        new = pd.DataFrame([_peg(rtt="AAACCC"), _peg(rtt="AAACCG")])
+        assert len(pe.drop_duplicate_pegRNAs(new, existing=existing)) == 2
+
+    def test_empty_input_is_returned_unchanged(self):
+        empty = pd.DataFrame(columns=["Spacer_sequence", "Scaffold_sequence",
+                                      "RTT_sequence", "PBS_sequence", "Edit"])
+        assert len(pe.drop_duplicate_pegRNAs(empty)) == 0
+
+    def test_empty_existing_is_ignored(self):
+        new = pd.DataFrame([_peg(rtt="AAACCC")])
+        empty = pd.DataFrame(columns=new.columns)
+        assert len(pe.drop_duplicate_pegRNAs(new, existing=empty)) == 1
+
+    def test_index_is_reset(self):
+        df = pd.DataFrame([_peg(edit="R1C"), _peg(edit="R1H"), _peg(rtt="AAACCG", edit="R1K")])
+        out = pe.drop_duplicate_pegRNAs(df)
+        assert list(out.index) == list(range(len(out)))
