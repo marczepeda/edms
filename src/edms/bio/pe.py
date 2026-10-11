@@ -15,6 +15,8 @@ Usage:
 - found_list_in_order(): returns index of sub_ls found consecutive order in main_ls or -1
 - find_enzyme_sites(): find enzyme sites in pegRNAs or ngRNAs
 - enzyme_codon_swap(): modify pegRNA RTT sequences to disrupt a RE recognition site
+- codon_nt_difference(): number of nucleotide differences between two codons
+- sort_pegRNAs(): arrange pegRNAs so related designs sit together
 - pegRNA_molecule_key(): the physical molecule each pegRNA row encodes
 - drop_duplicate_pegRNAs(): remove pegRNA rows encoding a molecule that is already present
 
@@ -205,6 +207,70 @@ def find_enzyme_sites(df: pd.DataFrame | str, enzyme: str, RE_type_IIS_df: pd.Da
     df[f'{enzyme}_fwd_i'] = df_enzyme_sites_fwd
     df[f'{enzyme}_rc_i'] = df_enzyme_sites_rc
     return df
+
+def codon_nt_difference(codon_ref, codon_edit) -> float:
+    ''' 
+    codon_nt_difference(): number of nucleotide differences between two codons
+
+    Parameters:
+    codon_ref: reference codon
+    codon_edit: edited codon
+
+    Returns NaN when either codon is missing, incomplete or ambiguous, so rows without a
+    codon sort last rather than being scored against the literal string 'nan'.
+    '''
+    codon_ref, codon_edit = str(codon_ref).upper(), str(codon_edit).upper()
+    # str(nan) is 'nan', which is three characters, so the bases have to be checked too
+    if not set(codon_ref) <= set('ACGT') or not set(codon_edit) <= set('ACGT'):
+        return np.nan
+    if len(codon_ref) != 3 or len(codon_edit) != 3:
+        return np.nan
+    return float(sum(a != b for a, b in zip(codon_ref, codon_edit)))
+
+def sort_pegRNAs(pegRNAs: pd.DataFrame, comments: bool = False) -> pd.DataFrame:
+    ''' 
+    sort_pegRNAs(): arrange pegRNAs so related designs sit together
+
+    Parameters:
+    pegRNAs (pd.DataFrame): pegRNAs DataFrame
+    comments (bool, optional): print comments (Default: False)
+
+    Rows are grouped by the edit and then by the pegRNA installing it (spacer, then PBS), so a
+    pegRNA revised by enzyme_codon_swap() lands beside the designs it shares those
+    characteristics with rather than relying on pegRNA_number ordering. Within a group the
+    synonymous codon choices are ordered the way PrimeDesign ranks them: most nucleotide
+    differences from the reference codon first, then highest human codon usage. The silent
+    mutation breaks any remaining tie on the same two criteria, and pegRNA_number makes the
+    order deterministic.
+
+    Adds Target_codon_nt_difference and Silent_codon_nt_difference, making the first sort
+    criterion explicit so the arrangement can be checked.
+
+    Dependencies: numpy, pandas, codon_nt_difference()
+    '''
+    if len(pegRNAs) == 0:
+        return pegRNAs
+
+    for prefix in ('Target', 'Silent'):
+        reference_col, edit_col = f'{prefix}_reference_codon', f'{prefix}_edit_codon'
+        if reference_col in pegRNAs.columns and edit_col in pegRNAs.columns:
+            pegRNAs[f'{prefix}_codon_nt_difference'] = [codon_nt_difference(reference, edit)
+                for reference, edit in zip(pegRNAs[reference_col], pegRNAs[edit_col])]
+
+    # (column, ascending): group first, then rank within the group
+    order = [('AA_number', True), ('Base_number', True), ('Edit', True),
+             ('Spacer_sequence', True), ('PBS_sequence', True),
+             ('Target_codon_nt_difference', False), ('Target_edit_codon_usage', False),
+             ('Silent_codon_nt_difference', False), ('Silent_edit_codon_usage', False),
+             ('pegRNA_number', True)]
+    by = [(col, asc) for col, asc in order if col in pegRNAs.columns]
+    if not by:
+        return pegRNAs.reset_index(drop=True)
+    if comments:
+        print(f"Sorting pegRNAs by: {[col for col, _ in by]}")
+    return pegRNAs.sort_values(by=[col for col, _ in by],
+                               ascending=[asc for _, asc in by],
+                               kind='mergesort').reset_index(drop=True)
 
 def pegRNA_molecule_key(pegRNAs: pd.DataFrame) -> pd.Series:
     ''' 
@@ -869,6 +935,9 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
     # Remove oligonucleotide column
     pegRNAs.drop(columns=['Oligonucleotide'], inplace=True)
     ngRNAs.drop(columns=['Oligonucleotide'], inplace=True)
+
+    # Arrange pegRNAs so revised designs sit beside the ones they resemble
+    pegRNAs = sort_pegRNAs(pegRNAs=pegRNAs)
 
     return pegRNAs,ngRNAs
 

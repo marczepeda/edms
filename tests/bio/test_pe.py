@@ -7,6 +7,7 @@ pandas-DataFrame-oriented functions (find_enzyme_sites, pegRNA_outcome,
 sensor_designer, merge, group_pe, shared_sequences, print_shared_sequences*)
 using small synthetic DataFrames built from hand-verifiable DNA sequences.
 """
+import numpy as np
 import pandas as pd
 import pytest
 from Bio.Seq import Seq
@@ -442,3 +443,103 @@ class TestDropDuplicatePegRNAs:
         df = pd.DataFrame([_peg(edit="R1C"), _peg(edit="R1H"), _peg(rtt="AAACCG", edit="R1K")])
         out = pe.drop_duplicate_pegRNAs(df)
         assert list(out.index) == list(range(len(out)))
+
+
+# --------------------------------------------------------------------------- #
+# codon_nt_difference / sort_pegRNAs
+# --------------------------------------------------------------------------- #
+
+class TestCodonNtDifference:
+    def test_identical_codons(self):
+        assert pe.codon_nt_difference("GTG", "GTG") == 0
+
+    def test_counts_each_differing_position(self):
+        assert pe.codon_nt_difference("CAC", "GGC") == 2
+        assert pe.codon_nt_difference("CAC", "GGA") == 3
+
+    def test_case_insensitive(self):
+        assert pe.codon_nt_difference("cac", "GGC") == 2
+
+    def test_missing_or_short_codon_is_nan(self):
+        assert np.isnan(pe.codon_nt_difference("", "GGC"))
+        assert np.isnan(pe.codon_nt_difference("GT", "GTG"))
+        assert np.isnan(pe.codon_nt_difference(np.nan, "GTG"))
+
+
+def _sortable(edit, spacer, pbs, ref_codon, edit_codon, usage, number,
+              silent_ref="AAA", silent_edit="AAG", silent_usage=0.5, aa=1):
+    return {"Edit": edit, "AA_number": aa, "Spacer_sequence": spacer, "PBS_sequence": pbs,
+            "Target_reference_codon": ref_codon, "Target_edit_codon": edit_codon,
+            "Target_edit_codon_usage": usage, "Silent_reference_codon": silent_ref,
+            "Silent_edit_codon": silent_edit, "Silent_edit_codon_usage": silent_usage,
+            "pegRNA_number": number}
+
+
+class TestSortPegRNAs:
+    def test_adds_the_nucleotide_difference_columns(self):
+        df = pd.DataFrame([_sortable("Y6V", "S1", "P1", "TAC", "GTG", 0.47, 1)])
+        out = pe.sort_pegRNAs(df)
+        assert out.loc[0, "Target_codon_nt_difference"] == 3   # TAC -> GTG
+        assert out.loc[0, "Silent_codon_nt_difference"] == 1   # AAA -> AAG
+
+    def test_orders_by_nucleotide_difference_then_usage(self):
+        # shuffled on input; TAC->GTC differs at 2, the rest at 3.
+        # pegRNA_number deliberately contradicts the usage order, so falling back to it
+        # would give GTT, GTA, GTG and fail -- only a usage-based tiebreak passes.
+        df = pd.DataFrame([
+            _sortable("Y6V", "S1", "P1", "TAC", "GTC", 0.24, 1),
+            _sortable("Y6V", "S1", "P1", "TAC", "GTA", 0.11, 8),
+            _sortable("Y6V", "S1", "P1", "TAC", "GTG", 0.47, 9),
+            _sortable("Y6V", "S1", "P1", "TAC", "GTT", 0.18, 7),
+        ])
+        out = pe.sort_pegRNAs(df)
+        assert list(out["Target_edit_codon"]) == ["GTG", "GTT", "GTA", "GTC"]
+
+    def test_keeps_each_edit_spacer_pbs_group_contiguous(self):
+        df = pd.DataFrame([
+            _sortable("Y6V", "S1", "P1", "TAC", "GTG", 0.47, 1),
+            _sortable("Y6V", "S2", "P2", "TAC", "GTT", 0.18, 2),
+            _sortable("Y6V", "S1", "P1", "TAC", "GTC", 0.24, 3),
+            _sortable("Y6V", "S2", "P2", "TAC", "GTA", 0.11, 4),
+        ])
+        out = pe.sort_pegRNAs(df)
+        codes = out[["Edit", "Spacer_sequence", "PBS_sequence"]].astype(str).agg("|".join, axis=1)
+        runs = (codes != codes.shift()).cumsum().nunique()
+        assert runs == codes.nunique()   # no group is split across the file
+
+    def test_a_revised_pegrna_lands_beside_its_group(self):
+        # the revised row (different RTT, fewest differences) must sort into its own group
+        df = pd.DataFrame([
+            _sortable("A1B", "Sx", "Px", "AAA", "CCC", 0.5, 10),
+            _sortable("Y6V", "S1", "P1", "TAC", "GTG", 0.47, 1),
+            _sortable("Y6V", "S1", "P1", "TAC", "GTC", 0.24, 99),   # the revised one
+            _sortable("A1B", "Sx", "Px", "AAA", "CCG", 0.4, 11),
+        ])
+        out = pe.sort_pegRNAs(df).reset_index(drop=True)
+        y6v = out.index[out["Edit"] == "Y6V"].tolist()
+        assert y6v == list(range(min(y6v), min(y6v) + len(y6v)))   # contiguous
+        assert out.loc[y6v[-1], "pegRNA_number"] == 99             # ranked last in its group
+
+    def test_amino_acid_order_takes_precedence(self):
+        df = pd.DataFrame([
+            _sortable("Q9X", "S1", "P1", "AAA", "CCC", 0.5, 1, aa=9),
+            _sortable("A1X", "S1", "P1", "AAA", "CCC", 0.5, 2, aa=1),
+        ])
+        out = pe.sort_pegRNAs(df)
+        assert list(out["AA_number"]) == [1, 9]
+
+    def test_empty_frame_is_returned_unchanged(self):
+        empty = pd.DataFrame(columns=["Edit", "Spacer_sequence", "PBS_sequence"])
+        assert len(pe.sort_pegRNAs(empty)) == 0
+
+    def test_tolerates_missing_optional_columns(self):
+        df = pd.DataFrame([{"Edit": "B", "pegRNA_number": 2}, {"Edit": "A", "pegRNA_number": 1}])
+        out = pe.sort_pegRNAs(df)
+        assert list(out["Edit"]) == ["A", "B"]
+
+    def test_index_is_reset(self):
+        df = pd.DataFrame([
+            _sortable("Y6V", "S1", "P1", "TAC", "GTC", 0.24, 2),
+            _sortable("Y6V", "S1", "P1", "TAC", "GTG", 0.47, 1),
+        ])
+        assert list(pe.sort_pegRNAs(df).index) == [0, 1]
