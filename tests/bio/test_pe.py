@@ -7,6 +7,7 @@ pandas-DataFrame-oriented functions (find_enzyme_sites, pegRNA_outcome,
 sensor_designer, merge, group_pe, shared_sequences, print_shared_sequences*)
 using small synthetic DataFrames built from hand-verifiable DNA sequences.
 """
+import numpy as np
 import pandas as pd
 import pytest
 from Bio.Seq import Seq
@@ -371,3 +372,260 @@ def test_print_shared_sequences_mutant_outputs_expected_text(capsys):
     out = capsys.readouterr().out
     assert "A_mutant" in out
     assert "M1" in out
+
+
+# --------------------------------------------------------------------------- #
+# pegRNA_molecule_key / drop_duplicate_pegRNAs
+# --------------------------------------------------------------------------- #
+
+def _peg(spacer="ACGTACGTACGTACGTACGT", rtt="AAACCC", pbs="GGGTTT", edit="R1C", **kw):
+    row = {"Spacer_sequence": spacer, "Scaffold_sequence": "GTTTAAGAGC",
+           "RTT_sequence": rtt, "PBS_sequence": pbs, "Edit": edit}
+    row.update(kw)
+    return row
+
+
+class TestPegRNAMoleculeKey:
+    def test_identical_sequences_give_identical_keys(self):
+        df = pd.DataFrame([_peg(edit="R1C"), _peg(edit="R1H")])
+        key = pe.pegRNA_molecule_key(df)
+        assert key.iloc[0] == key.iloc[1]  # same molecule, different edit label
+
+    def test_a_different_rtt_gives_a_different_key(self):
+        df = pd.DataFrame([_peg(rtt="AAACCC"), _peg(rtt="AAACCG")])
+        key = pe.pegRNA_molecule_key(df)
+        assert key.iloc[0] != key.iloc[1]
+
+    def test_case_is_ignored(self):
+        df = pd.DataFrame([_peg(rtt="aaaccc"), _peg(rtt="AAACCC")])
+        key = pe.pegRNA_molecule_key(df)
+        assert key.iloc[0] == key.iloc[1]
+
+    def test_linker_is_included_when_present(self):
+        df = pd.DataFrame([_peg(Linker_sequence="AAAA"), _peg(Linker_sequence="TTTT")])
+        key = pe.pegRNA_molecule_key(df)
+        assert key.iloc[0] != key.iloc[1]
+
+    def test_missing_sequence_columns_raises(self):
+        with pytest.raises(ValueError, match="none of the sequence columns"):
+            pe.pegRNA_molecule_key(pd.DataFrame({"Edit": ["R1C"]}))
+
+
+class TestDropDuplicatePegRNAs:
+    def test_removes_duplicates_within_the_frame(self):
+        df = pd.DataFrame([_peg(edit="R1C"), _peg(edit="R1H"), _peg(rtt="AAACCG", edit="R1K")])
+        out = pe.drop_duplicate_pegRNAs(df)
+        assert len(out) == 2
+        assert out.iloc[0]["Edit"] == "R1C"  # first occurrence is kept
+
+    def test_removes_rows_already_present_in_existing(self):
+        existing = pd.DataFrame([_peg(rtt="AAACCC")])
+        new = pd.DataFrame([_peg(rtt="AAACCC", edit="R1H"), _peg(rtt="AAACCG", edit="R1K")])
+        out = pe.drop_duplicate_pegRNAs(new, existing=existing)
+        assert list(out["Edit"]) == ["R1K"]
+
+    def test_keeps_everything_when_nothing_collides(self):
+        existing = pd.DataFrame([_peg(rtt="TTTTTT")])
+        new = pd.DataFrame([_peg(rtt="AAACCC"), _peg(rtt="AAACCG")])
+        assert len(pe.drop_duplicate_pegRNAs(new, existing=existing)) == 2
+
+    def test_empty_input_is_returned_unchanged(self):
+        empty = pd.DataFrame(columns=["Spacer_sequence", "Scaffold_sequence",
+                                      "RTT_sequence", "PBS_sequence", "Edit"])
+        assert len(pe.drop_duplicate_pegRNAs(empty)) == 0
+
+    def test_empty_existing_is_ignored(self):
+        new = pd.DataFrame([_peg(rtt="AAACCC")])
+        empty = pd.DataFrame(columns=new.columns)
+        assert len(pe.drop_duplicate_pegRNAs(new, existing=empty)) == 1
+
+    def test_index_is_reset(self):
+        df = pd.DataFrame([_peg(edit="R1C"), _peg(edit="R1H"), _peg(rtt="AAACCG", edit="R1K")])
+        out = pe.drop_duplicate_pegRNAs(df)
+        assert list(out.index) == list(range(len(out)))
+
+
+# --------------------------------------------------------------------------- #
+# codon_nt_difference / sort_pegRNAs
+# --------------------------------------------------------------------------- #
+
+class TestCodonNtDifference:
+    def test_identical_codons(self):
+        assert pe.codon_nt_difference("GTG", "GTG") == 0
+
+    def test_counts_each_differing_position(self):
+        assert pe.codon_nt_difference("CAC", "GGC") == 2
+        assert pe.codon_nt_difference("CAC", "GGA") == 3
+
+    def test_case_insensitive(self):
+        assert pe.codon_nt_difference("cac", "GGC") == 2
+
+    def test_missing_or_short_codon_is_nan(self):
+        assert np.isnan(pe.codon_nt_difference("", "GGC"))
+        assert np.isnan(pe.codon_nt_difference("GT", "GTG"))
+        assert np.isnan(pe.codon_nt_difference(np.nan, "GTG"))
+
+
+def _sortable(edit, spacer, pbs, ref_codon, edit_codon, usage, number,
+              silent_ref="AAA", silent_edit="AAG", silent_usage=0.5, aa=1):
+    return {"Edit": edit, "AA_number": aa, "Spacer_sequence": spacer, "PBS_sequence": pbs,
+            "Target_reference_codon": ref_codon, "Target_edit_codon": edit_codon,
+            "Target_edit_codon_usage": usage, "Silent_reference_codon": silent_ref,
+            "Silent_edit_codon": silent_edit, "Silent_edit_codon_usage": silent_usage,
+            "pegRNA_number": number}
+
+
+class TestSortPegRNAs:
+    def test_adds_the_nucleotide_difference_columns(self):
+        df = pd.DataFrame([_sortable("Y6V", "S1", "P1", "TAC", "GTG", 0.47, 1)])
+        out = pe.sort_pegRNAs(df)
+        assert out.loc[0, "Target_codon_nt_difference"] == 3   # TAC -> GTG
+        assert out.loc[0, "Silent_codon_nt_difference"] == 1   # AAA -> AAG
+
+    def test_orders_by_nucleotide_difference_then_usage(self):
+        # shuffled on input; TAC->GTC differs at 2, the rest at 3.
+        # pegRNA_number deliberately contradicts the usage order, so falling back to it
+        # would give GTT, GTA, GTG and fail -- only a usage-based tiebreak passes.
+        df = pd.DataFrame([
+            _sortable("Y6V", "S1", "P1", "TAC", "GTC", 0.24, 1),
+            _sortable("Y6V", "S1", "P1", "TAC", "GTA", 0.11, 8),
+            _sortable("Y6V", "S1", "P1", "TAC", "GTG", 0.47, 9),
+            _sortable("Y6V", "S1", "P1", "TAC", "GTT", 0.18, 7),
+        ])
+        out = pe.sort_pegRNAs(df)
+        assert list(out["Target_edit_codon"]) == ["GTG", "GTT", "GTA", "GTC"]
+
+    def test_keeps_each_edit_spacer_pbs_group_contiguous(self):
+        df = pd.DataFrame([
+            _sortable("Y6V", "S1", "P1", "TAC", "GTG", 0.47, 1),
+            _sortable("Y6V", "S2", "P2", "TAC", "GTT", 0.18, 2),
+            _sortable("Y6V", "S1", "P1", "TAC", "GTC", 0.24, 3),
+            _sortable("Y6V", "S2", "P2", "TAC", "GTA", 0.11, 4),
+        ])
+        out = pe.sort_pegRNAs(df)
+        codes = out[["Edit", "Spacer_sequence", "PBS_sequence"]].astype(str).agg("|".join, axis=1)
+        runs = (codes != codes.shift()).cumsum().nunique()
+        assert runs == codes.nunique()   # no group is split across the file
+
+    def test_a_revised_pegrna_lands_beside_its_group(self):
+        # the revised row (different RTT, fewest differences) must sort into its own group
+        df = pd.DataFrame([
+            _sortable("A1B", "Sx", "Px", "AAA", "CCC", 0.5, 10),
+            _sortable("Y6V", "S1", "P1", "TAC", "GTG", 0.47, 1),
+            _sortable("Y6V", "S1", "P1", "TAC", "GTC", 0.24, 99),   # the revised one
+            _sortable("A1B", "Sx", "Px", "AAA", "CCG", 0.4, 11),
+        ])
+        out = pe.sort_pegRNAs(df).reset_index(drop=True)
+        y6v = out.index[out["Edit"] == "Y6V"].tolist()
+        assert y6v == list(range(min(y6v), min(y6v) + len(y6v)))   # contiguous
+        assert out.loc[y6v[-1], "pegRNA_number"] == 99             # ranked last in its group
+
+    def test_amino_acid_order_takes_precedence(self):
+        df = pd.DataFrame([
+            _sortable("Q9X", "S1", "P1", "AAA", "CCC", 0.5, 1, aa=9),
+            _sortable("A1X", "S1", "P1", "AAA", "CCC", 0.5, 2, aa=1),
+        ])
+        out = pe.sort_pegRNAs(df)
+        assert list(out["AA_number"]) == [1, 9]
+
+    def test_empty_frame_is_returned_unchanged(self):
+        empty = pd.DataFrame(columns=["Edit", "Spacer_sequence", "PBS_sequence"])
+        assert len(pe.sort_pegRNAs(empty)) == 0
+
+    def test_tolerates_missing_optional_columns(self):
+        df = pd.DataFrame([{"Edit": "B", "pegRNA_number": 2}, {"Edit": "A", "pegRNA_number": 1}])
+        out = pe.sort_pegRNAs(df)
+        assert list(out["Edit"]) == ["A", "B"]
+
+    def test_index_is_reset(self):
+        df = pd.DataFrame([
+            _sortable("Y6V", "S1", "P1", "TAC", "GTC", 0.24, 2),
+            _sortable("Y6V", "S1", "P1", "TAC", "GTG", 0.47, 1),
+        ])
+        assert list(pe.sort_pegRNAs(df).index) == [0, 1]
+
+
+# --------------------------------------------------------------------------- #
+# refresh_codon_annotations
+# --------------------------------------------------------------------------- #
+
+# in-frame reference; codon 3 ([9,12)) stands in for the intended edit and
+# codon 5 ([15,18)) for the silent mutation
+REFRESH_REF = "ATGGCTCTGACCAAGCATGAATTCGTGCGT"
+
+
+def _annotated(edit_sequence):
+    """A row whose codon annotations describe REFRESH_REF, not necessarily edit_sequence."""
+    return {
+        "Reference_sequence": REFRESH_REF,
+        "Edit_sequence": edit_sequence,
+        "Target_reference_codon": "ACC", "Target_reference_AA": "T",
+        "Target_edit_codon": "ACC", "Target_edit_AA": "T",
+        "Target_edit_codon_usage": 0.36, "Target_edit_codon_index": 9,
+        "Silent_reference_codon": "CAT", "Silent_reference_AA": "H",
+        "Silent_edit_codon": "CAT", "Silent_edit_AA": "H",
+        "Silent_edit_codon_usage": 0.41, "Silent_edit_codon_index": 15,
+    }
+
+
+class TestRefreshCodonAnnotations:
+    def test_rereads_the_edit_codon_from_the_rewritten_sequence(self):
+        # codon 3 rewritten ACC -> ACG (still Thr)
+        edit = REFRESH_REF[:9] + "ACG" + REFRESH_REF[12:]
+        out = pe.refresh_codon_annotations(pd.DataFrame([_annotated(edit)]))
+        assert out.loc[0, "Target_edit_codon"] == "ACG"
+        assert out.loc[0, "Target_edit_AA"] == "T"
+        assert out.loc[0, "Target_edit_codon_usage"] == 0.12   # ACG human usage
+
+    def test_rereads_the_silent_codon(self):
+        edit = REFRESH_REF[:15] + "CAC" + REFRESH_REF[18:]     # CAT -> CAC, still His
+        out = pe.refresh_codon_annotations(pd.DataFrame([_annotated(edit)]))
+        assert out.loc[0, "Silent_edit_codon"] == "CAC"
+        assert out.loc[0, "Silent_edit_AA"] == "H"
+        assert out.loc[0, "Silent_edit_codon_usage"] == 0.59
+
+    def test_leaves_the_reference_columns_alone(self):
+        edit = REFRESH_REF[:9] + "ACG" + REFRESH_REF[12:]
+        out = pe.refresh_codon_annotations(pd.DataFrame([_annotated(edit)]))
+        assert out.loc[0, "Target_reference_codon"] == "ACC"   # Reference_sequence never changes
+        assert out.loc[0, "Silent_reference_codon"] == "CAT"
+
+    def test_recomputes_the_change_indexes(self):
+        edit = REFRESH_REF[:9] + "ACG" + REFRESH_REF[12:]      # one base differs, at 11
+        out = pe.refresh_codon_annotations(pd.DataFrame([_annotated(edit)]))
+        assert out.loc[0, "Edit_sequence_change_indexes"] == "11"
+        assert out.loc[0, "Reference_sequence_change_indexes"] == "11"
+
+    def test_unchanged_sequence_leaves_everything_as_it_was(self):
+        out = pe.refresh_codon_annotations(pd.DataFrame([_annotated(REFRESH_REF)]))
+        assert out.loc[0, "Target_edit_codon"] == "ACC"
+        assert out.loc[0, "Silent_edit_codon"] == "CAT"
+        assert out.loc[0, "Edit_sequence_change_indexes"] == ""
+
+    def test_row_without_a_recorded_index_is_left_alone(self):
+        row = _annotated(REFRESH_REF)
+        row["Silent_edit_codon_index"] = np.nan
+        row["Silent_edit_codon"] = "GGG"          # deliberately wrong, but unindexed
+        out = pe.refresh_codon_annotations(pd.DataFrame([row]))
+        assert out.loc[0, "Silent_edit_codon"] == "GGG"
+
+    def test_index_running_off_the_end_blanks_the_codon(self):
+        row = _annotated(REFRESH_REF)
+        row["Silent_edit_codon_index"] = len(REFRESH_REF) - 1   # only 1 base available
+        out = pe.refresh_codon_annotations(pd.DataFrame([row]))
+        assert out.loc[0, "Silent_edit_codon"] == ""
+        assert out.loc[0, "Silent_edit_AA"] == ""
+
+    def test_empty_frame_is_returned_unchanged(self):
+        assert len(pe.refresh_codon_annotations(pd.DataFrame(columns=["Edit_sequence"]))) == 0
+
+    def test_frame_without_codon_columns_is_tolerated(self):
+        df = pd.DataFrame([{"Edit_sequence": REFRESH_REF, "Reference_sequence": REFRESH_REF}])
+        out = pe.refresh_codon_annotations(df)
+        assert out.loc[0, "Edit_sequence_change_indexes"] == ""
+
+    def test_refresh_is_idempotent(self):
+        edit = REFRESH_REF[:9] + "ACG" + REFRESH_REF[12:]
+        once = pe.refresh_codon_annotations(pd.DataFrame([_annotated(edit)]))
+        twice = pe.refresh_codon_annotations(once.copy())
+        pd.testing.assert_frame_equal(once, twice)

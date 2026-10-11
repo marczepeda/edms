@@ -27,6 +27,15 @@ from edms.bio.primedesign import (
     silent_mutation_edit_sequence_in_allowed_range,
     process_sequence,
     saturating_mutagenesis_input_sequences,
+    ranked_silent_mutations,
+    pam_spacer_annotation,
+    target_aa_number,
+    codon_annotation,
+    codon_columns,
+    SILENT_CODON_COLUMNS,
+    NUCLEOTIDE_CHANGE_COLUMNS,
+    nucleotide_change_columns,
+    codon_dict,
 )
 
 
@@ -352,6 +361,11 @@ EXPECTED_COLUMNS = [
 ]
 
 
+def _expected_columns():
+    # pulled from the module rather than duplicated, so the two cannot drift
+    return EXPECTED_COLUMNS + SILENT_CODON_COLUMNS + NUCLEOTIDE_CHANGE_COLUMNS
+
+
 def _write_input_csv(tmp_path, rows):
     p = tmp_path / "input.csv"
     lines = ["target_name,target_sequence"]
@@ -377,7 +391,7 @@ class TestMainSubstitution:
     def test_produces_nonempty_output_with_expected_columns(self, tmp_path, monkeypatch):
         input_csv = _write_input_csv(tmp_path, [("target_01", SUBSTITUTION_SEQ)])
         df = _run_main(monkeypatch, tmp_path, input_csv)
-        assert list(df.columns) == EXPECTED_COLUMNS
+        assert list(df.columns) == _expected_columns()
         assert len(df) > 0
         assert set(df['Target_name'].unique()) == {"target_01"}
         # Edit_type is only populated on pegRNA rows (ngRNA rows carry NaN there)
@@ -437,3 +451,345 @@ class TestMainErrorHandling:
         import edms.bio.primedesign as primedesign
         with pytest.raises(SystemExit):
             primedesign.main()
+
+
+# ---------------------------------------------------------------------------
+# Silent mutation selection: ranked_silent_mutations()
+# ---------------------------------------------------------------------------
+
+# 20-codon in-frame reference. With the nick at 30 and the SpCas9 pe_format, the
+# spacer bases the RTT can reach are [30,33) (codon 10, AGC) and the PAM is
+# [33,36) (codon 11, CGG -- matches NGG and has 5 synonyms, so it can be broken
+# silently). Codon 15 (CAG, [45,48)) stands in for the intended edit.
+RANK_REF = ("ATG" "GCT" "CTG" "ACC" "AAG" "CAT" "GAA" "TTC" "GTG" "CGT"
+            "AGC" "CGG" "CCA" "GAT" "AAC" "CAG" "TAC" "ATT" "GGA" "TCT")
+NO_RANGE = {'silent_mutation_allowed_range': None}
+
+# SpCas9 'NNNNNNNNNNNNNNNNN/NNN[NGG]' offsets, as main() computes them
+CUT_IDX, SPACER_END_IDX, PAM_START_IDX, PAM_END_IDX = 17, 20, 20, 23
+
+
+def _rank_plus(entry=NO_RANGE, nick=30, rtt=30, edit=(45, 48)):
+    return ranked_silent_mutations(entry, RANK_REF, nick, rtt, '+', '[ACGT]GG', edit[0], edit[1])
+
+
+class TestRankedSilentMutations:
+    def test_pam_codon_is_CGG_as_the_fixture_assumes(self):
+        # guards the fixture itself: the other tests are meaningless if this drifts
+        assert RANK_REF[33:36] == 'CGG'
+        assert RANK_REF[30:33] == 'AGC'
+
+    def test_every_candidate_is_synonymous(self):
+        for c in _rank_plus():
+            assert codon_dict[c['codon_ref']][1] == codon_dict[c['codon_edit']][1]
+
+    def test_every_candidate_lies_wholly_inside_the_rtt(self):
+        for c in _rank_plus():
+            assert c['codon_start_abs'] >= 30
+            assert c['codon_end_abs'] <= 60
+
+    def test_codon_carrying_the_intended_edit_is_excluded(self):
+        for c in _rank_plus():
+            assert not (c['codon_start_abs'] < 48 and c['codon_end_abs'] > 45)
+
+    def test_pam_disruptors_rank_first(self):
+        candidates = _rank_plus()
+        disruptors = [c for c in candidates if c['disrupts_pam']]
+        assert disruptors, 'fixture should offer PAM-disrupting silent codons'
+        assert all(c['disrupts_pam'] for c in candidates[:len(disruptors)])
+
+    def test_pam_disruptors_are_exactly_the_arg_codons_that_break_NGG(self):
+        disruptors = {c['codon_edit'] for c in _rank_plus() if c['disrupts_pam']}
+        # CGG -> AGG still matches NGG, so it must NOT count as a disruptor
+        assert disruptors == {'AGA', 'CGC', 'CGA', 'CGT'}
+        assert 'AGG' not in disruptors
+
+    def test_ranking_is_monotonic_on_the_full_key(self):
+        key = lambda c: (c['disrupts_pam'], c['disrupts_spacer'], c['nt_difference'], c['usage_edit'])
+        candidates = _rank_plus()
+        assert all(key(a) >= key(b) for a, b in zip(candidates, candidates[1:]))
+
+    def test_within_the_pam_tier_most_nt_differences_come_first(self):
+        disruptors = [c for c in _rank_plus() if c['disrupts_pam']]
+        # CGG->AGA differs at 2 positions; the other three differ at 1
+        assert disruptors[0]['codon_edit'] == 'AGA'
+        assert disruptors[0]['nt_difference'] == 2
+
+    def test_codon_usage_breaks_ties_within_a_tier(self):
+        one_nt = [c for c in _rank_plus() if c['disrupts_pam'] and c['nt_difference'] == 1]
+        usages = [c['usage_edit'] for c in one_nt]
+        assert usages == sorted(usages, reverse=True)
+        assert [c['codon_edit'] for c in one_nt] == ['CGC', 'CGA', 'CGT']
+
+    def test_spacer_disruptors_rank_above_plain_candidates(self):
+        candidates = _rank_plus()
+        rest = [c for c in candidates if not c['disrupts_pam']]
+        spacer = [i for i, c in enumerate(rest) if c['disrupts_spacer']]
+        assert spacer == list(range(len(spacer)))
+
+    def test_only_the_reachable_spacer_codon_counts_as_spacer_disruption(self):
+        for c in _rank_plus():
+            if c['disrupts_spacer']:
+                assert c['codon_start_abs'] == 30  # the one codon overlapping [30,33)
+
+    def test_allowed_range_restricts_the_search(self):
+        entry = {'silent_mutation_allowed_range': (36, 45)}
+        candidates = _rank_plus(entry=entry)
+        assert candidates
+        for c in candidates:
+            assert c['codon_start_abs'] >= 36 and c['codon_end_abs'] <= 45
+        # the PAM codon is outside that range, so nothing can disrupt the PAM
+        assert not any(c['disrupts_pam'] for c in candidates)
+
+    def test_single_codon_amino_acids_yield_nothing(self):
+        # TGG (Trp) is the only codon for W, so a PAM made of it cannot be broken silently
+        ref = RANK_REF[:33] + 'TGG' + RANK_REF[36:]
+        candidates = ranked_silent_mutations(NO_RANGE, ref, 30, 30, '+', '[ACGT]GG', 45, 48)
+        assert not any(c['codon_start_abs'] == 33 for c in candidates)
+
+    def test_edit_that_already_broke_the_pam_yields_no_pam_credit(self):
+        # allele whose PAM is already destroyed: no candidate should claim to disrupt it
+        ref = RANK_REF[:33] + 'CAA' + RANK_REF[36:]
+        candidates = ranked_silent_mutations(NO_RANGE, ref, 30, 30, '+', '[ACGT]GG', 45, 48)
+        assert candidates
+        assert not any(c['disrupts_pam'] for c in candidates)
+
+    def test_minus_strand_searches_the_mirrored_window(self):
+        candidates = ranked_silent_mutations(NO_RANGE, RANK_REF, 40, 30, '-', '[ACGT]GG', 0, 0)
+        assert candidates
+        for c in candidates:
+            assert c['codon_start_abs'] >= 10 and c['codon_end_abs'] <= 40
+            assert codon_dict[c['codon_ref']][1] == codon_dict[c['codon_edit']][1]
+
+    def test_applying_a_candidate_changes_only_its_own_codon(self):
+        for c in _rank_plus():
+            new = c['silent_mutation_edit_sequence']
+            assert len(new) == len(RANK_REF)
+            differing = [i for i, (a, b) in enumerate(zip(RANK_REF.upper(), new.upper())) if a != b]
+            assert all(c['codon_start_abs'] <= i < c['codon_end_abs'] for i in differing)
+
+
+# ---------------------------------------------------------------------------
+# pam_spacer_annotation()
+# ---------------------------------------------------------------------------
+
+def _annotate(allele, strand='+', nick=30, reference=None):
+    return pam_spacer_annotation(reference if reference is not None else RANK_REF, allele,
+                                 nick, nick, strand, '[ACGT]GG',
+                                 CUT_IDX, SPACER_END_IDX, PAM_START_IDX, PAM_END_IDX)
+
+
+class TestPamSpacerAnnotation:
+    def test_unchanged_allele_is_intact(self):
+        assert _annotate(RANK_REF) == 'PAM_&_Spacer_Intact'
+
+    def test_broken_pam_reports_pam_disrupted(self):
+        allele = RANK_REF[:33] + 'CAA' + RANK_REF[36:]
+        assert _annotate(allele) == 'PAM_disrupted'
+
+    def test_pam_that_still_matches_NGG_is_not_disrupted(self):
+        # CGG -> AGG is a changed PAM that still matches, so it is not a disruption
+        allele = RANK_REF[:33] + 'AGG' + RANK_REF[36:]
+        assert _annotate(allele) == 'PAM_&_Spacer_Intact'
+
+    def test_changed_spacer_with_intact_pam_reports_spacer_disrupted(self):
+        allele = RANK_REF[:30] + 'TCT' + RANK_REF[33:]
+        assert _annotate(allele) == 'Spacer_disrupted'
+
+    def test_pam_disruption_outranks_spacer_disruption(self):
+        allele = RANK_REF[:30] + 'TCT' + 'CAA' + RANK_REF[36:]
+        assert _annotate(allele) == 'PAM_disrupted'
+
+    def test_changes_outside_pam_and_spacer_are_ignored(self):
+        allele = RANK_REF[:48] + 'TAT' + RANK_REF[51:]
+        assert _annotate(allele) == 'PAM_&_Spacer_Intact'
+
+    def test_minus_strand_reads_the_mirrored_offsets(self):
+        # nick at 40: PAM is [34,37) read as the reverse complement, spacer tail [37,40)
+        ref = RANK_REF[:34] + 'CCT' + RANK_REF[37:]      # revcomp('CCT') == 'AGG', an NGG
+        assert _annotate(ref, strand='-', nick=40, reference=ref) == 'PAM_&_Spacer_Intact'
+        broken = ref[:34] + 'TTA' + ref[37:]
+        assert _annotate(broken, strand='-', nick=40, reference=ref) == 'PAM_disrupted'
+        spacer = ref[:37] + ('AAA' if ref[37:40] != 'AAA' else 'TTT') + ref[40:]
+        assert _annotate(spacer, strand='-', nick=40, reference=ref) == 'Spacer_disrupted'
+
+
+# ---------------------------------------------------------------------------
+# target_aa_number() / codon_annotation() / codon_columns()
+# ---------------------------------------------------------------------------
+
+class TestTargetAaNumber:
+    def test_defaults_to_one_with_no_index_and_no_range(self):
+        assert target_aa_number({}, 0) == 1
+        assert target_aa_number({}, 3) == 2
+
+    def test_non_saturation_counts_from_the_start_of_the_target_sequence(self):
+        # cBioPortal convention: aa_index names codon 1 of the whole sequence.
+        # FOXA1_S194Afs*127 has its edit at nt 190 -> codon 63 -> 63 + 131 = 194
+        entry = {'silent_mutation_allowed_range': None, 'aa_index': 131}
+        assert target_aa_number(entry, 0) == 131
+        assert target_aa_number(entry, 189) == 194
+
+    def test_saturation_counts_from_the_start_of_the_parenthesized_region(self):
+        # FOXA1 convention: index names the first residue of the window (flank5 = 111 nt)
+        entry = {'silent_mutation_allowed_range': (111, 417), 'aa_index': 168}
+        assert target_aa_number(entry, 111) == 168
+        assert target_aa_number(entry, 114) == 169
+
+    def test_codon_before_the_window_numbers_below_the_index(self):
+        entry = {'silent_mutation_allowed_range': (111, 417), 'aa_index': 168}
+        assert target_aa_number(entry, 108) == 167
+
+
+class TestCodonAnnotation:
+    def test_returns_codon_amino_acid_usage_number_and_index(self):
+        assert codon_annotation('ATGGCTCTG', 3, 42) == ['GCT', 'A', codon_dict['GCT'][2], 42, 3]
+
+    def test_blank_for_a_truncated_codon(self):
+        assert codon_annotation('ATGGC', 3, 2) == ['', '', '', '', '']
+
+    def test_blank_for_an_ambiguous_codon(self):
+        assert codon_annotation('ATGGNT', 3, 2) == ['', '', '', '', '']
+
+
+class TestCodonColumns:
+    def _entry(self):
+        return {'silent_mutation_allowed_range': None, 'aa_index': 1,
+                'reference_sequence': RANK_REF,
+                'edit_sequence': RANK_REF[:45] + 'GAG' + RANK_REF[48:],  # CAG(Q) -> GAG(E)
+                'edit_start_in_ref': 45}
+
+    def test_column_count_matches_the_declared_names(self):
+        assert len(codon_columns(self._entry(), None)) == len(SILENT_CODON_COLUMNS) == 20
+
+    def test_silent_half_is_blank_when_no_silent_mutation_was_made(self):
+        assert codon_columns(self._entry(), None)[10:] == [''] * 10
+
+    def test_target_half_reports_the_edited_codon(self):
+        cols = codon_columns(self._entry(), None)
+        assert cols[0] == 'CAG' and cols[1] == 'Q'      # reference codon
+        assert cols[5] == 'GAG' and cols[6] == 'E'      # edited codon
+        assert cols[3] == cols[8] == 16                  # same residue, aa_index 1
+
+    def test_silent_half_reports_a_synonymous_pair(self):
+        entry = self._entry()
+        selected = ranked_silent_mutations(entry, entry['edit_sequence'], 30, 30, '+',
+                                           '[ACGT]GG', 45, 48)[0]
+        cols = codon_columns(entry, selected)
+        assert cols[10] == selected['codon_ref'] and cols[15] == selected['codon_edit']
+        assert cols[11] == cols[16]                      # amino acid unchanged
+        assert cols[13] == cols[18]                      # same residue number
+
+
+# ---------------------------------------------------------------------------
+# nucleotide_change_columns()
+# ---------------------------------------------------------------------------
+
+NT_REF = 'ATGCATTACGGCTAAGCCATGGTTCAGACCTGA'
+
+
+def _changes(reference, edit):
+    """Return the two index lists as ints."""
+    cols = nucleotide_change_columns(reference, edit)
+    return ([int(x) for x in cols[0].split(';') if x],
+            [int(x) for x in cols[1].split(';') if x])
+
+
+class TestNucleotideChangeColumns:
+    def test_identical_sequences_report_nothing(self):
+        assert nucleotide_change_columns(NT_REF, NT_REF) == ['', '']
+
+    def test_returns_one_value_per_declared_column(self):
+        assert len(nucleotide_change_columns(NT_REF, NT_REF)) == len(NUCLEOTIDE_CHANGE_COLUMNS) == 2
+
+    def test_single_substitution_is_reported_in_both_coordinate_systems(self):
+        edit = NT_REF[:10] + ('T' if NT_REF[10] != 'T' else 'A') + NT_REF[11:]
+        assert _changes(NT_REF, edit) == ([10], [10])
+
+    def test_separate_substitutions_are_all_reported(self):
+        # stands in for an intended edit plus a silent mutation elsewhere
+        edit = list(NT_REF)
+        for i in (4, 20, 21):
+            edit[i] = 'G' if NT_REF[i] != 'G' else 'C'
+        edit_positions, reference_positions = _changes(NT_REF, ''.join(edit))
+        assert edit_positions == reference_positions == [4, 20, 21]
+
+    def test_case_is_ignored(self):
+        # silent mutations are written in lowercase by PrimeDesign
+        edit = NT_REF[:10].lower() + NT_REF[10:]
+        assert nucleotide_change_columns(NT_REF, edit) == ['', '']
+
+    def test_deletion_has_reference_positions_but_no_edit_positions(self):
+        edit = NT_REF[:12] + NT_REF[17:]          # drops 5 reference bases
+        edit_positions, reference_positions = _changes(NT_REF, edit)
+        assert edit_positions == []
+        assert len(reference_positions) == 5
+        # alignment-agnostic: removing the reported reference bases must give the edit
+        kept = ''.join(c for i, c in enumerate(NT_REF) if i not in set(reference_positions))
+        assert kept == edit
+
+    def test_insertion_has_edit_positions_but_no_reference_positions(self):
+        edit = NT_REF[:12] + 'GGCTT' + NT_REF[12:]
+        edit_positions, reference_positions = _changes(NT_REF, edit)
+        assert reference_positions == []
+        assert len(edit_positions) == 5
+        kept = ''.join(c for i, c in enumerate(edit) if i not in set(edit_positions))
+        assert kept == NT_REF
+
+    def test_deletion_plus_a_distant_substitution(self):
+        # the realistic case: an indel edit and a silent mutation far from it
+        edit = NT_REF[:4] + ('G' if NT_REF[4] != 'G' else 'C') + NT_REF[5:12] + NT_REF[17:]
+        edit_positions, reference_positions = _changes(NT_REF, edit)
+        assert 4 in edit_positions and 4 in reference_positions
+        assert len(reference_positions) == len(edit_positions) + 5   # 5 deleted bases
+
+    def test_indexes_are_sorted_and_zero_based(self):
+        edit = list(NT_REF)
+        for i in (0, 7, len(NT_REF) - 1):
+            edit[i] = 'G' if NT_REF[i] != 'G' else 'C'
+        edit_positions, _ = _changes(NT_REF, ''.join(edit))
+        assert edit_positions == sorted(edit_positions)
+        assert edit_positions[0] == 0 and edit_positions[-1] == len(NT_REF) - 1
+
+    def test_values_contain_no_commas(self):
+        # the output is written as naive comma-joined CSV, so a comma would corrupt it
+        edit = list(NT_REF)
+        for i in (2, 9, 15):
+            edit[i] = 'G' if NT_REF[i] != 'G' else 'C'
+        for value in nucleotide_change_columns(NT_REF, ''.join(edit)):
+            assert ',' not in value
+
+
+# ---------------------------------------------------------------------------
+# number_of_pegrnas = 0 means "all"
+# ---------------------------------------------------------------------------
+
+class TestMainNumberOfPegrnas:
+    def _count(self, tmp_path, monkeypatch, extra):
+        tmp_path.mkdir(parents=True, exist_ok=True)
+        input_csv = _write_input_csv(tmp_path, [("target_01", SAT_MUT_SEQ)])
+        df = _run_main(monkeypatch, tmp_path, input_csv, extra_args=extra)
+        return df[df['gRNA_type'] == 'pegRNA']
+
+    def test_zero_means_all_not_none(self, tmp_path, monkeypatch):
+        # The selection slices the ranked pegRNAs, so a bare [:0] would silently return
+        # nothing. This fixture yields at most one pegRNA per design, so 0 and 1 give the
+        # same count here; what matters is that 0 is not read as "keep zero".
+        capped = self._count(tmp_path / 'capped', monkeypatch,
+                             ['-sat_mut', 'aa_subs', '-n_pegrnas', '1'])
+        every = self._count(tmp_path / 'every', monkeypatch,
+                            ['-sat_mut', 'aa_subs', '-n_pegrnas', '0'])
+        assert len(every) > 0
+        assert len(every) >= len(capped)
+
+    def test_an_explicit_cap_limits_pegrnas_per_design(self, tmp_path, monkeypatch):
+        capped = self._count(tmp_path / 'capped', monkeypatch,
+                             ['-sat_mut', 'aa_subs', '-n_pegrnas', '1'])
+        per_design = capped.groupby(['Target_name', 'Target_sequence'])['pegRNA_number'].nunique()
+        assert per_design.max() == 1
+
+    def test_zero_is_the_default(self, tmp_path, monkeypatch):
+        explicit = self._count(tmp_path / 'explicit', monkeypatch,
+                               ['-sat_mut', 'aa_subs', '-n_pegrnas', '0'])
+        default = self._count(tmp_path / 'default', monkeypatch, ['-sat_mut', 'aa_subs'])
+        assert len(default) == len(explicit)

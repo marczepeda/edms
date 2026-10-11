@@ -15,6 +15,11 @@ Usage:
 - found_list_in_order(): returns index of sub_ls found consecutive order in main_ls or -1
 - find_enzyme_sites(): find enzyme sites in pegRNAs or ngRNAs
 - enzyme_codon_swap(): modify pegRNA RTT sequences to disrupt a RE recognition site
+- refresh_codon_annotations(): re-read the codon annotation columns from the current Edit_sequence
+- codon_nt_difference(): number of nucleotide differences between two codons
+- sort_pegRNAs(): arrange pegRNAs so related designs sit together
+- pegRNA_molecule_key(): the physical molecule each pegRNA row encodes
+- drop_duplicate_pegRNAs(): remove pegRNA rows encoding a molecule that is already present
 
 [PrimeDesign]
 - prime_design_input(): creates and checks PrimeDesign saturation mutagenesis input file
@@ -56,6 +61,7 @@ from Bio.SeqRecord import SeqRecord
 import math
 from typing import Literal
 
+from .primedesign import codon_dict, nucleotide_change_columns
 from .signature import signature_from_alignment
 from . import pegLIT as pegLIT
 from ..gen import io as io
@@ -203,6 +209,181 @@ def find_enzyme_sites(df: pd.DataFrame | str, enzyme: str, RE_type_IIS_df: pd.Da
     df[f'{enzyme}_fwd_i'] = df_enzyme_sites_fwd
     df[f'{enzyme}_rc_i'] = df_enzyme_sites_rc
     return df
+
+def refresh_codon_annotations(pegRNAs: pd.DataFrame, comments: bool = False) -> pd.DataFrame:
+    ''' 
+    refresh_codon_annotations(): re-read the codon annotation columns from the current Edit_sequence
+
+    Parameters:
+    pegRNAs (pd.DataFrame): pegRNAs DataFrame
+    comments (bool, optional): print comments (Default: False)
+
+    The codon columns are written by PrimeDesign against the edit sequence it produced. Anything
+    that rewrites Edit_sequence afterwards -- enzyme_codon_swap() in particular -- can leave them
+    describing a codon that is no longer there. Each *_edit_codon is re-read at its recorded index
+    and its amino acid and codon usage recomputed; the *_reference_codon columns come from
+    Reference_sequence, which is never rewritten, so they are left alone. The nucleotide change
+    indexes are recomputed against the new allele, which is also what records a codon the swap
+    changed that is neither the intended edit nor the silent mutation.
+
+    Dependencies: pandas, codon_dict, nucleotide_change_columns()
+    '''
+    if len(pegRNAs) == 0 or 'Edit_sequence' not in pegRNAs.columns:
+        return pegRNAs
+
+    refreshed = 0
+    for prefix in ('Target', 'Silent'):
+        codon_col, index_col = f'{prefix}_edit_codon', f'{prefix}_edit_codon_index'
+        if codon_col not in pegRNAs.columns or index_col not in pegRNAs.columns:
+            continue
+
+        aa_col, usage_col = f'{prefix}_edit_AA', f'{prefix}_edit_codon_usage'
+        codons = list(pegRNAs[codon_col])
+        amino_acids = list(pegRNAs[aa_col]) if aa_col in pegRNAs.columns else None
+        usages = list(pegRNAs[usage_col]) if usage_col in pegRNAs.columns else None
+
+        for row, (edit_sequence, index) in enumerate(zip(pegRNAs['Edit_sequence'], pegRNAs[index_col])):
+            if pd.isna(index):
+                continue  # no codon recorded for this row, so leave it as it is
+            codon = str(edit_sequence)[int(index):int(index) + 3].upper()
+            if codon not in codon_dict:
+                codon, amino_acid, usage = '', '', ''
+            else:
+                amino_acid, usage = codon_dict[codon][1], codon_dict[codon][2]
+            if codon != str(codons[row]).upper():
+                refreshed += 1
+            codons[row] = codon
+            if amino_acids is not None:
+                amino_acids[row] = amino_acid
+            if usages is not None:
+                usages[row] = usage
+
+        pegRNAs[codon_col] = codons
+        if amino_acids is not None:
+            pegRNAs[aa_col] = amino_acids
+        if usages is not None:
+            pegRNAs[usage_col] = usages
+
+    # Recompute where the allele differs from the reference
+    if 'Reference_sequence' in pegRNAs.columns:
+        changes = [nucleotide_change_columns(reference, edit)
+                   for reference, edit in zip(pegRNAs['Reference_sequence'], pegRNAs['Edit_sequence'])]
+        pegRNAs['Edit_sequence_change_indexes'] = [change[0] for change in changes]
+        pegRNAs['Reference_sequence_change_indexes'] = [change[1] for change in changes]
+
+    if comments:
+        print(f"Refreshed {refreshed} codon annotation(s) against the rewritten edit sequences")
+    return pegRNAs
+
+def codon_nt_difference(codon_ref, codon_edit) -> float:
+    ''' 
+    codon_nt_difference(): number of nucleotide differences between two codons
+
+    Parameters:
+    codon_ref: reference codon
+    codon_edit: edited codon
+
+    Returns NaN when either codon is missing, incomplete or ambiguous, so rows without a
+    codon sort last rather than being scored against the literal string 'nan'.
+    '''
+    codon_ref, codon_edit = str(codon_ref).upper(), str(codon_edit).upper()
+    # str(nan) is 'nan', which is three characters, so the bases have to be checked too
+    if not set(codon_ref) <= set('ACGT') or not set(codon_edit) <= set('ACGT'):
+        return np.nan
+    if len(codon_ref) != 3 or len(codon_edit) != 3:
+        return np.nan
+    return float(sum(a != b for a, b in zip(codon_ref, codon_edit)))
+
+def sort_pegRNAs(pegRNAs: pd.DataFrame, comments: bool = False) -> pd.DataFrame:
+    ''' 
+    sort_pegRNAs(): arrange pegRNAs so related designs sit together
+
+    Parameters:
+    pegRNAs (pd.DataFrame): pegRNAs DataFrame
+    comments (bool, optional): print comments (Default: False)
+
+    Rows are grouped by the edit and then by the pegRNA installing it (spacer, then PBS), so a
+    pegRNA revised by enzyme_codon_swap() lands beside the designs it shares those
+    characteristics with rather than relying on pegRNA_number ordering. Within a group the
+    synonymous codon choices are ordered the way PrimeDesign ranks them: most nucleotide
+    differences from the reference codon first, then highest human codon usage. The silent
+    mutation breaks any remaining tie on the same two criteria, and pegRNA_number makes the
+    order deterministic.
+
+    Adds Target_codon_nt_difference and Silent_codon_nt_difference, making the first sort
+    criterion explicit so the arrangement can be checked.
+
+    Dependencies: numpy, pandas, codon_nt_difference()
+    '''
+    if len(pegRNAs) == 0:
+        return pegRNAs
+
+    for prefix in ('Target', 'Silent'):
+        reference_col, edit_col = f'{prefix}_reference_codon', f'{prefix}_edit_codon'
+        if reference_col in pegRNAs.columns and edit_col in pegRNAs.columns:
+            pegRNAs[f'{prefix}_codon_nt_difference'] = [codon_nt_difference(reference, edit)
+                for reference, edit in zip(pegRNAs[reference_col], pegRNAs[edit_col])]
+
+    # (column, ascending): group first, then rank within the group
+    order = [('AA_number', True), ('Base_number', True), ('Edit', True),
+             ('Spacer_sequence', True), ('PBS_sequence', True),
+             ('Target_codon_nt_difference', False), ('Target_edit_codon_usage', False),
+             ('Silent_codon_nt_difference', False), ('Silent_edit_codon_usage', False),
+             ('pegRNA_number', True)]
+    by = [(col, asc) for col, asc in order if col in pegRNAs.columns]
+    if not by:
+        return pegRNAs.reset_index(drop=True)
+    if comments:
+        print(f"Sorting pegRNAs by: {[col for col, _ in by]}")
+    return pegRNAs.sort_values(by=[col for col, _ in by],
+                               ascending=[asc for _, asc in by],
+                               kind='mergesort').reset_index(drop=True)
+
+def pegRNA_molecule_key(pegRNAs: pd.DataFrame) -> pd.Series:
+    ''' 
+    pegRNA_molecule_key(): the physical molecule each pegRNA row encodes
+
+    Parameters:
+    pegRNAs (pd.DataFrame): pegRNAs DataFrame
+
+    Two rows sharing this key are the same oligonucleotide, so they install the same allele
+    whatever edit label they were designed under.
+
+    Dependencies: pandas
+    '''
+    cols = [col for col in ['Spacer_sequence', 'Scaffold_sequence', 'RTT_sequence', 'PBS_sequence', 'Linker_sequence']
+            if col in pegRNAs.columns]
+    if not cols:
+        raise ValueError("pegRNAs DataFrame has none of the sequence columns needed to identify a pegRNA.")
+    key = pegRNAs[cols[0]].astype(str).str.upper()
+    for col in cols[1:]:
+        key = key + pegRNAs[col].astype(str).str.upper()
+    return key
+
+def drop_duplicate_pegRNAs(pegRNAs: pd.DataFrame, existing: pd.DataFrame = None, comments: bool = False) -> pd.DataFrame:
+    ''' 
+    drop_duplicate_pegRNAs(): remove pegRNA rows encoding a molecule that is already present
+
+    Parameters:
+    pegRNAs (pd.DataFrame): pegRNAs to filter
+    existing (pd.DataFrame, optional): pegRNAs already in the library to check against
+    comments (bool, optional): print comments (Default: False)
+
+    Removes duplicates within pegRNAs and, when existing is given, any row whose molecule
+    already appears there. enzyme_codon_swap() can swap a codon onto one that another design
+    already uses, which would otherwise add the same oligonucleotide to the library twice.
+
+    Dependencies: pandas, pegRNA_molecule_key()
+    '''
+    if len(pegRNAs) == 0:
+        return pegRNAs
+    key = pegRNA_molecule_key(pegRNAs)
+    keep = ~key.duplicated(keep='first')
+    if existing is not None and len(existing) > 0:
+        keep &= ~key.isin(set(pegRNA_molecule_key(existing)))
+    if comments and (~keep).any():
+        print(f"Dropped {int((~keep).sum())} duplicate pegRNA(s) of {len(pegRNAs)} before adding them to the library")
+    return pegRNAs[keep].reset_index(drop=True)
 
 def enzyme_codon_swap(pegRNAs: pd.DataFrame | str, enzyme: str, 
                       RE_type_IIS_df: pd.DataFrame | str = None, out_dir: str = None, 
@@ -465,6 +646,9 @@ def enzyme_codon_swap(pegRNAs: pd.DataFrame | str, enzyme: str,
     pegRNAs['Edit_sequence'] = new_edit_sequence_ls
     pegRNAs = pegRNAs[pegRNAs['RTT_sequence'].isna()==False].reset_index(drop=True)  # Filter out None RTT sequences
 
+    # The swap rewrote Edit_sequence, so the codon annotations have to be re-read from it
+    pegRNAs = refresh_codon_annotations(pegRNAs=pegRNAs, comments=comments)
+
     # Update extension & oligonucleotide sequence
     if 'Linker_sequence' in pegRNAs.columns:  # epegRNA?
         pegRNAs['Extension_sequence'] = pegRNAs['RTT_sequence'] + pegRNAs['PBS_sequence'] + pegRNAs['Linker_sequence']
@@ -519,7 +703,7 @@ def prime_design_input(target_name: str, flank5_sequence: str,
 
 def prime_design(file: str, pe_format: str = 'NNNNNNNNNNNNNNNNN/NNN[NGG]', pbs_length_list: list = [], rtt_length_list: list = [], 
                 nicking_distance_minimum: int = 0, nicking_distance_maximum: int = 100, filter_c1_extension: bool = False, silent_mutation: bool = False,
-                genome_wide_design: bool = False, saturation_mutagenesis: str = None, number_of_pegrnas: int = 3, number_of_ngrnas: int = 3,
+                genome_wide_design: bool = False, saturation_mutagenesis: str = None, number_of_pegrnas: int = 0, number_of_ngrnas: int = 3,
                 nicking_distance_pooled: int = 75, homology_downstream: int = 15, pbs_length_pooled: int = 14, rtt_max_length_pooled: int = 50,
                 out_dir: str = './PrimeDesign/DATETIMESTAMP_PrimeDesign'):
     ''' 
@@ -536,7 +720,7 @@ def prime_design(file: str, pe_format: str = 'NNNNNNNNNNNNNNNNN/NNN[NGG]', pbs_l
     silent_mutation (bool, optional): introduce silent mutation into PAM assuming sequence is in-frame. Currently only available with SpCas9. (Default: False)
     genome_wide_design (bool, optional): whether this is a genome-wide pooled design. This option designs a set of pegRNAs per input without ranging PBS and RTT parameters.
     saturation_mutagenesis (str, optional): saturation mutagenesis design with prime editing (Options: 'aa', 'aa_subs', 'aa_ins', 'aa_dels', 'base'). The 'aa' option makes all amino acid substitutions ('aa_subs'), +1 amino acid insertions ('aa_ins'), and -1 amino acid deletions ('aa_dels'). The 'base' option makes DNA base changes. (Default: None)
-    number_of_pegrnas (int, optional): maximum number of pegRNAs to design for each input sequence. The pegRNAs are ranked by 1) PAM disrupted > PAM intact then 2) distance to edit. (Default: 3)
+    number_of_pegrnas (int, optional): maximum number of pegRNAs to design for each input sequence; 0 keeps every pegRNA meeting the criteria. The pegRNAs are ranked by 1) PAM disrupted > Spacer disrupted > PAM & Spacer intact then 2) distance to edit. (Default: 0)
     number_of_ngrnas (int, optional): maximum number of ngRNAs to design for each input sequence. The ngRNAs are ranked by 1) PE3b-seed > PE3b-nonseed > PE3 then 2) deviation from nicking_distance_pooled. (Default: 3)
     nicking_distance_pooled (int, optional): the nicking distance between pegRNAs and ngRNAs for pooled designs. PE3b annotation is priority (PE3b seed -> PE3b non-seed), followed by nicking distance closest to this parameter. (Default: 75 bp)
     homology_downstream (int, optional): this parameter determines the minimum RT extension length downstream of an edit for pegRNA designs. (Default: 15)
@@ -602,7 +786,7 @@ def prime_design(file: str, pe_format: str = 'NNNNNNNNNNNNNNNNN/NNN[NGG]', pbs_l
     if silent_mutation: cmd += f' -silent_mut'
     if genome_wide_design: cmd += f' -genome_wide'
     if saturation_mutagenesis: cmd += f' -sat_mut {saturation_mutagenesis}'
-    if number_of_pegrnas!=3: cmd += f' -n_pegrnas {number_of_pegrnas}'
+    if number_of_pegrnas!=0: cmd += f' -n_pegrnas {number_of_pegrnas}'
     if number_of_ngrnas!=3: cmd += f' -n_ngrnas {number_of_ngrnas}'
     if nicking_distance_pooled!=75: cmd += f' -nick_dist_pooled {nicking_distance_pooled}'
     if homology_downstream!=15: cmd += f' -homology_downstream {homology_downstream}'
@@ -761,6 +945,13 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
                 pegRNAs_enzyme = enzyme_codon_swap(pegRNAs=pegRNAs_enzyme,enzyme=enzyme,comments=True)
                 io.save(obj=pegRNAs_enzyme,
                         file=os.path.join(f'{pegRNAs_dir}/{enzyme}/codon_swap_after', f'{int(pegRNAs_enzyme.iloc[0]['PBS_length'])}.csv'))
+
+                # A codon swap can land on a codon another design already uses, so only keep
+                # swapped pegRNAs whose molecule is not already in the library. Compare against
+                # the pegRNAs that will survive, since those carrying a site are dropped below.
+                pegRNAs_enzyme = drop_duplicate_pegRNAs(pegRNAs=pegRNAs_enzyme,
+                                                        existing=pegRNAs[pegRNAs[enzyme]==0], comments=True)
+
                 pegRNAs = pd.concat([pegRNAs,pegRNAs_enzyme],ignore_index=True)
                 print(f"pegRNAs edits recovered by modifying {enzyme} recognition site: {list(pegRNAs_enzyme['Edit'].unique())}")
 
@@ -815,13 +1006,16 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
     pegRNAs.drop(columns=['Oligonucleotide'], inplace=True)
     ngRNAs.drop(columns=['Oligonucleotide'], inplace=True)
 
+    # Arrange pegRNAs so revised designs sit beside the ones they resemble
+    pegRNAs = sort_pegRNAs(pegRNAs=pegRNAs)
+
     return pegRNAs,ngRNAs
 
 def prime_designer(in_file: str = None, target_name: str = None, flank5_sequence: str = None, target_sequence: str = None, 
                 flank3_sequence: str = None, index: int=1, pe_format: str = 'NNNNNNNNNNNNNNNNN/NNN[NGG]', pbs_length_list: list = [],
                 rtt_length_list: list = [], nicking_distance_minimum: int = 0,nicking_distance_maximum: int = 100, filter_c1_extension: bool = False,
                 silent_mutation: bool = True, genome_wide_design: bool = False, saturation_mutagenesis: str = None,
-                number_of_pegrnas: int = 3, number_of_ngrnas: int = 3, nicking_distance_pooled: int = 75, homology_downstream: int = 15,
+                number_of_pegrnas: int = 0, number_of_ngrnas: int = 3, nicking_distance_pooled: int = 75, homology_downstream: int = 15,
                 pbs_length_pooled_list: list = [11,13,15], rtt_max_length_pooled: int = 50,
                 scaffold_sequence: str='GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC', 
                 enzymes: list[str]=['Esp3I'], replace: bool=True, out_dir: str = './PrimeDesign/DATETIMESTAMP_PrimeDesign', pegRNAs_dir: str = './pegRNAs', ngRNAs_dir: str = './ngRNAs'):
@@ -845,7 +1039,7 @@ def prime_designer(in_file: str = None, target_name: str = None, flank5_sequence
     silent_mutation (bool, optional): introduce silent mutation into PAM assuming sequence is in-frame. Currently only available with SpCas9. (Default: False)
     genome_wide_design (bool, optional): whether this is a genome-wide pooled design. This option designs a set of pegRNAs per input without ranging PBS and RTT parameters (Default: False).
     saturation_mutagenesis (str, optional): saturation mutagenesis design with prime editing (Options: 'aa', 'aa_subs', 'aa_ins', 'aa_dels', 'aa_silent', 'base'). The 'aa' option makes all amino acid substitutions ('aa_subs'), +1 amino acid insertions ('aa_ins'), and -1 amino acid deletions ('aa_dels'). The 'aa_silent' option makes all possible silent codon changes. The 'base' option makes DNA base changes. (Default: None)
-    number_of_pegrnas (int, optional): maximum number of pegRNAs to design for each input sequence. The pegRNAs are ranked by 1) PAM disrupted > PAM intact then 2) distance to edit. (Default: 3)
+    number_of_pegrnas (int, optional): maximum number of pegRNAs to design for each input sequence; 0 keeps every pegRNA meeting the criteria. The pegRNAs are ranked by 1) PAM disrupted > Spacer disrupted > PAM & Spacer intact then 2) distance to edit. (Default: 0)
     number_of_ngrnas (int, optional): maximum number of ngRNAs to design for each input sequence. The ngRNAs are ranked by 1) PE3b-seed > PE3b-nonseed > PE3 then 2) deviation from nicking_distance_pooled. (Default: 3)
     nicking_distance_pooled (int, optional): the nicking distance between pegRNAs and ngRNAs for pooled designs. PE3b annotation is priority (PE3b seed -> PE3b non-seed), followed by nicking distance closest to this parameter. (Default: 75 bp)
     homology_downstream (int, optional): this parameter determines the minimum RT extension length downstream of an edit for pegRNA designs. (Default: 15)
