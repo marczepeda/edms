@@ -15,6 +15,7 @@ Usage:
 - found_list_in_order(): returns index of sub_ls found consecutive order in main_ls or -1
 - find_enzyme_sites(): find enzyme sites in pegRNAs or ngRNAs
 - enzyme_codon_swap(): modify pegRNA RTT sequences to disrupt a RE recognition site
+- refresh_codon_annotations(): re-read the codon annotation columns from the current Edit_sequence
 - codon_nt_difference(): number of nucleotide differences between two codons
 - sort_pegRNAs(): arrange pegRNAs so related designs sit together
 - pegRNA_molecule_key(): the physical molecule each pegRNA row encodes
@@ -60,6 +61,7 @@ from Bio.SeqRecord import SeqRecord
 import math
 from typing import Literal
 
+from .primedesign import codon_dict, nucleotide_change_columns
 from .signature import signature_from_alignment
 from . import pegLIT as pegLIT
 from ..gen import io as io
@@ -207,6 +209,71 @@ def find_enzyme_sites(df: pd.DataFrame | str, enzyme: str, RE_type_IIS_df: pd.Da
     df[f'{enzyme}_fwd_i'] = df_enzyme_sites_fwd
     df[f'{enzyme}_rc_i'] = df_enzyme_sites_rc
     return df
+
+def refresh_codon_annotations(pegRNAs: pd.DataFrame, comments: bool = False) -> pd.DataFrame:
+    ''' 
+    refresh_codon_annotations(): re-read the codon annotation columns from the current Edit_sequence
+
+    Parameters:
+    pegRNAs (pd.DataFrame): pegRNAs DataFrame
+    comments (bool, optional): print comments (Default: False)
+
+    The codon columns are written by PrimeDesign against the edit sequence it produced. Anything
+    that rewrites Edit_sequence afterwards -- enzyme_codon_swap() in particular -- can leave them
+    describing a codon that is no longer there. Each *_edit_codon is re-read at its recorded index
+    and its amino acid and codon usage recomputed; the *_reference_codon columns come from
+    Reference_sequence, which is never rewritten, so they are left alone. The nucleotide change
+    indexes are recomputed against the new allele, which is also what records a codon the swap
+    changed that is neither the intended edit nor the silent mutation.
+
+    Dependencies: pandas, codon_dict, nucleotide_change_columns()
+    '''
+    if len(pegRNAs) == 0 or 'Edit_sequence' not in pegRNAs.columns:
+        return pegRNAs
+
+    refreshed = 0
+    for prefix in ('Target', 'Silent'):
+        codon_col, index_col = f'{prefix}_edit_codon', f'{prefix}_edit_codon_index'
+        if codon_col not in pegRNAs.columns or index_col not in pegRNAs.columns:
+            continue
+
+        aa_col, usage_col = f'{prefix}_edit_AA', f'{prefix}_edit_codon_usage'
+        codons = list(pegRNAs[codon_col])
+        amino_acids = list(pegRNAs[aa_col]) if aa_col in pegRNAs.columns else None
+        usages = list(pegRNAs[usage_col]) if usage_col in pegRNAs.columns else None
+
+        for row, (edit_sequence, index) in enumerate(zip(pegRNAs['Edit_sequence'], pegRNAs[index_col])):
+            if pd.isna(index):
+                continue  # no codon recorded for this row, so leave it as it is
+            codon = str(edit_sequence)[int(index):int(index) + 3].upper()
+            if codon not in codon_dict:
+                codon, amino_acid, usage = '', '', ''
+            else:
+                amino_acid, usage = codon_dict[codon][1], codon_dict[codon][2]
+            if codon != str(codons[row]).upper():
+                refreshed += 1
+            codons[row] = codon
+            if amino_acids is not None:
+                amino_acids[row] = amino_acid
+            if usages is not None:
+                usages[row] = usage
+
+        pegRNAs[codon_col] = codons
+        if amino_acids is not None:
+            pegRNAs[aa_col] = amino_acids
+        if usages is not None:
+            pegRNAs[usage_col] = usages
+
+    # Recompute where the allele differs from the reference
+    if 'Reference_sequence' in pegRNAs.columns:
+        changes = [nucleotide_change_columns(reference, edit)
+                   for reference, edit in zip(pegRNAs['Reference_sequence'], pegRNAs['Edit_sequence'])]
+        pegRNAs['Edit_sequence_change_indexes'] = [change[0] for change in changes]
+        pegRNAs['Reference_sequence_change_indexes'] = [change[1] for change in changes]
+
+    if comments:
+        print(f"Refreshed {refreshed} codon annotation(s) against the rewritten edit sequences")
+    return pegRNAs
 
 def codon_nt_difference(codon_ref, codon_edit) -> float:
     ''' 
@@ -578,6 +645,9 @@ def enzyme_codon_swap(pegRNAs: pd.DataFrame | str, enzyme: str,
     pegRNAs['RTT_sequence'] = new_rtt_ls
     pegRNAs['Edit_sequence'] = new_edit_sequence_ls
     pegRNAs = pegRNAs[pegRNAs['RTT_sequence'].isna()==False].reset_index(drop=True)  # Filter out None RTT sequences
+
+    # The swap rewrote Edit_sequence, so the codon annotations have to be re-read from it
+    pegRNAs = refresh_codon_annotations(pegRNAs=pegRNAs, comments=comments)
 
     # Update extension & oligonucleotide sequence
     if 'Linker_sequence' in pegRNAs.columns:  # epegRNA?

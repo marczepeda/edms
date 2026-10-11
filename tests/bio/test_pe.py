@@ -543,3 +543,89 @@ class TestSortPegRNAs:
             _sortable("Y6V", "S1", "P1", "TAC", "GTG", 0.47, 1),
         ])
         assert list(pe.sort_pegRNAs(df).index) == [0, 1]
+
+
+# --------------------------------------------------------------------------- #
+# refresh_codon_annotations
+# --------------------------------------------------------------------------- #
+
+# in-frame reference; codon 3 ([9,12)) stands in for the intended edit and
+# codon 5 ([15,18)) for the silent mutation
+REFRESH_REF = "ATGGCTCTGACCAAGCATGAATTCGTGCGT"
+
+
+def _annotated(edit_sequence):
+    """A row whose codon annotations describe REFRESH_REF, not necessarily edit_sequence."""
+    return {
+        "Reference_sequence": REFRESH_REF,
+        "Edit_sequence": edit_sequence,
+        "Target_reference_codon": "ACC", "Target_reference_AA": "T",
+        "Target_edit_codon": "ACC", "Target_edit_AA": "T",
+        "Target_edit_codon_usage": 0.36, "Target_edit_codon_index": 9,
+        "Silent_reference_codon": "CAT", "Silent_reference_AA": "H",
+        "Silent_edit_codon": "CAT", "Silent_edit_AA": "H",
+        "Silent_edit_codon_usage": 0.41, "Silent_edit_codon_index": 15,
+    }
+
+
+class TestRefreshCodonAnnotations:
+    def test_rereads_the_edit_codon_from_the_rewritten_sequence(self):
+        # codon 3 rewritten ACC -> ACG (still Thr)
+        edit = REFRESH_REF[:9] + "ACG" + REFRESH_REF[12:]
+        out = pe.refresh_codon_annotations(pd.DataFrame([_annotated(edit)]))
+        assert out.loc[0, "Target_edit_codon"] == "ACG"
+        assert out.loc[0, "Target_edit_AA"] == "T"
+        assert out.loc[0, "Target_edit_codon_usage"] == 0.12   # ACG human usage
+
+    def test_rereads_the_silent_codon(self):
+        edit = REFRESH_REF[:15] + "CAC" + REFRESH_REF[18:]     # CAT -> CAC, still His
+        out = pe.refresh_codon_annotations(pd.DataFrame([_annotated(edit)]))
+        assert out.loc[0, "Silent_edit_codon"] == "CAC"
+        assert out.loc[0, "Silent_edit_AA"] == "H"
+        assert out.loc[0, "Silent_edit_codon_usage"] == 0.59
+
+    def test_leaves_the_reference_columns_alone(self):
+        edit = REFRESH_REF[:9] + "ACG" + REFRESH_REF[12:]
+        out = pe.refresh_codon_annotations(pd.DataFrame([_annotated(edit)]))
+        assert out.loc[0, "Target_reference_codon"] == "ACC"   # Reference_sequence never changes
+        assert out.loc[0, "Silent_reference_codon"] == "CAT"
+
+    def test_recomputes_the_change_indexes(self):
+        edit = REFRESH_REF[:9] + "ACG" + REFRESH_REF[12:]      # one base differs, at 11
+        out = pe.refresh_codon_annotations(pd.DataFrame([_annotated(edit)]))
+        assert out.loc[0, "Edit_sequence_change_indexes"] == "11"
+        assert out.loc[0, "Reference_sequence_change_indexes"] == "11"
+
+    def test_unchanged_sequence_leaves_everything_as_it_was(self):
+        out = pe.refresh_codon_annotations(pd.DataFrame([_annotated(REFRESH_REF)]))
+        assert out.loc[0, "Target_edit_codon"] == "ACC"
+        assert out.loc[0, "Silent_edit_codon"] == "CAT"
+        assert out.loc[0, "Edit_sequence_change_indexes"] == ""
+
+    def test_row_without_a_recorded_index_is_left_alone(self):
+        row = _annotated(REFRESH_REF)
+        row["Silent_edit_codon_index"] = np.nan
+        row["Silent_edit_codon"] = "GGG"          # deliberately wrong, but unindexed
+        out = pe.refresh_codon_annotations(pd.DataFrame([row]))
+        assert out.loc[0, "Silent_edit_codon"] == "GGG"
+
+    def test_index_running_off_the_end_blanks_the_codon(self):
+        row = _annotated(REFRESH_REF)
+        row["Silent_edit_codon_index"] = len(REFRESH_REF) - 1   # only 1 base available
+        out = pe.refresh_codon_annotations(pd.DataFrame([row]))
+        assert out.loc[0, "Silent_edit_codon"] == ""
+        assert out.loc[0, "Silent_edit_AA"] == ""
+
+    def test_empty_frame_is_returned_unchanged(self):
+        assert len(pe.refresh_codon_annotations(pd.DataFrame(columns=["Edit_sequence"]))) == 0
+
+    def test_frame_without_codon_columns_is_tolerated(self):
+        df = pd.DataFrame([{"Edit_sequence": REFRESH_REF, "Reference_sequence": REFRESH_REF}])
+        out = pe.refresh_codon_annotations(df)
+        assert out.loc[0, "Edit_sequence_change_indexes"] == ""
+
+    def test_refresh_is_idempotent(self):
+        edit = REFRESH_REF[:9] + "ACG" + REFRESH_REF[12:]
+        once = pe.refresh_codon_annotations(pd.DataFrame([_annotated(edit)]))
+        twice = pe.refresh_codon_annotations(once.copy())
+        pd.testing.assert_frame_equal(once, twice)
