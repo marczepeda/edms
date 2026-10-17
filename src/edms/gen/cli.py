@@ -643,12 +643,13 @@ def add_subparser(subparsers, formatter_class=None):
     parser_plot = subparsers.add_parser("plot", help="Generate scatter, category, distribution, heatmap, stacked bar, and volcano plots", description="Generate scatter, category, distribution, heatmap, stacked bar, and volcano plots", formatter_class=formatter_class)
     subparsers_plot = parser_plot.add_subparsers(dest="graph")
 
-    # scat(): Creates scatter plot related graphs (scat, line, line_scat)
+    # scat(): Creates scatter plot related graphs (scat, line, line_scat, scat_line)
     parser_plot_type_scat = subparsers_plot.add_parser("scat", help="Create scatter plot", description="Create scatter plot", formatter_class=formatter_class)
     parser_plot_type_line = subparsers_plot.add_parser("line", help="Create line plot", description="Create line plot", formatter_class=formatter_class)
     parser_plot_type_line_scat = subparsers_plot.add_parser("line_scat", help="Create scatter + line plot", description="Create scatter + line plot", formatter_class=formatter_class)
+    parser_plot_type_scat_line = subparsers_plot.add_parser("scat_line", help="Create scatter plot with same-color points connected (no error band)", description="Create scatter plot with same-color points connected (no error band)", formatter_class=formatter_class)
 
-    for parser_plot_scat in [parser_plot_type_scat, parser_plot_type_line, parser_plot_type_line_scat]:
+    for parser_plot_scat in [parser_plot_type_scat, parser_plot_type_line, parser_plot_type_line_scat, parser_plot_type_scat_line]:
         add_common_plot_scat_args(parser_plot_scat)
         parser_plot_scat.set_defaults(func=p.scat)
 
@@ -886,9 +887,25 @@ Pipeline .csv column reference:[/red]
   |               before it submits anything. A token naming another column  |
   |               (i.e. 'out_dir') resolves to that row's value for it, so a |
   |               path is never typed twice; anything else is a literal path.|
-  |               Directories are never inferred: the same column is an input|
-  |               for one subcommand and an output for another, and creating |
-  |               an input would hide a typo behind an empty folder.         |
+  |               Rarely needed now that paths are detected, but it still    |
+  |               forces a value to count as a directory however it looks.   |
+  |                                                                          |
+  ----------------------------------------------------------------------------
+
+  *** Paths (detected automatically, created by submit.sh) *** --------------
+  |                                                                          |
+  |  A value starting with '/', './', '../' or '~/' is treated as a path;    |
+  |  anything else is left alone, so a pe_format such as 'NNNN/NNN(NGG)' is  |
+  |  never mistaken for one.                                                 |
+  |  A path whose basename has an extension is a file, everything else is a  |
+  |  directory.                                                              |
+  |  submit.sh creates every directory, with parents, before the first       |
+  |  sbatch, and echoes each one it had to create. A directory reported as   |
+  |  created that you expected to already hold data is a typo in the .csv.   |
+  |  A file cannot be created, so only its parent directory is. A missing    |
+  |  input file is listed as a warning and submission continues; a column    |
+  |  whose name contains 'out' is taken as a file the job writes, and is     |
+  |  never reported as missing.                                              |
   |                                                                          |
   ----------------------------------------------------------------------------
 

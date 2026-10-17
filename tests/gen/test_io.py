@@ -693,9 +693,22 @@ def test_pipeline_mkdir_skips_blank_resolved_values_and_deduplicates():
     assert io._pipeline_mkdir("out_dir;dir;save_dir", vals, lambda v: v) == ["./work"]
 
 
-def test_create_pipeline_without_mkdir_column_writes_no_directory_block(tmp_path):
+def test_create_pipeline_detects_paths_without_an_mkdir_column(tmp_path):
+    # Path-like values are picked up on their own, so the directory block appears
+    # even when nothing is declared in 'mkdir'.
     submit = _submit_text(tmp_path, [
         ["trim", "", "fastq trim", "", "", "", "", "./raw", "./work/trim"],
+    ])
+    directories = submit.split("---------- directories ----------")[1].split("done")[0]
+    assert "./raw" in directories
+    assert "./work/trim" in directories
+
+
+def test_create_pipeline_writes_no_directory_block_without_any_paths(tmp_path):
+    # Nothing here looks like a path, so there is nothing to create. 'basename'
+    # and a bare suffix must not be mistaken for one.
+    submit = _submit_text(tmp_path, [
+        ["split", "", "io in", "", "", "", "", "basename", ".fastq"],
     ])
     assert "---------- directories ----------" not in submit
 
@@ -709,14 +722,17 @@ def test_create_pipeline_mkdir_block_runs_before_the_first_sbatch(tmp_path):
     assert submit.index('cd "$(dirname') < submit.index("---------- directories ----------")
 
 
-def test_create_pipeline_mkdir_creates_outputs_but_never_inputs(tmp_path):
+def test_create_pipeline_creates_inputs_as_well_as_declared_outputs(tmp_path):
     submit = _submit_text(tmp_path, [
         ["trim", "", "fastq trim", "", "", "", "out_dir", "./raw", "./work/trim"],
     ])
     assert "./work/trim" in submit.split("---------- trim ----------")[0]
-    # fastq_dir is an input; creating it would hide a typo behind an empty folder
+    # An input directory is created too, rather than left to fail the job later.
+    # The trade-off is that a typo'd input becomes an empty folder, so submit.sh
+    # reports every directory it had to create and the reader can spot it.
     directories = submit.split("---------- directories ----------")[1].split("done")[0]
-    assert "./raw" not in directories
+    assert "./raw" in directories
+    assert 'echo "  Created $_dir"' in submit
 
 
 def test_create_pipeline_mkdir_expands_per_scattered_sample(tmp_path):
@@ -802,3 +818,152 @@ def test_bundled_example_pipeline_csv_declares_mkdir(tmp_path, capsys):
     io.create_pipeline(pt=str(pt), dir=str(tmp_path / "scripts"), email="test@example.com",
                        dry_run=True)
     assert "directories submit.sh would create" in capsys.readouterr().out
+
+
+# --------------------------------------------------------------------------- #
+# create_pipeline() path detection
+# --------------------------------------------------------------------------- #
+
+@pytest.mark.parametrize("value, is_path", [
+    ("/n/netscratch/lab/trim", True),
+    ("./work/trim", True),
+    ("../shared/ref", True),
+    ("~/scratch/trim", True),
+    # Arguments that merely contain a slash are not paths. edms pe designer's
+    # pe_format and edit syntax both look like this.
+    ("NNNNNNNNNNNNNNNNN/NNN[NGG]", False),
+    ("(G/A)", False),
+    ("spMUZ88_spMUZ89", False),
+    ("basename", False),
+    (".fastq", False),
+])
+def test_pipeline_is_path(value, is_path):
+    assert io._pipeline_is_path(value) is is_path
+
+
+@pytest.mark.parametrize("value, is_file", [
+    ("./epegRNA_pool_signature.csv", True),
+    ("/n/lab/ref.csv", True),
+    ("/n/netscratch/lab/trim", False),
+    ("./work/count/SAMPLE_A1", False),
+    ("/n/lab/trim/", False),
+])
+def test_pipeline_is_file(value, is_file):
+    assert io._pipeline_is_file(value) is is_file
+
+
+def test_create_pipeline_creates_parent_of_an_input_file_and_reports_the_file(tmp_path):
+    cols = ["step", "sample", "command", "scatter", "depends_on", "script", "mkdir",
+            "df_ref", "out_dir"]
+    pt = _write_pipeline(tmp_path, [
+        {"step": "count", "command": "fastq signatures", "mkdir": "out_dir",
+         "df_ref": "./ref/pool.csv", "out_dir": "./work/count"},
+    ], cols=cols)
+    out = tmp_path / "scripts"
+    io.create_pipeline(pt=pt, dir=str(out), email="test@example.com")
+    submit = (out / "submit.sh").read_text()
+
+    # The file itself cannot be created, but its parent directory can be
+    directories = submit.split("---------- directories ----------")[1].split("done")[0]
+    assert "./ref" in directories
+    assert "./ref/pool.csv" not in directories
+    # ...and its absence is reported rather than silently ignored
+    files = submit.split("---------- input files ----------")[1]
+    assert "./ref/pool.csv" in files
+    assert "input file(s) not found" in files
+
+
+def test_create_pipeline_does_not_report_output_files_as_missing(tmp_path):
+    cols = ["step", "sample", "command", "scatter", "depends_on", "script", "mkdir",
+            "df_ref", "out_file"]
+    pt = _write_pipeline(tmp_path, [
+        {"step": "count", "command": "fastq signatures",
+         "df_ref": "./ref.csv", "out_file": "./results/counts.csv"},
+    ], cols=cols)
+    out = tmp_path / "scripts"
+    io.create_pipeline(pt=pt, dir=str(out), email="test@example.com")
+    submit = (out / "submit.sh").read_text()
+
+    files = submit.split("---------- input files ----------")[1]
+    assert "./ref.csv" in files          # an input, expected to exist
+    assert "counts.csv" not in files     # an output, written by the job
+    # The output's parent is still created so the job can write into it
+    directories = submit.split("---------- directories ----------")[1].split("done")[0]
+    assert "./results" in directories
+
+
+def test_create_pipeline_path_blocks_are_valid_shell(tmp_path):
+    import subprocess
+    cols = ["step", "sample", "command", "scatter", "depends_on", "script", "mkdir",
+            "df_ref", "fastq_dir", "out_dir"]
+    pt = _write_pipeline(tmp_path, [
+        {"step": "count", "command": "fastq signatures", "scatter": "A1;B2",
+         "mkdir": "out_dir", "df_ref": "./ref.csv",
+         "fastq_dir": "./work/trim/{sample}", "out_dir": "./work/count/{sample}"},
+    ], cols=cols)
+    out = tmp_path / "scripts"
+    io.create_pipeline(pt=pt, dir=str(out), email="test@example.com")
+    assert subprocess.run(["bash", "-n", str(out / "submit.sh")]).returncode == 0
+
+
+def test_create_pipeline_submit_creates_directories_when_run(tmp_path):
+    """Run the real submit.sh end to end with sbatch stubbed, and check the effects."""
+    import subprocess
+    cols = ["step", "sample", "command", "scatter", "depends_on", "script", "mkdir",
+            "df_ref", "fastq_dir", "out_dir"]
+    pt = _write_pipeline(tmp_path, [
+        {"step": "count", "command": "fastq signatures", "mkdir": "out_dir",
+         "df_ref": "./ref.csv", "fastq_dir": "./deep/nested/input",
+         "out_dir": "./deep/other/output"},
+    ], cols=cols)
+    out = tmp_path / "scripts"
+    io.create_pipeline(pt=pt, dir=str(out), email="test@example.com")
+
+    # Stub sbatch so the script runs to completion without a scheduler
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "sbatch").write_text("#!/bin/bash\necho 12345\n")
+    (bin_dir / "sbatch").chmod(0o755)
+    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+
+    done = subprocess.run(["bash", "submit.sh"], cwd=str(out), env=env,
+                          capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+
+    # Parents are created all the way down, for inputs as well as outputs
+    assert (out / "deep/nested/input").is_dir()
+    assert (out / "deep/other/output").is_dir()
+    # Each creation is reported, so a typo'd input is visible in the output
+    assert "Created ./deep/nested/input" in done.stdout
+    # The missing input file is reported, not invented
+    assert "input file(s) not found" in done.stdout
+    assert "./ref.csv" in done.stdout
+    assert not (out / "ref.csv").exists()
+
+
+def test_create_pipeline_submit_is_quiet_when_paths_already_exist(tmp_path):
+    import subprocess
+    cols = ["step", "sample", "command", "scatter", "depends_on", "script", "mkdir",
+            "df_ref", "fastq_dir", "out_dir"]
+    pt = _write_pipeline(tmp_path, [
+        {"step": "count", "command": "fastq signatures", "mkdir": "out_dir",
+         "df_ref": "./ref.csv", "fastq_dir": "./raw", "out_dir": "./counts"},
+    ], cols=cols)
+    out = tmp_path / "scripts"
+    io.create_pipeline(pt=pt, dir=str(out), email="test@example.com")
+    # Everything the .csv names already exists
+    (out / "raw").mkdir(parents=True)
+    (out / "counts").mkdir(parents=True)
+    (out / "ref.csv").write_text("x\n")
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "sbatch").write_text("#!/bin/bash\necho 12345\n")
+    (bin_dir / "sbatch").chmod(0o755)
+    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+
+    done = subprocess.run(["bash", "submit.sh"], cwd=str(out), env=env,
+                          capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+    assert "Created" not in done.stdout
+    assert "not found" not in done.stdout

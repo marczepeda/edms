@@ -11,6 +11,7 @@ import math
 
 import matplotlib
 import matplotlib.pyplot as plt
+from matplotlib.collections import PolyCollection
 import numpy as np
 import pandas as pd
 import pytest
@@ -266,6 +267,26 @@ def test_scat_with_color_column_and_save(tmp_path, scat_df):
 def test_scat_line_graph_type(scat_df):
     fig, axes = p.scat("line", scat_df.sort_values("x"), x="x", y="y", show=False)
     assert isinstance(fig, plt.Figure)
+    plt.close(fig)
+
+
+def test_scat_scat_line_connects_raw_points_per_color(scat_df):
+    df = pd.concat([scat_df, scat_df.assign(y=scat_df["y"] + 1)])  # replicate x values would be averaged by line_scat
+    fig, axes = p.scat("scat_line", df, x="x", y="y", cols="grp", show=False)
+    ax = axes[0, 0]
+    lines = [ln for ln in ax.get_lines() if len(ln.get_xdata()) > 0]
+    assert len(lines) == 2  # one line per color
+    assert sorted(len(ln.get_xdata()) for ln in lines) == [20, 20]  # every raw point, no aggregation
+    assert not any(isinstance(c, PolyCollection) for c in ax.collections)  # no error band
+    assert len(ax.collections) >= 1  # scatter points
+    plt.close(fig)
+
+
+def test_scat_scat_line_without_color_column(scat_df):
+    fig, axes = p.scat("scat_line", scat_df, x="x", y="y", show=False)
+    lines = [ln for ln in axes[0, 0].get_lines() if len(ln.get_xdata()) > 0]
+    assert len(lines) == 1
+    assert len(lines[0].get_xdata()) == len(scat_df)
     plt.close(fig)
 
 

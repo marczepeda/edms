@@ -515,6 +515,63 @@ def _pipeline_mkdir(value: str, vals: dict, sub) -> list:
             dirs.append(resolved)
     return dirs
 
+# A value is only treated as a path when it is unmistakably one. Requiring an
+# explicit prefix keeps sequence-shaped arguments such as the pe_format
+# 'NNNNNNNNNNNNNNNNN/NNN[NGG]' or an edit '(G/A)' from being mistaken for paths.
+PIPELINE_PATH_PREFIXES = ('/', './', '../', '~/')
+
+def _pipeline_is_path(value: str) -> bool:
+    """
+    _pipeline_is_path(): returns whether a cell value should be treated as a path.
+
+    Parameters:
+    value (str): resolved cell value
+    """
+    return value.startswith(PIPELINE_PATH_PREFIXES)
+
+def _pipeline_is_file(value: str, col: str = '') -> bool:
+    """
+    _pipeline_is_file(): returns whether a path value names a file rather than a directory.
+
+    A basename carrying an extension ('./ref.csv') is a file; everything else
+    ('/n/.../trim') is a directory.
+
+    Parameters:
+    value (str): resolved path value
+    col (str, optional): column the value came from
+    """
+    base = os.path.basename(value.rstrip('/'))
+    return bool(base) and base not in ('.', '..') and '.' in base
+
+def _pipeline_is_output(col: str) -> bool:
+    """
+    _pipeline_is_output(): returns whether a file-valued column names something the job writes.
+
+    An output file is not expected to exist yet, so only its parent directory is
+    created and its absence is never reported.
+
+    Parameters:
+    col (str): column name the value came from
+    """
+    return 'out' in col.lower()
+
+def _pipeline_checkable(value: str) -> bool:
+    """
+    _pipeline_checkable(): returns whether a path can meaningfully be checked on this machine.
+
+    Scripts are usually generated locally and run on the cluster, so an absolute
+    path whose root is absent here (e.g. '/n' on a laptop) says nothing about
+    whether it exists where the jobs will run.
+
+    Parameters:
+    value (str): resolved path value
+    """
+    value = os.path.expanduser(value)
+    if not os.path.isabs(value):
+        return True
+    root = os.sep + value.lstrip(os.sep).split(os.sep)[0]
+    return os.path.isdir(root)
+
 def create_pipeline(pt: str = None, dir: str = '.', submit_file: str = 'submit.sh',
                     cores: int = 1, partition: str = 'serial_requeue', time: str = '0-00:10',
                     mem: int = 1000, email: str = None, python: str = 'python', env: str = 'edms',
@@ -538,8 +595,8 @@ def create_pipeline(pt: str = None, dir: str = '.', submit_file: str = 'submit.s
     - script: script filename override; may contain {sample}
     - mkdir: ';' or ',' separated directories for submit.sh to create before it submits
       anything. A token naming another column (i.e. 'out_dir') resolves to that row's
-      value for it; anything else is a literal path. Directories are never inferred,
-      because the same column is an input for one subcommand and an output for another.
+      value for it; anything else is a literal path. Rarely needed now that paths are
+      detected, but it still forces a value to count as a directory however it looks.
     - sbatch_cores / sbatch_partition / sbatch_time / sbatch_mem / sbatch_email /
       sbatch_python / sbatch_env: per-step SLURM and environment settings
 
@@ -547,6 +604,15 @@ def create_pipeline(pt: str = None, dir: str = '.', submit_file: str = 'submit.s
     skipped, so one wide .csv can cover steps that take different arguments. Columns
     whose name starts with '#' are notes for the reader and are ignored, as are rows
     whose 'step' starts with '#'.
+
+    Paths are detected among those values: anything starting with '/', './', '../' or
+    '~/' counts, which leaves sequence-shaped arguments alone. A path whose basename
+    carries an extension is a file, everything else a directory. submit.sh creates
+    every directory with its parents and echoes the ones that were missing, so a typo'd
+    input shows up as a freshly created empty folder rather than a silent failure. A
+    file is never created, only its parent; a missing input file is warned about and
+    submission continues, while a column whose name contains 'out' is treated as a file
+    the job writes and is never reported as missing.
 
     Parameters:
     pt (str): path to the pipeline .csv (or .tsv) file (required unless example=True).
@@ -700,13 +766,19 @@ def create_pipeline(pt: str = None, dir: str = '.', submit_file: str = 'submit.s
                 raise ValueError(f"Two jobs both want to write '{stem}.sh'; add a 'script' column "
                                  f"(e.g. '{entry['name']}_{{sample}}') to keep the names distinct")
 
-            # Command line: the subcommand, then one flag per continued line
+            # Command line: the subcommand, then one flag per continued line.
+            # Path-like values are collected on the way past so submit.sh can
+            # create them (and report the input files it cannot).
             chunks = []
+            job_paths = []
             for col in flag_cols:
                 value = vals.get(col, '')
                 if not value:
                     continue
-                tokens = _pipeline_flag(col, sub(value))
+                resolved = sub(value)
+                if _pipeline_is_path(resolved):
+                    job_paths.append((col, resolved))
+                tokens = _pipeline_flag(col, resolved)
                 if tokens:
                     chunks.append(' '.join(shlex.quote(t) for t in tokens))
             base = f"{prog} {' '.join(vals['command'].split())}"
@@ -714,6 +786,7 @@ def create_pipeline(pt: str = None, dir: str = '.', submit_file: str = 'submit.s
 
             jobs.append(dict(step=entry['name'], file=f'{stem}.sh',
                              dirs=_pipeline_mkdir(vals.get('mkdir', ''), vals, sub),
+                             paths=job_paths,
                              cores=int(vals.get('sbatch_cores') or cores),
                              partition=vals.get('sbatch_partition') or partition,
                              time=vals.get('sbatch_time') or time,
@@ -726,12 +799,28 @@ def create_pipeline(pt: str = None, dir: str = '.', submit_file: str = 'submit.s
             scripts.append(f'{stem}.sh')
         scripts_by_step[entry['name']] = scripts
 
-    # Every directory the .csv asked for, in first-seen order, created once up front
+    # Every directory the .csv asked for, in first-seen order, created once up front.
+    # A path named in 'mkdir' is a directory however it looks; every other path-like
+    # value is classified by its own shape.
     pipeline_dirs = []
+    pipeline_files = []  # input files: only the parent is created, absence is reported
     for job in jobs:
         for job_dir in job['dirs']:
             if job_dir not in pipeline_dirs:
                 pipeline_dirs.append(job_dir)
+    for job in jobs:
+        for col, value in job['paths']:
+            if value in pipeline_dirs:
+                continue  # already declared in 'mkdir'
+            if _pipeline_is_file(value, col):
+                parent = os.path.dirname(value)
+                # '.', '..' and '/' always exist, so creating them is pure noise
+                if parent not in ('', '.', '..', '/', '~') and parent not in pipeline_dirs:
+                    pipeline_dirs.append(parent)
+                if not _pipeline_is_output(col) and value not in pipeline_files:
+                    pipeline_files.append(value)
+            elif value not in pipeline_dirs:
+                pipeline_dirs.append(value)
 
     # Build submit.sh
     lines = [
@@ -754,12 +843,39 @@ def create_pipeline(pt: str = None, dir: str = '.', submit_file: str = 'submit.s
         # that SLURM can open its .out/.err logs even when a script name has a path.
         lines += [
             '# ---------- directories ----------',
+            '# Declared in the .csv \'mkdir\' column, plus every path-like value in it.',
+            '# Anything already present is left alone; the rest is created with its',
+            '# parents. A directory reported as created that you expected to already',
+            '# hold data usually means a typo in the .csv.',
+            '_made=0',
             'for _dir in \\',
             ' \\\n'.join(f'    {shlex.quote(d)}' for d in pipeline_dirs) + '; do',
             '  [ -d "$_dir" ] && continue',
             '  mkdir -p "$_dir"',
             '  echo "  Created $_dir"',
+            '  _made=$((_made + 1))',
             'done',
+            '[ "$_made" -gt 0 ] && echo "  ($_made of '
+            + str(len(pipeline_dirs)) + ' director(ies) did not exist)"',
+            '',
+        ]
+    if pipeline_files:
+        # Input files cannot be created, so their absence is only reported. The
+        # parent directories are already covered by the loop above.
+        lines += [
+            '# ---------- input files ----------',
+            '_missing=()',
+            'for _file in \\',
+            ' \\\n'.join(f'    {shlex.quote(f)}' for f in pipeline_files) + '; do',
+            '  [ -f "$_file" ] || _missing+=("$_file")',
+            'done',
+            'if [ "${#_missing[@]}" -gt 0 ]; then',
+            '  echo',
+            '  echo "WARNING: ${#_missing[@]} input file(s) not found:"',
+            '  printf \'    %s\\n\' "${_missing[@]}"',
+            '  echo "Jobs that read them will fail. Submitting anyway."',
+            '  echo',
+            'fi',
             '',
         ]
     for entry in steps:
@@ -803,9 +919,28 @@ def create_pipeline(pt: str = None, dir: str = '.', submit_file: str = 'submit.s
                     print(f'      {ln}')
             print()
         if pipeline_dirs:
-            print(f'=== directories {submit_file} would create ===')
+            print(f'=== directories {submit_file} would create if missing ===')
             for job_dir in pipeline_dirs:
-                print(f'  {job_dir}{"" if os.path.isdir(job_dir) else "   (does not exist yet)"}')
+                # Only annotate when this machine can actually answer the question;
+                # a cluster path says nothing about itself on a laptop.
+                if not _pipeline_checkable(job_dir):
+                    note = '   (not checkable here)'
+                elif os.path.isdir(job_dir):
+                    note = '   (exists)'
+                else:
+                    note = '   (does not exist yet)'
+                print(f'  {job_dir}{note}')
+            print()
+        if pipeline_files:
+            print(f'=== input files {submit_file} would check ===')
+            for job_file in pipeline_files:
+                if not _pipeline_checkable(job_file):
+                    note = '   (not checkable here)'
+                elif os.path.isfile(job_file):
+                    note = '   (found)'
+                else:
+                    note = '   (NOT FOUND)'
+                print(f'  {job_file}{note}')
             print()
         print(f'=== {submit_file} ===')
         for entry in steps:

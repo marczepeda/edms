@@ -962,7 +962,7 @@ def formatter(graph: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file:
     Dependencies: os, matplotlib, seaborn, io, re_un_cap(), & round_up_pow_10()
     '''
     # Define graph types
-    scats = ['scat', 'line', 'line_scat']
+    scats = ['scat', 'line', 'line_scat', 'scat_line']
     cats = ['bar', 'box', 'violin', 'swarm', 'strip', 'point', 'count', 'bar_strip', 'box_strip', 'violin_strip','bar_swarm', 'box_swarm', 'violin_swarm']
     dists = ['hist', 'kde', 'hist_kde','ridge']
     heats = ['ht']
@@ -1371,7 +1371,7 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
     scat(): creates scatter plot related graphs
 
     Parameters:
-    graph (str): graph type (scat, line, line_scat)
+    graph (str): graph type (scat, line, line_scat, scat_line; scat_line connects same-color points with a line without aggregation or error band)
     df (dataframe | str): pandas dataframe (or file path)
     x (str): x-axis column name
     y (str): y-axis column name
@@ -1540,9 +1540,15 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
         df_sub (pd.DataFrame): subset of the data for this facet panel
         ax (plt.Axes): the specific axis to draw on
         '''
+        # scat_line: connect raw points sharing a color (no aggregation or error band) beneath the scatter drawn below
+        if graph == 'scat_line':
+            hue_kwargs = {'hue': cols, 'hue_order': cols_order, 'palette': palette} if cols is not None else {'color': kwargs.get('color')}
+            sns.lineplot(data=df_sub, x=x, y=y, estimator=None, errorbar=None, sort=True,
+                         legend=False, zorder=1, ax=ax, **hue_kwargs)
+
         # seaborn plots
         if cols is not None and stys is not None:
-            if graph == 'scat':
+            if graph in ('scat', 'scat_line'):
                 sns.scatterplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_order,
                                 style=stys, style_order=stys_order, markers=mark_order,
                                 edgecolor=edgecol, alpha=alpha, palette=palette, ax=ax, **scat_size_kwargs, **kwargs)
@@ -1558,10 +1564,10 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
                                 style=stys, style_order=stys_order, markers=mark_order,
                                 edgecolor=edgecol, alpha=alpha, palette=palette, ax=ax, **scat_size_kwargs, **kwargs)
             else:
-                raise ValueError("Invalid graph! scat, line, or line_scat")
+                raise ValueError("Invalid graph! scat, line, line_scat, or scat_line")
 
         elif cols is not None:
-            if graph == 'scat':
+            if graph in ('scat', 'scat_line'):
                 sns.scatterplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_order,
                                 edgecolor=edgecol, alpha=alpha, palette=palette, ax=ax, **scat_size_kwargs, **kwargs)
             elif graph == 'line':
@@ -1573,10 +1579,10 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
                 sns.scatterplot(data=df_sub, x=x, y=y, hue=cols, hue_order=cols_order,
                                 edgecolor=edgecol, alpha=alpha, palette=palette, ax=ax, **scat_size_kwargs, **kwargs)
             else:
-                raise ValueError("Invalid graph! scat, line, or line_scat")
+                raise ValueError("Invalid graph! scat, line, line_scat, or scat_line")
 
         elif stys is not None:
-            if graph == 'scat':
+            if graph in ('scat', 'scat_line'):
                 sns.scatterplot(data=df_sub, x=x, y=y, style=stys, style_order=stys_order,
                                 markers=mark_order, edgecolor=edgecol, palette=palette,
                                 alpha=alpha, ax=ax, **scat_size_kwargs, **kwargs)
@@ -1590,10 +1596,10 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
                                 markers=mark_order, edgecolor=edgecol, palette=palette,
                                 alpha=alpha, ax=ax, **scat_size_kwargs, **kwargs)
             else:
-                raise ValueError("Invalid graph! scat, line, or line_scat")
+                raise ValueError("Invalid graph! scat, line, line_scat, or scat_line")
 
         else:
-            if graph == 'scat':
+            if graph in ('scat', 'scat_line'):
                 sns.scatterplot(data=df_sub, x=x, y=y, edgecolor=edgecol, palette=palette,
                                 alpha=alpha, ax=ax, **scat_size_kwargs, **kwargs)
             elif graph == 'line':
@@ -1603,17 +1609,19 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
                 sns.scatterplot(data=df_sub, x=x, y=y, edgecolor=edgecol, palette=palette,
                                 alpha=alpha, ax=ax, **scat_size_kwargs, **kwargs)
             else:
-                raise ValueError("Invalid graph! scat, line, or line_scat")
+                raise ValueError("Invalid graph! scat, line, line_scat, or scat_line")
 
         # Optional point labels: static for images, interactive for HTML
         if label is not None and label in df.columns:
             if is_html:
-                # Use invisible points to carry click-to-toggle tooltips in HTML
+                # Use invisible points to carry click-to-toggle tooltips in HTML;
+                # zorder keeps them above lines (zorder=2) so line/line_scat strokes don't block hover
                 pts = ax.scatter(
                     df_sub[x],
                     df_sub[y],
                     s=20,
-                    alpha=0
+                    alpha=0,
+                    zorder=10
                 )
                 labels_list = df_sub[label].fillna("").astype(str).tolist()
                 tooltip = SafeHTMLTooltip(pts, labels_list)
@@ -1630,7 +1638,7 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
                     )
         
         # Add error bars if specified
-        if graph == 'scat' and (x_err in df.columns or y_err in df.columns):
+        if graph in ('scat', 'scat_line') and (x_err in df.columns or y_err in df.columns):
             for i in range(len(df_sub)):
                 x_val = df_sub.iloc[i][x]
                 y_val = df_sub.iloc[i][y]
@@ -3939,9 +3947,9 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
         if df_signif is not None and len(df_signif) > 0:
             if is_html:
                 if vertical:
-                    pts = ax.scatter(x=df_signif[x], y=df_signif[y], s=20, alpha=0)
+                    pts = ax.scatter(x=df_signif[x], y=df_signif[y], s=20, alpha=0, zorder=10) # zorder above lines so they don't block hover
                 else:
-                    pts = ax.scatter(x=df_signif[y], y=df_signif[x], s=20, alpha=0)
+                    pts = ax.scatter(x=df_signif[y], y=df_signif[x], s=20, alpha=0, zorder=10)
 
                 labels_list = df_signif[label].fillna("").astype(str).tolist()
                 tooltip = SafeHTMLTooltip(pts, labels_list)

@@ -5553,7 +5553,8 @@ def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, siz
                     x=df_sub[x],
                     y=df_sub[y],
                     s=20,
-                    alpha=0
+                    alpha=0,
+                    zorder=10 # Above lines (zorder=2) so they don't block hover
                 )
                 labels_list = df_sub[tip_label].fillna("").astype(str).tolist()
                 tooltip = p.SafeHTMLTooltip(pts, labels_list)
@@ -5576,7 +5577,8 @@ def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, siz
                     x=df_sub_labels[x],
                     y=df_sub_labels[y],
                     s=20,
-                    alpha=0
+                    alpha=0,
+                    zorder=10 # Above lines (zorder=2) so they don't block hover
                 )
                 labels_list = df_sub_labels[tip_label].fillna("").astype(str).tolist()
                 tooltip = p.SafeHTMLTooltip(pts, labels_list)
@@ -6166,7 +6168,8 @@ def corr(df: pd.DataFrame | str, cond_col: str, cond_vals: list, scores_col: str
                 x=df[f'{scores_col}_{cond_vals[0]}'],
                 y=df[f'{scores_col}_{cond_vals[1]}'],
                 s=20,
-                alpha=0
+                alpha=0,
+                zorder=10 # Above lines (zorder=2) so they don't block hover
             )
             labels_list = df[label].fillna("").astype(str).tolist()
             tooltip = p.SafeHTMLTooltip(pts, labels_list)
