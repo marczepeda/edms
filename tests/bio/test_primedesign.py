@@ -30,6 +30,7 @@ from edms.bio.primedesign import (
     ranked_silent_mutations,
     pam_spacer_annotation,
     select_silent_mutations,
+    extend_rtt_for_silent_mutations,
     target_aa_number,
     codon_annotation,
     codon_columns,
@@ -820,10 +821,22 @@ class TestMainSilentMutationOptions:
         options = self._pegrnas(tmp_path / 'options', monkeypatch, SUBSTITUTION_SEQ)
         assert len(options) > len(plain)
 
-    def test_every_pegrna_still_carries_a_silent_mutation(self, tmp_path, monkeypatch):
+    def test_nearly_every_pegrna_carries_a_silent_mutation(self, tmp_path, monkeypatch):
+        # Not all of them: the 3' homology arm is excluded from the search, and the short
+        # RTTs in this fixture can leave no eligible codon outside it. Those pegRNAs are
+        # emitted without a silent mutation rather than with one in the arm.
         peg = self._pegrnas(tmp_path / 'cover', monkeypatch, SUBSTITUTION_SEQ)
         assert len(peg) > 0
-        assert peg['Silent_mutation_relative_to_edit'].notna().all()
+        covered = peg['Silent_mutation_relative_to_edit'].notna().mean()
+        assert covered > 0.9
+
+    def test_pegrnas_without_a_silent_mutation_have_the_shortest_rtts(self):
+        # the ones that miss out should be the short RTTs, where the arm leaves no room
+        short = ranked_silent_mutations(NO_RANGE, RANK_REF, 30, 18, '+', '[ACGT]GG', 45, 48,
+                                        homology_downstream=15)
+        long_enough = ranked_silent_mutations(NO_RANGE, RANK_REF, 30, 30, '+', '[ACGT]GG', 45, 48,
+                                              homology_downstream=15)
+        assert len(short) < len(long_enough)
 
     def test_options_are_distinct_molecules(self, tmp_path, monkeypatch):
         # one row per option, never the same extension twice for a spacer
@@ -904,3 +917,75 @@ class TestSelectSilentMutations:
         before = list(candidates)
         select_silent_mutations(candidates, 1)
         assert candidates == before
+
+
+# ---------------------------------------------------------------------------
+# homology arm exclusion / extend_rtt_for_silent_mutations()
+# ---------------------------------------------------------------------------
+
+# RANK_REF with the codon at [30,33) replaced by TGG (Trp), the one amino acid with
+# no synonym, so the first codon in the window can never supply a candidate
+NO_SYNONYM_REF = RANK_REF[:30] + 'TGG' + RANK_REF[33:]
+
+
+class TestHomologyArmExclusion:
+    def test_arm_is_excluded_from_the_search(self):
+        # RTT [30,60); a 15 nt arm leaves [30,45)
+        kept = ranked_silent_mutations(NO_RANGE, RANK_REF, 30, 30, '+', '[ACGT]GG', 45, 48,
+                                       homology_downstream=15)
+        assert kept
+        assert all(c['codon_end_abs'] <= 45 for c in kept)
+
+    def test_zero_arm_searches_the_whole_rtt(self):
+        whole = ranked_silent_mutations(NO_RANGE, RANK_REF, 30, 30, '+', '[ACGT]GG', 45, 48)
+        kept = ranked_silent_mutations(NO_RANGE, RANK_REF, 30, 30, '+', '[ACGT]GG', 45, 48,
+                                       homology_downstream=15)
+        assert len(whole) > len(kept)
+
+    def test_pam_disruptors_survive_the_exclusion(self):
+        # the PAM sits next to the nick, at the far end from the arm, so it must be unaffected
+        kept = ranked_silent_mutations(NO_RANGE, RANK_REF, 30, 30, '+', '[ACGT]GG', 45, 48,
+                                       homology_downstream=15)
+        assert any(c['disrupts_pam'] for c in kept)
+
+    def test_minus_strand_excludes_the_mirrored_arm(self):
+        # RTT [10,40); a 15 nt arm leaves [25,40)
+        kept = ranked_silent_mutations(NO_RANGE, RANK_REF, 40, 30, '-', '[ACGT]GG', 0, 0,
+                                       homology_downstream=15)
+        assert kept
+        assert all(c['codon_start_abs'] >= 25 for c in kept)
+
+
+class TestExtendRttForSilentMutations:
+    def _extend(self, reference, rtt_length, maximum, strand='+', hd=15):
+        return extend_rtt_for_silent_mutations(NO_RANGE, reference, 30, rtt_length, strand,
+                                               '[ACGT]GG', 45, 48, hd, maximum)
+
+    def test_leaves_the_rtt_alone_when_a_candidate_already_fits(self):
+        length, candidates = self._extend(RANK_REF, 30, 50)
+        assert length == 30 and candidates
+
+    def test_extends_until_a_candidate_appears(self):
+        # rtt 18 with a 15 nt arm leaves only [30,33), which is the no-synonym codon
+        assert ranked_silent_mutations(NO_RANGE, NO_SYNONYM_REF, 30, 18, '+', '[ACGT]GG', 45, 48, 15) == []
+        length, candidates = self._extend(NO_SYNONYM_REF, 18, 50)
+        assert length > 18 and candidates
+        assert all(c['codon_end_abs'] <= 30 + length - 15 for c in candidates)
+
+    def test_extension_is_the_shortest_that_works(self):
+        # from 19 the window ends mid-codon, so the shortest workable extension is 2, not a
+        # whole codon: stepping a codon at a time would overshoot to 22 and fail this
+        length, _ = self._extend(NO_SYNONYM_REF, 19, 50)
+        assert length == 21
+        for shorter in range(19, length):
+            assert ranked_silent_mutations(NO_RANGE, NO_SYNONYM_REF, 30, shorter, '+',
+                                           '[ACGT]GG', 45, 48, 15) == []
+
+    def test_never_reaches_the_maximum_length(self):
+        length, _ = self._extend(NO_SYNONYM_REF, 18, 24)
+        assert length < 24
+
+    def test_returns_the_original_length_when_no_extension_helps(self):
+        # a maximum that leaves no room to grow must not lengthen the pegRNA for nothing
+        length, candidates = self._extend(NO_SYNONYM_REF, 18, 19)
+        assert length == 18 and candidates == []

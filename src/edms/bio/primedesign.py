@@ -26,7 +26,7 @@ silent_mutation = False
 genome_wide_design = False
 saturation_mutagenesis = False
 number_of_pegrnas = 0
-number_of_silent_mutations = 0
+number_of_silent_mutations = 5
 number_of_ngrnas = 3
 nicking_distance_pooled = 75
 homology_downstream = 15
@@ -95,7 +95,7 @@ def _configure_cli():
 	parser.add_argument('-genome_wide', '--genome_wide_design', action='store_true', help = '***** Whether or not this is a genome-wide pooled design. This option designs a set of pegRNAs per input without ranging PBS and RTT parameters. (Default: False) *****\n\n')
 	parser.add_argument('-sat_mut', '--saturation_mutagenesis', default = False, choices = ['aa', 'aa_subs', 'aa_ins', 'aa_dels', 'aa_silent', 'base'], type = str, help = '***** Saturation mutagenesis design with prime editing. The \'aa\' option makes all amino acid substitutions (\'aa_subs\'),  +1 amino acid insertions (\'aa_ins\'), and -1 amino acid deletions (\'aa_dels\'). The \'aa_silent\' option makes all possible silent codon changes. The \'base\' option makes DNA base changes. (Default: False) *****\n\n')
 	parser.add_argument('-n_pegrnas', '--number_of_pegrnas', default = 0, type = int, help = '***** The maximum number of pegRNAs to design for each input sequence. 0 keeps every pegRNA meeting the criteria. The pegRNAs are ranked by 1) PAM disrupted > Spacer disrupted > PAM & Spacer intact then 2) distance to edit. (Default: 0) *****\n\n')
-	parser.add_argument('-n_silent_mut', '--number_of_silent_mutations', default = 0, type = int, help = '***** The maximum number of silent mutation options to design for each pegRNA when the input file supplies the edits (not saturation mutagenesis). 0 keeps every option. Options are ranked by 1) PAM disrupted > Spacer disrupted then 2) nucleotide differences from the reference codon then 3) human codon usage, so a cap keeps the strongest. (Default: 0) *****\n\n')
+	parser.add_argument('-n_silent_mut', '--number_of_silent_mutations', default = 5, type = int, help = '***** The maximum number of silent mutation options to design for each pegRNA when the input file supplies the edits (not saturation mutagenesis). 0 keeps every option. Options are ranked by 1) PAM disrupted > Spacer disrupted then 2) nucleotide differences from the reference codon then 3) human codon usage, so a cap keeps the strongest. (Default: 5) *****\n\n')
 	parser.add_argument('-n_ngrnas', '--number_of_ngrnas', default = 3, type = int, help = '***** The maximum number of ngRNAs to design for each input sequence. The ngRNAs are ranked by 1) PE3b-seed > PE3b-nonseed > PE3 then 2) deviation from nicking_distance_pooled. (Default: 3) *****\n\n')
 	parser.add_argument('-nick_dist_pooled', '--nicking_distance_pooled', default = 75, type = int, help = '***** The nicking distance between pegRNAs and ngRNAs for pooled designs. PE3b annotation is priority, followed by nicking distance closest to this parameter. (Default: 75 bp) *****\n\n')
 	parser.add_argument('-homology_downstream', '--homology_downstream', default = 15, type = int, help = '***** This parameter determines the minimum RT extension length downstream of an edit for pegRNA designs. (Default: 15) *****\n\n')
@@ -288,7 +288,7 @@ def silent_mutation_edit_sequence_in_allowed_range(target_design_entry, edit_seq
 	return all(silent_codon_in_allowed_range(target_design_entry, start, end) for start, end in changed_codons)
 
 def ranked_silent_mutations(target_design_entry, edit_sequence, pe_nick_edit_idx, rtt_length,
-	strand, pam_search, edit_start_abs, edit_stop_abs):
+	strand, pam_search, edit_start_abs, edit_stop_abs, homology_downstream = 0):
 	"""Enumerate every silent codon substitution the RTT can encode, best candidate first.
 
 	Replaces the previous approach of inspecting only the one or two codons adjacent to
@@ -301,17 +301,21 @@ def ranked_silent_mutations(target_design_entry, edit_sequence, pe_nick_edit_idx
 		3. number of nucleotide differences from the reference codon, most first
 		4. human codon usage of the replacement codon, most frequent first
 
+	The last homology_downstream nucleotides of the RTT are excluded. That stretch is the 3'
+	homology arm the reverse-transcribed flap anneals through, so a mismatch there costs
+	incorporation efficiency; it is the one part of the RTT that must match the genome.
+
 	Coordinates are 0-indexed, half-open, and in edit_sequence space. The RTT runs 3' of
 	the nick on the (+) strand and 5' of the nick on the (-) strand, so the PAM and the
 	reachable spacer bases sit at mirrored offsets.
 	"""
 	if strand == '+':
-		rtt_lo, rtt_hi = pe_nick_edit_idx, pe_nick_edit_idx + rtt_length
+		rtt_lo, rtt_hi = pe_nick_edit_idx, pe_nick_edit_idx + rtt_length - homology_downstream
 		pam_lo, pam_hi = pe_nick_edit_idx + 3, pe_nick_edit_idx + 6
 		spacer_lo, spacer_hi = pe_nick_edit_idx, pe_nick_edit_idx + 3
 		pam_pattern = pam_search
 	else:
-		rtt_lo, rtt_hi = pe_nick_edit_idx - rtt_length, pe_nick_edit_idx
+		rtt_lo, rtt_hi = pe_nick_edit_idx - rtt_length + homology_downstream, pe_nick_edit_idx
 		pam_lo, pam_hi = pe_nick_edit_idx - 6, pe_nick_edit_idx - 3
 		spacer_lo, spacer_hi = pe_nick_edit_idx - 3, pe_nick_edit_idx
 		pam_pattern = reverse_complement(pam_search)
@@ -421,6 +425,38 @@ def codon_columns(target_design_entry, silent_selected):
 	return target_cols + [
 		ref, codon_dict[ref][1], codon_dict[ref][2], number, start,
 		edit, codon_dict[edit][1], codon_dict[edit][2], number, start]
+
+def extend_rtt_for_silent_mutations(target_design_entry, edit_sequence, pe_nick_edit_idx, rtt_length,
+	strand, pam_search, edit_start_abs, edit_stop_abs, homology_downstream, rtt_max_length):
+	"""Grow the RTT until it can carry a silent mutation outside the 3' homology arm.
+
+	Saturation mutagenesis sizes the RTT as the distance to the end of the edit plus the
+	homology arm, so once the arm is excluded there is nothing left between the two whenever
+	the nick sits close to the edit. Lengthening the RTT pushes the arm 3' and opens more
+	positions, so it is grown one nucleotide at a time until a candidate appears or the length
+	would reach rtt_max_length. A single nucleotide is enough to matter when the window
+	boundary falls mid-codon, and stepping one at a time keeps the extension as short as
+	possible, which a codon-sized step would not.
+
+	Returns (rtt_length, candidates). The original length comes back unchanged when no
+	extension is needed, and also when no extension produces a candidate, so a pegRNA is
+	never lengthened for nothing.
+	"""
+	def candidates_for(length):
+		return ranked_silent_mutations(target_design_entry, edit_sequence, pe_nick_edit_idx,
+			length, strand, pam_search, edit_start_abs, edit_stop_abs, homology_downstream)
+
+	candidates = candidates_for(rtt_length)
+	if candidates:
+		return rtt_length, candidates
+
+	extended = rtt_length + 1
+	while extended < rtt_max_length:
+		candidates = candidates_for(extended)
+		if candidates:
+			return extended, candidates
+		extended += 1
+	return rtt_length, []
 
 def select_silent_mutations(silent_candidates, maximum = 0):
 	"""Which silent mutations a non-saturation pegRNA should encode.
@@ -1162,8 +1198,12 @@ def main():
 							# next criterion and still adds a separate silent mutation inside the allowed region.
 							edit_start_abs = pe_nick_edit_idx + nick2edit_length
 							edit_stop_abs = edit_start_abs + edit_span_length_w_edit
-							silent_candidates = ranked_silent_mutations(target_design[target_name], edit_sequence,
-								pe_nick_edit_idx, rtt_length, '+', pam_search, edit_start_abs, edit_stop_abs)
+							# Make room if the arm leaves none: a longer RTT pushes the arm 3'
+							rtt_length, silent_candidates = extend_rtt_for_silent_mutations(
+								target_design[target_name], edit_sequence, pe_nick_edit_idx, rtt_length,
+								'+', pam_search, edit_start_abs, edit_stop_abs, homology_downstream,
+								rtt_max_length_pooled)
+							pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + rtt_length])
 
 							if silent_candidates:
 								silent_mutation_selected = silent_candidates[0]
@@ -1296,8 +1336,12 @@ def main():
 							# codon earns PAM-disruption credit only when the intended edit left the PAM intact.
 							edit_stop_abs = pe_nick_edit_idx - nick2edit_length
 							edit_start_abs = pe_nick_edit_idx - nick2lastedit_length
-							silent_candidates = ranked_silent_mutations(target_design[target_name], edit_sequence,
-								pe_nick_edit_idx, rtt_length, '-', pam_search, edit_start_abs, edit_stop_abs)
+							# Make room if the arm leaves none: a longer RTT pushes the arm 3'
+							rtt_length, silent_candidates = extend_rtt_for_silent_mutations(
+								target_design[target_name], edit_sequence, pe_nick_edit_idx, rtt_length,
+								'-', pam_search, edit_start_abs, edit_stop_abs, homology_downstream,
+								rtt_max_length_pooled)
+							pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + pbs_length]
 
 							if silent_candidates:
 								silent_mutation_selected = silent_candidates[0]
@@ -1445,7 +1489,7 @@ def main():
 									edit_start_abs = pe_nick_edit_idx + nick2edit_length
 									edit_stop_abs = edit_start_abs + edit_span_length_w_edit
 									silent_candidates = ranked_silent_mutations(target_design[target_name], edit_sequence,
-										pe_nick_edit_idx, rtt_length, '+', pam_search, edit_start_abs, edit_stop_abs)
+										pe_nick_edit_idx, rtt_length, '+', pam_search, edit_start_abs, edit_stop_abs, homology_downstream)
 
 
 									silent_options = select_silent_mutations(silent_candidates, number_of_silent_mutations)
@@ -1565,7 +1609,7 @@ def main():
 									edit_stop_abs = pe_nick_edit_idx - nick2edit_length
 									edit_start_abs = pe_nick_edit_idx - nick2lastedit_length
 									silent_candidates = ranked_silent_mutations(target_design[target_name], edit_sequence,
-										pe_nick_edit_idx, rtt_length, '-', pam_search, edit_start_abs, edit_stop_abs)
+										pe_nick_edit_idx, rtt_length, '-', pam_search, edit_start_abs, edit_stop_abs, homology_downstream)
 
 
 									silent_options = select_silent_mutations(silent_candidates, number_of_silent_mutations)
