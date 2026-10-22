@@ -703,7 +703,7 @@ def prime_design_input(target_name: str, flank5_sequence: str,
 
 def prime_design(file: str, pe_format: str = 'NNNNNNNNNNNNNNNNN/NNN[NGG]', pbs_length_list: list = [], rtt_length_list: list = [], 
                 nicking_distance_minimum: int = 0, nicking_distance_maximum: int = 100, filter_c1_extension: bool = False, silent_mutation: bool = False,
-                genome_wide_design: bool = False, saturation_mutagenesis: str = None, number_of_pegrnas: int = 0, number_of_ngrnas: int = 3,
+                genome_wide_design: bool = False, saturation_mutagenesis: str = None, number_of_pegrnas: int = 0, number_of_silent_mutations: int = 0, number_of_ngrnas: int = 3,
                 nicking_distance_pooled: int = 75, homology_downstream: int = 15, pbs_length_pooled: int = 14, rtt_max_length_pooled: int = 50,
                 out_dir: str = './PrimeDesign/DATETIMESTAMP_PrimeDesign'):
     ''' 
@@ -721,6 +721,7 @@ def prime_design(file: str, pe_format: str = 'NNNNNNNNNNNNNNNNN/NNN[NGG]', pbs_l
     genome_wide_design (bool, optional): whether this is a genome-wide pooled design. This option designs a set of pegRNAs per input without ranging PBS and RTT parameters.
     saturation_mutagenesis (str, optional): saturation mutagenesis design with prime editing (Options: 'aa', 'aa_subs', 'aa_ins', 'aa_dels', 'base'). The 'aa' option makes all amino acid substitutions ('aa_subs'), +1 amino acid insertions ('aa_ins'), and -1 amino acid deletions ('aa_dels'). The 'base' option makes DNA base changes. (Default: None)
     number_of_pegrnas (int, optional): maximum number of pegRNAs to design for each input sequence; 0 keeps every pegRNA meeting the criteria. The pegRNAs are ranked by 1) PAM disrupted > Spacer disrupted > PAM & Spacer intact then 2) distance to edit. (Default: 0)
+    number_of_silent_mutations (int, optional): maximum number of silent mutation options per pegRNA when the input file supplies the edits (not saturation mutagenesis); 0 keeps every option. Options are ranked by 1) PAM disrupted > Spacer disrupted then 2) nucleotide differences from the reference codon then 3) human codon usage. (Default: 0)
     number_of_ngrnas (int, optional): maximum number of ngRNAs to design for each input sequence. The ngRNAs are ranked by 1) PE3b-seed > PE3b-nonseed > PE3 then 2) deviation from nicking_distance_pooled. (Default: 3)
     nicking_distance_pooled (int, optional): the nicking distance between pegRNAs and ngRNAs for pooled designs. PE3b annotation is priority (PE3b seed -> PE3b non-seed), followed by nicking distance closest to this parameter. (Default: 75 bp)
     homology_downstream (int, optional): this parameter determines the minimum RT extension length downstream of an edit for pegRNA designs. (Default: 15)
@@ -787,6 +788,7 @@ def prime_design(file: str, pe_format: str = 'NNNNNNNNNNNNNNNNN/NNN[NGG]', pbs_l
     if genome_wide_design: cmd += f' -genome_wide'
     if saturation_mutagenesis: cmd += f' -sat_mut {saturation_mutagenesis}'
     if number_of_pegrnas!=0: cmd += f' -n_pegrnas {number_of_pegrnas}'
+    if number_of_silent_mutations!=0: cmd += f' -n_silent_mut {number_of_silent_mutations}'
     if number_of_ngrnas!=3: cmd += f' -n_ngrnas {number_of_ngrnas}'
     if nicking_distance_pooled!=75: cmd += f' -nick_dist_pooled {nicking_distance_pooled}'
     if homology_downstream!=15: cmd += f' -homology_downstream {homology_downstream}'
@@ -1015,7 +1017,7 @@ def prime_designer(in_file: str = None, target_name: str = None, flank5_sequence
                 flank3_sequence: str = None, index: int=1, pe_format: str = 'NNNNNNNNNNNNNNNNN/NNN[NGG]', pbs_length_list: list = [],
                 rtt_length_list: list = [], nicking_distance_minimum: int = 0,nicking_distance_maximum: int = 100, filter_c1_extension: bool = False,
                 silent_mutation: bool = True, genome_wide_design: bool = False, saturation_mutagenesis: str = None,
-                number_of_pegrnas: int = 0, number_of_ngrnas: int = 3, nicking_distance_pooled: int = 75, homology_downstream: int = 15,
+                number_of_pegrnas: int = 0, number_of_silent_mutations: int = 0, number_of_ngrnas: int = 3, nicking_distance_pooled: int = 75, homology_downstream: int = 15,
                 pbs_length_pooled_list: list = [11,13,15], rtt_max_length_pooled: int = 50,
                 scaffold_sequence: str='GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC', 
                 enzymes: list[str]=['Esp3I'], replace: bool=True, out_dir: str = './PrimeDesign/DATETIMESTAMP_PrimeDesign', pegRNAs_dir: str = './pegRNAs', ngRNAs_dir: str = './ngRNAs'):
@@ -1040,6 +1042,7 @@ def prime_designer(in_file: str = None, target_name: str = None, flank5_sequence
     genome_wide_design (bool, optional): whether this is a genome-wide pooled design. This option designs a set of pegRNAs per input without ranging PBS and RTT parameters (Default: False).
     saturation_mutagenesis (str, optional): saturation mutagenesis design with prime editing (Options: 'aa', 'aa_subs', 'aa_ins', 'aa_dels', 'aa_silent', 'base'). The 'aa' option makes all amino acid substitutions ('aa_subs'), +1 amino acid insertions ('aa_ins'), and -1 amino acid deletions ('aa_dels'). The 'aa_silent' option makes all possible silent codon changes. The 'base' option makes DNA base changes. (Default: None)
     number_of_pegrnas (int, optional): maximum number of pegRNAs to design for each input sequence; 0 keeps every pegRNA meeting the criteria. The pegRNAs are ranked by 1) PAM disrupted > Spacer disrupted > PAM & Spacer intact then 2) distance to edit. (Default: 0)
+    number_of_silent_mutations (int, optional): maximum number of silent mutation options per pegRNA when the input file supplies the edits (not saturation mutagenesis); 0 keeps every option. Options are ranked by 1) PAM disrupted > Spacer disrupted then 2) nucleotide differences from the reference codon then 3) human codon usage. (Default: 0)
     number_of_ngrnas (int, optional): maximum number of ngRNAs to design for each input sequence. The ngRNAs are ranked by 1) PE3b-seed > PE3b-nonseed > PE3 then 2) deviation from nicking_distance_pooled. (Default: 3)
     nicking_distance_pooled (int, optional): the nicking distance between pegRNAs and ngRNAs for pooled designs. PE3b annotation is priority (PE3b seed -> PE3b non-seed), followed by nicking distance closest to this parameter. (Default: 75 bp)
     homology_downstream (int, optional): this parameter determines the minimum RT extension length downstream of an edit for pegRNA designs. (Default: 15)
@@ -1127,7 +1130,7 @@ def prime_designer(in_file: str = None, target_name: str = None, flank5_sequence
         if in_file is None:
             # Run PrimeDesign
             prime_design(file=f'{"_".join(target_name.split(" "))}.csv', silent_mutation=silent_mutation, saturation_mutagenesis=saturation_mutagenesis,
-                        number_of_pegrnas=number_of_pegrnas, number_of_ngrnas=number_of_ngrnas, pbs_length_pooled=pbs_length_pooled, 
+                        number_of_pegrnas=number_of_pegrnas, number_of_silent_mutations=number_of_silent_mutations, number_of_ngrnas=number_of_ngrnas, pbs_length_pooled=pbs_length_pooled, 
                         rtt_max_length_pooled=rtt_max_length_pooled, homology_downstream=homology_downstream, pe_format=pe_format,
                         pbs_length_list=pbs_length_list, rtt_length_list=rtt_length_list, nicking_distance_minimum=nicking_distance_minimum,
                         nicking_distance_maximum=nicking_distance_maximum, filter_c1_extension=filter_c1_extension, genome_wide_design=genome_wide_design,
@@ -1147,7 +1150,7 @@ def prime_designer(in_file: str = None, target_name: str = None, flank5_sequence
         else:
             # Run PrimeDesign
             prime_design(file=in_file, silent_mutation=silent_mutation, saturation_mutagenesis=saturation_mutagenesis,
-                        number_of_pegrnas=number_of_pegrnas, number_of_ngrnas=number_of_ngrnas, pbs_length_pooled=pbs_length_pooled, 
+                        number_of_pegrnas=number_of_pegrnas, number_of_silent_mutations=number_of_silent_mutations, number_of_ngrnas=number_of_ngrnas, pbs_length_pooled=pbs_length_pooled, 
                         rtt_max_length_pooled=rtt_max_length_pooled, homology_downstream=homology_downstream, pe_format=pe_format,
                         pbs_length_list=pbs_length_list, rtt_length_list=rtt_length_list, nicking_distance_minimum=nicking_distance_minimum,
                         nicking_distance_maximum=nicking_distance_maximum, filter_c1_extension=filter_c1_extension, genome_wide_design=genome_wide_design,

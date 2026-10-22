@@ -830,6 +830,18 @@ class TestMainSilentMutationOptions:
         peg = self._pegrnas(tmp_path / 'distinct', monkeypatch, SUBSTITUTION_SEQ)
         assert not peg.duplicated(subset=['Spacer_sequence', 'Extension_sequence']).any()
 
+    def test_maximum_limits_options_per_design(self, tmp_path, monkeypatch):
+        capped = self._pegrnas(tmp_path / 'cap2', monkeypatch, SUBSTITUTION_SEQ,
+                               extra=['-n_silent_mut', '2'])
+        per_design = capped.groupby(['Spacer_sequence', 'RTT_length', 'PBS_length']).size()
+        assert per_design.max() <= 2
+
+    def test_uncapped_emits_more_than_capped(self, tmp_path, monkeypatch):
+        capped = self._pegrnas(tmp_path / 'c1', monkeypatch, SUBSTITUTION_SEQ,
+                               extra=['-n_silent_mut', '1'])
+        every = self._pegrnas(tmp_path / 'c0', monkeypatch, SUBSTITUTION_SEQ)
+        assert len(every) > len(capped)
+
     def test_options_for_one_design_differ_only_in_the_silent_codon(self, tmp_path, monkeypatch):
         peg = self._pegrnas(tmp_path / 'group', monkeypatch, SUBSTITUTION_SEQ)
         grouped = peg.groupby(['Spacer_sequence', 'RTT_length', 'PBS_length'])
@@ -856,32 +868,39 @@ def _cand(name, pam=False, spacer=False):
 
 
 class TestSelectSilentMutations:
-    def test_keeps_every_disrupting_option(self):
-        candidates = [_cand('A', pam=True), _cand('B', spacer=True), _cand('C', pam=True)]
-        assert [c['codon_edit'] for c in select_silent_mutations(candidates)] == ['A', 'B', 'C']
-
-    def test_drops_options_that_disrupt_neither(self):
+    def test_keeps_every_candidate_by_default(self):
         candidates = [_cand('A', pam=True), _cand('B'), _cand('C', spacer=True), _cand('D')]
-        assert [c['codon_edit'] for c in select_silent_mutations(candidates)] == ['A', 'C']
+        assert [c['codon_edit'] for c in select_silent_mutations(candidates)] == ['A', 'B', 'C', 'D']
 
     def test_preserves_the_ranked_order(self):
-        candidates = [_cand(str(i), pam=True) for i in range(5)]
+        candidates = [_cand(str(i)) for i in range(5)]
         assert [c['codon_edit'] for c in select_silent_mutations(candidates)] == list('01234')
 
-    def test_falls_back_to_the_best_candidate_when_nothing_disrupts(self):
-        # without this the pegRNA would lose its silent mutation entirely
-        candidates = [_cand('A'), _cand('B'), _cand('C')]
-        selected = select_silent_mutations(candidates)
-        assert [c['codon_edit'] for c in selected] == ['A']
+    def test_maximum_keeps_the_highest_ranked(self):
+        candidates = [_cand(str(i)) for i in range(5)]
+        assert [c['codon_edit'] for c in select_silent_mutations(candidates, 2)] == ['0', '1']
+
+    def test_maximum_of_zero_means_all(self):
+        candidates = [_cand(str(i)) for i in range(5)]
+        assert len(select_silent_mutations(candidates, 0)) == 5
+
+    def test_maximum_larger_than_the_list_is_harmless(self):
+        candidates = [_cand('A'), _cand('B')]
+        assert len(select_silent_mutations(candidates, 99)) == 2
+
+    def test_a_cap_keeps_disruptors_because_they_rank_first(self):
+        # ranking puts PAM then spacer disruptors first, so a cap never drops them for a
+        # non-disrupting option that happens to sit lower in the list
+        candidates = [_cand('pam', pam=True), _cand('spacer', spacer=True), _cand('plain'), _cand('plain2')]
+        kept = select_silent_mutations(candidates, 2)
+        assert [c['codon_edit'] for c in kept] == ['pam', 'spacer']
 
     def test_no_candidates_means_one_pegrna_with_no_silent_mutation(self):
         assert select_silent_mutations([]) == [None]
-
-    def test_a_single_disrupting_candidate_is_returned_alone(self):
-        assert len(select_silent_mutations([_cand('A', spacer=True)])) == 1
+        assert select_silent_mutations([], 3) == [None]
 
     def test_does_not_mutate_the_input(self):
         candidates = [_cand('A', pam=True), _cand('B')]
         before = list(candidates)
-        select_silent_mutations(candidates)
+        select_silent_mutations(candidates, 1)
         assert candidates == before

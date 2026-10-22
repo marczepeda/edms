@@ -26,6 +26,7 @@ silent_mutation = False
 genome_wide_design = False
 saturation_mutagenesis = False
 number_of_pegrnas = 0
+number_of_silent_mutations = 0
 number_of_ngrnas = 3
 nicking_distance_pooled = 75
 homology_downstream = 15
@@ -38,7 +39,7 @@ def _configure_cli():
 	"""Parse CLI args and configure logging/output dir. Only called from main(), never on import."""
 	global args, file_in, pe_format, pbs_length_list, rtt_length_list, nicking_distance_minimum, nicking_distance_maximum
 	global filter_c1_extension, filter_homopolymer_ts, silent_mutation, genome_wide_design, saturation_mutagenesis
-	global number_of_pegrnas, number_of_ngrnas, nicking_distance_pooled, homology_downstream, pbs_length_pooled, rtt_max_length_pooled
+	global number_of_pegrnas, number_of_silent_mutations, number_of_ngrnas, nicking_distance_pooled, homology_downstream, pbs_length_pooled, rtt_max_length_pooled
 	global out_dir, logger
 
 	parser = argparse.ArgumentParser(description = '''----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -94,6 +95,7 @@ def _configure_cli():
 	parser.add_argument('-genome_wide', '--genome_wide_design', action='store_true', help = '***** Whether or not this is a genome-wide pooled design. This option designs a set of pegRNAs per input without ranging PBS and RTT parameters. (Default: False) *****\n\n')
 	parser.add_argument('-sat_mut', '--saturation_mutagenesis', default = False, choices = ['aa', 'aa_subs', 'aa_ins', 'aa_dels', 'aa_silent', 'base'], type = str, help = '***** Saturation mutagenesis design with prime editing. The \'aa\' option makes all amino acid substitutions (\'aa_subs\'),  +1 amino acid insertions (\'aa_ins\'), and -1 amino acid deletions (\'aa_dels\'). The \'aa_silent\' option makes all possible silent codon changes. The \'base\' option makes DNA base changes. (Default: False) *****\n\n')
 	parser.add_argument('-n_pegrnas', '--number_of_pegrnas', default = 0, type = int, help = '***** The maximum number of pegRNAs to design for each input sequence. 0 keeps every pegRNA meeting the criteria. The pegRNAs are ranked by 1) PAM disrupted > Spacer disrupted > PAM & Spacer intact then 2) distance to edit. (Default: 0) *****\n\n')
+	parser.add_argument('-n_silent_mut', '--number_of_silent_mutations', default = 0, type = int, help = '***** The maximum number of silent mutation options to design for each pegRNA when the input file supplies the edits (not saturation mutagenesis). 0 keeps every option. Options are ranked by 1) PAM disrupted > Spacer disrupted then 2) nucleotide differences from the reference codon then 3) human codon usage, so a cap keeps the strongest. (Default: 0) *****\n\n')
 	parser.add_argument('-n_ngrnas', '--number_of_ngrnas', default = 3, type = int, help = '***** The maximum number of ngRNAs to design for each input sequence. The ngRNAs are ranked by 1) PE3b-seed > PE3b-nonseed > PE3 then 2) deviation from nicking_distance_pooled. (Default: 3) *****\n\n')
 	parser.add_argument('-nick_dist_pooled', '--nicking_distance_pooled', default = 75, type = int, help = '***** The nicking distance between pegRNAs and ngRNAs for pooled designs. PE3b annotation is priority, followed by nicking distance closest to this parameter. (Default: 75 bp) *****\n\n')
 	parser.add_argument('-homology_downstream', '--homology_downstream', default = 15, type = int, help = '***** This parameter determines the minimum RT extension length downstream of an edit for pegRNA designs. (Default: 15) *****\n\n')
@@ -121,6 +123,7 @@ def _configure_cli():
 	genome_wide_design = args.genome_wide_design
 	saturation_mutagenesis = args.saturation_mutagenesis
 	number_of_pegrnas = args.number_of_pegrnas
+	number_of_silent_mutations = args.number_of_silent_mutations
 	number_of_ngrnas = args.number_of_ngrnas
 	nicking_distance_pooled = args.nicking_distance_pooled
 
@@ -419,21 +422,22 @@ def codon_columns(target_design_entry, silent_selected):
 		ref, codon_dict[ref][1], codon_dict[ref][2], number, start,
 		edit, codon_dict[edit][1], codon_dict[edit][2], number, start]
 
-def select_silent_mutations(silent_candidates):
+def select_silent_mutations(silent_candidates, maximum = 0):
 	"""Which silent mutations a non-saturation pegRNA should encode.
 
 	Saturation mutagenesis fans an edit out over all of its synonymous codons, so the pegRNA
 	keeps only its best silent mutation. Outside saturation the edit is fixed, so the silent
-	mutation is what gets enumerated instead: every option disrupting the PAM or the spacer is
-	returned, in ranked order, and one pegRNA is emitted per option.
+	mutation is what gets enumerated instead: every candidate is returned, in ranked order, and
+	one pegRNA is emitted per option.
 
-	When nothing disrupts either, the single best-ranked candidate is kept so the pegRNA still
-	carries a silent mutation rather than losing one. [None] means emit one pegRNA with no
-	silent mutation at all.
+	maximum caps how many options a pegRNA produces; 0 keeps them all. Because the ranking puts
+	PAM disruptors first, then spacer disruptors, then the most different codon and the most
+	frequent one, a cap always keeps the most useful options and drops the weakest.
+
+	[None] means emit one pegRNA with no silent mutation at all.
 	"""
-	disrupting = [candidate for candidate in silent_candidates
-		if candidate['disrupts_pam'] or candidate['disrupts_spacer']]
-	return disrupting or list(silent_candidates[:1]) or [None]
+	selected = list(silent_candidates[:maximum]) if maximum else list(silent_candidates)
+	return selected or [None]
 
 def pam_spacer_annotation(reference_sequence, allele, pe_nick_ref_idx, pe_nick_edit_idx, strand,
 	pam_search, cut_idx, spacer_end_idx, pam_start_idx, pam_end_idx):
@@ -1444,7 +1448,7 @@ def main():
 										pe_nick_edit_idx, rtt_length, '+', pam_search, edit_start_abs, edit_stop_abs)
 
 
-									silent_options = select_silent_mutations(silent_candidates)
+									silent_options = select_silent_mutations(silent_candidates, number_of_silent_mutations)
 
 								# The ngRNA block after these loops reads silent_mutation_edit_sequence, so the best
 								# option is restored once the loop ends to leave that behavior unchanged.
@@ -1564,7 +1568,7 @@ def main():
 										pe_nick_edit_idx, rtt_length, '-', pam_search, edit_start_abs, edit_stop_abs)
 
 
-									silent_options = select_silent_mutations(silent_candidates)
+									silent_options = select_silent_mutations(silent_candidates, number_of_silent_mutations)
 
 								# The ngRNA block after these loops reads silent_mutation_edit_sequence, so the best
 								# option is restored once the loop ends to leave that behavior unchanged.
