@@ -29,6 +29,7 @@ from edms.bio.primedesign import (
     saturating_mutagenesis_input_sequences,
     ranked_silent_mutations,
     pam_spacer_annotation,
+    select_silent_mutations,
     target_aa_number,
     codon_annotation,
     codon_columns,
@@ -793,3 +794,113 @@ class TestMainNumberOfPegrnas:
                                ['-sat_mut', 'aa_subs', '-n_pegrnas', '0'])
         default = self._count(tmp_path / 'default', monkeypatch, ['-sat_mut', 'aa_subs'])
         assert len(default) == len(explicit)
+
+
+# ---------------------------------------------------------------------------
+# non-saturation runs emit every PAM- or spacer-disrupting silent mutation
+# ---------------------------------------------------------------------------
+
+class TestMainSilentMutationOptions:
+    def _pegrnas(self, tmp_path, monkeypatch, seq, extra=None):
+        tmp_path.mkdir(parents=True, exist_ok=True)
+        input_csv = _write_input_csv(tmp_path, [("target_01", seq)])
+        df = _run_main(monkeypatch, tmp_path, input_csv, extra_args=(extra or []) + ['-silent_mut'])
+        return df[df['gRNA_type'] == 'pegRNA']
+
+    def _plain(self, tmp_path, monkeypatch, seq):
+        """Same run without -silent_mut, as the comparison point."""
+        tmp_path.mkdir(parents=True, exist_ok=True)
+        input_csv = _write_input_csv(tmp_path, [("target_01", seq)])
+        df = _run_main(monkeypatch, tmp_path, input_csv)
+        return df[df['gRNA_type'] == 'pegRNA']
+
+    def test_emits_more_pegrnas_than_without_silent_mutations(self, tmp_path, monkeypatch):
+        # the edit is fixed, so any extra rows can only come from silent mutation options
+        plain = self._plain(tmp_path / 'plain', monkeypatch, SUBSTITUTION_SEQ)
+        options = self._pegrnas(tmp_path / 'options', monkeypatch, SUBSTITUTION_SEQ)
+        assert len(options) > len(plain)
+
+    def test_every_pegrna_still_carries_a_silent_mutation(self, tmp_path, monkeypatch):
+        peg = self._pegrnas(tmp_path / 'cover', monkeypatch, SUBSTITUTION_SEQ)
+        assert len(peg) > 0
+        assert peg['Silent_mutation_relative_to_edit'].notna().all()
+
+    def test_options_are_distinct_molecules(self, tmp_path, monkeypatch):
+        # one row per option, never the same extension twice for a spacer
+        peg = self._pegrnas(tmp_path / 'distinct', monkeypatch, SUBSTITUTION_SEQ)
+        assert not peg.duplicated(subset=['Spacer_sequence', 'Extension_sequence']).any()
+
+    def test_maximum_limits_options_per_design(self, tmp_path, monkeypatch):
+        capped = self._pegrnas(tmp_path / 'cap2', monkeypatch, SUBSTITUTION_SEQ,
+                               extra=['-n_silent_mut', '2'])
+        per_design = capped.groupby(['Spacer_sequence', 'RTT_length', 'PBS_length']).size()
+        assert per_design.max() <= 2
+
+    def test_uncapped_emits_more_than_capped(self, tmp_path, monkeypatch):
+        capped = self._pegrnas(tmp_path / 'c1', monkeypatch, SUBSTITUTION_SEQ,
+                               extra=['-n_silent_mut', '1'])
+        every = self._pegrnas(tmp_path / 'c0', monkeypatch, SUBSTITUTION_SEQ)
+        assert len(every) > len(capped)
+
+    def test_options_for_one_design_differ_only_in_the_silent_codon(self, tmp_path, monkeypatch):
+        peg = self._pegrnas(tmp_path / 'group', monkeypatch, SUBSTITUTION_SEQ)
+        grouped = peg.groupby(['Spacer_sequence', 'RTT_length', 'PBS_length'])
+        multi = [sub for _, sub in grouped if len(sub) > 1]
+        assert multi, 'expected at least one design with several silent options'
+        for sub in multi:
+            assert sub['Silent_edit_codon_index'].nunique() + sub['Silent_edit_codon'].nunique() > 1
+
+
+    def test_saturation_mutagenesis_still_emits_one_option(self, tmp_path, monkeypatch):
+        # enumeration is deliberately limited to the non-saturation path
+        peg = self._pegrnas(tmp_path / 'sat', monkeypatch, SAT_MUT_SEQ, extra=['-sat_mut', 'aa_subs'])
+        per_design = peg.groupby(['Target_name', 'Target_sequence', 'Spacer_sequence',
+                                  'RTT_length', 'PBS_length']).size()
+        assert per_design.max() == 1
+
+
+# ---------------------------------------------------------------------------
+# select_silent_mutations()
+# ---------------------------------------------------------------------------
+
+def _cand(name, pam=False, spacer=False):
+    return {'codon_edit': name, 'disrupts_pam': pam, 'disrupts_spacer': spacer}
+
+
+class TestSelectSilentMutations:
+    def test_keeps_every_candidate_by_default(self):
+        candidates = [_cand('A', pam=True), _cand('B'), _cand('C', spacer=True), _cand('D')]
+        assert [c['codon_edit'] for c in select_silent_mutations(candidates)] == ['A', 'B', 'C', 'D']
+
+    def test_preserves_the_ranked_order(self):
+        candidates = [_cand(str(i)) for i in range(5)]
+        assert [c['codon_edit'] for c in select_silent_mutations(candidates)] == list('01234')
+
+    def test_maximum_keeps_the_highest_ranked(self):
+        candidates = [_cand(str(i)) for i in range(5)]
+        assert [c['codon_edit'] for c in select_silent_mutations(candidates, 2)] == ['0', '1']
+
+    def test_maximum_of_zero_means_all(self):
+        candidates = [_cand(str(i)) for i in range(5)]
+        assert len(select_silent_mutations(candidates, 0)) == 5
+
+    def test_maximum_larger_than_the_list_is_harmless(self):
+        candidates = [_cand('A'), _cand('B')]
+        assert len(select_silent_mutations(candidates, 99)) == 2
+
+    def test_a_cap_keeps_disruptors_because_they_rank_first(self):
+        # ranking puts PAM then spacer disruptors first, so a cap never drops them for a
+        # non-disrupting option that happens to sit lower in the list
+        candidates = [_cand('pam', pam=True), _cand('spacer', spacer=True), _cand('plain'), _cand('plain2')]
+        kept = select_silent_mutations(candidates, 2)
+        assert [c['codon_edit'] for c in kept] == ['pam', 'spacer']
+
+    def test_no_candidates_means_one_pegrna_with_no_silent_mutation(self):
+        assert select_silent_mutations([]) == [None]
+        assert select_silent_mutations([], 3) == [None]
+
+    def test_does_not_mutate_the_input(self):
+        candidates = [_cand('A', pam=True), _cand('B')]
+        before = list(candidates)
+        select_silent_mutations(candidates, 1)
+        assert candidates == before
