@@ -34,6 +34,11 @@ Usage:
     - paired_regions(): quantify, plot, & return (un)paired regions that aligned to the annotated library
 - [Signature]
     - _signature_phred_summary() Return min/median/max Phred+33 qualities for bases changed in `signature`.
+    - _cut_site_indexes(): Return cut site indexes for a spacer in the reference sequence
+    - _signature_event_boundaries(): Return the range of inter-nucleotide boundaries that a Signature event touches
+    - _cut_site_outcome(): Return the (id, edit) cut site outcome labels for a Signature with indels/substitutions at a pegRNA cut site
+    - _cut_site_rows(): Return '{edit} (ngRNA) indels' & '{edit} (ngRNA) non-indels' rows for each pegRNA in the fastq reference library
+    - _aggregate_edit_outcomes(): Return WT, Not WT, Edit, (Edit indels, Edit non-indels, Edit ngRNA indels, & Edit ngRNA non-indels) aggregate rows
     - count_signatures(): generate signatures from fastq read region alignments to WT sequence; count signatures, plot and return fastq signatures dataframe
     - count_signatures_dir(): count signatures from previously-generated signature dataframes; plot and return fastq signatures dataframe
 
@@ -111,7 +116,7 @@ import itertools
 import shutil
 from pathlib import Path
 
-from ..bio.signature import parse_signature_literal, signature_from_alignment, expand_signature_units, is_reference_match_with_n_extra_nt_or_less
+from ..bio.signature import SNV, Indel, Signature, parse_signature_literal, signature_from_alignment, expand_signature_units, is_reference_match_with_n_extra_nt_or_less
 from ..gen import io, tidy as t, plot as p, stat as st
 from ..data import uniprot, pdb, dssp
 from ..utils import memory_timer, mkdir, load_resource_csv
@@ -1691,10 +1696,145 @@ def _signature_phred_summary(signature, alignment, read_quals, include_insertion
 
     return min(vals), float(np.median(vals)), float(np.mean(vals)), max(vals), min(read_quals), float(np.median(read_quals)), float(np.mean(read_quals)), max(read_quals)
 
+def _cut_site_indexes(spacer: str, ref_seq: str, cut_offset: int=3) -> list[int]:
+    '''
+    _cut_site_indexes(): Return cut site indexes for a spacer in the reference sequence (cut is between ref_seq[i-1] & ref_seq[i])
+
+    Parameters:
+    spacer (str): spacer sequence (5' to 3', excluding PAM)
+    ref_seq (str): reference sequence
+    cut_offset (int, optional): # of nucleotides between the cut site & the PAM-proximal end of the spacer (Default: 3 => SpCas9)
+    '''
+    spacer = str(spacer).upper()
+    ref_seq = ref_seq.upper()
+    spacer_rc = str(Seq(spacer).reverse_complement())
+
+    cut_sites = [m.start()+len(spacer)-cut_offset for m in re.finditer(f'(?={spacer})', ref_seq)] # + strand: PAM is 3' of spacer
+    cut_sites.extend([m.start()+cut_offset for m in re.finditer(f'(?={spacer_rc})', ref_seq)]) # - strand: PAM is 5' of spacer (reverse complement)
+    return sorted(set(cut_sites))
+
+def _signature_event_boundaries(event: SNV | Indel, ref_seq: str) -> tuple[int, int]:
+    '''
+    _signature_event_boundaries(): Return the (lo, hi) range of inter-nucleotide boundaries that a Signature event touches,
+                                   where boundary i is between ref_seq[i-1] & ref_seq[i]. Indels are left-aligned, so the range
+                                   is extended 3' across equivalent positions in repeat contexts.
+
+    Parameters:
+    event (SNV | Indel): Signature event
+    ref_seq (str): reference sequence
+    '''
+    if isinstance(event, SNV): # Substitution: boundaries on either side of the base
+        return event.pos, event.pos+1
+
+    if event.dellen > 0: # Deletion: boundaries on either side of the deleted bases
+        shift = 0
+        while event.pos+event.dellen+shift < len(ref_seq) and ref_seq[event.pos+shift] == ref_seq[event.pos+event.dellen+shift]:
+            shift += 1
+        return event.pos, event.pos+event.dellen+shift
+
+    # Insertion: boundary where the inserted bases are placed
+    shift = 0
+    while event.pos+shift < len(ref_seq) and ref_seq[event.pos+shift] == event.ins[shift%len(event.ins)]:
+        shift += 1
+    return event.pos, event.pos+shift
+
+def _cut_site_outcome(signature: Signature, cut_sites: list[tuple], ref_seq: str, cut_window: int=0) -> tuple[str, str] | None:
+    '''
+    _cut_site_outcome(): Return the (id, edit) cut site outcome labels for a Signature with indels/substitutions that overlap or
+                         are directly adjacent to a pegRNA cut site ('{edit} indels' or '{edit} non-indels') or ngRNA nick site 
+                         ('{edit} ngRNA indels' or '{edit} ngRNA non-indels'), excluding the intended edit's own indels/substitutions.
+                         Indels take priority over substitutions; then cut sites take priority in cut_sites order (pegRNA first). 
+                         Returns None if no cut site outcome is found.
+
+    Parameters:
+    signature (Signature): read Signature
+    cut_sites (list[tuple]): (id, edit, intended Signature, cut site index, label prefix: '' (pegRNA) or 'ngRNA ') for each cut site
+    ref_seq (str): reference sequence
+    cut_window (int, optional): # of additional nucleotides from the cut site to search (Default: 0 => overlap or directly adjacent)
+    '''
+    ref_seq = ref_seq.upper()
+    non_indels = None
+    for id, edit, id_signature, cut_site, prefix in cut_sites: # Iterate through cut sites
+        intended = set()
+        if isinstance(id_signature, Signature):
+            intended = set(id_signature.snvs) | set(id_signature.indels)
+
+        for event in list(signature.indels)+list(signature.snvs): # Indels first; non-intended events that touch the cut site
+            if event in intended:
+                continue
+            lo, hi = _signature_event_boundaries(event=event, ref_seq=ref_seq)
+            if max(0, lo-cut_site, cut_site-hi) <= cut_window:
+                if isinstance(event, Indel):
+                    return f'{id} {prefix}indels', f'{edit} {prefix}indels'
+                if non_indels is None:
+                    non_indels = (f'{id} {prefix}non-indels', f'{edit} {prefix}non-indels')
+                break # Only indels can outrank a substitution for this cut site
+
+    return non_indels
+
+def _cut_site_rows(fastq_df_ref: pd.DataFrame, id_col: str, edit_col: str, previous_cols: list, ngRNA: bool=False) -> tuple[pd.DataFrame, dict]:
+    '''
+    _cut_site_rows(): Return '{edit} indels' & '{edit} non-indels' (& '{edit} ngRNA indels' & '{edit} ngRNA non-indels') rows for 
+                      each pegRNA in the fastq reference library, with the fastq metadata columns (not in previous_cols) like the 
+                      WT & Not WT rows, and a dictionary of cut site outcome ids to outcomes (e.g., 'p1 ngRNA indels' -> 'ngRNA indels')
+
+    Parameters:
+    fastq_df_ref (dataframe): fastq reference library dataframe (pegRNA rows only)
+    id_col (str): id column name in the annotated reference library
+    edit_col (str): edit column name in the annotated reference library
+    previous_cols (list): reference library columns that are not copied
+    ngRNA (bool, optional): include ngRNA nick site outcome rows (Default: False)
+    '''
+    outcomes = ['indels', 'non-indels', 'ngRNA indels', 'ngRNA non-indels'] if ngRNA else ['indels', 'non-indels']
+    ids, edits, cut_site_outcomes = [], [], {}
+    for id, edit in t.zip_cols(df=fastq_df_ref, cols=[id_col, edit_col]):
+        for outcome in outcomes:
+            ids.append(f'{id} {outcome}')
+            edits.append(f'{edit} {outcome}')
+            cut_site_outcomes[f'{id} {outcome}'] = outcome
+
+    cut_site_df = pd.concat([fastq_df_ref.iloc[0:1][[col for col in fastq_df_ref.columns if col not in previous_cols]]]*len(ids), ignore_index=True)
+    cut_site_df[id_col] = ids
+    cut_site_df[edit_col] = edits
+    return cut_site_df, cut_site_outcomes
+
+def _aggregate_edit_outcomes(fastq_df_ref_by: pd.DataFrame, id_col: str, edit_col: str, cut_site_outcomes: dict, edit_row: dict) -> pd.DataFrame:
+    '''
+    _aggregate_edit_outcomes(): Return WT, Not WT, Edit, (Edit indels, Edit non-indels, Edit ngRNA indels, & Edit ngRNA non-indels) aggregate rows
+
+    Parameters:
+    fastq_df_ref_by (dataframe): counts merged with fastq reference library dataframe
+    id_col (str): id column name in the annotated reference library
+    edit_col (str): edit column name in the annotated reference library
+    cut_site_outcomes (dict): cut site outcome ids to outcomes (aggregated separately from the edits)
+    edit_row (dict): additional columns for the aggregate rows (e.g., fastq_file)
+    '''
+    totals = {'Edit': [0,0]}
+    for outcome in dict.fromkeys(cut_site_outcomes.values()): # Unique outcomes in order
+        totals[f'Edit {outcome}'] = [0,0]
+    for id,edit,count,fraction in t.zip_cols(df=fastq_df_ref_by,cols=[id_col,edit_col,'count','fraction']):
+        if edit=='WT' or edit=='Not WT':
+            continue
+        if id in cut_site_outcomes:
+            agg = f'Edit {cut_site_outcomes[id]}'
+        else:
+            agg = 'Edit'
+        totals[agg][0] += count
+        totals[agg][1] += fraction
+
+    fastq_df_ref_by_agg = fastq_df_ref_by[fastq_df_ref_by[id_col].isin(['WT','Not WT'])].reset_index(drop=True)
+    return pd.concat([fastq_df_ref_by_agg,
+                      pd.DataFrame({id_col: list(totals.keys()),
+                                    edit_col: list(totals.keys()),
+                                    'count': [cts for cts,_ in totals.values()],
+                                    'fraction': [fracs for _,fracs in totals.values()],
+                                    'percent': [fracs*100 for _,fracs in totals.values()],
+                                    **{col: val*len(totals) for col,val in edit_row.items()}})], ignore_index=True)
+
 def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str, edit_col: str, fastq_dir: str, 
                     out_dir: str, out_file: str, config_key: str = None, in_file: pd.DataFrame | str=None, sequence: str=None, n_extra_nt: int=0,
                     df_motif5: pd.DataFrame | str=None, df_motif3: pd.DataFrame | str=None, fastq_col: str=None,  meta: pd.DataFrame | str=None, 
-                    match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, extend_gap_score: float = -0.1, 
+                    spacer_col: str='Spacer_sequence', ngRNA_spacer_col: str=None, cut_window: int=0, match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, extend_gap_score: float = -0.1, 
                     align_dims: tuple=(0,0), align_ckpt: int=10000, save_alignments: bool=False, return_df: bool=False, 
                     literal_eval: bool=True, plot_suf: str=None, show: bool=False, sh: bool=False, **plot_kwargs) -> pd.DataFrame:
     ''' 
@@ -1716,8 +1856,16 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
     n_extra_nt (int, optional): number of extra nucleotide differences allowed for Signature match (Default: 0)
     df_motif5 (dataframe | str, optional): 5' motif dataframe (or file path)
     df_motif3 (dataframe | str, optional): 3' motif dataframe (or file path)
-    fastq_col (str, optional): fastq column name in the annotated reference library (Default: None)
+    fastq_col (str, optional): fastq column name in the annotated reference library (Default: None). If provided, reads that 
+                               do not match an edit but have indels/substitutions (other than the intended edit) that overlap 
+                               or are directly adjacent to the cut site of a pegRNA used for the fastq file are labeled 
+                               '{edit} indels' or '{edit} non-indels' (substitutions only) instead of 'Not WT'.
     meta (DataFrame | str, optional): meta dataframe (or file path) must have 'fastq_file' column (Default: None)
+    spacer_col (str, optional): spacer column name in the annotated reference library used to find pegRNA cut sites with fastq_col (Default: 'Spacer_sequence')
+    ngRNA_spacer_col (str, optional): ngRNA spacer column name in the annotated reference library (same row as the pegRNA spacer) used to also 
+                                      find ngRNA nick sites with fastq_col; labeled '{edit} ngRNA indels' or '{edit} ngRNA non-indels'
+                                      (pegRNA cut site outcomes take priority) (Default: None => pegRNA cut sites only)
+    cut_window (int, optional): # of additional nucleotides from the cut site to search for indels/substitutions with fastq_col (Default: 0 => overlap or directly adjacent)
     match_score (float, optional): match score for pairwise alignment (Default: 2)
     mismatch_score (float, optional): mismatch score for pairwise alignment (Default: -1)
     open_gap_score (float, optional): open gap score for pairwise alignment (Default: -10)
@@ -1758,6 +1906,14 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
     if fastq_col is not None:
         if fastq_col not in df_ref.columns.tolist():
             raise Exception(f'Missing fastq column: {fastq_col}')
+    
+    # Check dataframe for spacer column to find cut site outcomes (if needed)
+    cut_site_search = fastq_col is not None
+    if cut_site_search and spacer_col not in df_ref.columns.tolist():
+        print(f"Warning: Did not search for cut site outcomes.\nMissing spacer column: {spacer_col}")
+        cut_site_search = False
+    if cut_site_search and ngRNA_spacer_col is not None and ngRNA_spacer_col not in df_ref.columns.tolist():
+        raise Exception(f'Missing ngRNA spacer column: {ngRNA_spacer_col}')
 
     # Get ref_seq from config_key, in_file, or sequence
     if sequence is None: 
@@ -2052,6 +2208,28 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
         Not_WT_WT_df = pd.concat([fastq_df_ref.iloc[0:1][[col for col in fastq_df_ref.columns if col not in previous_cols]]]*2, ignore_index=True)
         Not_WT_WT_df[id_col] = ['Not WT', 'WT']
         Not_WT_WT_df[edit_col] = ['Not WT', 'WT']
+
+        # Find pegRNA cut sites (& ngRNA nick sites) & create cut site outcome rows ('{edit} (ngRNA) indels' & '{edit} (ngRNA) non-indels'), which are added after the alignments
+        cut_sites = []
+        cut_site_outcomes = {}
+        if cut_site_search and len(fastq_df_ref)>0:
+            spacer_cols = [('spacer', spacer_col, '')]
+            if ngRNA_spacer_col is not None:
+                spacer_cols.append(('ngRNA spacer', ngRNA_spacer_col, 'ngRNA '))
+            for spacer_type, col, prefix in spacer_cols: # pegRNA cut sites (& ngRNA nick sites)
+                for id, edit, id_signature, spacer in t.zip_cols(df=fastq_df_ref, cols=[id_col, edit_col, signature_col, col]):
+                    if not isinstance(spacer, str) or len(spacer)==0: # No spacer for this row (e.g., pegRNA without ngRNA)
+                        continue
+                    id_cut_sites = _cut_site_indexes(spacer=spacer, ref_seq=ref_seq)
+                    if len(id_cut_sites)==0:
+                        print(f"Warning: {id} {spacer_type} ({spacer}) was not found in ref_seq; did not search for its cut site outcomes.")
+                    cut_sites.extend([(id, edit, id_signature, cut_site, prefix) for cut_site in id_cut_sites])
+            cut_site_df, cut_site_outcomes = _cut_site_rows(fastq_df_ref=fastq_df_ref, id_col=id_col, edit_col=edit_col, 
+                                                            previous_cols=previous_cols, ngRNA=ngRNA_spacer_col is not None)
+            print(f"pegRNA cut sites: {sorted(set([cut_site for _,_,_,cut_site,prefix in cut_sites if prefix=='']))}")
+            if ngRNA_spacer_col is not None:
+                print(f"ngRNA nick sites: {sorted(set([cut_site for _,_,_,cut_site,prefix in cut_sites if prefix=='ngRNA ']))}")
+        
         fastq_df_ref = pd.concat([fastq_df_ref, Not_WT_WT_df], ignore_index=True)
 
         # Expand Signature Units from Signature Objects in the reference dataframe
@@ -2183,8 +2361,12 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                     found = True
                     break
 
-            # Edit: search for near-match (n extra nt) in reference dataframe or declare Not WT
+            # Edit: search for near-match (n extra nt) in reference dataframe or cut site outcome or declare Not WT
             if found == False:
+                # Cut site outcome: indels/substitutions at a pegRNA cut site (other than the intended edit)
+                cut_site_outcome = _cut_site_outcome(signature=signature, cut_sites=cut_sites, ref_seq=ref_seq, cut_window=cut_window) if len(cut_sites)>0 else None
+                cut_site_id, cut_site_edit = cut_site_outcome if cut_site_outcome is not None else ("Not WT", "Not WT")
+
                 found_w_error = False
                 if n_extra_nt>0: # Search for near match
                     signature_units = expand_signature_units(signature) # Expand Signature Units
@@ -2195,15 +2377,15 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                                                                         n_extra_nt=n_extra_nt): # Found near match
                             id_ls.append(id)
                             edit_ls.append(edit)
-                            exact_ls.append("Not WT")
+                            exact_ls.append(cut_site_id)
                             found_w_error = True
                             break
 
-                # Not WT: no exact or near match found
+                # Cut site outcome or Not WT: no exact or near match found
                 if found_w_error == False:
-                    id_ls.append("Not WT")
-                    edit_ls.append("Not WT")
-                    exact_ls.append("Not WT")
+                    id_ls.append(cut_site_id)
+                    edit_ls.append(cut_site_edit)
+                    exact_ls.append(cut_site_id)
 
         # Create and save fastq_file dataframe w or w/o aligntments
         if save_alignments==True: 
@@ -2243,6 +2425,10 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
         io.save(obj=df_fastq,
                 file=os.path.join(out_dir,'Signature', f'{fastq_name}.csv'))
         memories.append(memory_timer(task=f"{fastq_name} (alignment/signature)"))
+
+        # Add cut site outcome rows ('{edit} (ngRNA) indels' & '{edit} (ngRNA) non-indels')
+        if len(cut_site_outcomes)>0:
+            fastq_df_ref = pd.concat([fastq_df_ref, cut_site_df], ignore_index=True)
 
         # Remove None
         df_fastq.dropna(subset=[signature_col], inplace=True, ignore_index=True)
@@ -2285,21 +2471,8 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
         out_df = pd.concat([out_df,fastq_df_ref_by_id], ignore_index=True)
 
         # Total Editing Outcomes
-        cts = 0
-        fracs = 0
-        for edit,count,fraction in t.zip_cols(df=fastq_df_ref_by_id,cols=[edit_col,'count','fraction']):
-            if edit!='WT' and edit!='Not WT':
-                cts += count
-                fracs += fraction
-
-        fastq_df_ref_by_id_agg = fastq_df_ref_by_id[fastq_df_ref_by_id[id_col].isin(['WT','Not WT'])].reset_index(drop=True)
-        fastq_df_ref_by_id_agg = pd.concat([fastq_df_ref_by_id_agg,
-                                            pd.DataFrame({id_col: ['Edit'],
-                                                        edit_col: ['Edit'],
-                                                        'count': [cts],
-                                                        'fraction': [fracs],
-                                                        'percent': [fracs*100],
-                                                        'fastq_file': [fastq_file]})], ignore_index=True)
+        fastq_df_ref_by_id_agg = _aggregate_edit_outcomes(fastq_df_ref_by=fastq_df_ref_by_id, id_col=id_col, edit_col=edit_col,
+                                                          cut_site_outcomes=cut_site_outcomes, edit_row={'fastq_file': [fastq_file]})
         out_df2 = pd.concat([out_df2,fastq_df_ref_by_id_agg], ignore_index=True)
 
         # Save memory & clear for next use
@@ -2319,21 +2492,8 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
             out_df3 = pd.concat([out_df3,fastq_df_ref_by_exact], ignore_index=True)
 
             # Total Editing Outcomes minus extra nt differences
-            cts = 0
-            fracs = 0
-            for edit,count,fraction in t.zip_cols(df=fastq_df_ref_by_exact,cols=[edit_col,'count','fraction']):
-                if edit!='WT' and edit!='Not WT':
-                    cts += count
-                    fracs += fraction
-
-            fastq_df_ref_by_exact_agg = fastq_df_ref_by_exact[fastq_df_ref_by_exact[id_col].isin(['WT','Not WT'])].reset_index(drop=True)
-            fastq_df_ref_by_exact_agg = pd.concat([fastq_df_ref_by_exact_agg,
-                                                    pd.DataFrame({id_col: ['Edit'],
-                                                                edit_col: ['Edit'],
-                                                                'count': [cts],
-                                                                'fraction': [fracs],
-                                                                'percent': [fracs*100],
-                                                                'fastq_file': [fastq_file]})], ignore_index=True)
+            fastq_df_ref_by_exact_agg = _aggregate_edit_outcomes(fastq_df_ref_by=fastq_df_ref_by_exact, id_col=id_col, edit_col=edit_col,
+                                                                 cut_site_outcomes=cut_site_outcomes, edit_row={'fastq_file': [fastq_file]})
             out_df4 = pd.concat([out_df4,fastq_df_ref_by_exact_agg], ignore_index=True)
 
             # Save memory & clear for next use
@@ -2406,7 +2566,9 @@ def count_signatures_dir(df_ref: pd.DataFrame | str, signature_col: str, id_col:
     signature_folder (str, optional): signature directory name written by count_signatures() (Default: 'Signature')
     n_extra_nt (int, optional): number of extra nucleotide differences that were allowed for Signature match by
                                 count_signatures(); >0 additionally writes the 'Exact_match' outputs (Default: 0)
-    fastq_col (str, optional): fastq column name in the annotated reference library (Default: None)
+    fastq_col (str, optional): fastq column name in the annotated reference library (Default: None). If provided, counts the 
+                               '{edit} indels' & '{edit} non-indels' cut site outcomes assigned by count_signatures(), and the
+                               '{edit} ngRNA indels' & '{edit} ngRNA non-indels' nick site outcomes if any were assigned.
     meta (dataframe | str, optional): meta dataframe (or file path) must have 'fastq_file' column (Default: None)
     stats (dataframe | str, optional): count_signatures() stats dataframe, file path, or (with recursive=True) a
                                        directory searched for '*_stats.csv'; needs 'file', 'reads_total', &
@@ -2472,6 +2634,14 @@ def count_signatures_dir(df_ref: pd.DataFrame | str, signature_col: str, id_col:
         print(f"Warning: {len(duplicate_names)} fastq name(s) were found in more than one '{signature_folder}' directory; "
               f"their rows share a 'fastq_file' value & are only distinguished by the 'signature_folder' column.\n"
               f"Duplicates: {', '.join(duplicate_names)}")
+
+    # Check whether count_signatures() assigned ngRNA nick site outcomes (ngRNA_spacer_col) to include their rows
+    ngRNA = False
+    if fastq_col is not None:
+        ngRNA = any(str(id).endswith((' ngRNA indels', ' ngRNA non-indels'))
+                    for _,_,df_signature in signature_records
+                    for col in [id_col, 'Exact_match'] if col in df_signature.columns.tolist()
+                    for id in df_signature[col].dropna().unique())
 
     # Get meta dataframe from file path if needed & check for 'fastq_file' column
     if meta is not None:
@@ -2581,7 +2751,15 @@ def count_signatures_dir(df_ref: pd.DataFrame | str, signature_col: str, id_col:
         Not_WT_WT_df = pd.concat([fastq_df_ref.iloc[0:1][[col for col in fastq_df_ref.columns if col not in previous_cols]]]*2, ignore_index=True)
         Not_WT_WT_df[id_col] = ['Not WT', 'WT']
         Not_WT_WT_df[edit_col] = ['Not WT', 'WT']
-        fastq_df_ref = pd.concat([fastq_df_ref, Not_WT_WT_df], ignore_index=True)
+
+        # Add cut site outcome rows ('{edit} (ngRNA) indels' & '{edit} (ngRNA) non-indels') assigned by count_signatures() with fastq_col
+        cut_site_outcomes = {}
+        if fastq_col is not None and len(fastq_df_ref)>0:
+            cut_site_df, cut_site_outcomes = _cut_site_rows(fastq_df_ref=fastq_df_ref, id_col=id_col, edit_col=edit_col, 
+                                                            previous_cols=previous_cols, ngRNA=ngRNA)
+            fastq_df_ref = pd.concat([fastq_df_ref, Not_WT_WT_df, cut_site_df], ignore_index=True)
+        else:
+            fastq_df_ref = pd.concat([fastq_df_ref, Not_WT_WT_df], ignore_index=True)
 
         # Remove None
         df_fastq.dropna(subset=[fastq_signature_col], inplace=True, ignore_index=True)
@@ -2621,18 +2799,11 @@ def count_signatures_dir(df_ref: pd.DataFrame | str, signature_col: str, id_col:
         out_df = pd.concat([out_df,fastq_df_ref_by_id], ignore_index=True)
 
         # Total Editing Outcomes
-        cts = 0
-        fracs = 0
-        for edit,count,fraction in t.zip_cols(df=fastq_df_ref_by_id,cols=[edit_col,'count','fraction']):
-            if edit!='WT' and edit!='Not WT':
-                cts += count
-                fracs += fraction
-
-        edit_row = {id_col: ['Edit'], edit_col: ['Edit'], 'count': [cts], 'fraction': [fracs], 'percent': [fracs*100], 'fastq_file': [fastq_file]}
+        edit_row = {'fastq_file': [fastq_file]}
         if found_label is not None:
             edit_row['signature_folder'] = [found_label]
-        fastq_df_ref_by_id_agg = fastq_df_ref_by_id[fastq_df_ref_by_id[id_col].isin(['WT','Not WT'])].reset_index(drop=True)
-        fastq_df_ref_by_id_agg = pd.concat([fastq_df_ref_by_id_agg, pd.DataFrame(edit_row)], ignore_index=True)
+        fastq_df_ref_by_id_agg = _aggregate_edit_outcomes(fastq_df_ref_by=fastq_df_ref_by_id, id_col=id_col, edit_col=edit_col,
+                                                          cut_site_outcomes=cut_site_outcomes, edit_row=edit_row)
         out_df2 = pd.concat([out_df2,fastq_df_ref_by_id_agg], ignore_index=True)
 
         # Save memory & clear for next use
@@ -2654,18 +2825,11 @@ def count_signatures_dir(df_ref: pd.DataFrame | str, signature_col: str, id_col:
             out_df3 = pd.concat([out_df3,fastq_df_ref_by_exact], ignore_index=True)
 
             # Total Editing Outcomes minus extra nt differences
-            cts = 0
-            fracs = 0
-            for edit,count,fraction in t.zip_cols(df=fastq_df_ref_by_exact,cols=[edit_col,'count','fraction']):
-                if edit!='WT' and edit!='Not WT':
-                    cts += count
-                    fracs += fraction
-
-            edit_row = {id_col: ['Edit'], edit_col: ['Edit'], 'count': [cts], 'fraction': [fracs], 'percent': [fracs*100], 'fastq_file': [fastq_file]}
+            edit_row = {'fastq_file': [fastq_file]}
             if found_label is not None:
                 edit_row['signature_folder'] = [found_label]
-            fastq_df_ref_by_exact_agg = fastq_df_ref_by_exact[fastq_df_ref_by_exact[id_col].isin(['WT','Not WT'])].reset_index(drop=True)
-            fastq_df_ref_by_exact_agg = pd.concat([fastq_df_ref_by_exact_agg, pd.DataFrame(edit_row)], ignore_index=True)
+            fastq_df_ref_by_exact_agg = _aggregate_edit_outcomes(fastq_df_ref_by=fastq_df_ref_by_exact, id_col=id_col, edit_col=edit_col,
+                                                                 cut_site_outcomes=cut_site_outcomes, edit_row=edit_row)
             out_df4 = pd.concat([out_df4,fastq_df_ref_by_exact_agg], ignore_index=True)
 
             # Save memory & clear for next use
