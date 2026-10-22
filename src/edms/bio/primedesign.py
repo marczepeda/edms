@@ -419,6 +419,22 @@ def codon_columns(target_design_entry, silent_selected):
 		ref, codon_dict[ref][1], codon_dict[ref][2], number, start,
 		edit, codon_dict[edit][1], codon_dict[edit][2], number, start]
 
+def select_silent_mutations(silent_candidates):
+	"""Which silent mutations a non-saturation pegRNA should encode.
+
+	Saturation mutagenesis fans an edit out over all of its synonymous codons, so the pegRNA
+	keeps only its best silent mutation. Outside saturation the edit is fixed, so the silent
+	mutation is what gets enumerated instead: every option disrupting the PAM or the spacer is
+	returned, in ranked order, and one pegRNA is emitted per option.
+
+	When nothing disrupts either, the single best-ranked candidate is kept so the pegRNA still
+	carries a silent mutation rather than losing one. [None] means emit one pegRNA with no
+	silent mutation at all.
+	"""
+	disrupting = [candidate for candidate in silent_candidates
+		if candidate['disrupts_pam'] or candidate['disrupts_spacer']]
+	return disrupting or list(silent_candidates[:1]) or [None]
+
 def pam_spacer_annotation(reference_sequence, allele, pe_nick_ref_idx, pe_nick_edit_idx, strand,
 	pam_search, cut_idx, spacer_end_idx, pam_start_idx, pam_end_idx):
 	"""Classify what the pegRNA can no longer re-cut in the final allele.
@@ -1416,7 +1432,7 @@ def main():
 								pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + rtt_length])
 								nick_aa_index = int(pe_nick_edit_idx)%3
 								silent_mutation_relative_to_edit = None
-								silent_mutation_selected = None
+								silent_options = [None]
 								if silent_mutation and (pe_format == 'NNNNNNNNNNNNNNNNN/NNN[NGG]'):
 
 									# Non-saturation (+) strand path. silent_mutation_allowed_range is None here, so every
@@ -1427,8 +1443,21 @@ def main():
 									silent_candidates = ranked_silent_mutations(target_design[target_name], edit_sequence,
 										pe_nick_edit_idx, rtt_length, '+', pam_search, edit_start_abs, edit_stop_abs)
 
-									if silent_candidates:
-										silent_mutation_selected = silent_candidates[0]
+
+									silent_options = select_silent_mutations(silent_candidates)
+
+								# The ngRNA block after these loops reads silent_mutation_edit_sequence, so the best
+								# option is restored once the loop ends to leave that behavior unchanged.
+								primary_silent_mutation_edit_sequence = ''
+								base_pegRNA_ext = pegRNA_ext
+								for silent_mutation_selected in silent_options:
+
+									pe_pam_ref_silent_mutation = ''
+									silent_mutation_relative_to_edit = None
+									silent_mutation_edit_sequence = ''
+									pegRNA_ext = base_pegRNA_ext
+
+									if silent_mutation_selected is not None:
 										silent_mutation_edit_sequence = silent_mutation_selected['silent_mutation_edit_sequence']
 										pegRNA_ext = reverse_complement(silent_mutation_edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + rtt_length])
 										pe_silent_mutation = silent_mutation_selected['codon_ref'] + '-to-' + silent_mutation_selected['codon_edit'].lower()
@@ -1441,34 +1470,38 @@ def main():
 											silent_mutation_relative_to_edit = 'downstream'
 										else:
 											silent_mutation_relative_to_edit = 'upstream'
-								
-								# Classify the final allele: what can this pegRNA no longer re-cut?
-								pe_annotate = pam_spacer_annotation(reference_sequence,
-									silent_mutation_edit_sequence if silent_mutation_edit_sequence else edit_sequence,
-									pe_nick_ref_idx, pe_nick_edit_idx, '+', pam_search,
-									cut_idx, spacer_end_idx, pam_start_idx, pam_end_idx)
-								# Check to see if pegRNA extension is within input sequence
-								if len(pegRNA_ext) == (pbs_length + rtt_length):
+										if not primary_silent_mutation_edit_sequence:
+											primary_silent_mutation_edit_sequence = silent_mutation_edit_sequence
 
-									# Initiate entry for new pegRNA spacers that are close enough to edit window based on RTT length parameter list
-									if pegid not in pe_design[target_name]:
+									# Classify the final allele: what can this pegRNA no longer re-cut?
+									pe_annotate = pam_spacer_annotation(reference_sequence,
+										silent_mutation_edit_sequence if silent_mutation_edit_sequence else edit_sequence,
+										pe_nick_ref_idx, pe_nick_edit_idx, '+', pam_search,
+										cut_idx, spacer_end_idx, pam_start_idx, pam_end_idx)
+									# Check to see if pegRNA extension is within input sequence
+									if len(pegRNA_ext) == (pbs_length + rtt_length):
 
-										# First list is for peg extension, second list is for nicking guide
-										pe_design[target_name][pegid] = [[],[]]
+										# Initiate entry for new pegRNA spacers that are close enough to edit window based on RTT length parameter list
+										if pegid not in pe_design[target_name]:
 
-									# Store pegRNA design
-									if silent_mutation_edit_sequence == '':
-										if pe_pam_ref_silent_mutation == '':
-											pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
+											# First list is for peg extension, second list is for nicking guide
+											pe_design[target_name][pegid] = [[],[]]
 
+										# Store pegRNA design
+										if silent_mutation_edit_sequence == '':
+											if pe_pam_ref_silent_mutation == '':
+												pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
+
+											else:
+												pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref_silent_mutation, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
 										else:
-											pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref_silent_mutation, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
-									else:
-										if pe_pam_ref_silent_mutation == '':
-											pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, silent_mutation_edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
+											if pe_pam_ref_silent_mutation == '':
+												pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, silent_mutation_edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
 
-										else:
-											pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref_silent_mutation, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, silent_mutation_edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
+											else:
+												pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref_silent_mutation, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, silent_mutation_edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
+
+								silent_mutation_edit_sequence = primary_silent_mutation_edit_sequence
 
 					# Create ngRNAs targeting (-) strand for (+) pegRNAs
 					if pegid in pe_design[target_name]:
@@ -1521,7 +1554,7 @@ def main():
 								pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + pbs_length]
 								nick_aa_index = int(pe_nick_edit_idx)%3
 								silent_mutation_relative_to_edit = None
-								silent_mutation_selected = None
+								silent_options = [None]
 								if silent_mutation and (pe_format == 'NNNNNNNNNNNNNNNNN/NNN[NGG]'):
 
 									# Non-saturation (-) strand path: RTT runs 5' of the nick, PAM at [nick-6, nick-3).
@@ -1530,8 +1563,21 @@ def main():
 									silent_candidates = ranked_silent_mutations(target_design[target_name], edit_sequence,
 										pe_nick_edit_idx, rtt_length, '-', pam_search, edit_start_abs, edit_stop_abs)
 
-									if silent_candidates:
-										silent_mutation_selected = silent_candidates[0]
+
+									silent_options = select_silent_mutations(silent_candidates)
+
+								# The ngRNA block after these loops reads silent_mutation_edit_sequence, so the best
+								# option is restored once the loop ends to leave that behavior unchanged.
+								primary_silent_mutation_edit_sequence = ''
+								base_pegRNA_ext = pegRNA_ext
+								for silent_mutation_selected in silent_options:
+
+									pe_pam_ref_silent_mutation = ''
+									silent_mutation_relative_to_edit = None
+									silent_mutation_edit_sequence = ''
+									pegRNA_ext = base_pegRNA_ext
+
+									if silent_mutation_selected is not None:
 										silent_mutation_edit_sequence = silent_mutation_selected['silent_mutation_edit_sequence']
 										pegRNA_ext = silent_mutation_edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + pbs_length]
 										pe_silent_mutation = reverse_complement(silent_mutation_selected['codon_ref']) + '-to-' + reverse_complement(silent_mutation_selected['codon_edit']).lower()
@@ -1544,35 +1590,39 @@ def main():
 											silent_mutation_relative_to_edit = 'downstream'
 										else:
 											silent_mutation_relative_to_edit = 'upstream'
-								
-								# Classify the final allele: what can this pegRNA no longer re-cut?
-								pe_annotate = pam_spacer_annotation(reference_sequence,
-									silent_mutation_edit_sequence if silent_mutation_edit_sequence else edit_sequence,
-									pe_nick_ref_idx, pe_nick_edit_idx, '-', pam_search,
-									cut_idx, spacer_end_idx, pam_start_idx, pam_end_idx)
-								# Check to see if pegRNA extension is within input sequence
-								if len(pegRNA_ext) == (pbs_length + rtt_length):
+										if not primary_silent_mutation_edit_sequence:
+											primary_silent_mutation_edit_sequence = silent_mutation_edit_sequence
 
-									# Initiate entry for new pegRNA spacers that are close enough to edit window based on RTT length parameter list
-									if pegid not in pe_design[target_name]:
+									# Classify the final allele: what can this pegRNA no longer re-cut?
+									pe_annotate = pam_spacer_annotation(reference_sequence,
+										silent_mutation_edit_sequence if silent_mutation_edit_sequence else edit_sequence,
+										pe_nick_ref_idx, pe_nick_edit_idx, '-', pam_search,
+										cut_idx, spacer_end_idx, pam_start_idx, pam_end_idx)
+									# Check to see if pegRNA extension is within input sequence
+									if len(pegRNA_ext) == (pbs_length + rtt_length):
 
-										# First list is for peg extension, second list is for nicking guide
-										pe_design[target_name][pegid] = [[],[]]
+										# Initiate entry for new pegRNA spacers that are close enough to edit window based on RTT length parameter list
+										if pegid not in pe_design[target_name]:
 
-									# Store pegRNA design
-									if silent_mutation_edit_sequence == '':
-										if pe_pam_ref_silent_mutation == '':
-											pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), reverse_complement(pe_pam_ref), pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
+											# First list is for peg extension, second list is for nicking guide
+											pe_design[target_name][pegid] = [[],[]]
+
+										# Store pegRNA design
+										if silent_mutation_edit_sequence == '':
+											if pe_pam_ref_silent_mutation == '':
+												pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), reverse_complement(pe_pam_ref), pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
 									
-										else:
-											pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), pe_pam_ref_silent_mutation, pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
+											else:
+												pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), pe_pam_ref_silent_mutation, pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
 								
-									else:
-										if pe_pam_ref_silent_mutation == '':
-											pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), reverse_complement(pe_pam_ref), pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, silent_mutation_edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
-									
 										else:
-											pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), pe_pam_ref_silent_mutation, pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, silent_mutation_edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
+											if pe_pam_ref_silent_mutation == '':
+												pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), reverse_complement(pe_pam_ref), pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, silent_mutation_edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
+									
+											else:
+												pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), pe_pam_ref_silent_mutation, pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, silent_mutation_edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
+
+								silent_mutation_edit_sequence = primary_silent_mutation_edit_sequence
 
 					# Create ngRNAs targeting (+) strand for (-) pegRNAs
 					if pegid in pe_design[target_name]:

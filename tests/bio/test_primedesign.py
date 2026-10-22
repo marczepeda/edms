@@ -29,6 +29,7 @@ from edms.bio.primedesign import (
     saturating_mutagenesis_input_sequences,
     ranked_silent_mutations,
     pam_spacer_annotation,
+    select_silent_mutations,
     target_aa_number,
     codon_annotation,
     codon_columns,
@@ -793,3 +794,94 @@ class TestMainNumberOfPegrnas:
                                ['-sat_mut', 'aa_subs', '-n_pegrnas', '0'])
         default = self._count(tmp_path / 'default', monkeypatch, ['-sat_mut', 'aa_subs'])
         assert len(default) == len(explicit)
+
+
+# ---------------------------------------------------------------------------
+# non-saturation runs emit every PAM- or spacer-disrupting silent mutation
+# ---------------------------------------------------------------------------
+
+class TestMainSilentMutationOptions:
+    def _pegrnas(self, tmp_path, monkeypatch, seq, extra=None):
+        tmp_path.mkdir(parents=True, exist_ok=True)
+        input_csv = _write_input_csv(tmp_path, [("target_01", seq)])
+        df = _run_main(monkeypatch, tmp_path, input_csv, extra_args=(extra or []) + ['-silent_mut'])
+        return df[df['gRNA_type'] == 'pegRNA']
+
+    def _plain(self, tmp_path, monkeypatch, seq):
+        """Same run without -silent_mut, as the comparison point."""
+        tmp_path.mkdir(parents=True, exist_ok=True)
+        input_csv = _write_input_csv(tmp_path, [("target_01", seq)])
+        df = _run_main(monkeypatch, tmp_path, input_csv)
+        return df[df['gRNA_type'] == 'pegRNA']
+
+    def test_emits_more_pegrnas_than_without_silent_mutations(self, tmp_path, monkeypatch):
+        # the edit is fixed, so any extra rows can only come from silent mutation options
+        plain = self._plain(tmp_path / 'plain', monkeypatch, SUBSTITUTION_SEQ)
+        options = self._pegrnas(tmp_path / 'options', monkeypatch, SUBSTITUTION_SEQ)
+        assert len(options) > len(plain)
+
+    def test_every_pegrna_still_carries_a_silent_mutation(self, tmp_path, monkeypatch):
+        peg = self._pegrnas(tmp_path / 'cover', monkeypatch, SUBSTITUTION_SEQ)
+        assert len(peg) > 0
+        assert peg['Silent_mutation_relative_to_edit'].notna().all()
+
+    def test_options_are_distinct_molecules(self, tmp_path, monkeypatch):
+        # one row per option, never the same extension twice for a spacer
+        peg = self._pegrnas(tmp_path / 'distinct', monkeypatch, SUBSTITUTION_SEQ)
+        assert not peg.duplicated(subset=['Spacer_sequence', 'Extension_sequence']).any()
+
+    def test_options_for_one_design_differ_only_in_the_silent_codon(self, tmp_path, monkeypatch):
+        peg = self._pegrnas(tmp_path / 'group', monkeypatch, SUBSTITUTION_SEQ)
+        grouped = peg.groupby(['Spacer_sequence', 'RTT_length', 'PBS_length'])
+        multi = [sub for _, sub in grouped if len(sub) > 1]
+        assert multi, 'expected at least one design with several silent options'
+        for sub in multi:
+            assert sub['Silent_edit_codon_index'].nunique() + sub['Silent_edit_codon'].nunique() > 1
+
+
+    def test_saturation_mutagenesis_still_emits_one_option(self, tmp_path, monkeypatch):
+        # enumeration is deliberately limited to the non-saturation path
+        peg = self._pegrnas(tmp_path / 'sat', monkeypatch, SAT_MUT_SEQ, extra=['-sat_mut', 'aa_subs'])
+        per_design = peg.groupby(['Target_name', 'Target_sequence', 'Spacer_sequence',
+                                  'RTT_length', 'PBS_length']).size()
+        assert per_design.max() == 1
+
+
+# ---------------------------------------------------------------------------
+# select_silent_mutations()
+# ---------------------------------------------------------------------------
+
+def _cand(name, pam=False, spacer=False):
+    return {'codon_edit': name, 'disrupts_pam': pam, 'disrupts_spacer': spacer}
+
+
+class TestSelectSilentMutations:
+    def test_keeps_every_disrupting_option(self):
+        candidates = [_cand('A', pam=True), _cand('B', spacer=True), _cand('C', pam=True)]
+        assert [c['codon_edit'] for c in select_silent_mutations(candidates)] == ['A', 'B', 'C']
+
+    def test_drops_options_that_disrupt_neither(self):
+        candidates = [_cand('A', pam=True), _cand('B'), _cand('C', spacer=True), _cand('D')]
+        assert [c['codon_edit'] for c in select_silent_mutations(candidates)] == ['A', 'C']
+
+    def test_preserves_the_ranked_order(self):
+        candidates = [_cand(str(i), pam=True) for i in range(5)]
+        assert [c['codon_edit'] for c in select_silent_mutations(candidates)] == list('01234')
+
+    def test_falls_back_to_the_best_candidate_when_nothing_disrupts(self):
+        # without this the pegRNA would lose its silent mutation entirely
+        candidates = [_cand('A'), _cand('B'), _cand('C')]
+        selected = select_silent_mutations(candidates)
+        assert [c['codon_edit'] for c in selected] == ['A']
+
+    def test_no_candidates_means_one_pegrna_with_no_silent_mutation(self):
+        assert select_silent_mutations([]) == [None]
+
+    def test_a_single_disrupting_candidate_is_returned_alone(self):
+        assert len(select_silent_mutations([_cand('A', spacer=True)])) == 1
+
+    def test_does_not_mutate_the_input(self):
+        candidates = [_cand('A', pam=True), _cand('B')]
+        before = list(candidates)
+        select_silent_mutations(candidates)
+        assert candidates == before
