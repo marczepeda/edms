@@ -29,9 +29,16 @@ def mutations(df: pd.DataFrame | str, wt: str, config: bool=True, file: str=None
     if isinstance(df, str): # Get dataframe from path if needed
         df = io.get(df)
 
+    # Fall back to 'Cancer Type Detailed' if 'Cancer Type' is unpopulated (some cBioPortal exports leave it empty)
+    if df['Cancer Type'].isna().all() and 'Cancer Type Detailed' in df.columns:
+        print("Warning: 'Cancer Type' column is empty; using 'Cancer Type Detailed' instead.")
+        df['Cancer Type'] = df['Cancer Type Detailed']
+
     # Determine number of patients with each mutation and associated cancer types (sorted by descending frequency)
     df.dropna(subset=['Gene','Cancer Type','Protein Change','Mutation Type'], inplace=True)
     df = df[df['Mutation Type']!='fusion'] # Exclude fusions
+    if df.empty:
+        raise ValueError("No mutations remain after dropping rows with missing 'Gene', 'Cancer Type', 'Protein Change', or 'Mutation Type' and excluding fusions.")
     df_cts = df[['Gene','Protein Change','Mutation Type']].value_counts().reset_index(name='counts')
     df_cts['Cancer Types'] = df_cts['Protein Change'].map(df.groupby('Protein Change')['Cancer Type'].apply(lambda x: ', '.join(x.value_counts().index)))
 
