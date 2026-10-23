@@ -31,6 +31,7 @@ from edms.bio.primedesign import (
     pam_spacer_annotation,
     select_silent_mutations,
     extend_rtt_for_silent_mutations,
+    with_no_silent_mutation_option,
     target_aa_number,
     codon_annotation,
     codon_columns,
@@ -821,14 +822,18 @@ class TestMainSilentMutationOptions:
         options = self._pegrnas(tmp_path / 'options', monkeypatch, SUBSTITUTION_SEQ)
         assert len(options) > len(plain)
 
-    def test_nearly_every_pegrna_carries_a_silent_mutation(self, tmp_path, monkeypatch):
-        # Not all of them: the 3' homology arm is excluded from the search, and the short
-        # RTTs in this fixture can leave no eligible codon outside it. Those pegRNAs are
-        # emitted without a silent mutation rather than with one in the arm.
+    def test_every_design_also_gets_a_no_silent_mutation_pegrna(self, tmp_path, monkeypatch):
+        # pandas reads the literal 'None' written for these rows as NaN
         peg = self._pegrnas(tmp_path / 'cover', monkeypatch, SUBSTITUTION_SEQ)
         assert len(peg) > 0
-        covered = peg['Silent_mutation_relative_to_edit'].notna().mean()
-        assert covered > 0.9
+        design = ['Spacer_sequence', 'RTT_length', 'PBS_length']
+        none_rows = peg[peg['Silent_mutation_relative_to_edit'].isna()].groupby(design).size()
+        assert len(none_rows) == peg.groupby(design).ngroups   # one for every design
+        assert (none_rows == 1).all()                          # and exactly one each
+
+    def test_most_designs_also_offer_a_silent_mutation(self, tmp_path, monkeypatch):
+        peg = self._pegrnas(tmp_path / 'silent', monkeypatch, SUBSTITUTION_SEQ)
+        assert peg['Silent_mutation_relative_to_edit'].notna().mean() > 0.5
 
     def test_pegrnas_without_a_silent_mutation_have_the_shortest_rtts(self):
         # the ones that miss out should be the short RTTs, where the arm leaves no room
@@ -844,10 +849,11 @@ class TestMainSilentMutationOptions:
         assert not peg.duplicated(subset=['Spacer_sequence', 'Extension_sequence']).any()
 
     def test_maximum_limits_options_per_design(self, tmp_path, monkeypatch):
+        # at most the maximum, plus the one no-silent-mutation design
         capped = self._pegrnas(tmp_path / 'cap2', monkeypatch, SUBSTITUTION_SEQ,
                                extra=['-n_silent_mut', '2'])
         per_design = capped.groupby(['Spacer_sequence', 'RTT_length', 'PBS_length']).size()
-        assert per_design.max() <= 2
+        assert per_design.max() <= 3
 
     def test_uncapped_emits_more_than_capped(self, tmp_path, monkeypatch):
         capped = self._pegrnas(tmp_path / 'c1', monkeypatch, SUBSTITUTION_SEQ,
@@ -880,43 +886,84 @@ def _cand(name, pam=False, spacer=False):
     return {'codon_edit': name, 'disrupts_pam': pam, 'disrupts_spacer': spacer}
 
 
+def _cand2(name, pam=False, spacer=False, distance=0):
+    return {'codon_edit': name, 'disrupts_pam': pam, 'disrupts_spacer': spacer,
+            'distance_to_pam': distance}
+
+
 class TestSelectSilentMutations:
-    def test_keeps_every_candidate_by_default(self):
-        candidates = [_cand('A', pam=True), _cand('B'), _cand('C', spacer=True), _cand('D')]
-        assert [c['codon_edit'] for c in select_silent_mutations(candidates)] == ['A', 'B', 'C', 'D']
+    def test_default_keeps_every_disruptor(self):
+        candidates = [_cand2('A', pam=True), _cand2('B', spacer=True), _cand2('C', pam=True)]
+        assert [c['codon_edit'] for c in select_silent_mutations(candidates)] == ['A', 'B', 'C']
 
-    def test_preserves_the_ranked_order(self):
-        candidates = [_cand(str(i)) for i in range(5)]
-        assert [c['codon_edit'] for c in select_silent_mutations(candidates)] == list('01234')
+    def test_default_adds_the_non_disruptor_closest_to_the_pam(self):
+        candidates = [_cand2('pam', pam=True),
+                      _cand2('far', distance=30), _cand2('near', distance=3), _cand2('mid', distance=12)]
+        assert [c['codon_edit'] for c in select_silent_mutations(candidates)] == ['pam', 'near']
 
-    def test_maximum_keeps_the_highest_ranked(self):
-        candidates = [_cand(str(i)) for i in range(5)]
-        assert [c['codon_edit'] for c in select_silent_mutations(candidates, 2)] == ['0', '1']
+    def test_default_keeps_only_one_non_disruptor(self):
+        candidates = [_cand2('a', distance=9), _cand2('b', distance=3), _cand2('c', distance=21)]
+        assert len(select_silent_mutations(candidates)) == 1
 
-    def test_maximum_of_zero_means_all(self):
-        candidates = [_cand(str(i)) for i in range(5)]
-        assert len(select_silent_mutations(candidates, 0)) == 5
+    def test_ties_on_distance_keep_the_better_ranked(self):
+        # the list arrives ranked, so the first of an equal-distance pair wins
+        candidates = [_cand2('first', distance=6), _cand2('second', distance=6)]
+        assert select_silent_mutations(candidates)[0]['codon_edit'] == 'first'
 
-    def test_maximum_larger_than_the_list_is_harmless(self):
-        candidates = [_cand('A'), _cand('B')]
-        assert len(select_silent_mutations(candidates, 99)) == 2
+    def test_default_with_only_disruptors_adds_nothing_extra(self):
+        candidates = [_cand2('A', pam=True), _cand2('B', spacer=True)]
+        assert len(select_silent_mutations(candidates)) == 2
 
-    def test_a_cap_keeps_disruptors_because_they_rank_first(self):
-        # ranking puts PAM then spacer disruptors first, so a cap never drops them for a
-        # non-disrupting option that happens to sit lower in the list
-        candidates = [_cand('pam', pam=True), _cand('spacer', spacer=True), _cand('plain'), _cand('plain2')]
-        kept = select_silent_mutations(candidates, 2)
-        assert [c['codon_edit'] for c in kept] == ['pam', 'spacer']
+    def test_a_maximum_takes_the_top_of_the_full_ranked_list(self):
+        candidates = [_cand2(str(i), distance=i) for i in range(6)]
+        assert [c['codon_edit'] for c in select_silent_mutations(candidates, 3)] == ['0', '1', '2']
+
+    def test_a_maximum_can_exceed_what_the_curated_set_gives(self):
+        candidates = [_cand2('pam', pam=True)] + [_cand2(f'n{i}', distance=i + 1) for i in range(5)]
+        assert len(select_silent_mutations(candidates)) == 2          # curated: disruptor + nearest
+        assert len(select_silent_mutations(candidates, 4)) == 4       # explicit maximum overrides
 
     def test_no_candidates_means_one_pegrna_with_no_silent_mutation(self):
         assert select_silent_mutations([]) == [None]
         assert select_silent_mutations([], 3) == [None]
 
     def test_does_not_mutate_the_input(self):
-        candidates = [_cand('A', pam=True), _cand('B')]
+        candidates = [_cand2('A', pam=True), _cand2('B')]
         before = list(candidates)
-        select_silent_mutations(candidates, 1)
+        select_silent_mutations(candidates)
         assert candidates == before
+
+
+class TestWithNoSilentMutationOption:
+    def test_appends_the_no_silent_design(self):
+        options = with_no_silent_mutation_option([_cand2('A', pam=True)])
+        assert len(options) == 2 and options[-1] is None
+
+    def test_does_not_double_up_when_there_is_nothing_to_add(self):
+        assert with_no_silent_mutation_option([None]) == [None]
+
+    def test_keeps_the_silent_options_first_and_in_order(self):
+        options = with_no_silent_mutation_option([_cand2('A'), _cand2('B')])
+        assert [c['codon_edit'] for c in options[:-1]] == ['A', 'B']
+
+
+class TestDistanceToPam:
+    def test_candidates_carry_their_distance_to_the_pam(self):
+        candidates = ranked_silent_mutations(NO_RANGE, RANK_REF, 30, 30, '+', '[ACGT]GG', 45, 48)
+        assert all('distance_to_pam' in c for c in candidates)
+
+    def test_a_codon_overlapping_the_pam_is_distance_zero(self):
+        # the PAM sits at [33,36); the codon there must report 0
+        candidates = ranked_silent_mutations(NO_RANGE, RANK_REF, 30, 30, '+', '[ACGT]GG', 45, 48)
+        at_pam = [c for c in candidates if c['codon_start_abs'] == 33]
+        assert at_pam and all(c['distance_to_pam'] == 0 for c in at_pam)
+
+    def test_distance_grows_with_separation_from_the_pam(self):
+        candidates = ranked_silent_mutations(NO_RANGE, RANK_REF, 30, 30, '+', '[ACGT]GG', 45, 48)
+        by_start = {c['codon_start_abs']: c['distance_to_pam'] for c in candidates}
+        far = max(by_start)
+        assert by_start[far] > 0 and by_start[far] >= by_start[min(by_start)]
+
 
 
 # ---------------------------------------------------------------------------
