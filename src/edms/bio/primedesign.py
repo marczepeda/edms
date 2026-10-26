@@ -287,6 +287,11 @@ def silent_mutation_edit_sequence_in_allowed_range(target_design_entry, edit_seq
 			changed_codons.add((codon_start, codon_start + 3))
 	return all(silent_codon_in_allowed_range(target_design_entry, start, end) for start, end in changed_codons)
 
+# Written to Silent_mutation_relative_to_edit when a pegRNA carries no silent mutation.
+# Deliberately not the string 'None': that is in pandas' default NA list, so read_csv turns
+# it into NaN and the row looks as though the value were missing rather than meaningful.
+NO_SILENT_MUTATION = 'no_silent_mutation'
+
 def ranked_silent_mutations(target_design_entry, edit_sequence, pe_nick_edit_idx, rtt_length,
 	strand, pam_search, edit_start_abs, edit_stop_abs, homology_downstream = 0):
 	"""Enumerate every silent codon substitution the RTT can encode, best candidate first.
@@ -1209,7 +1214,7 @@ def main():
 						pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + rtt_length])
 						pegRNA_ext_max = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + rtt_max_length_pooled])
 						nick_aa_index = int(pe_nick_edit_idx)%3
-						silent_mutation_relative_to_edit = None
+						silent_mutation_relative_to_edit = NO_SILENT_MUTATION
 						silent_mutation_selected = None
 						silent_options = [None]
 						if silent_mutation and (pe_format == 'NNNNNNNNNNNNNNNNN/NNN[NGG]'): # Generate silent mutations
@@ -1239,7 +1244,7 @@ def main():
 						for silent_mutation_selected in silent_options:
 
 							pe_pam_ref_silent_mutation = ''
-							silent_mutation_relative_to_edit = None
+							silent_mutation_relative_to_edit = NO_SILENT_MUTATION
 							silent_mutation_edit_sequence = ''
 							pegRNA_ext = base_pegRNA_ext
 							pegRNA_ext_max = base_pegRNA_ext_max
@@ -1275,7 +1280,7 @@ def main():
 								pe_pam_ref_silent_mutation = ''
 								pe_annotate = pe_annotate_constant
 								silent_mutation_edit_sequence = ''
-								silent_mutation_relative_to_edit = None
+								silent_mutation_relative_to_edit = NO_SILENT_MUTATION
 
 							# Create pegRNA ID based on annotation
 							if pe_annotate == 'PAM_disrupted':
@@ -1374,7 +1379,7 @@ def main():
 						pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + pbs_length]
 						pegRNA_ext_max = edit_sequence[pe_nick_edit_idx - rtt_max_length_pooled:pe_nick_edit_idx + pbs_length]
 						nick_aa_index = int(pe_nick_edit_idx)%3
-						silent_mutation_relative_to_edit = None
+						silent_mutation_relative_to_edit = NO_SILENT_MUTATION
 						silent_mutation_selected = None
 						silent_options = [None]
 						if silent_mutation and (pe_format == 'NNNNNNNNNNNNNNNNN/NNN[NGG]'):
@@ -1403,7 +1408,7 @@ def main():
 						for silent_mutation_selected in silent_options:
 
 							pe_pam_ref_silent_mutation = ''
-							silent_mutation_relative_to_edit = None
+							silent_mutation_relative_to_edit = NO_SILENT_MUTATION
 							silent_mutation_edit_sequence = ''
 							pegRNA_ext = base_pegRNA_ext
 							pegRNA_ext_max = base_pegRNA_ext_max
@@ -1439,7 +1444,7 @@ def main():
 								pe_pam_ref_silent_mutation = ''
 								pe_annotate = pe_annotate_constant
 								silent_mutation_edit_sequence = ''
-								silent_mutation_relative_to_edit = None
+								silent_mutation_relative_to_edit = NO_SILENT_MUTATION
 
 							# Create pegRNA ID based on annotation
 							if pe_annotate == 'PAM_disrupted':
@@ -1552,7 +1557,7 @@ def main():
 								# Silent mutations only work for NGG PAMs
 								pegRNA_ext = reverse_complement(edit_sequence[pe_nick_edit_idx - pbs_length:pe_nick_edit_idx + rtt_length])
 								nick_aa_index = int(pe_nick_edit_idx)%3
-								silent_mutation_relative_to_edit = None
+								silent_mutation_relative_to_edit = NO_SILENT_MUTATION
 								silent_options = [None]
 								if silent_mutation and (pe_format == 'NNNNNNNNNNNNNNNNN/NNN[NGG]'):
 
@@ -1575,7 +1580,7 @@ def main():
 								for silent_mutation_selected in silent_options:
 
 									pe_pam_ref_silent_mutation = ''
-									silent_mutation_relative_to_edit = None
+									silent_mutation_relative_to_edit = NO_SILENT_MUTATION
 									silent_mutation_edit_sequence = ''
 									pegRNA_ext = base_pegRNA_ext
 
@@ -1675,7 +1680,7 @@ def main():
 								# Silent mutations only work for NGG PAMs
 								pegRNA_ext = edit_sequence[pe_nick_edit_idx - rtt_length:pe_nick_edit_idx + pbs_length]
 								nick_aa_index = int(pe_nick_edit_idx)%3
-								silent_mutation_relative_to_edit = None
+								silent_mutation_relative_to_edit = NO_SILENT_MUTATION
 								silent_options = [None]
 								if silent_mutation and (pe_format == 'NNNNNNNNNNNNNNNNN/NNN[NGG]'):
 
@@ -1696,7 +1701,7 @@ def main():
 								for silent_mutation_selected in silent_options:
 
 									pe_pam_ref_silent_mutation = ''
-									silent_mutation_relative_to_edit = None
+									silent_mutation_relative_to_edit = NO_SILENT_MUTATION
 									silent_mutation_edit_sequence = ''
 									pegRNA_ext = base_pegRNA_ext
 

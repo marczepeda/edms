@@ -32,6 +32,7 @@ from edms.bio.primedesign import (
     select_silent_mutations,
     extend_rtt_for_silent_mutations,
     with_no_silent_mutation_option,
+    NO_SILENT_MUTATION,
     target_aa_number,
     codon_annotation,
     codon_columns,
@@ -434,9 +435,12 @@ class TestMainSilentMutation:
         input_csv = _write_input_csv(tmp_path, [("target_05", SUBSTITUTION_SEQ)])
         df = _run_main(monkeypatch, tmp_path, input_csv, extra_args=['-silent_mut'])
         assert len(df) > 0
-        # with -silent_mut, at least some designs should carry a non-null relative-position tag
-        assert df['Silent_mutation_relative_to_edit'].notna().any()
-        assert set(df['Silent_mutation_relative_to_edit'].dropna().unique()) <= {"upstream", "downstream", "overlap"}
+        # with -silent_mut, at least some designs should carry a relative-position tag
+        placements = set(df['Silent_mutation_relative_to_edit'].dropna().unique())
+        assert placements & {"upstream", "downstream"}
+        # 'overlap' is no longer produced: the codon carrying the edit is excluded from the
+        # search, so a silent mutation can only sit upstream or downstream of it
+        assert placements <= {"upstream", "downstream", NO_SILENT_MUTATION}
 
 
 class TestMainErrorHandling:
@@ -823,17 +827,24 @@ class TestMainSilentMutationOptions:
         assert len(options) > len(plain)
 
     def test_every_design_also_gets_a_no_silent_mutation_pegrna(self, tmp_path, monkeypatch):
-        # pandas reads the literal 'None' written for these rows as NaN
         peg = self._pegrnas(tmp_path / 'cover', monkeypatch, SUBSTITUTION_SEQ)
         assert len(peg) > 0
         design = ['Spacer_sequence', 'RTT_length', 'PBS_length']
-        none_rows = peg[peg['Silent_mutation_relative_to_edit'].isna()].groupby(design).size()
+        marked = peg['Silent_mutation_relative_to_edit'] == NO_SILENT_MUTATION
+        none_rows = peg[marked].groupby(design).size()
         assert len(none_rows) == peg.groupby(design).ngroups   # one for every design
         assert (none_rows == 1).all()                          # and exactly one each
 
+    def test_the_marker_survives_a_default_pandas_read(self, tmp_path, monkeypatch):
+        # 'None' would have come back as NaN, since pandas treats it as a missing value
+        peg = self._pegrnas(tmp_path / 'marker', monkeypatch, SUBSTITUTION_SEQ)
+        assert peg['Silent_mutation_relative_to_edit'].isna().sum() == 0
+        assert NO_SILENT_MUTATION in set(peg['Silent_mutation_relative_to_edit'])
+
     def test_most_designs_also_offer_a_silent_mutation(self, tmp_path, monkeypatch):
         peg = self._pegrnas(tmp_path / 'silent', monkeypatch, SUBSTITUTION_SEQ)
-        assert peg['Silent_mutation_relative_to_edit'].notna().mean() > 0.5
+        has_one = peg['Silent_mutation_relative_to_edit'] != NO_SILENT_MUTATION
+        assert has_one.mean() > 0.5
 
     def test_pegrnas_without_a_silent_mutation_have_the_shortest_rtts(self):
         # the ones that miss out should be the short RTTs, where the arm leaves no room
