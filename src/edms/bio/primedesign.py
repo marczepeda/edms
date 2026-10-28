@@ -1977,30 +1977,33 @@ def main():
 							f.write(','.join(map(str, [target_design[target_name].get('output_target_name', target_name), target_design[target_name]['target_sequence'], counter, 'pegRNA', pe_spacer_sequence, spacer_gc_content, pe_pam_ref, pegRNA_ext, pe_strand, pe_annotate, nick2lastedit_length, pe_nick_ref_idx, '', pbs_length, pbs_gc_content, rtt_length, rtt_gc_content, pegRNA_ext_first_base, spacer_oligo_top, spacer_oligo_bottom, pegext_oligo_top, pegext_oligo_bottom, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit] + codon_columns(target_design[target_name], silent_mutation_selected) + nucleotide_change_columns(reference_sequence, edit_sequence))) + '\n')
 
 					# Write ngRNAs
-					if ng_continue:
-						for ngRNA_entry in ngRNA_entries[:number_of_ngrnas]:
-							ng_nick_ref_idx, ng_spacer_sequence_edit, ng_pam_edit, ng_annotate, ng_strand, nick_distance = ngRNA_entry
+						if ng_continue:
+							for ngRNA_entry in ngRNA_entries[:number_of_ngrnas]:
+								ng_nick_ref_idx, ng_spacer_sequence_edit, ng_pam_edit, ng_annotate, ng_strand, nick_distance = ngRNA_entry
 
-							spacer_gc_content = gc_content(ng_spacer_sequence_edit)
+								spacer_gc_content = gc_content(ng_spacer_sequence_edit)
 
-							if ng_spacer_sequence_edit[0].upper() == 'G':
-								spacer_oligo_top = 'cacc' + ng_spacer_sequence_edit
-								spacer_oligo_bottom = 'aaac' + reverse_complement(ng_spacer_sequence_edit)
+								if ng_spacer_sequence_edit[0].upper() == 'G':
+									spacer_oligo_top = 'cacc' + ng_spacer_sequence_edit
+									spacer_oligo_bottom = 'aaac' + reverse_complement(ng_spacer_sequence_edit)
 
-							else:
-								spacer_oligo_top = 'caccG' + ng_spacer_sequence_edit
-								spacer_oligo_bottom = 'aaac' + reverse_complement('G' + ng_spacer_sequence_edit)
+								else:
+									spacer_oligo_top = 'caccG' + ng_spacer_sequence_edit
+									spacer_oligo_bottom = 'aaac' + reverse_complement('G' + ng_spacer_sequence_edit)
 
-							if filter_homopolymer_ts:
+								if filter_homopolymer_ts:
 
-								if 'TTTT' not in ng_spacer_sequence_edit:
+									if 'TTTT' not in ng_spacer_sequence_edit:
+										f.write(','.join(map(str, [target_design[target_name].get('output_target_name', target_name), target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', '', '', reference_sequence, edit_sequence, silent_mutation_relative_to_edit] + [''] * len(SILENT_CODON_COLUMNS) + nucleotide_change_columns(reference_sequence, edit_sequence))) + '\n')
+
+								else:
+
 									f.write(','.join(map(str, [target_design[target_name].get('output_target_name', target_name), target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', '', '', reference_sequence, edit_sequence, silent_mutation_relative_to_edit] + [''] * len(SILENT_CODON_COLUMNS) + nucleotide_change_columns(reference_sequence, edit_sequence))) + '\n')
 
-							else:
+						# one number per pegRNA row, not per spacer: a spacer carries several silent
+						# mutation alleles, and an ngRNA belongs to the allele it was cut from
+						counter += 1
 
-								f.write(','.join(map(str, [target_design[target_name].get('output_target_name', target_name), target_design[target_name]['target_sequence'], counter, 'ngRNA', ng_spacer_sequence_edit, spacer_gc_content, ng_pam_edit, '', ng_strand, ng_annotate, '', ng_nick_ref_idx, nick_distance, '', '', '', '', '', spacer_oligo_top, spacer_oligo_bottom, '', '', '', reference_sequence, edit_sequence, silent_mutation_relative_to_edit] + [''] * len(SILENT_CODON_COLUMNS) + nucleotide_change_columns(reference_sequence, edit_sequence))) + '\n')
-
-					counter += 1
 
 if __name__ == '__main__':
 	main()
