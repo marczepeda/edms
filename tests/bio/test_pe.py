@@ -708,6 +708,13 @@ class TestMergePegRNAsNgRNAs:
         ng = pd.DataFrame([_ng_row(1, rc)])
         assert len(pe.merge_pegRNAs_ngRNAs(peg, ng)) == 1
 
+    def test_grna_type_is_dropped_from_both_sides(self):
+        peg = pd.DataFrame([_peg_row(1, gRNA_type='pegRNA')])
+        ng = pd.DataFrame([_ng_row(1, MERGE_ALLELE[3:23], gRNA_type='ngRNA')])
+        out = pe.merge_pegRNAs_ngRNAs(peg, ng)
+        assert 'gRNA_type' not in out.columns and 'ngRNA_gRNA_type' not in out.columns
+        assert len(out) == 1                       # the merge itself is unaffected
+
     def test_missing_join_key_raises(self):
         peg = pd.DataFrame([{"Spacer_sequence": "A"}])
         ng = pd.DataFrame([_ng_row(1, MERGE_ALLELE[3:23])])

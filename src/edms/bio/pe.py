@@ -1277,6 +1277,8 @@ def prime_designer(in_file: str = None, target_name: str = None, flank5_sequence
                         dc={key: merge_pegRNAs_ngRNAs(pegRNAs=pegRNAs[key], ngRNAs=ngRNAs[key])
                             for key in pegRNAs if key in ngRNAs})
 
+MERGE_DROP_COLUMNS = ['gRNA_type']
+
 def merge_pegRNAs_ngRNAs(pegRNAs: pd.DataFrame | str, ngRNAs: pd.DataFrame | str,
                          ngRNA_prefix: str = 'ngRNA_', file: str = None,
                          literal_eval: bool = False, comments: bool = False) -> pd.DataFrame:
@@ -1302,7 +1304,8 @@ def merge_pegRNAs_ngRNAs(pegRNAs: pd.DataFrame | str, ngRNAs: pd.DataFrame | str
     Columns the ngRNA side shares with the pegRNA side are handled by what they contain:
     a column that is empty for ngRNAs, or that carries the same value as the pegRNA column,
     is dropped; one that genuinely differs is kept under the prefix. The join key is left
-    unprefixed.
+    unprefixed. 'gRNA_type' is dropped from both sides, since the column names already say
+    which side a value came from.
 
     Dependencies: pandas, io
     '''
@@ -1312,6 +1315,10 @@ def merge_pegRNAs_ngRNAs(pegRNAs: pd.DataFrame | str, ngRNAs: pd.DataFrame | str
         ngRNAs = io.get(pt=ngRNAs, literal_eval=literal_eval)
     if 'pegRNA_number' not in pegRNAs.columns or 'pegRNA_number' not in ngRNAs.columns:
         raise ValueError("Both pegRNAs and ngRNAs need a 'pegRNA_number' column to be merged.")
+
+    # 'gRNA_type' only restates which side a row came from, which the column names already say
+    pegRNAs = pegRNAs.drop(columns=[col for col in MERGE_DROP_COLUMNS if col in pegRNAs.columns])
+    ngRNAs = ngRNAs.drop(columns=[col for col in MERGE_DROP_COLUMNS if col in ngRNAs.columns])
 
     shared = [col for col in pegRNAs.columns if col in ngRNAs.columns and col != 'pegRNA_number']
 
