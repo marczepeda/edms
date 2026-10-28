@@ -27,7 +27,7 @@ genome_wide_design = False
 saturation_mutagenesis = False
 number_of_pegrnas = 0
 number_of_silent_mutations = 0
-number_of_ngrnas = 3
+number_of_ngrnas = 1
 nicking_distance_pooled = 75
 homology_downstream = 15
 pbs_length_pooled = 14
@@ -96,7 +96,7 @@ def _configure_cli():
 	parser.add_argument('-sat_mut', '--saturation_mutagenesis', default = False, choices = ['aa', 'aa_subs', 'aa_ins', 'aa_dels', 'aa_silent', 'base'], type = str, help = '***** Saturation mutagenesis design with prime editing. The \'aa\' option makes all amino acid substitutions (\'aa_subs\'),  +1 amino acid insertions (\'aa_ins\'), and -1 amino acid deletions (\'aa_dels\'). The \'aa_silent\' option makes all possible silent codon changes. The \'base\' option makes DNA base changes. (Default: False) *****\n\n')
 	parser.add_argument('-n_pegrnas', '--number_of_pegrnas', default = 0, type = int, help = '***** The maximum number of pegRNAs to design for each input sequence. 0 keeps every pegRNA meeting the criteria. The pegRNAs are ranked by 1) PAM disrupted > Spacer disrupted > PAM & Spacer intact then 2) distance to edit. (Default: 0) *****\n\n')
 	parser.add_argument('-n_silent_mut', '--number_of_silent_mutations', default = 0, type = int, help = '***** The maximum number of silent mutation options to design for each pegRNA when the input file supplies the edits (not saturation mutagenesis). 0, the default, keeps a curated set: every option disrupting the PAM or the spacer, plus the non-disrupting option closest to the PAM. A non-zero value instead takes that many from the full ranked list. Every pegRNA additionally gets a design with no silent mutation. (Default: 0) *****\n\n')
-	parser.add_argument('-n_ngrnas', '--number_of_ngrnas', default = 3, type = int, help = '***** The maximum number of ngRNAs to design for each input sequence. The ngRNAs are ranked by 1) PE3b-seed > PE3b-nonseed > PE3 then 2) deviation from nicking_distance_pooled. (Default: 3) *****\n\n')
+	parser.add_argument('-n_ngrnas', '--number_of_ngrnas', default = 1, type = int, help = '***** The maximum number of ngRNAs to design for each input sequence. The ngRNAs are ranked by 1) PE3b-seed > PE3b-nonseed > PE3 then 2) deviation from nicking_distance_pooled. (Default: 1) *****\n\n')
 	parser.add_argument('-nick_dist_pooled', '--nicking_distance_pooled', default = 75, type = int, help = '***** The nicking distance between pegRNAs and ngRNAs for pooled designs. PE3b annotation is priority, followed by nicking distance closest to this parameter. (Default: 75 bp) *****\n\n')
 	parser.add_argument('-homology_downstream', '--homology_downstream', default = 15, type = int, help = '***** This parameter determines the minimum RT extension length downstream of an edit for pegRNA designs. (Default: 15) *****\n\n')
 	parser.add_argument('-pbs_pooled', '--pbs_length_pooled', type = int, default = 14, help = '***** The PBS length to design pegRNAs for pooled design applications. (Default: 14 nt) *****\n\n')
