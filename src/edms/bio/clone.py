@@ -1055,7 +1055,7 @@ def off_targets(df: pd.DataFrame | str, col: str, match_score: float = 2, mismat
         off_target_seqs_alignments.append(fq.format_alignment(a=seq, b=off_target_seqs[s], show=False, return_alignment=True))
 
     if dir is not None:  # Save final results
-        io.save(obj=pd.DataFrame({'Target Sequence': seqs[:s],
+        io.save(obj=pd.DataFrame({'Target Sequence': seqs,
                                   'Off Target Sequence': off_target_seqs,
                                   'Best Alignment Score': off_target_seqs_scores,
                                   'Best Alignment Formatted': off_target_seqs_alignments}),
