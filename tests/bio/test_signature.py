@@ -29,6 +29,8 @@ from edms.bio.signature import (
     expand_signature_units,
     compare_signature_with_n_extra_nt_or_less,
     is_reference_match_with_n_extra_nt_or_less,
+    cut_site_indexes,
+    query_to_ref_boundary,
 )
 
 
@@ -105,6 +107,13 @@ class TestDataclasses:
 # parse_signature_literal
 # --------------------------------------------------------------------------- #
 class TestParseSignatureLiteral:
+    def test_signature_object_is_returned_unchanged(self):
+        sig = Signature(snvs=(SNV(pos=1, ref="A", alt="C"),), indels=())
+        assert parse_signature_literal(sig) is sig
+
+    def test_missing_value_is_returned_unchanged(self):
+        assert parse_signature_literal(None) is None
+
     def test_valid_signature_with_snv_and_indel(self):
         lit = (
             "Signature(snvs=(SNV(pos=3, ref='T', alt='A'),), "
@@ -580,3 +589,58 @@ class TestIsReferenceMatchWithNExtraNtOrLess:
     def test_default_n_extra_nt(self):
         query = Signature(snvs=(SNV(pos=5, ref="A", alt="T"),), indels=())
         assert is_reference_match_with_n_extra_nt_or_less(query, self.REF_SIG) is True
+
+
+# --------------------------------------------------------------------------- #
+# cut_site_indexes()
+# --------------------------------------------------------------------------- #
+CUT_SEQ = "TTGACCTAGGATCCAGTTACGGATCAAGCTTGCATGCCTGCAGGTCGACTCTAGAGGATCC"
+
+
+class TestCutSiteIndexes:
+    def test_plus_strand_nick_is_3_nt_from_spacer_3_prime_end(self):
+        assert cut_site_indexes(CUT_SEQ[10:30], CUT_SEQ) == [27]
+
+    def test_minus_strand_nick_is_3_nt_from_reverse_complement_5_prime_end(self):
+        rc = CUT_SEQ[30:50][::-1].translate(str.maketrans("ACGT", "TGCA"))
+        assert cut_site_indexes(rc, CUT_SEQ) == [33]
+
+    def test_case_insensitive(self):
+        assert cut_site_indexes(CUT_SEQ[10:30].lower(), CUT_SEQ) == [27]
+
+    def test_not_found(self):
+        assert cut_site_indexes("A" * 20, CUT_SEQ) == []
+
+    def test_cut_offset(self):
+        assert cut_site_indexes(CUT_SEQ[10:30], CUT_SEQ, cut_offset=4) == [26]
+
+
+# --------------------------------------------------------------------------- #
+# query_to_ref_boundary()
+# --------------------------------------------------------------------------- #
+class TestQueryToRefBoundary:
+    @staticmethod
+    def _align(ref, query):
+        aligner = Align.PairwiseAligner(mode="global", match_score=2, mismatch_score=-1,
+                                        open_gap_score=-10, extend_gap_score=-0.1)
+        return aligner.align(ref, query)[0]
+
+    def test_identity(self):
+        aln = self._align(CUT_SEQ, CUT_SEQ)
+        assert [query_to_ref_boundary(aln, q) for q in (0, 20, len(CUT_SEQ))] == [0, 20, len(CUT_SEQ)]
+
+    def test_after_insertion_shifts_back(self):
+        query = CUT_SEQ[:20] + "GGG" + CUT_SEQ[20:]
+        aln = self._align(CUT_SEQ, query)
+        assert query_to_ref_boundary(aln, 10) == 10
+        assert query_to_ref_boundary(aln, 33) == 30
+
+    def test_inside_insertion_maps_to_insertion_boundary(self):
+        query = CUT_SEQ[:20] + "GGG" + CUT_SEQ[20:]
+        aln = self._align(CUT_SEQ, query)
+        assert query_to_ref_boundary(aln, 21) == 20
+
+    def test_after_deletion_shifts_forward(self):
+        query = CUT_SEQ[:20] + CUT_SEQ[25:]
+        aln = self._align(CUT_SEQ, query)
+        assert query_to_ref_boundary(aln, 30) == 35

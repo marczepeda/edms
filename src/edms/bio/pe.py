@@ -64,7 +64,7 @@ import math
 from typing import Literal
 
 from .primedesign import codon_dict, nucleotide_change_columns
-from .signature import signature_from_alignment
+from .signature import signature_from_alignment, cut_site_indexes, query_to_ref_boundary
 from . import pegLIT as pegLIT
 from ..gen import io as io
 from ..gen import tidy as t
@@ -1861,10 +1861,16 @@ def pegRNA_signature(pegRNAs: pd.DataFrame | str, config_key: str=None,
                     flank5_sequence: str = None, flank3_sequence: str = None, 
                     flank5_length: int=0, flank3_length: int=0,
                     reference_sequence: str='Reference_sequence', edit_sequence: str='Edit_sequence',
+                    spacer_sequence: str='Spacer_sequence', ngRNA_spacer_sequence: str=None,
                     match_score: float = 2, mismatch_score: float = -1, open_gap_score: float = -10, extend_gap_score: float = -0.1,
                     out_dir: str=None, out_file: str=None, save_alignments: bool=False, return_df: bool=True, literal_eval: bool=False) -> pd.DataFrame:
     ''' 
     pegRNA_signature(): create signatures for pegRNA outcomes using alignments
+
+    Adds the 'Signature' column & its reference frame: 'Signature_ref' (trimmed reference sequence that Signature positions refer to),
+    'Signature_nick_index' (pegRNA nick between Signature_ref[i-1] & Signature_ref[i]), and 'Signature_ngRNA_nick_index' (ngRNA nick in
+    the same frame; PE3b ngRNAs are found in the edit sequence & mapped to the reference through the alignment) if ngRNA_spacer_sequence
+    is provided. edms.bio.fastq.count_signatures() uses these to check its reference sequence & find cut site outcomes.
     
     Parameters:
     pegRNAs (dataframe | str): pegRNAs DataFrame (or file path)
@@ -1875,6 +1881,9 @@ def pegRNA_signature(pegRNAs: pd.DataFrame | str, config_key: str=None,
     flank3_length (int, optional): length of flank3 sequence to include in alignment if provided (Default: 0)
     reference_sequence (str, optional): column name for reference sequences (Default: 'Reference_sequence')
     edit_sequence (str, optional): column name for post RTT sequences (Default: 'Edit_sequence')
+    spacer_sequence (str, optional): column name for pegRNA spacer sequences used for 'Signature_nick_index' (Default: 'Spacer_sequence')
+    ngRNA_spacer_sequence (str, optional): column name for ngRNA spacer sequences in the same row as the pegRNA (probably 'ngRNA_Spacer_sequence' 
+                                           after merge_pegRNAs_ngRNAs()) used for 'Signature_ngRNA_nick_index' (Default: None)
     match_score (float, optional): match score for pairwise alignment (Default: 2)
     mismatch_score (float, optional): mismatch score for pairwise alignment (Default: -1)
     open_gap_score (float, optional): open gap score for pairwise alignment (Default: -10)
@@ -1892,6 +1901,13 @@ def pegRNA_signature(pegRNAs: pd.DataFrame | str, config_key: str=None,
     # Get pegRNAs DataFrame from file path if needed
     if isinstance(pegRNAs, str):
         pegRNAs = io.get(pt=pegRNAs, literal_eval=literal_eval)
+
+    # Check for spacer columns used for nick indexes
+    nicks = spacer_sequence in pegRNAs.columns
+    if not nicks:
+        print(f"Warning: Did not add 'Signature_nick_index'.\nMissing spacer column: {spacer_sequence}")
+    if ngRNA_spacer_sequence is not None and ngRNA_spacer_sequence not in pegRNAs.columns:
+        raise ValueError(f"Missing ngRNA spacer column: {ngRNA_spacer_sequence}")
 
     # High sequence homology; punish gaps
     aligner = PairwiseAligner()
@@ -1911,11 +1927,19 @@ def pegRNA_signature(pegRNAs: pd.DataFrame | str, config_key: str=None,
     if save_alignments:
         aligments_list = []
     signatures_list = []
+    signature_refs_list = []
+    nicks_list = []
+    ngRNA_nicks_list = []
+    nick_warnings = []
+    spacers = pegRNAs[spacer_sequence].tolist() if nicks else [None]*len(pegRNAs)
+    ngRNA_spacers = pegRNAs[ngRNA_spacer_sequence].tolist() if ngRNA_spacer_sequence is not None else [None]*len(pegRNAs)
     for i,(reference_seq, edit_seq) in enumerate(t.zip_cols(df=pegRNAs, cols=[reference_sequence,edit_sequence])): # Iterate through reference and edit sequences
         
-        # Convert Seq objects to strings
+        # Convert Seq objects to strings; keep full sequences & trimmed start indexes to find nicks
         reference_seq = str(reference_seq)
         edit_seq = str(edit_seq)
+        full_reference_seq, full_edit_seq = reference_seq, edit_seq
+        reference5, edit5 = 0, 0
 
         # Trim flanks if provided
         if flank5_sequence is not None and flank3_sequence is not None:
@@ -1925,21 +1949,56 @@ def pegRNA_signature(pegRNAs: pd.DataFrame | str, config_key: str=None,
                 raise(ValueError(f"Flank5 or Flank3 sequences were not found in edit sequence for pegRNAs row {i}.\nPlease check the flank5 ({flank5_sequence}) and flank3 ({flank3_sequence}) sequences.\nEdit sequence: {edit_seq}"))
             
             # Trim flanks from reference and edit sequences
-            reference_seq = reference_seq[reference_seq.find(flank5_sequence)+len(flank5_sequence)-flank5_length : reference_seq.rfind(flank3_sequence)+flank3_length]
-            edit_seq = edit_seq[edit_seq.find(flank5_sequence)+len(flank5_sequence)-flank5_length : edit_seq.rfind(flank3_sequence)+flank3_length]
+            reference5 = reference_seq.find(flank5_sequence)+len(flank5_sequence)-flank5_length
+            edit5 = edit_seq.find(flank5_sequence)+len(flank5_sequence)-flank5_length
+            reference_seq = reference_seq[reference5 : reference_seq.rfind(flank3_sequence)+flank3_length]
+            edit_seq = edit_seq[edit5 : edit_seq.rfind(flank3_sequence)+flank3_length]
 
         # Create and append alignment
         alignment = aligner.align(Seq(reference_seq.upper()), Seq(edit_seq.upper()))[0]
         if save_alignments:
             aligments_list.append(alignment)
 
-        # Create and append signature
+        # Create and append signature & its reference frame
         signatures_list.append(signature_from_alignment(ref_seq=reference_seq.upper(), query_seq=edit_seq.upper(), alignment=alignment))
+        signature_refs_list.append(reference_seq.upper())
+
+        # pegRNA nick: spacer in full reference sequence => trimmed reference frame
+        if nicks:
+            nick = None
+            if isinstance(spacers[i], str) and len(spacers[i])>0:
+                frame_nicks = [n-reference5 for n in cut_site_indexes(spacer=spacers[i], seq=full_reference_seq) if 0 <= n-reference5 <= len(reference_seq)]
+                if len(frame_nicks)==1:
+                    nick = frame_nicks[0]
+                else:
+                    nick_warnings.append(f"row {i} pegRNA spacer ({spacers[i]}): {'not found' if len(frame_nicks)==0 else 'multiple nicks'} in the trimmed reference sequence")
+            nicks_list.append(nick)
+
+        # ngRNA nick: spacer in full reference sequence (PE3) or full edit sequence (PE3b) => trimmed reference frame
+        if ngRNA_spacer_sequence is not None:
+            nick = None
+            if isinstance(ngRNA_spacers[i], str) and len(ngRNA_spacers[i])>0:
+                frame_nicks = [n-reference5 for n in cut_site_indexes(spacer=ngRNA_spacers[i], seq=full_reference_seq) if 0 <= n-reference5 <= len(reference_seq)]
+                if len(frame_nicks)==0: # PE3b: map nick in the edit sequence to the reference sequence through the alignment
+                    frame_nicks = sorted(set([query_to_ref_boundary(alignment=alignment, boundary=n-edit5) 
+                                              for n in cut_site_indexes(spacer=ngRNA_spacers[i], seq=full_edit_seq) if 0 <= n-edit5 <= len(edit_seq)]))
+                if len(frame_nicks)==1:
+                    nick = frame_nicks[0]
+                else:
+                    nick_warnings.append(f"row {i} ngRNA spacer ({ngRNA_spacers[i]}): {'not found' if len(frame_nicks)==0 else 'multiple nicks'} in the trimmed reference/edit sequences")
+            ngRNA_nicks_list.append(nick)
 
     # Create Alignment and Signature columns
     if save_alignments:
         pegRNAs['Alignment'] = aligments_list
     pegRNAs['Signature'] = signatures_list
+    pegRNAs['Signature_ref'] = signature_refs_list
+    if nicks:
+        pegRNAs['Signature_nick_index'] = pd.array(nicks_list, dtype='Int64')
+    if ngRNA_spacer_sequence is not None:
+        pegRNAs['Signature_ngRNA_nick_index'] = pd.array(ngRNA_nicks_list, dtype='Int64')
+    if len(nick_warnings)>0:
+        print(f"Warning: {len(nick_warnings)} nick index(es) were left empty:\n" + '\n'.join(nick_warnings))
 
     # Count # of SNVs, insertions, deletions in Signature
     snvs_ls = []

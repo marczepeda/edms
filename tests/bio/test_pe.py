@@ -775,3 +775,76 @@ class TestRefreshNgRNASpacers:
 
     def test_empty_frame_is_returned_unchanged(self):
         assert len(pe.refresh_ngRNA_spacers(pd.DataFrame(columns=['pegRNA_number']), {}, {})) == 0
+
+
+# --------------------------------------------------------------------------- #
+# pegRNA_signature(): Signature reference frame & nick indexes
+# --------------------------------------------------------------------------- #
+SIG_FLANK5 = "GGCCAATT"
+SIG_FLANK3 = "AATTGGCC"
+SIG_REGION = "TTGACCTAGGATCCAGTTACGGATCAAGCTTGCATGCCTGCAGGTCGACTCTAGAGGATCCCTAGCTAC"
+SIG_REF = SIG_FLANK5 + SIG_REGION + SIG_FLANK3   # region starts at full index 8
+
+
+def _rc(seq):
+    return str(Seq(seq).reverse_complement())
+
+
+def _sig_rows(**kw):
+    edit = SIG_REF[:30] + "C" + SIG_REF[31:]            # A>C SNV at full index 30 => region index 22
+    row = {"Reference_sequence": SIG_REF, "Edit_sequence": edit,
+           "Spacer_sequence": SIG_REF[12:32]}           # + strand nick at full 29 => region 21
+    row.update(kw)
+    return pd.DataFrame([row])
+
+
+class TestPegRNASignatureFrame:
+    def _run(self, df, **kw):
+        return pe.pegRNA_signature(df, flank5_sequence=SIG_FLANK5, flank3_sequence=SIG_FLANK3, **kw)
+
+    def test_signature_ref_is_the_trimmed_reference(self):
+        out = self._run(_sig_rows())
+        assert out.loc[0, 'Signature_ref'] == SIG_REGION
+        assert out.loc[0, 'Signature'].snvs[0].pos == 22
+
+    def test_nick_index_is_in_the_trimmed_frame(self):
+        assert self._run(_sig_rows()).loc[0, 'Signature_nick_index'] == 21
+
+    def test_flank_length_shifts_the_frame(self):
+        out = self._run(_sig_rows(), flank5_length=3)
+        assert out.loc[0, 'Signature_ref'] == SIG_FLANK5[-3:] + SIG_REGION
+        assert out.loc[0, 'Signature_nick_index'] == 24
+        assert out.loc[0, 'Signature'].snvs[0].pos == 25
+
+    def test_spacer_extending_into_the_flank_still_gets_a_nick(self):
+        out = self._run(_sig_rows(Spacer_sequence=SIG_REF[0:20]))   # nick at full 17 => region 9
+        assert out.loc[0, 'Signature_nick_index'] == 9
+
+    def test_minus_strand_spacer(self):
+        out = self._run(_sig_rows(Spacer_sequence=_rc(SIG_REF[40:60])))   # nick at full 43 => region 35
+        assert out.loc[0, 'Signature_nick_index'] == 35
+
+    def test_ngRNA_column_is_only_added_when_requested(self):
+        assert 'Signature_ngRNA_nick_index' not in self._run(_sig_rows()).columns
+
+    def test_pe3_ngRNA_nick(self):
+        df = _sig_rows(ngRNA_Spacer_sequence=_rc(SIG_REF[50:70]))   # nick at full 53 => region 45
+        out = self._run(df, ngRNA_spacer_sequence='ngRNA_Spacer_sequence')
+        assert out.loc[0, 'Signature_ngRNA_nick_index'] == 45
+
+    def test_pe3b_ngRNA_nick_is_mapped_through_the_alignment(self):
+        edit = SIG_REF[:30] + "GGG" + SIG_REF[30:]   # 3 nt insertion at full 30 => region 22
+        ng = edit[20:40]                             # spans the insertion => binds the edit only; + strand nick at edit full 37
+        df = _sig_rows(Edit_sequence=edit, ngRNA_Spacer_sequence=ng)
+        out = self._run(df, ngRNA_spacer_sequence='ngRNA_Spacer_sequence')
+        assert ng not in SIG_REF and _rc(ng) not in SIG_REF
+        assert out.loc[0, 'Signature_ngRNA_nick_index'] == 37 - len(SIG_FLANK5) - 3   # 3 inserted nt precede the nick
+
+    def test_missing_ngRNA_spacer_leaves_the_nick_empty(self):
+        df = _sig_rows(ngRNA_Spacer_sequence=np.nan)
+        out = self._run(df, ngRNA_spacer_sequence='ngRNA_Spacer_sequence')
+        assert pd.isna(out.loc[0, 'Signature_ngRNA_nick_index'])
+
+    def test_missing_ngRNA_column_raises(self):
+        with pytest.raises(ValueError, match="ngRNA spacer column"):
+            self._run(_sig_rows(), ngRNA_spacer_sequence='ngRNA_Spacer_sequence')

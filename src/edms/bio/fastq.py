@@ -34,7 +34,8 @@ Usage:
     - paired_regions(): quantify, plot, & return (un)paired regions that aligned to the annotated library
 - [Signature]
     - _signature_phred_summary() Return min/median/max Phred+33 qualities for bases changed in `signature`.
-    - _cut_site_indexes(): Return cut site indexes for a spacer in the reference sequence
+    - _check_signature_frame(): Raise if the reference library Signatures were not computed against ref_seq
+    - _nick_index_value(): Convert a stored nick index into an int (or None if missing)
     - _signature_event_boundaries(): Return the range of inter-nucleotide boundaries that a Signature event touches
     - _cut_site_outcome(): Return the (id, edit) cut site outcome labels for a Signature with indels/substitutions at a pegRNA cut site
     - _cut_site_rows(): Return '{edit} (ngRNA) indels' & '{edit} (ngRNA) non-indels' rows for each pegRNA in the fastq reference library
@@ -116,7 +117,7 @@ import itertools
 import shutil
 from pathlib import Path
 
-from ..bio.signature import SNV, Indel, Signature, parse_signature_literal, signature_from_alignment, expand_signature_units, is_reference_match_with_n_extra_nt_or_less
+from ..bio.signature import SNV, Indel, Signature, parse_signature_literal, signature_from_alignment, expand_signature_units, is_reference_match_with_n_extra_nt_or_less, cut_site_indexes
 from ..gen import io, tidy as t, plot as p, stat as st
 from ..data import uniprot, pdb, dssp
 from ..utils import memory_timer, mkdir, load_resource_csv
@@ -1696,22 +1697,43 @@ def _signature_phred_summary(signature, alignment, read_quals, include_insertion
 
     return min(vals), float(np.median(vals)), float(np.mean(vals)), max(vals), min(read_quals), float(np.median(read_quals)), float(np.mean(read_quals)), max(read_quals)
 
-def _cut_site_indexes(spacer: str, ref_seq: str, cut_offset: int=3) -> list[int]:
+def _check_signature_frame(fastq_df_ref: pd.DataFrame, id_col: str, signature_ref_col: str, ref_seq: str):
     '''
-    _cut_site_indexes(): Return cut site indexes for a spacer in the reference sequence (cut is between ref_seq[i-1] & ref_seq[i])
+    _check_signature_frame(): Raise if the reference library Signatures were not computed against ref_seq (i.e., a different reference frame)
 
     Parameters:
-    spacer (str): spacer sequence (5' to 3', excluding PAM)
-    ref_seq (str): reference sequence
-    cut_offset (int, optional): # of nucleotides between the cut site & the PAM-proximal end of the spacer (Default: 3 => SpCas9)
+    fastq_df_ref (dataframe): fastq reference library dataframe (pegRNA rows only)
+    id_col (str): id column name in the annotated reference library
+    signature_ref_col (str): Signature reference sequence column name written by edms.bio.pe.pegRNA_signature()
+    ref_seq (str): reference sequence for the read alignments
     '''
-    spacer = str(spacer).upper()
-    ref_seq = ref_seq.upper()
-    spacer_rc = str(Seq(spacer).reverse_complement())
+    for id, signature_ref in t.zip_cols(df=fastq_df_ref, cols=[id_col, signature_ref_col]):
+        if not isinstance(signature_ref, str) or signature_ref.upper() == ref_seq.upper():
+            continue
+        
+        # Describe the frame shift if one sequence contains the other (e.g., different flank lengths)
+        if signature_ref.upper() in ref_seq.upper():
+            hint = f"{signature_ref_col} = ref_seq[{ref_seq.upper().find(signature_ref.upper())}:{ref_seq.upper().find(signature_ref.upper())+len(signature_ref)}]"
+        elif ref_seq.upper() in signature_ref.upper():
+            hint = f"ref_seq = {signature_ref_col}[{signature_ref.upper().find(ref_seq.upper())}:{signature_ref.upper().find(ref_seq.upper())+len(ref_seq)}]"
+        else:
+            hint = "the sequences do not contain one another"
+        raise ValueError(f"{id} Signature was computed against a different reference sequence than ref_seq ({hint}).\n"
+                         f"{signature_ref_col} ({len(signature_ref)} nt): {signature_ref}\nref_seq ({len(ref_seq)} nt): {ref_seq}\n"
+                         f"Use the same sequence (e.g., matching flank5_length/flank3_length in edms.bio.pe.pegRNA_signature()) so Signature positions share a reference frame.")
 
-    cut_sites = [m.start()+len(spacer)-cut_offset for m in re.finditer(f'(?={spacer})', ref_seq)] # + strand: PAM is 3' of spacer
-    cut_sites.extend([m.start()+cut_offset for m in re.finditer(f'(?={spacer_rc})', ref_seq)]) # - strand: PAM is 5' of spacer (reverse complement)
-    return sorted(set(cut_sites))
+def _nick_index_value(nick) -> int | None:
+    '''
+    _nick_index_value(): Convert a stored nick index into an int (or None if missing)
+
+    Parameters:
+    nick (int | float | str): nick index from the annotated reference library
+    '''
+    try:
+        nick = float(nick)
+    except (TypeError, ValueError):
+        return None
+    return None if np.isnan(nick) else int(nick)
 
 def _signature_event_boundaries(event: SNV | Indel, ref_seq: str) -> tuple[int, int]:
     '''
@@ -1861,10 +1883,18 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                                or are directly adjacent to the cut site of a pegRNA used for the fastq file are labeled 
                                '{edit} indels' or '{edit} non-indels' (substitutions only) instead of 'Not WT'.
     meta (DataFrame | str, optional): meta dataframe (or file path) must have 'fastq_file' column (Default: None)
-    spacer_col (str, optional): spacer column name in the annotated reference library used to find pegRNA cut sites with fastq_col (Default: 'Spacer_sequence')
-    ngRNA_spacer_col (str, optional): ngRNA spacer column name in the annotated reference library (same row as the pegRNA spacer) used to also 
-                                      find ngRNA nick sites with fastq_col; labeled '{edit} ngRNA indels' or '{edit} ngRNA non-indels'
-                                      (pegRNA cut site outcomes take priority) (Default: None => pegRNA cut sites only)
+
+    Note: if the annotated reference library has '{signature_col}_ref' (from edms.bio.pe.pegRNA_signature()), it must equal ref_seq so that
+          the library & read Signatures share a reference frame; '{signature_col}_nick_index' & '{signature_col}_ngRNA_nick_index'
+          (same frame) are then used for the cut sites instead of searching spacers in ref_seq, which also covers spacers that extend
+          past ref_seq & PE3b ngRNAs (whose spacers match the edit sequence).
+    spacer_col (str, optional): spacer column name in the annotated reference library used to find pegRNA cut sites with fastq_col if
+                                '{signature_col}_nick_index' (from edms.bio.pe.pegRNA_signature()) is missing (Default: 'Spacer_sequence')
+    ngRNA_spacer_col (str, optional): ngRNA spacer column name in the annotated reference library (same row as the pegRNA spacer; probably
+                                      'ngRNA_Spacer_sequence') used to also find ngRNA nick sites with fastq_col if '{signature_col}_ngRNA_nick_index' 
+                                      (from edms.bio.pe.pegRNA_signature()) is missing; labeled '{edit} ngRNA indels' or '{edit} ngRNA non-indels'
+                                      (pegRNA cut site outcomes take priority) (Default: None => pegRNA cut sites only, unless 
+                                      '{signature_col}_ngRNA_nick_index' is present)
     cut_window (int, optional): # of additional nucleotides from the cut site to search for indels/substitutions with fastq_col (Default: 0 => overlap or directly adjacent)
     match_score (float, optional): match score for pairwise alignment (Default: 2)
     mismatch_score (float, optional): mismatch score for pairwise alignment (Default: -1)
@@ -1907,13 +1937,21 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
         if fastq_col not in df_ref.columns.tolist():
             raise Exception(f'Missing fastq column: {fastq_col}')
     
-    # Check dataframe for spacer column to find cut site outcomes (if needed)
+    # Check dataframe for Signature reference frame & nick columns (from edms.bio.pe.pegRNA_signature()) or spacer columns to find cut site outcomes (if needed)
+    signature_ref_col = f'{signature_col}_ref'
+    nick_col = f'{signature_col}_nick_index'
+    ngRNA_nick_col = f'{signature_col}_ngRNA_nick_index'
+    if signature_ref_col not in df_ref.columns.tolist():
+        print(f"Warning: Did not check that the reference library Signatures share ref_seq's reference frame.\n"
+              f"Missing column: {signature_ref_col} (rerun edms.bio.pe.pegRNA_signature() to add it)")
+    
     cut_site_search = fastq_col is not None
-    if cut_site_search and spacer_col not in df_ref.columns.tolist():
-        print(f"Warning: Did not search for cut site outcomes.\nMissing spacer column: {spacer_col}")
+    if cut_site_search and nick_col not in df_ref.columns.tolist() and spacer_col not in df_ref.columns.tolist():
+        print(f"Warning: Did not search for cut site outcomes.\nMissing nick column ({nick_col}) & spacer column ({spacer_col})")
         cut_site_search = False
-    if cut_site_search and ngRNA_spacer_col is not None and ngRNA_spacer_col not in df_ref.columns.tolist():
+    if cut_site_search and ngRNA_nick_col not in df_ref.columns.tolist() and ngRNA_spacer_col is not None and ngRNA_spacer_col not in df_ref.columns.tolist():
         raise Exception(f'Missing ngRNA spacer column: {ngRNA_spacer_col}')
+    ngRNA_search = cut_site_search and (ngRNA_nick_col in df_ref.columns.tolist() or ngRNA_spacer_col is not None)
 
     # Get ref_seq from config_key, in_file, or sequence
     if sequence is None: 
@@ -2020,7 +2058,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                     elif df_motif5 is not None and df_motif3 is None: # df_motif5 is provided
                         start_i = fastq_motif5.iloc[i]["end_i"] # Obtain motif5 boundary that define region
 
-                        if start_i==-1: # motif5 is present
+                        if start_i!=-1: # motif5 is present
                             regions += 1
                             seqs.append(str(record.seq[start_i:])) 
                             quals.append(record.letter_annotations["phred_quality"][start_i:])
@@ -2033,12 +2071,12 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                     elif df_motif5 is None and df_motif3 is not None: # df_motif3 is provided
                         end_i = fastq_motif3.iloc[i]["start_i"] # Obtain motif3 boundary that define region
 
-                        if end_i==-1: # motif3 is present
+                        if end_i!=-1: # motif3 is present
                             regions += 1
                             seqs.append(str(record.seq[:end_i])) 
                             quals.append(record.letter_annotations["phred_quality"][:end_i])
 
-                        else: # 5' motif is missing
+                        else: # 3' motif is missing
                             missing3 += 1 
                             seqs.append(None)
                             quals.append(None)
@@ -2112,7 +2150,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                     elif df_motif5 is not None and df_motif3 is None: # df_motif5 is provided
                         start_i = fastq_motif5.iloc[i]["end_i"] # Obtain motif5 boundary that define region
 
-                        if start_i==-1: # motif5 is present
+                        if start_i!=-1: # motif5 is present
                             regions += 1
                             seqs.append(str(record.seq[start_i:])) 
                             quals.append(record.letter_annotations["phred_quality"][start_i:])
@@ -2125,12 +2163,12 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
                     elif df_motif5 is None and df_motif3 is not None: # df_motif3 is provided
                         end_i = fastq_motif3.iloc[i]["start_i"] # Obtain motif3 boundary that define region
 
-                        if end_i==-1: # motif3 is present
+                        if end_i!=-1: # motif3 is present
                             regions += 1
                             seqs.append(str(record.seq[:end_i])) 
                             quals.append(record.letter_annotations["phred_quality"][:end_i])
                             
-                        else: # 5' motif is missing
+                        else: # 3' motif is missing
                             missing3 += 1 
                             seqs.append(None)
                             quals.append(None)
@@ -2209,25 +2247,41 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
         Not_WT_WT_df[id_col] = ['Not WT', 'WT']
         Not_WT_WT_df[edit_col] = ['Not WT', 'WT']
 
+        # Check that the reference library Signatures share ref_seq's reference frame
+        if signature_ref_col in fastq_df_ref.columns.tolist():
+            _check_signature_frame(fastq_df_ref=fastq_df_ref, id_col=id_col, signature_ref_col=signature_ref_col, ref_seq=ref_seq)
+
         # Find pegRNA cut sites (& ngRNA nick sites) & create cut site outcome rows ('{edit} (ngRNA) indels' & '{edit} (ngRNA) non-indels'), which are added after the alignments
+        # Nick indexes from edms.bio.pe.pegRNA_signature() are used if available (Signature reference frame); otherwise, spacers are searched in ref_seq
         cut_sites = []
         cut_site_outcomes = {}
         if cut_site_search and len(fastq_df_ref)>0:
-            spacer_cols = [('spacer', spacer_col, '')]
-            if ngRNA_spacer_col is not None:
-                spacer_cols.append(('ngRNA spacer', ngRNA_spacer_col, 'ngRNA '))
-            for spacer_type, col, prefix in spacer_cols: # pegRNA cut sites (& ngRNA nick sites)
-                for id, edit, id_signature, spacer in t.zip_cols(df=fastq_df_ref, cols=[id_col, edit_col, signature_col, col]):
-                    if not isinstance(spacer, str) or len(spacer)==0: # No spacer for this row (e.g., pegRNA without ngRNA)
-                        continue
-                    id_cut_sites = _cut_site_indexes(spacer=spacer, ref_seq=ref_seq)
-                    if len(id_cut_sites)==0:
-                        print(f"Warning: {id} {spacer_type} ({spacer}) was not found in ref_seq; did not search for its cut site outcomes.")
-                    cut_sites.extend([(id, edit, id_signature, cut_site, prefix) for cut_site in id_cut_sites])
+            nick_sources = [('pegRNA', nick_col, spacer_col, '')]
+            if ngRNA_search:
+                nick_sources.append(('ngRNA', ngRNA_nick_col, ngRNA_spacer_col, 'ngRNA '))
+            for gRNA, nick_source_col, spacer_source_col, prefix in nick_sources: # pegRNA cut sites (& ngRNA nick sites)
+                if nick_source_col in fastq_df_ref.columns.tolist(): # Nick indexes from edms.bio.pe.pegRNA_signature()
+                    for id, edit, id_signature, nick in t.zip_cols(df=fastq_df_ref, cols=[id_col, edit_col, signature_col, nick_source_col]):
+                        nick = _nick_index_value(nick)
+                        if nick is None:
+                            if gRNA=='pegRNA':
+                                print(f"Warning: {id} is missing its {nick_source_col}; did not search for its cut site outcomes.")
+                            continue # No nick for this row (e.g., pegRNA without ngRNA)
+                        cut_sites.append((id, edit, id_signature, nick, prefix))
+                
+                else: # Search spacers in ref_seq
+                    for id, edit, id_signature, spacer in t.zip_cols(df=fastq_df_ref, cols=[id_col, edit_col, signature_col, spacer_source_col]):
+                        if not isinstance(spacer, str) or len(spacer)==0: # No spacer for this row (e.g., pegRNA without ngRNA)
+                            continue
+                        id_cut_sites = cut_site_indexes(spacer=spacer, seq=ref_seq)
+                        if len(id_cut_sites)==0:
+                            print(f"Warning: {id} {gRNA} spacer ({spacer}) was not found in ref_seq; did not search for its cut site outcomes.")
+                        cut_sites.extend([(id, edit, id_signature, cut_site, prefix) for cut_site in id_cut_sites])
+            
             cut_site_df, cut_site_outcomes = _cut_site_rows(fastq_df_ref=fastq_df_ref, id_col=id_col, edit_col=edit_col, 
-                                                            previous_cols=previous_cols, ngRNA=ngRNA_spacer_col is not None)
+                                                            previous_cols=previous_cols, ngRNA=ngRNA_search)
             print(f"pegRNA cut sites: {sorted(set([cut_site for _,_,_,cut_site,prefix in cut_sites if prefix=='']))}")
-            if ngRNA_spacer_col is not None:
+            if ngRNA_search:
                 print(f"ngRNA nick sites: {sorted(set([cut_site for _,_,_,cut_site,prefix in cut_sites if prefix=='ngRNA ']))}")
         
         fastq_df_ref = pd.concat([fastq_df_ref, Not_WT_WT_df], ignore_index=True)

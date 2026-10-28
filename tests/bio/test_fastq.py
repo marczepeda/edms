@@ -659,3 +659,84 @@ def test_trim_motifs_requires_motif_source(tmp_path):
     fastq_dir.mkdir()
     with pytest.raises(ValueError, match="in_file"):
         fastq.trim_motifs(fastq_dir=str(fastq_dir), out_dir=str(tmp_path / "out"))
+
+
+# =========================================================================== #
+# count_signatures(): single motif regions, Signature reference frame & cut site outcomes
+# =========================================================================== #
+CS_FLANK5 = "GGCCAATT"
+CS_FLANK3 = "AATTGGCC"
+CS_REGION = "TTGACCTAGGATCCAGTTACGGATCAAGCTTGCATGCCTGCAGGTCGACTCTAGAGGATCCCTAGCTAC"
+CS_REF = CS_FLANK5 + CS_REGION + CS_FLANK3
+
+
+def _cs_library(**kw):
+    from edms.bio import pe
+    edit = CS_REF[:30] + "C" + CS_REF[31:]                       # intended A>C SNV at region index 22
+    row = {"ID": "p1", "Edit": "E1", "fastq": "s1.fastq", "Reference_sequence": CS_REF, "Edit_sequence": edit,
+           "Spacer_sequence": CS_REF[0:20],                       # spans flank5 => not in CS_REGION; nick at region 9
+           "ngRNA_Spacer_sequence": str(Seq(CS_REF[50:70]).reverse_complement())}   # nick at region 45
+    row.update(kw)
+    lib = pe.pegRNA_signature(pd.DataFrame([row]), flank5_sequence=CS_FLANK5, flank3_sequence=CS_FLANK3,
+                              ngRNA_spacer_sequence='ngRNA_Spacer_sequence')
+    return lib                                                    # Signature objects (not strings) straight from pegRNA_signature()
+
+
+def _cs_write_fastq(path, reads):
+    with open(path, "w") as f:
+        for name, seq in reads.items():
+            f.write(f"@{name}\n{seq}\n+\n{'I' * len(seq)}\n")
+
+
+def _cs_run(tmp_path, df_ref, reads, **kw):
+    fq_dir = tmp_path / "fq"
+    fq_dir.mkdir(exist_ok=True)
+    _cs_write_fastq(fq_dir / "s1.fastq", reads)
+    out_dir = tmp_path / "out"
+    fastq.count_signatures(df_ref=df_ref, signature_col='Signature', id_col='ID', edit_col='Edit',
+                           fastq_dir=str(fq_dir), out_dir=str(out_dir), out_file='c.csv', **kw)
+    return pd.read_csv(out_dir / "Signature" / "s1.csv")
+
+
+def test_count_signatures_motif5_only_keeps_reads_with_the_motif(tmp_path):
+    lib = _cs_library()
+    reads = {"with_motif": CS_FLANK5 + CS_REGION, "without_motif": "N" * 8 + CS_REGION}
+    df_motif5 = pd.DataFrame({"fastq_file": ["s1.fastq"] * 2, "end_i": [len(CS_FLANK5), -1]})
+    out = _cs_run(tmp_path, lib, reads, sequence=CS_REGION, df_motif5=df_motif5)
+    assert out["ID"].tolist()[0] == "WT"
+    assert pd.isna(out["ID"].tolist()[1])
+
+
+def test_count_signatures_motif3_only_keeps_reads_with_the_motif(tmp_path):
+    lib = _cs_library()
+    reads = {"with_motif": CS_REGION + CS_FLANK3, "without_motif": CS_REGION + "N" * 8}
+    df_motif3 = pd.DataFrame({"fastq_file": ["s1.fastq"] * 2, "start_i": [len(CS_REGION), -1]})
+    out = _cs_run(tmp_path, lib, reads, sequence=CS_REGION, df_motif3=df_motif3)
+    assert out["ID"].tolist()[0] == "WT"
+    assert pd.isna(out["ID"].tolist()[1])
+
+
+def test_count_signatures_raises_on_a_different_reference_frame(tmp_path):
+    lib = _cs_library()
+    with pytest.raises(ValueError, match=r"Signature_ref = ref_seq\[3:"):
+        _cs_run(tmp_path, lib, {"wt": CS_FLANK5[-3:] + CS_REGION}, sequence=CS_FLANK5[-3:] + CS_REGION)
+
+
+def test_count_signatures_uses_stored_nick_indexes(tmp_path):
+    lib = _cs_library()
+    reads = {"wt": CS_REGION,
+             "intended": CS_REGION[:22] + "C" + CS_REGION[23:],
+             "del_peg_nick": CS_REGION[:7] + CS_REGION[11:],              # spacer is not in ref_seq; stored nick (9) is used
+             "del_ng_nick": CS_REGION[:43] + CS_REGION[47:],              # ngRNA labels from the stored ngRNA nick (45)
+             "far_snv": CS_REGION[:60] + ("A" if CS_REGION[60] != "A" else "C") + CS_REGION[61:]}
+    out = _cs_run(tmp_path, lib, reads, sequence=CS_REGION, fastq_col='fastq')
+    assert out["ID"].tolist() == ["WT", "p1", "p1 indels", "p1 ngRNA indels", "Not WT"]
+
+
+def test_count_signatures_falls_back_to_spacer_search_without_nick_columns(tmp_path):
+    lib = _cs_library(Spacer_sequence=CS_REF[12:32])              # nick at region 21
+    lib = lib.drop(columns=['Signature_nick_index', 'Signature_ngRNA_nick_index'])
+    reads = {"del_peg_nick": CS_REGION[:19] + CS_REGION[23:], "del_ng_nick": CS_REGION[:43] + CS_REGION[47:]}
+    lib['Signature'] = lib['Signature'].astype(str)               # string Signatures, as loaded from a saved library
+    out = _cs_run(tmp_path, lib, reads, sequence=CS_REGION, fastq_col='fastq')
+    assert out["ID"].tolist() == ["p1 indels", "Not WT"]          # ngRNA search is off without ngRNA_spacer_col

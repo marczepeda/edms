@@ -23,6 +23,10 @@ Usage:
 - expand_signature_units(): Decompose a Signature into per-nucleotide 'units' so equality/containment is unambiguous.
 - compare_signature_with_n_extra_nt_or_less(): Determine if 'query' == 'reference' plus n nucleotide differences or less.
 - is_reference_match_with_n_extra_nt_or_less(): Convenience boolean-only checker
+
+[Cut Site Functions]
+- cut_site_indexes(): Return cut site (nick) indexes for a spacer in a sequence (cut is between seq[i-1] & seq[i])
+- query_to_ref_boundary(): Map an inter-nucleotide boundary in the query sequence to the reference sequence through an alignment
 '''
 
 # Import packages
@@ -63,13 +67,16 @@ class SignatureParseError(ValueError):
 # Datastructure for expanded units
 Unit = Tuple[Any, ...] # tuple types: see expand_signature_units()
 
-def parse_signature_literal(text: str) -> Signature:
+def parse_signature_literal(text: str | Signature) -> Signature:
     """
     parse_signature_literal(): Convert string into a Signature object, if applicable
 
     Parameters:
-    text (str): text that might represent a Signature object
+    text (str | Signature): text that might represent a Signature object; non-strings (e.g., Signature objects) are returned unchanged
     """
+    if not isinstance(text, str): # Already a Signature object (or missing value) => leave unchanged
+        return text
+    
     try:
         node = ast.parse(text, mode="eval").body
     except SyntaxError as e:
@@ -401,3 +408,41 @@ def is_reference_match_with_n_extra_nt_or_less(query: Signature | Counter[List[U
     n_extra_nt (int, optional): number of extra nucleotide differences allowed (Default: 1)
     """
     return compare_signature_with_n_extra_nt_or_less(query, reference, n_extra_nt=n_extra_nt)[f"is_match_with_{n_extra_nt}_extra_nt_or_less"]
+
+# Cut Site Functions
+_COMPLEMENT = str.maketrans('ACGTN', 'TGCAN')
+
+def cut_site_indexes(spacer: str, seq: str, cut_offset: int=3) -> List[int]:
+    '''
+    cut_site_indexes(): Return cut site (nick) indexes for a spacer in a sequence (cut is between seq[i-1] & seq[i])
+
+    Parameters:
+    spacer (str): spacer sequence (5' to 3', excluding PAM)
+    seq (str): sequence to search (both strands)
+    cut_offset (int, optional): # of nucleotides between the cut site & the PAM-proximal end of the spacer (Default: 3 => SpCas9)
+    '''
+    spacer = str(spacer).upper()
+    seq = str(seq).upper()
+    spacer_rc = spacer.translate(_COMPLEMENT)[::-1]
+
+    cut_sites = [i+len(spacer)-cut_offset for i in range(len(seq)-len(spacer)+1) if seq.startswith(spacer, i)] # + strand: PAM is 3' of spacer
+    cut_sites.extend([i+cut_offset for i in range(len(seq)-len(spacer)+1) if seq.startswith(spacer_rc, i)]) # - strand: PAM is 5' of spacer (reverse complement)
+    return sorted(set(cut_sites))
+
+def query_to_ref_boundary(alignment, boundary: int) -> int:
+    '''
+    query_to_ref_boundary(): Map an inter-nucleotide boundary in the query sequence to the reference sequence through an alignment.
+                             A boundary inside an insertion maps to the reference boundary where the insertion is placed.
+
+    Parameters:
+    alignment: PairwiseAligner Alignment (reference = target, query = query)
+    boundary (int): boundary in the query sequence (between query[boundary-1] & query[boundary])
+    '''
+    ref_blocks = alignment.aligned[0]
+    query_blocks = alignment.aligned[1]
+    for (rs, re), (qs, qe) in zip(ref_blocks, query_blocks):
+        if boundary < qs: # Boundary is before this block (inside an insertion or leading query overhang)
+            return int(rs)
+        if boundary <= qe: # Boundary is within (or at the ends of) this block
+            return int(rs + (boundary - qs))
+    return int(ref_blocks[-1][1]) if len(ref_blocks) > 0 else 0 # Boundary is after the last block (trailing query overhang)
