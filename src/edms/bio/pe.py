@@ -15,6 +15,7 @@ Usage:
 - found_list_in_order(): returns index of sub_ls found consecutive order in main_ls or -1
 - find_enzyme_sites(): find enzyme sites in pegRNAs or ngRNAs
 - enzyme_codon_swap(): modify pegRNA RTT sequences to disrupt a RE recognition site
+- refresh_ngRNA_spacers(): re-cut ngRNA spacers whose pegRNA allele was rewritten
 - refresh_codon_annotations(): re-read the codon annotation columns from the current Edit_sequence
 - codon_nt_difference(): number of nucleotide differences between two codons
 - sort_pegRNAs(): arrange pegRNAs so related designs sit together
@@ -209,6 +210,74 @@ def find_enzyme_sites(df: pd.DataFrame | str, enzyme: str, RE_type_IIS_df: pd.Da
     df[f'{enzyme}_fwd_i'] = df_enzyme_sites_fwd
     df[f'{enzyme}_rc_i'] = df_enzyme_sites_rc
     return df
+
+def refresh_ngRNA_spacers(ngRNAs: pd.DataFrame, alleles_before: dict, alleles_after: dict,
+                          seed_length: int = 10, comments: bool = False) -> pd.DataFrame:
+    ''' 
+    refresh_ngRNA_spacers(): re-cut ngRNA spacers whose pegRNA allele was rewritten
+
+    Parameters:
+    ngRNAs (pd.DataFrame): ngRNAs DataFrame
+    alleles_before (dict): pegRNA_number -> edit sequence as the ngRNAs were designed against
+    alleles_after (dict): pegRNA_number -> edit sequence after the rewrite
+    seed_length (int, optional): PAM-proximal nucleotides treated as the seed (Default: 10)
+    comments (bool, optional): print comments (Default: False)
+
+    PE3b spacers are cut from the edited allele, so a pegRNA rewritten by enzyme_codon_swap()
+    leaves any ngRNA overlapping the swapped codon holding a spacer that no longer occurs in
+    the allele it is paired with. The swap only substitutes bases, so each affected spacer is
+    located in the old allele and re-cut at the same coordinates from the new one, and its
+    PE3b annotation is recomputed from where the edited bases now fall.
+
+    Dependencies: pandas, Bio.Seq
+    '''
+    if len(ngRNAs) == 0 or 'pegRNA_number' not in ngRNAs.columns:
+        return ngRNAs
+
+    spacers = list(ngRNAs['Spacer_sequence'])
+    annotations = list(ngRNAs['Annotation']) if 'Annotation' in ngRNAs.columns else None
+    strands = list(ngRNAs['Strand']) if 'Strand' in ngRNAs.columns else [None] * len(ngRNAs)
+    refreshed = 0
+
+    for row, (number, spacer, strand) in enumerate(zip(ngRNAs['pegRNA_number'], spacers, strands)):
+        before, after = alleles_before.get(number), alleles_after.get(number)
+        if before is None or after is None or before == after or len(before) != len(after):
+            continue
+
+        # the stored (-) strand spacer is the reverse complement of the allele slice
+        plus = str(spacer).upper()
+        reverse = plus not in str(before).upper()
+        if reverse:
+            plus = str(Seq(str(spacer)).reverse_complement()).upper()
+        start = str(before).upper().find(plus)
+        if start == -1 or str(before).upper().count(plus) != 1:
+            continue  # cannot place it unambiguously, so leave it alone
+
+        slice_after = str(after)[start:start + len(plus)]
+        new_spacer = str(Seq(slice_after).reverse_complement()) if reverse else slice_after
+        if str(new_spacer).upper() == str(spacer).upper():
+            continue
+
+        spacers[row] = new_spacer
+        refreshed += 1
+
+        if annotations is not None:
+            # lowercase marks the edited bases; the seed is the PAM-proximal end
+            edited = [i for i, base in enumerate(new_spacer) if base.islower()]
+            if not edited:
+                annotations[row] = 'PE3'
+            elif any((i < seed_length) if strand == '-' else (i >= len(new_spacer) - seed_length) for i in edited):
+                annotations[row] = 'PE3b-seed'
+            else:
+                annotations[row] = 'PE3b-nonseed'
+
+    ngRNAs = ngRNAs.copy()
+    ngRNAs['Spacer_sequence'] = spacers
+    if annotations is not None:
+        ngRNAs['Annotation'] = annotations
+    if comments and refreshed:
+        print(f"Re-cut {refreshed} ngRNA spacer(s) against the rewritten pegRNA alleles")
+    return ngRNAs
 
 def refresh_codon_annotations(pegRNAs: pd.DataFrame, comments: bool = False) -> pd.DataFrame:
     ''' 
@@ -946,7 +1015,14 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
                         file=os.path.join(f'{pegRNAs_dir}/{enzyme}/codon_swap_before', f'{int(pegRNAs_enzyme.iloc[0]['PBS_length'])}.csv'))
                 
                 # Codon swap pegRNAs with enzyme recognition site
+                alleles_before = dict(zip(pegRNAs_enzyme['pegRNA_number'], pegRNAs_enzyme['Edit_sequence']))
                 pegRNAs_enzyme = enzyme_codon_swap(pegRNAs=pegRNAs_enzyme,enzyme=enzyme,comments=True)
+
+                # The swap rewrote the allele after primedesign cut the PE3b spacers from it
+                ngRNAs = refresh_ngRNA_spacers(ngRNAs=ngRNAs, alleles_before=alleles_before,
+                                               alleles_after=dict(zip(pegRNAs_enzyme['pegRNA_number'],
+                                                                      pegRNAs_enzyme['Edit_sequence'])),
+                                               comments=True)
                 io.save(obj=pegRNAs_enzyme,
                         file=os.path.join(f'{pegRNAs_dir}/{enzyme}/codon_swap_after', f'{int(pegRNAs_enzyme.iloc[0]['PBS_length'])}.csv'))
 
