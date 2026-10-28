@@ -28,6 +28,7 @@ Usage:
 - prime_design_output(): splits peg/ngRNAs from PrimeDesign output & finishes annotations
 - prime_designer(): execute PrimeDesign for EDMS workflow
 - merge(): rejoins epeg/ngRNAs & creates ngRNA_groups
+- merge_pegRNAs_ngRNAs(): join each pegRNA to its ngRNAs, one row per pair
 
 [pegRNA]
 - epegRNA_linkers(): generate epegRNA linkers between PBS and 3' hairpin motif & finish annotations
@@ -235,6 +236,7 @@ def refresh_ngRNA_spacers(ngRNAs: pd.DataFrame, alleles_before: dict, alleles_af
         return ngRNAs
 
     spacers = list(ngRNAs['Spacer_sequence'])
+    alleles = list(ngRNAs['Edit_sequence']) if 'Edit_sequence' in ngRNAs.columns else None
     annotations = list(ngRNAs['Annotation']) if 'Annotation' in ngRNAs.columns else None
     strands = list(ngRNAs['Strand']) if 'Strand' in ngRNAs.columns else [None] * len(ngRNAs)
     refreshed = 0
@@ -256,9 +258,13 @@ def refresh_ngRNA_spacers(ngRNAs: pd.DataFrame, alleles_before: dict, alleles_af
         slice_after = str(after)[start:start + len(plus)]
         new_spacer = str(Seq(slice_after).reverse_complement()) if reverse else slice_after
         if str(new_spacer).upper() == str(spacer).upper():
+            if alleles is not None:
+                alleles[row] = after   # the allele moved even though this spacer did not
             continue
 
         spacers[row] = new_spacer
+        if alleles is not None:
+            alleles[row] = after
         refreshed += 1
 
         if annotations is not None:
@@ -273,6 +279,8 @@ def refresh_ngRNA_spacers(ngRNAs: pd.DataFrame, alleles_before: dict, alleles_af
 
     ngRNAs = ngRNAs.copy()
     ngRNAs['Spacer_sequence'] = spacers
+    if alleles is not None:
+        ngRNAs['Edit_sequence'] = alleles
     if annotations is not None:
         ngRNAs['Annotation'] = annotations
     if comments and refreshed:
@@ -936,6 +944,7 @@ def prime_design_output(pt: str, scaffold_sequence: str, in_file: pd.DataFrame |
                         str(int(target_name.split('_')[-2]) + index-1) + # AA Index
                         str(target_name.split('_')[-1].split('to')[1]) # AA After
                         for target_name in ngRNAs['Target_name']]
+        ngRNAs['Edit'] = ngRNAs['Edit'].replace('X', '*', regex=True) # Match the pegRNA stop codon spelling
         ngRNAs['Target_name']=[target_name_in_file]*len(ngRNAs)
         ngRNAs['Scaffold_sequence']=[scaffold_sequence]*len(ngRNAs)
         ngRNAs['ngRNA_number']=list(np.arange(1,len(ngRNAs)+1))
@@ -1098,7 +1107,8 @@ def prime_designer(in_file: str = None, target_name: str = None, flank5_sequence
                 number_of_pegrnas: int = 0, number_of_silent_mutations: int = 0, number_of_ngrnas: int = 1, nicking_distance_pooled: int = 75, homology_downstream: int = 15,
                 pbs_length_pooled_list: list = [11,13,15], rtt_max_length_pooled: int = 50,
                 scaffold_sequence: str='GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC', 
-                enzymes: list[str]=['Esp3I'], replace: bool=True, out_dir: str = './PrimeDesign/DATETIMESTAMP_PrimeDesign', pegRNAs_dir: str = './pegRNAs', ngRNAs_dir: str = './ngRNAs'):
+                enzymes: list[str]=['Esp3I'], replace: bool=True, out_dir: str = './PrimeDesign/DATETIMESTAMP_PrimeDesign', pegRNAs_dir: str = './pegRNAs', ngRNAs_dir: str = './ngRNAs',
+                pegRNAs_w_ngRNAs_dir: str = './pegRNAs_w_ngRNAs'):
     '''
     prime_designer(): execute PrimeDesign saturation mutagenesis (EDMS version)
     
@@ -1133,6 +1143,7 @@ def prime_designer(in_file: str = None, target_name: str = None, flank5_sequence
     out_dir (str, optional): name of output directory (Default: ./PrimeDesign/DATETIMESTAMP_PrimeDesign)
     pegRNAs_dir (str, optional): directory to save pegRNAs with RE sites before and after codon swap (Default: ./pegRNAs)
     ngRNAs_dir (str, optional): directory to save ngRNAs with RE sites before removal (Default: ./ngRNAs)
+    pegRNAs_w_ngRNAs_dir (str, optional): where to save each pegRNA joined to its ngRNAs, one row per pair. A single file for a regular design, or a directory of per-PBS-length files under saturation mutagenesis or genome-wide design. (Default: ./pegRNAs_w_ngRNAs)
 
     *** Example saturation_mutagenesis.TXT file *** ---------------------------------------
     |											|
@@ -1253,6 +1264,97 @@ def prime_designer(in_file: str = None, target_name: str = None, flank5_sequence
     # Save pegRNAs and ngRNAs
     io.save_dir(dir=pegRNAs_dir, suf='.csv', dc=pegRNAs)
     io.save_dir(dir=ngRNAs_dir, suf='.csv', dc=ngRNAs)
+
+    # Save each pegRNA joined to its ngRNAs as well, so one row is a complete design
+    if pegRNAs_w_ngRNAs_dir is not None:
+        if (saturation_mutagenesis is None) and (genome_wide_design == False):
+            # one design, keyed 'pegRNAs' and 'ngRNAs' rather than by PBS length, so one file
+            file = pegRNAs_w_ngRNAs_dir if pegRNAs_w_ngRNAs_dir.endswith('.csv') else f'{pegRNAs_w_ngRNAs_dir}.csv'
+            io.save(obj=merge_pegRNAs_ngRNAs(pegRNAs=pegRNAs['pegRNAs'], ngRNAs=ngRNAs['ngRNAs']), file=file)
+        else:
+            # saturation and genome-wide range over PBS lengths, so keep those separate
+            io.save_dir(dir=pegRNAs_w_ngRNAs_dir, suf='.csv',
+                        dc={key: merge_pegRNAs_ngRNAs(pegRNAs=pegRNAs[key], ngRNAs=ngRNAs[key])
+                            for key in pegRNAs if key in ngRNAs})
+
+def merge_pegRNAs_ngRNAs(pegRNAs: pd.DataFrame | str, ngRNAs: pd.DataFrame | str,
+                         ngRNA_prefix: str = 'ngRNA_', file: str = None,
+                         literal_eval: bool = False, comments: bool = False) -> pd.DataFrame:
+    ''' 
+    merge_pegRNAs_ngRNAs(): join each pegRNA to its ngRNAs, one row per pair
+
+    Parameters:
+    pegRNAs (pd.DataFrame | str): pegRNAs DataFrame or file path
+    ngRNAs (pd.DataFrame | str): ngRNAs DataFrame or file path
+    ngRNA_prefix (str, optional): prefix for ngRNA columns that clash with a pegRNA column (Default: 'ngRNA_')
+    file (str, optional): output file path
+    literal_eval (bool, optional): convert string representations (Default: False)
+    comments (bool, optional): print comments (Default: False)
+
+    A pegRNA with several ngRNAs is repeated, one row per pegRNA/ngRNA pair, so every row is
+    a complete design. Unlike merge(), no ngRNA_group is assigned.
+
+    Pairs whose ngRNA spacer does not occur in that pegRNA's allele are dropped. They arise
+    because pegRNA_number identifies a spacer rather than a row, so outside saturation
+    mutagenesis a pegRNA's several silent mutation alleles share one number and the join
+    cannot tell which ngRNA belongs to which.
+
+    Columns the ngRNA side shares with the pegRNA side are handled by what they contain:
+    a column that is empty for ngRNAs, or that carries the same value as the pegRNA column,
+    is dropped; one that genuinely differs is kept under the prefix. The join key is left
+    unprefixed.
+
+    Dependencies: pandas, io
+    '''
+    if isinstance(pegRNAs, str):
+        pegRNAs = io.get(pt=pegRNAs, literal_eval=literal_eval)
+    if isinstance(ngRNAs, str):
+        ngRNAs = io.get(pt=ngRNAs, literal_eval=literal_eval)
+    if 'pegRNA_number' not in pegRNAs.columns or 'pegRNA_number' not in ngRNAs.columns:
+        raise ValueError("Both pegRNAs and ngRNAs need a 'pegRNA_number' column to be merged.")
+
+    shared = [col for col in pegRNAs.columns if col in ngRNAs.columns and col != 'pegRNA_number']
+
+    # drop what the ngRNA side does not carry: these columns describe the pegRNA
+    empty = [col for col in shared
+             if ngRNAs[col].isna().all() or (ngRNAs[col].astype(str).str.strip() == '').all()]
+
+    # drop what it carries identically: keeping both would duplicate the same information.
+    # Compared through a merge rather than an index lookup, since pegRNA_number need not be
+    # unique once a pegRNA is repeated per silent mutation option.
+    candidates = [col for col in shared if col not in empty]
+    probe = pegRNAs[['pegRNA_number'] + candidates].merge(
+        ngRNAs[['pegRNA_number'] + candidates], on='pegRNA_number', suffixes=('__peg', '__ng'))
+    identical = [col for col in candidates
+                 if probe[f'{col}__peg'].astype(str).equals(probe[f'{col}__ng'].astype(str))]
+
+    prefixed = [col for col in shared if col not in empty and col not in identical]
+    ngRNAs = ngRNAs.drop(columns=empty + identical).rename(
+        columns={col: f'{ngRNA_prefix}{col}' for col in prefixed})
+
+    if comments:
+        print(f"ngRNA columns dropped as empty: {empty}")
+        print(f"ngRNA columns dropped as duplicated: {identical}")
+        print(f"ngRNA columns kept under '{ngRNA_prefix}': {prefixed}")
+
+    merged = pd.merge(left=pegRNAs, right=ngRNAs, on='pegRNA_number').reset_index(drop=True)
+
+    # pegRNA_number identifies a spacer, not a row, so outside saturation mutagenesis it can
+    # pair a pegRNA with an ngRNA built for one of its other alleles. A PE3b spacer only
+    # occurs in the allele it was cut from, so pairs that cannot bind are dropped.
+    spacer_col, allele_col = f'{ngRNA_prefix}Spacer_sequence', 'Edit_sequence'
+    if spacer_col in merged.columns and allele_col in merged.columns:
+        bindable = [str(spacer).upper() in str(allele).upper()
+                    or str(Seq(str(spacer)).reverse_complement()).upper() in str(allele).upper()
+                    for spacer, allele in zip(merged[spacer_col], merged[allele_col])]
+        dropped = len(bindable) - sum(bindable)
+        if dropped and comments:
+            print(f"Dropped {dropped} pegRNA/ngRNA pair(s) whose ngRNA cannot bind the pegRNA's allele")
+        merged = merged[bindable].reset_index(drop=True)
+
+    if file is not None:
+        io.save(obj=merged, file=file)
+    return merged
 
 def merge(epegRNAs: str | dict | pd.DataFrame, ngRNAs: str | dict | pd.DataFrame, ngRNAs_groups_max: int=3,
         epegRNA_suffix: str='_epegRNA', ngRNA_suffix: str='_ngRNA', file: str=None, literal_eval: bool=False) -> pd.DataFrame:
