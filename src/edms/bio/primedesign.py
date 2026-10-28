@@ -467,6 +467,56 @@ def extend_rtt_for_silent_mutations(target_design_entry, edit_sequence, pe_nick_
 		extended += 1
 	return rtt_length, []
 
+def build_ngRNA_entries(target_design_entry, ngRNA_strand, allele, pe_nick_ref_idx, silent_mutation,
+	pe_format, nicking_distance_minimum, nicking_distance_maximum, nicking_distance_pooled,
+	ranked = True):
+	"""Ranked ngRNA designs for one pegRNA allele.
+
+	PE3b ngRNAs bind the edited strand, so their spacer has to be cut from the allele the
+	pegRNA actually installs. Building them per allele stops a pegRNA carrying no silent
+	mutation from inheriting spacers computed for one that does, which would not bind.
+
+	ngRNA_strand is the strand the ngRNAs target, opposite the pegRNA's. The seed is the
+	PAM-proximal ten nucleotides, which sit at the start of a (-) strand spacer and the end
+	of a (+) strand one, and (-) strand spacers are stored reverse complemented.
+
+	ranked matches the two entry shapes already in use: pooled designs lead each entry with a
+	sort key combining the PE3b annotation and the deviation from nicking_distance_pooled, and
+	are returned in that order; regular designs carry no key and keep the search order.
+	"""
+	entries = []
+	for ngRNA in target_design_entry['ngRNA'][ngRNA_strand]:
+		(ng_nick_ref_idx, ng_edit_start_idx, ng_edit_end_idx, ng_full_search_edit,
+			ng_spacer_sequence_edit, ng_pam_edit, ng_annotate) = ngRNA
+		nick_distance = ng_nick_ref_idx - pe_nick_ref_idx
+
+		if silent_mutation and (pe_format == 'NNNNNNNNNNNNNNNNN/NNN[NGG]') and len(allele) > 0:
+			ng_spacer_sequence_edit = allele[ng_edit_start_idx:ng_edit_end_idx]
+
+			# lowercase marks the edited bases
+			mutation_indices = [i for i, base in enumerate(ng_spacer_sequence_edit) if base.islower()]
+			if mutation_indices:
+				in_seed = [i for i in mutation_indices if (i < 10 if ngRNA_strand == '-' else i >= 10)]
+				ng_annotate = 'PE3b-seed' if in_seed else 'PE3b-nonseed'
+			else:
+				ng_annotate = 'PE3'
+
+		if (abs(nick_distance) >= nicking_distance_minimum) and (abs(nick_distance) <= nicking_distance_maximum):
+			if ngRNA_strand == '-':
+				entry = [ng_nick_ref_idx, reverse_complement(ng_spacer_sequence_edit),
+					reverse_complement(ng_pam_edit), ng_annotate, '-', nick_distance]
+			else:
+				entry = [ng_nick_ref_idx, ng_spacer_sequence_edit, ng_pam_edit,
+					ng_annotate, '+', nick_distance]
+
+			if ranked:
+				ng_code = {'PE3b-seed': 0, 'PE3b-nonseed': 1}.get(ng_annotate, 2)
+				offset = abs(abs(nick_distance) - nicking_distance_pooled)
+				entry = [str(ng_code) + '0' * (3 - len(str(offset))) + str(offset)] + entry
+			entries.append(entry)
+
+	return sorted(entries) if ranked else entries
+
 def select_silent_mutations(silent_candidates, maximum = 0):
 	"""Which silent mutations a pegRNA should encode.
 
@@ -1293,6 +1343,13 @@ def main():
 							pegid = '_'.join(map(str, [str(pe_annotate_code) + '0'*(3 - len(str(abs(nick2lastedit_length)))) + str(abs(nick2lastedit_length)), pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '+']))
 					
 							# Check to see if pegRNA extension is within input sequence
+							# ngRNAs for this allele: a PE3b spacer is cut from the sequence this pegRNA
+							# installs, so it is built per silent mutation option rather than shared
+							ngRNA_entries = build_ngRNA_entries(target_design[target_name], '-',
+								silent_mutation_edit_sequence, pe_nick_ref_idx, silent_mutation, pe_format,
+								nicking_distance_minimum, nicking_distance_maximum, nicking_distance_pooled,
+								ranked = True)
+
 							if len(pegRNA_ext) == (pbs_length + rtt_length):
 
 								# Initiate entry for new pegRNA spacers that are close enough to edit window based on RTT length parameter list
@@ -1304,16 +1361,16 @@ def main():
 								# Store pegRNA design
 								if silent_mutation_edit_sequence == '':
 									if pe_pam_ref_silent_mutation == '':
-										pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
+										pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected, ngRNA_entries])
 
 									else:
-										pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref_silent_mutation, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
+										pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref_silent_mutation, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected, ngRNA_entries])
 								else:
 									if pe_pam_ref_silent_mutation == '':
-										pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length, edit_type, reference_sequence, silent_mutation_edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
+										pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length, edit_type, reference_sequence, silent_mutation_edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected, ngRNA_entries])
 
 									else:
-										pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref_silent_mutation, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length, edit_type, reference_sequence, silent_mutation_edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
+										pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref_silent_mutation, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length, edit_type, reference_sequence, silent_mutation_edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected, ngRNA_entries])
 
 							if primary_pegid is None:
 								primary_pegid = pegid
@@ -1322,37 +1379,6 @@ def main():
 						if primary_pegid is not None:
 							pegid = primary_pegid
 
-						# Create ngRNAs targeting (-) strand for (+) pegRNAs
-						if pegid in pe_design[target_name]:
-							for ng_minus in target_design[target_name]['ngRNA']['-']:
-								ng_nick_ref_idx, ng_edit_start_idx, ng_edit_end_idx, ng_full_search_edit, ng_spacer_sequence_edit, ng_pam_edit, ng_annotate = ng_minus
-								nick_distance = ng_nick_ref_idx - pe_nick_ref_idx
-
-								if silent_mutation and (pe_format == 'NNNNNNNNNNNNNNNNN/NNN[NGG]') and (len(silent_mutation_edit_sequence) > 0):
-									ng_spacer_sequence_edit = silent_mutation_edit_sequence[ng_edit_start_idx:ng_edit_end_idx]
-
-									mutation_indices = [i for i, a in enumerate(ng_spacer_sequence_edit) if a.islower()]
-									if len(mutation_indices) > 0:
-										if len([1 for x in mutation_indices if x < 10]) > 0:
-											ng_annotate = 'PE3b-seed'
-
-										else:
-											ng_annotate = 'PE3b-nonseed'
-									else:
-										ng_annotate = 'PE3'
-
-								if (abs(nick_distance) >= nicking_distance_minimum) and (abs(nick_distance) <= nicking_distance_maximum):
-
-									if ng_annotate == 'PE3b-seed':
-										ng_code = 0
-									elif ng_annotate == 'PE3b-nonseed':
-										ng_code = 1
-									else:
-										ng_code = 2
-
-									pe_design[target_name][pegid][1].append([str(ng_code) + '0'*(3 - len(str(abs(abs(nick_distance) - nicking_distance_pooled)))) + str(abs(abs(nick_distance) - nicking_distance_pooled)), ng_nick_ref_idx, reverse_complement(ng_spacer_sequence_edit), reverse_complement(ng_pam_edit), ng_annotate, '-', nick_distance])
-
-							pe_design[target_name][pegid][1] = sorted(pe_design[target_name][pegid][1])
 
 			# Design pegRNAs targeting the (-) strand
 			for peg_minus in target_design[target_name]['pegRNA']['-']:
@@ -1457,6 +1483,13 @@ def main():
 							pegid = '_'.join(map(str, [str(pe_annotate_code) + '0'*(3 - len(str(abs(nick2lastedit_length)))) + str(abs(nick2lastedit_length)), pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '-']))
 					
 							# Check to see if pegRNA extension is within input sequence
+							# ngRNAs for this allele: a PE3b spacer is cut from the sequence this pegRNA
+							# installs, so it is built per silent mutation option rather than shared
+							ngRNA_entries = build_ngRNA_entries(target_design[target_name], '+',
+								silent_mutation_edit_sequence, pe_nick_ref_idx, silent_mutation, pe_format,
+								nicking_distance_minimum, nicking_distance_maximum, nicking_distance_pooled,
+								ranked = True)
+
 							if len(pegRNA_ext) == (pbs_length + rtt_length):
 
 								# Initiate entry for new pegRNA spacers that are close enough to edit window based on RTT length parameter list
@@ -1468,17 +1501,17 @@ def main():
 								# Store pegRNA design
 								if silent_mutation_edit_sequence == '':
 									if pe_pam_ref_silent_mutation == '':
-										pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), reverse_complement(pe_pam_ref), pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
+										pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), reverse_complement(pe_pam_ref), pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected, ngRNA_entries])
 							
 									else:
-										pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), pe_pam_ref_silent_mutation, pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
+										pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), pe_pam_ref_silent_mutation, pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected, ngRNA_entries])
 						
 								else:
 									if pe_pam_ref_silent_mutation == '':
-										pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), reverse_complement(pe_pam_ref), pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length, edit_type, reference_sequence, silent_mutation_edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
+										pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), reverse_complement(pe_pam_ref), pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length, edit_type, reference_sequence, silent_mutation_edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected, ngRNA_entries])
 							
 									else:
-										pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), pe_pam_ref_silent_mutation, pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length, edit_type, reference_sequence, silent_mutation_edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
+										pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), pe_pam_ref_silent_mutation, pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length, edit_type, reference_sequence, silent_mutation_edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected, ngRNA_entries])
 
 							if primary_pegid is None:
 								primary_pegid = pegid
@@ -1487,37 +1520,6 @@ def main():
 						if primary_pegid is not None:
 							pegid = primary_pegid
 
-						# Create ngRNAs targeting (+) strand for (-) pegRNAs
-						if pegid in pe_design[target_name]:
-							for ng_plus in target_design[target_name]['ngRNA']['+']:
-								ng_nick_ref_idx, ng_edit_start_idx, ng_edit_end_idx, ng_full_search_edit, ng_spacer_sequence_edit, ng_pam_edit, ng_annotate = ng_plus
-								nick_distance = ng_nick_ref_idx - pe_nick_ref_idx
-
-								if silent_mutation and (pe_format == 'NNNNNNNNNNNNNNNNN/NNN[NGG]') and (len(silent_mutation_edit_sequence) > 0):
-									ng_spacer_sequence_edit = silent_mutation_edit_sequence[ng_edit_start_idx:ng_edit_end_idx]
-
-									mutation_indices = [i for i, a in enumerate(ng_spacer_sequence_edit) if a.islower()]
-									if len(mutation_indices) > 0:
-										if len([1 for x in mutation_indices if x >= 10]) > 0:
-											ng_annotate = 'PE3b-seed'
-
-										else:
-											ng_annotate = 'PE3b-nonseed'
-									else:
-										ng_annotate = 'PE3'
-
-								if (abs(nick_distance) >= nicking_distance_minimum) and (abs(nick_distance) <= nicking_distance_maximum):
-
-									if ng_annotate == 'PE3b-seed':
-										ng_code = 0
-									elif ng_annotate == 'PE3b-nonseed':
-										ng_code = 1
-									else:
-										ng_code = 2
-
-									pe_design[target_name][pegid][1].append([str(ng_code) + '0'*(3 - len(str(abs(abs(nick_distance) - nicking_distance_pooled)))) + str(abs(abs(nick_distance) - nicking_distance_pooled)), ng_nick_ref_idx, ng_spacer_sequence_edit, ng_pam_edit, ng_annotate, '+', nick_distance])
-
-							pe_design[target_name][pegid][1] = sorted(pe_design[target_name][pegid][1])
 
 			# Sort pegRNAs and ngRNAs and filter for top designs
 			pe_design[target_name] = dict(sorted(pe_design[target_name].items(), key=lambda v: int(v[0].split('_')[0])))
@@ -1606,6 +1608,13 @@ def main():
 										pe_nick_ref_idx, pe_nick_edit_idx, '+', pam_search,
 										cut_idx, spacer_end_idx, pam_start_idx, pam_end_idx)
 									# Check to see if pegRNA extension is within input sequence
+									# ngRNAs for this allele: a PE3b spacer is cut from the sequence this pegRNA
+									# installs, so it is built per silent mutation option rather than shared
+									ngRNA_entries = build_ngRNA_entries(target_design[target_name], '-',
+										silent_mutation_edit_sequence, pe_nick_ref_idx, silent_mutation, pe_format,
+										nicking_distance_minimum, nicking_distance_maximum, nicking_distance_pooled,
+										ranked = False)
+
 									if len(pegRNA_ext) == (pbs_length + rtt_length):
 
 										# Initiate entry for new pegRNA spacers that are close enough to edit window based on RTT length parameter list
@@ -1617,40 +1626,19 @@ def main():
 										# Store pegRNA design
 										if silent_mutation_edit_sequence == '':
 											if pe_pam_ref_silent_mutation == '':
-												pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
+												pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected, ngRNA_entries])
 
 											else:
-												pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref_silent_mutation, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
+												pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref_silent_mutation, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected, ngRNA_entries])
 										else:
 											if pe_pam_ref_silent_mutation == '':
-												pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, silent_mutation_edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
+												pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, silent_mutation_edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected, ngRNA_entries])
 
 											else:
-												pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref_silent_mutation, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, silent_mutation_edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
+												pe_design[target_name][pegid][0].append([pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref_silent_mutation, pe_annotate, '+', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, silent_mutation_edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected, ngRNA_entries])
 
 								silent_mutation_edit_sequence = primary_silent_mutation_edit_sequence
 
-					# Create ngRNAs targeting (-) strand for (+) pegRNAs
-					if pegid in pe_design[target_name]:
-						for ng_minus in target_design[target_name]['ngRNA']['-']:
-							ng_nick_ref_idx, ng_edit_start_idx, ng_edit_end_idx, ng_full_search_edit, ng_spacer_sequence_edit, ng_pam_edit, ng_annotate = ng_minus
-							nick_distance = ng_nick_ref_idx - pe_nick_ref_idx
-
-							if silent_mutation and (pe_format == 'NNNNNNNNNNNNNNNNN/NNN[NGG]') and (len(silent_mutation_edit_sequence) > 0):
-								ng_spacer_sequence_edit = silent_mutation_edit_sequence[ng_edit_start_idx:ng_edit_end_idx]
-
-								mutation_indices = [i for i, a in enumerate(ng_spacer_sequence_edit) if a.islower()]
-								if len(mutation_indices) > 0:
-									if len([1 for x in mutation_indices if x < 10]) > 0:
-										ng_annotate = 'PE3b-seed'
-
-									else:
-										ng_annotate = 'PE3b-nonseed'
-								else:
-									ng_annotate = 'PE3'
-
-							if (abs(nick_distance) >= nicking_distance_minimum) and (abs(nick_distance) <= nicking_distance_maximum):
-								pe_design[target_name][pegid][1].append([ng_nick_ref_idx, reverse_complement(ng_spacer_sequence_edit), reverse_complement(ng_pam_edit), ng_annotate, '-', nick_distance])
 
 			# Design pegRNAs targeting the (-) strand
 			for peg_minus in target_design[target_name]['pegRNA']['-']:
@@ -1727,6 +1715,13 @@ def main():
 										pe_nick_ref_idx, pe_nick_edit_idx, '-', pam_search,
 										cut_idx, spacer_end_idx, pam_start_idx, pam_end_idx)
 									# Check to see if pegRNA extension is within input sequence
+									# ngRNAs for this allele: a PE3b spacer is cut from the sequence this pegRNA
+									# installs, so it is built per silent mutation option rather than shared
+									ngRNA_entries = build_ngRNA_entries(target_design[target_name], '+',
+										silent_mutation_edit_sequence, pe_nick_ref_idx, silent_mutation, pe_format,
+										nicking_distance_minimum, nicking_distance_maximum, nicking_distance_pooled,
+										ranked = False)
+
 									if len(pegRNA_ext) == (pbs_length + rtt_length):
 
 										# Initiate entry for new pegRNA spacers that are close enough to edit window based on RTT length parameter list
@@ -1738,41 +1733,20 @@ def main():
 										# Store pegRNA design
 										if silent_mutation_edit_sequence == '':
 											if pe_pam_ref_silent_mutation == '':
-												pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), reverse_complement(pe_pam_ref), pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
+												pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), reverse_complement(pe_pam_ref), pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected, ngRNA_entries])
 									
 											else:
-												pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), pe_pam_ref_silent_mutation, pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
+												pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), pe_pam_ref_silent_mutation, pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected, ngRNA_entries])
 								
 										else:
 											if pe_pam_ref_silent_mutation == '':
-												pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), reverse_complement(pe_pam_ref), pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, silent_mutation_edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
+												pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), reverse_complement(pe_pam_ref), pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, silent_mutation_edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected, ngRNA_entries])
 									
 											else:
-												pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), pe_pam_ref_silent_mutation, pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, silent_mutation_edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected])
+												pe_design[target_name][pegid][0].append([pe_nick_ref_idx, reverse_complement(pe_spacer_sequence), pe_pam_ref_silent_mutation, pe_annotate, '-', pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, silent_mutation_edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected, ngRNA_entries])
 
 								silent_mutation_edit_sequence = primary_silent_mutation_edit_sequence
 
-					# Create ngRNAs targeting (+) strand for (-) pegRNAs
-					if pegid in pe_design[target_name]:
-						for ng_plus in target_design[target_name]['ngRNA']['+']:
-							ng_nick_ref_idx, ng_edit_start_idx, ng_edit_end_idx, ng_full_search_edit, ng_spacer_sequence_edit, ng_pam_edit, ng_annotate = ng_plus
-							nick_distance = ng_nick_ref_idx - pe_nick_ref_idx
-
-							if silent_mutation and (pe_format == 'NNNNNNNNNNNNNNNNN/NNN[NGG]') and (len(silent_mutation_edit_sequence) > 0):
-								ng_spacer_sequence_edit = silent_mutation_edit_sequence[ng_edit_start_idx:ng_edit_end_idx]
-
-								mutation_indices = [i for i, a in enumerate(ng_spacer_sequence_edit) if a.islower()]
-								if len(mutation_indices) > 0:
-									if len([1 for x in mutation_indices if x >= 10]) > 0:
-										ng_annotate = 'PE3b-seed'
-
-									else:
-										ng_annotate = 'PE3b-nonseed'
-								else:
-									ng_annotate = 'PE3'
-
-							if (abs(nick_distance) >= nicking_distance_minimum) and (abs(nick_distance) <= nicking_distance_maximum):
-								pe_design[target_name][pegid][1].append([ng_nick_ref_idx, ng_spacer_sequence_edit, ng_pam_edit, ng_annotate, '+', nick_distance])
 
 			if counter%1000 == 0:
 				logger.info('Completed pegRNA and ngRNA search for %s out of %s sites ...' % (counter, total_regions))
@@ -1801,7 +1775,7 @@ def main():
 
 						# Write pegRNAs
 						for pegRNA_entry in pe_design[target_name][pegid][0]:
-							pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, pe_strand, pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected = pegRNA_entry
+							pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, pe_strand, pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected, ngRNA_entries = pegRNA_entry
 
 							pegRNA_ext_first_base = pegRNA_ext[0]
 							spacer_gc_content = gc_content(pe_spacer_sequence)
@@ -1879,7 +1853,7 @@ def main():
 
 							# Write ngRNAs
 							if ng_continue:
-								for ngRNA_entry in pe_design[target_name][pegid][1][:number_of_ngrnas]:
+								for ngRNA_entry in ngRNA_entries[:number_of_ngrnas]:
 									ng_code, ng_nick_ref_idx, ng_spacer_sequence_edit, ng_pam_edit, ng_annotate, ng_strand, nick_distance = ngRNA_entry
 
 									spacer_gc_content = gc_content(ng_spacer_sequence_edit)
@@ -1911,7 +1885,7 @@ def main():
 
 						# Write pegRNAs
 						for pegRNA_entry in pe_design[target_name][pegid][0]:
-							pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, pe_strand, pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected = pegRNA_entry
+							pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, pe_strand, pbs_length, rtt_length, pegRNA_ext, pegRNA_ext_max, nick2lastedit_length, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected, ngRNA_entries = pegRNA_entry
 
 							pegRNA_ext_first_base = pegRNA_ext[0]
 							spacer_gc_content = gc_content(pe_spacer_sequence)
@@ -1941,7 +1915,7 @@ def main():
 							# Sort ngRNAs
 
 							# Write ngRNAs
-							for ngRNA_entry in pe_design[target_name][pegid][1][:number_of_ngrnas]:
+							for ngRNA_entry in ngRNA_entries[:number_of_ngrnas]:
 								ng_code, ng_nick_ref_idx, ng_spacer_sequence_edit, ng_pam_edit, ng_annotate, ng_strand, nick_distance = ngRNA_entry
 
 								spacer_gc_content = gc_content(ng_spacer_sequence_edit)
@@ -1972,7 +1946,7 @@ def main():
 
 					# Write pegRNAs
 					for pegRNA_entry in pe_design[target_name][pegid][0]:
-						pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, pe_strand, pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected = pegRNA_entry
+						pe_nick_ref_idx, pe_spacer_sequence, pe_pam_ref, pe_annotate, pe_strand, pbs_length, rtt_length, pegRNA_ext, nick2lastedit_length, edit_type, reference_sequence, edit_sequence, silent_mutation_relative_to_edit, silent_mutation_selected, ngRNA_entries = pegRNA_entry
 
 						pegRNA_ext_first_base = pegRNA_ext[0]
 						spacer_gc_content = gc_content(pe_spacer_sequence)
@@ -2004,7 +1978,7 @@ def main():
 
 					# Write ngRNAs
 					if ng_continue:
-						for ngRNA_entry in pe_design[target_name][pegid][1][:number_of_ngrnas]:
+						for ngRNA_entry in ngRNA_entries[:number_of_ngrnas]:
 							ng_nick_ref_idx, ng_spacer_sequence_edit, ng_pam_edit, ng_annotate, ng_strand, nick_distance = ngRNA_entry
 
 							spacer_gc_content = gc_content(ng_spacer_sequence_edit)
