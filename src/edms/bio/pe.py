@@ -1143,7 +1143,7 @@ def prime_designer(in_file: str = None, target_name: str = None, flank5_sequence
     out_dir (str, optional): name of output directory (Default: ./PrimeDesign/DATETIMESTAMP_PrimeDesign)
     pegRNAs_dir (str, optional): directory to save pegRNAs with RE sites before and after codon swap (Default: ./pegRNAs)
     ngRNAs_dir (str, optional): directory to save ngRNAs with RE sites before removal (Default: ./ngRNAs)
-    pegRNAs_w_ngRNAs_dir (str, optional): where to save each pegRNA joined to its ngRNAs, one row per pair. A single file for a regular design, or a directory of per-PBS-length files under saturation mutagenesis or genome-wide design. (Default: ./pegRNAs_w_ngRNAs)
+    pegRNAs_w_ngRNAs_dir (str, optional): directory where each pegRNA joined to its ngRNAs is saved, one row per pair. One file per PBS length under saturation mutagenesis or genome-wide design, a single file otherwise. (Default: ./pegRNAs_w_ngRNAs)
 
     *** Example saturation_mutagenesis.TXT file *** ---------------------------------------
     |											|
@@ -1267,15 +1267,37 @@ def prime_designer(in_file: str = None, target_name: str = None, flank5_sequence
 
     # Save each pegRNA joined to its ngRNAs as well, so one row is a complete design
     if pegRNAs_w_ngRNAs_dir is not None:
-        if (saturation_mutagenesis is None) and (genome_wide_design == False):
-            # one design, keyed 'pegRNAs' and 'ngRNAs' rather than by PBS length, so one file
-            file = pegRNAs_w_ngRNAs_dir if pegRNAs_w_ngRNAs_dir.endswith('.csv') else f'{pegRNAs_w_ngRNAs_dir}.csv'
-            io.save(obj=merge_pegRNAs_ngRNAs(pegRNAs=pegRNAs['pegRNAs'], ngRNAs=ngRNAs['ngRNAs']), file=file)
-        else:
-            # saturation and genome-wide range over PBS lengths, so keep those separate
-            io.save_dir(dir=pegRNAs_w_ngRNAs_dir, suf='.csv',
-                        dc={key: merge_pegRNAs_ngRNAs(pegRNAs=pegRNAs[key], ngRNAs=ngRNAs[key])
-                            for key in pegRNAs if key in ngRNAs})
+        # a directory either way, matching pegRNAs_dir and ngRNAs_dir: one file per PBS length
+        # under saturation mutagenesis or genome-wide design, a single file otherwise. The two
+        # dictionaries are keyed by PBS length in the first case but 'pegRNAs'/'ngRNAs' in the
+        # second, so the pairs are taken by key only where the keys actually correspond.
+        pairs = pegRNAs_w_ngRNAs_pairs(pegRNAs=pegRNAs, ngRNAs=ngRNAs,
+                                       saturation_mutagenesis=saturation_mutagenesis,
+                                       genome_wide_design=genome_wide_design)
+        io.save_dir(dir=pegRNAs_w_ngRNAs_dir, suf='.csv',
+                    dc={key: merge_pegRNAs_ngRNAs(pegRNAs=peg, ngRNAs=ng)
+                        for key, (peg, ng) in pairs.items()})
+
+def pegRNAs_w_ngRNAs_pairs(pegRNAs: dict, ngRNAs: dict, saturation_mutagenesis: str = None,
+                           genome_wide_design: bool = False) -> dict:
+    '''
+    pegRNAs_w_ngRNAs_pairs(): pair each pegRNAs frame with the ngRNAs frame it belongs to
+
+    Parameters:
+    pegRNAs (dict): pegRNA dataframes from prime_designer()
+    ngRNAs (dict): ngRNA dataframes from prime_designer()
+    saturation_mutagenesis (str, optional): saturation mutagenesis mode, if any (Default: None)
+    genome_wide_design (bool, optional): genome-wide design (Default: False)
+
+    Saturation mutagenesis and genome-wide design key both dictionaries by PBS length, so the
+    keys correspond. A regular design runs once and keys them 'pegRNAs' and 'ngRNAs' instead,
+    so the keys never match and the pair has to be named here.
+
+    Dependencies: none
+    '''
+    if (saturation_mutagenesis is None) and (genome_wide_design == False):
+        return {'pegRNAs_w_ngRNAs': (pegRNAs['pegRNAs'], ngRNAs['ngRNAs'])}
+    return {key: (pegRNAs[key], ngRNAs[key]) for key in pegRNAs if key in ngRNAs}
 
 MERGE_DROP_COLUMNS = ['gRNA_type']
 

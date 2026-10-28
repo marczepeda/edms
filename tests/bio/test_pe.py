@@ -632,6 +632,32 @@ class TestRefreshCodonAnnotations:
 
 
 # --------------------------------------------------------------------------- #
+# pegRNAs_w_ngRNAs_pairs
+# --------------------------------------------------------------------------- #
+
+
+class TestPegRNAsWNgRNAsPairs:
+    def test_a_regular_design_pairs_its_two_unmatched_keys(self):
+        peg, ng = {'pegRNAs': 'P'}, {'ngRNAs': 'N'}
+        pairs = pe.pegRNAs_w_ngRNAs_pairs(peg, ng)
+        assert pairs == {'pegRNAs_w_ngRNAs': ('P', 'N')}   # not empty: the keys never match
+
+    def test_saturation_pairs_by_pbs_length(self):
+        peg, ng = {11: 'P11', 13: 'P13'}, {11: 'N11', 13: 'N13'}
+        pairs = pe.pegRNAs_w_ngRNAs_pairs(peg, ng, saturation_mutagenesis='aa_subs')
+        assert pairs == {11: ('P11', 'N11'), 13: ('P13', 'N13')}
+
+    def test_genome_wide_design_pairs_by_pbs_length_too(self):
+        peg, ng = {11: 'P11'}, {11: 'N11'}
+        assert pe.pegRNAs_w_ngRNAs_pairs(peg, ng, genome_wide_design=True) == {11: ('P11', 'N11')}
+
+    def test_a_pbs_length_missing_ngrnas_is_skipped(self):
+        peg, ng = {11: 'P11', 13: 'P13'}, {11: 'N11'}
+        pairs = pe.pegRNAs_w_ngRNAs_pairs(peg, ng, saturation_mutagenesis='aa_subs')
+        assert pairs == {11: ('P11', 'N11')}
+
+
+# --------------------------------------------------------------------------- #
 # merge_pegRNAs_ngRNAs
 # --------------------------------------------------------------------------- #
 
