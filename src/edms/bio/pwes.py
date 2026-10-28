@@ -423,7 +423,7 @@ def pymol_script(
             pymol_file.write(f"disable {group_name}\n")
 
 # Plot functions
-def hist(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new", line: float = None,
+def hist(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new", line: float | list[float] = None,
     file: str = None, palette_or_cmap: str | list | dict | mcolors.Colormap = 'turbo', alpha: float = 1.0, dodge: bool = False, jitter: bool = True, size: float = 5, edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
     figsize: tuple=(6,6), title: str = 'Number of Edits in Clusters', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
     x_axis: str = 'Cluster #', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
@@ -437,7 +437,7 @@ def hist(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new", line: float =
     Parameters:
     df_clus (pd.DataFrame | str): DataFrame or path to a saved DataFrame containing clustering results, must have cluster_col column for cluster labels.
     cluster_col (str, optional): column name in df_clus with cluster labels (Default: "cl_new")
-    line (float, optional): add horizontal line at y value or vertical line at x value
+    line (float | list[float], optional): add horizontal line(s) at y value(s) or vertical line(s) at x value(s)
     file (str, optional): output plot file path (including the file extension)
     palette_or_cmap (str | list | dict | Colormap, optional): seaborn palette name, matplotlib color map
                                                             (name or object), list of colors, or {category: color} dictionary
@@ -506,7 +506,7 @@ def hist(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new", line: float =
         legend_columnspacing=legend_columnspacing,legend_handletextpad=legend_handletextpad,legend_labelspacing=legend_labelspacing,legend_borderpad=legend_borderpad,legend_handlelength=legend_handlelength,html_size_multiplier=html_size_multiplier,
         dpi=dpi,transparent=transparent,show=show,space_capitalize=space_capitalize,**kwargs)
 
-def cat(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new",scores_col: str = "log2(FC)", line: float = None,
+def cat(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new",scores_col: str = "log2(FC)", line: float | list[float] = None,
     file: str = None, palette_or_cmap: str | list | dict | mcolors.Colormap = 'turbo', alpha: float = 0.5, dodge: bool = False, jitter: bool = True, size: float = 5, edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
     figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
     x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
@@ -521,7 +521,7 @@ def cat(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new",scores_col: str
     df_clus (pd.DataFrame | str): DataFrame or path to a saved DataFrame containing clustering results, must have cluster_col column for cluster labels and scores_col for values to plot.
     cluster_col (str, optional): column name in df_clus with cluster labels (Default: "cl_new")
     scores_col (str, optional): column name in df_clus with sgRNA scores (Default: "log2(FC)")
-    line (float, optional): add horizontal line at y value or vertical line at x value
+    line (float | list[float], optional): add horizontal line(s) at y value(s) or vertical line(s) at x value(s)
     file (str, optional): output plot file path (including the file extension)
     palette_or_cmap (str | list | dict | Colormap, optional): seaborn palette name, matplotlib color map
                                                             (name or object), list of colors, or {category: color} dictionary

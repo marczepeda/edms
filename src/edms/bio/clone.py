@@ -848,7 +848,13 @@ def umi(length: int = 15, GC_fract: tuple = (0.4, 0.6), hamming: int = 4,
 
     else: # Load from provided file path
         filtered_sequences = io.get(pt=pt)['UMI_sequence'].tolist()
-        stop = count_csv_rows(pt)
+        filtered_sequences_set = set(filtered_sequences)
+        sequences = generate_sequences(length=length) # Generate all possible sequences of specified length
+        new_filtered_sequences = filter_GC(sequences=sequences, GC_fract=GC_fract) # Filter sequences based on GC content
+        filtered_sequences.extend([seq for seq in new_filtered_sequences if seq not in filtered_sequences_set])
+        print(f'Generated {len(filtered_sequences)-len(filtered_sequences_set)} additional sequences of length {length} with GC content between {GC_fract[0]} and {GC_fract[1]}.')
+        
+        stop = len(filtered_sequences)
     
     filtered_sequences_save = [] # List to save filtered sequences iteratively
     for i in np.arange(start=0, stop=stop, step=nrows): # Process in chunks of nrows

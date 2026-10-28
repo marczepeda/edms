@@ -1797,7 +1797,7 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
 def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
         cats_order: list = None, cats_exclude: list|str = None,
         cols: str = None, cols_order: list = None, cols_exclude: list | str = None,
-        line: float = None, facetx: str = None, facety: str = None,
+        line: float | list[float] = None, facetx: str = None, facety: str = None,
         facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
         file: str = None, palette_or_cmap: str | list | dict | mcolors.Colormap = 'colorblind', alpha: float = 1.0,
         dodge: bool = False, jitter: bool = True, size: float = 5,
@@ -1830,7 +1830,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
     cols (str, optional): color column name
     cols_order (list, optional): color column values order
     cols_exclude (list | str, optional): color column values exclude
-    line (float, optional): add horizontal line at y value or vertical line at x value
+    line (float | list[float], optional): add horizontal line(s) at y value(s) or vertical line(s) at x value(s)
     facetx (str, optional): column name for facet columns (creates one subplot per category in this column, arranged in separate columns)
     facety (str, optional): column name for facet rows (creates one subplot per category in this column, arranged in seperate rows)
     facetx_order (list, optional): order of facet columns
@@ -2140,10 +2140,13 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
 
         # Optional: add line
         if line is not None and x != '' and y != '':
+            lines = [line] if np.isscalar(line) else list(line)
             if df_sub[x].apply(lambda row: isinstance(row, str)).all():
-                ax.axhline(y=line, color='black', linestyle='--', linewidth=lw, zorder=0)
+                for l in lines:
+                    ax.axhline(y=l, color='black', linestyle='--', linewidth=lw, zorder=0)
             elif df_sub[y].apply(lambda row: isinstance(row, str)).all():
-                ax.axvline(x=line, color='black', linestyle='--', linewidth=lw, zorder=0)
+                for l in lines:
+                    ax.axvline(x=l, color='black', linestyle='--', linewidth=lw, zorder=0)
 
     for i, r in enumerate(row_vals):
         for j, c in enumerate(col_vals):

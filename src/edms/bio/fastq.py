@@ -5019,7 +5019,7 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
         return df,secondary_structure
 
 # Plot methods
-def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_order: list = None, cats_exclude: list|str = None, cols: str=None, cols_order: list=None, cols_exclude: list|str=None, PDB_pt: str=None, line: float = None,
+def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_order: list = None, cats_exclude: list|str = None, cols: str=None, cols_order: list=None, cols_exclude: list|str=None, PDB_pt: str=None, line: float | list[float] = None,
         facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
         file: str=None, palette_or_cmap: str | list | dict | mcolors.Colormap='colorblind', alpha: float=1.0, dodge: bool=True, jitter: bool=True, size: float=5, edgecol: str='black', lw: int=1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
         figsize: tuple=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
@@ -5043,7 +5043,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_order: li
     cols_order (list, optional): color column values order
     cols_exclude (list | str, optional): color column values exclude
     PDB_pt (str, optional): PDB ID (if saved to ~/.config/edms/PDB) or file path for PDB structure file. See edms.dat.pdb.retrieve() or edms uniprot retrieve -h for more information.
-    line (float, optional): add horizontal line at y value or vertical line at x value
+    line (float | list[float], optional): add horizontal line(s) at y value(s) or vertical line(s) at x value(s)
     facetx (str, optional): column name for facet columns (creates one subplot per category in this column, arranged in separate columns)
     facety (str, optional): column name for facet rows (creates one subplot per category in this column, arranged in separate rows)
     facetx_order (list, optional): order of facet columns
