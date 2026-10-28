@@ -822,13 +822,13 @@ def count_csv_rows(pt:str) -> int:
     with open(pt, 'r') as f:
         return sum(1 for line in f) - 1  # subtract 1 for header
 
-def umi(length: int = 15, GC_fract: tuple = (0.4, 0.6), hamming: int = 4, 
+def umi(length: int = 10, GC_fract: tuple = (0.4, 0.6), hamming: int = 4, 
         nrows: int=1000, pt: str=None, dir: str = '../out'):
     '''
     umi(): generates unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance
     
     Parameters:
-    length (int, optional): length of the unique molecular identifiers (Default: 15)
+    length (int, optional): length of the unique molecular identifiers (Default: 10)
     GC_fract (tuple, optional): pair of GC content boundaries written as fractions (Default: (0.4, 0.6))
     hamming (int, optional): Minimum Hamming distance between UMIs (Default: 4)
     nrows (int, optional): # of UMIs to compare iteratively for hamming filtering (Default: 1000)

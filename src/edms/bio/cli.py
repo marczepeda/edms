@@ -302,7 +302,7 @@ def add_subparser(subparsers, formatter_class=None):
     # umi(): generates unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance
     parser_clone_umi = subparsers_clone.add_parser("umi", help="Generate unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance", description="Generate unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance", formatter_class=formatter_class)
 
-    parser_clone_umi.add_argument("-l", "--length", type=int, help="Length of UMI (Default: 15)", default=15)
+    parser_clone_umi.add_argument("-l", "--length", type=int, help="Length of UMI (Default: 10)", default=10)
     parser_clone_umi.add_argument("-g", "--GC_fract", type=parse_tuple_float, default=(0.4,0.6), help="Pair of GC content boundaries written as fractions (Default: 0.4,0.6)")
     parser_clone_umi.add_argument("-ha", "--hamming", type=int, help="Minimum Hamming distance between UMIs (Default: 4)", default=4)
     parser_clone_umi.add_argument("-nr", "--nrows", type=int, help="# of UMIs to compare iteratively for hamming filtering (Default: 1000)", default=1000)
