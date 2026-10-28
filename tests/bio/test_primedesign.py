@@ -33,6 +33,7 @@ from edms.bio.primedesign import (
     extend_rtt_for_silent_mutations,
     with_no_silent_mutation_option,
     NO_SILENT_MUTATION,
+    build_ngRNA_entries,
     target_aa_number,
     codon_annotation,
     codon_columns,
@@ -1047,3 +1048,87 @@ class TestExtendRttForSilentMutations:
         # a maximum that leaves no room to grow must not lengthen the pegRNA for nothing
         length, candidates = self._extend(NO_SYNONYM_REF, 18, 19)
         assert length == 18 and candidates == []
+
+
+# ---------------------------------------------------------------------------
+# build_ngRNA_entries()
+# ---------------------------------------------------------------------------
+
+# an ngRNA tuple as target_design stores it:
+# (nick_ref_idx, edit_start_idx, edit_end_idx, full_search_edit, spacer_edit, pam_edit, annotation)
+def _ng_candidate(nick, start, end, spacer, pam='AGG', annotation='PE3'):
+    return (nick, start, end, spacer + pam, spacer, pam, annotation)
+
+
+def _design(ngRNAs_minus=(), ngRNAs_plus=()):
+    return {'ngRNA': {'-': list(ngRNAs_minus), '+': list(ngRNAs_plus)}}
+
+
+NG_ALLELE = 'ATGGCTCTGACCAAGCATGAATTCGTGCGTAGCATCCCAGATAACCAGTACATTGGATCT'
+
+
+class TestBuildNgRNAEntries:
+    def test_spacer_is_cut_from_the_allele_passed_in(self):
+        design = _design(ngRNAs_minus=[_ng_candidate(80, 10, 30, 'X' * 20)])
+        entries = build_ngRNA_entries(design, '-', NG_ALLELE, 20, True,
+                                      'NNNNNNNNNNNNNNNNN/NNN[NGG]', 0, 100, 75)
+        assert entries
+        # (-) strand spacers are stored reverse complemented
+        assert entries[0][2] == reverse_complement(NG_ALLELE[10:30])
+
+    def test_two_alleles_give_two_different_spacers(self):
+        other = NG_ALLELE[:15] + 'ttt' + NG_ALLELE[18:]
+        design = _design(ngRNAs_minus=[_ng_candidate(80, 10, 30, 'X' * 20)])
+        args = ('-', 20, True, 'NNNNNNNNNNNNNNNNN/NNN[NGG]', 0, 100, 75)
+        first = build_ngRNA_entries(design, args[0], NG_ALLELE, *args[1:])
+        second = build_ngRNA_entries(design, args[0], other, *args[1:])
+        assert first[0][2] != second[0][2]   # this is what sharing one list per pegid broke
+
+    def test_an_edit_in_the_spacer_makes_it_pe3b(self):
+        allele = NG_ALLELE[:12] + 'ttt' + NG_ALLELE[15:]
+        design = _design(ngRNAs_minus=[_ng_candidate(80, 10, 30, 'X' * 20)])
+        entries = build_ngRNA_entries(design, '-', allele, 20, True,
+                                      'NNNNNNNNNNNNNNNNN/NNN[NGG]', 0, 100, 75)
+        assert entries[0][4].startswith('PE3b')
+
+    def test_no_edit_in_the_spacer_stays_pe3(self):
+        allele = NG_ALLELE[:45] + 'ttt' + NG_ALLELE[48:]   # outside [10,30)
+        design = _design(ngRNAs_minus=[_ng_candidate(80, 10, 30, 'X' * 20)])
+        entries = build_ngRNA_entries(design, '-', allele, 20, True,
+                                      'NNNNNNNNNNNNNNNNN/NNN[NGG]', 0, 100, 75)
+        assert entries[0][4] == 'PE3'
+
+    def test_nicking_distance_bounds_are_enforced(self):
+        design = _design(ngRNAs_minus=[_ng_candidate(1000, 10, 30, 'X' * 20)])
+        entries = build_ngRNA_entries(design, '-', NG_ALLELE, 20, True,
+                                      'NNNNNNNNNNNNNNNNN/NNN[NGG]', 0, 100, 75)
+        assert entries == []        # |1000 - 20| is past nicking_distance_maximum
+
+    def test_ranked_entries_carry_a_sort_key_and_come_back_sorted(self):
+        # listed worst-first, so returning them unsorted would fail: nick 60 deviates 35 from
+        # nicking_distance_pooled while nick 95 deviates 0
+        design = _design(ngRNAs_minus=[_ng_candidate(60, 10, 30, 'X' * 20),
+                                       _ng_candidate(95, 10, 30, 'X' * 20)])
+        entries = build_ngRNA_entries(design, '-', NG_ALLELE, 20, True,
+                                      'NNNNNNNNNNNNNNNNN/NNN[NGG]', 0, 100, 75, ranked=True)
+        assert len(entries[0]) == 7
+        assert entries[0][1] == 95 and entries[1][1] == 60   # best deviation first
+        assert entries == sorted(entries)
+
+    def test_unranked_entries_omit_the_sort_key(self):
+        design = _design(ngRNAs_minus=[_ng_candidate(80, 10, 30, 'X' * 20)])
+        entries = build_ngRNA_entries(design, '-', NG_ALLELE, 20, True,
+                                      'NNNNNNNNNNNNNNNNN/NNN[NGG]', 0, 100, 75, ranked=False)
+        assert len(entries[0]) == 6
+
+    def test_plus_strand_spacers_are_not_reverse_complemented(self):
+        design = _design(ngRNAs_plus=[_ng_candidate(80, 10, 30, 'X' * 20)])
+        entries = build_ngRNA_entries(design, '+', NG_ALLELE, 20, True,
+                                      'NNNNNNNNNNNNNNNNN/NNN[NGG]', 0, 100, 75)
+        assert entries[0][2] == NG_ALLELE[10:30]
+
+    def test_without_silent_mutations_the_stored_spacer_is_kept(self):
+        design = _design(ngRNAs_minus=[_ng_candidate(80, 10, 30, 'ACGTACGTACGTACGTACGT')])
+        entries = build_ngRNA_entries(design, '-', NG_ALLELE, 20, False,
+                                      'NNNNNNNNNNNNNNNNN/NNN[NGG]', 0, 100, 75)
+        assert entries[0][2] == reverse_complement('ACGTACGTACGTACGTACGT')

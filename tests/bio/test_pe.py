@@ -629,3 +629,142 @@ class TestRefreshCodonAnnotations:
         once = pe.refresh_codon_annotations(pd.DataFrame([_annotated(edit)]))
         twice = pe.refresh_codon_annotations(once.copy())
         pd.testing.assert_frame_equal(once, twice)
+
+
+# --------------------------------------------------------------------------- #
+# merge_pegRNAs_ngRNAs
+# --------------------------------------------------------------------------- #
+
+MERGE_ALLELE = "ATGGCTCTGACCAAGCATGAATTCGTGCGTAGCATCCCAGATAACCAGTAC"
+
+
+def _peg_row(number, allele=MERGE_ALLELE, **kw):
+    row = {"pegRNA_number": number, "Spacer_sequence": "AAACCCGGGTTTAAACCCGG",
+           "Strand": "+", "Edit_sequence": allele, "Reference_sequence": MERGE_ALLELE,
+           "Target_name": "demo", "Annotation": "PAM_disrupted", "Extension_sequence": "ACGT"}
+    row.update(kw)
+    return row
+
+
+def _ng_row(number, spacer, allele=MERGE_ALLELE, **kw):
+    row = {"pegRNA_number": number, "ngRNA_number": number * 10,
+           "Spacer_sequence": spacer, "Strand": "-", "Edit_sequence": allele,
+           "Reference_sequence": MERGE_ALLELE, "Target_name": "demo",
+           "Annotation": "PE3b-seed", "Extension_sequence": ""}
+    row.update(kw)
+    return row
+
+
+class TestMergePegRNAsNgRNAs:
+    def test_one_row_per_pegrna_ngrna_pair(self):
+        peg = pd.DataFrame([_peg_row(1)])
+        ng = pd.DataFrame([_ng_row(1, MERGE_ALLELE[3:23]), _ng_row(1, MERGE_ALLELE[6:26])])
+        out = pe.merge_pegRNAs_ngRNAs(peg, ng)
+        assert len(out) == 2                       # the pegRNA is repeated per ngRNA
+        assert out['pegRNA_number'].tolist() == [1, 1]
+
+    def test_no_ngrna_group_is_assigned(self):
+        peg = pd.DataFrame([_peg_row(1)])
+        ng = pd.DataFrame([_ng_row(1, MERGE_ALLELE[3:23])])
+        assert 'ngRNA_group' not in pe.merge_pegRNAs_ngRNAs(peg, ng).columns
+
+    def test_columns_that_differ_get_the_prefix(self):
+        peg = pd.DataFrame([_peg_row(1)])
+        ng = pd.DataFrame([_ng_row(1, MERGE_ALLELE[3:23])])
+        out = pe.merge_pegRNAs_ngRNAs(peg, ng)
+        assert 'ngRNA_Spacer_sequence' in out.columns and 'ngRNA_Strand' in out.columns
+        assert out.loc[0, 'Spacer_sequence'] == peg.loc[0, 'Spacer_sequence']   # pegRNA's kept
+
+    def test_identical_columns_are_dropped(self):
+        peg = pd.DataFrame([_peg_row(1)])
+        ng = pd.DataFrame([_ng_row(1, MERGE_ALLELE[3:23])])
+        out = pe.merge_pegRNAs_ngRNAs(peg, ng)
+        for col in ('Reference_sequence', 'Target_name'):
+            assert col in out.columns and f'ngRNA_{col}' not in out.columns
+
+    def test_columns_empty_on_the_ngrna_side_are_dropped(self):
+        peg = pd.DataFrame([_peg_row(1)])
+        ng = pd.DataFrame([_ng_row(1, MERGE_ALLELE[3:23])])          # Extension_sequence is ''
+        out = pe.merge_pegRNAs_ngRNAs(peg, ng)
+        assert 'ngRNA_Extension_sequence' not in out.columns
+
+    def test_no_pandas_suffixes_survive(self):
+        peg = pd.DataFrame([_peg_row(1)])
+        ng = pd.DataFrame([_ng_row(1, MERGE_ALLELE[3:23])])
+        out = pe.merge_pegRNAs_ngRNAs(peg, ng)
+        assert not [c for c in out.columns if c.endswith(('_x', '_y'))]
+
+    def test_pairs_the_ngrna_cannot_bind_are_dropped(self):
+        peg = pd.DataFrame([_peg_row(1)])
+        ng = pd.DataFrame([_ng_row(1, MERGE_ALLELE[3:23]),
+                           _ng_row(1, 'TTTTTTTTTTTTTTTTTTTT')])      # absent from the allele
+        out = pe.merge_pegRNAs_ngRNAs(peg, ng)
+        assert len(out) == 1
+        assert out.loc[0, 'ngRNA_Spacer_sequence'] == MERGE_ALLELE[3:23]
+
+    def test_a_reverse_complement_spacer_still_counts_as_bindable(self):
+        rc = str(Seq(MERGE_ALLELE[3:23]).reverse_complement())
+        peg = pd.DataFrame([_peg_row(1)])
+        ng = pd.DataFrame([_ng_row(1, rc)])
+        assert len(pe.merge_pegRNAs_ngRNAs(peg, ng)) == 1
+
+    def test_missing_join_key_raises(self):
+        peg = pd.DataFrame([{"Spacer_sequence": "A"}])
+        ng = pd.DataFrame([_ng_row(1, MERGE_ALLELE[3:23])])
+        with pytest.raises(ValueError, match="pegRNA_number"):
+            pe.merge_pegRNAs_ngRNAs(peg, ng)
+
+
+# --------------------------------------------------------------------------- #
+# refresh_ngRNA_spacers
+# --------------------------------------------------------------------------- #
+
+class TestRefreshNgRNASpacers:
+    def _frame(self, spacer, strand='+'):
+        return pd.DataFrame([{"pegRNA_number": 1, "Spacer_sequence": spacer, "Strand": strand,
+                              "Annotation": "PE3", "Edit_sequence": MERGE_ALLELE}])
+
+    def test_recuts_a_spacer_whose_allele_was_rewritten(self):
+        after = MERGE_ALLELE[:10] + 'ttt' + MERGE_ALLELE[13:]
+        out = pe.refresh_ngRNA_spacers(self._frame(MERGE_ALLELE[5:25]), {1: MERGE_ALLELE}, {1: after})
+        assert out.loc[0, 'Spacer_sequence'] == after[5:25]
+
+    def test_updates_the_stored_allele_too(self):
+        after = MERGE_ALLELE[:10] + 'ttt' + MERGE_ALLELE[13:]
+        out = pe.refresh_ngRNA_spacers(self._frame(MERGE_ALLELE[5:25]), {1: MERGE_ALLELE}, {1: after})
+        assert out.loc[0, 'Edit_sequence'] == after
+
+    def test_a_reverse_complement_spacer_is_recut_in_its_own_orientation(self):
+        rc = str(Seq(MERGE_ALLELE[5:25]).reverse_complement())
+        after = MERGE_ALLELE[:10] + 'ttt' + MERGE_ALLELE[13:]
+        out = pe.refresh_ngRNA_spacers(self._frame(rc, strand='-'), {1: MERGE_ALLELE}, {1: after})
+        assert out.loc[0, 'Spacer_sequence'] == str(Seq(after[5:25]).reverse_complement())
+
+    def test_annotation_becomes_pe3b_when_an_edit_lands_in_the_spacer(self):
+        after = MERGE_ALLELE[:10] + 'ttt' + MERGE_ALLELE[13:]
+        out = pe.refresh_ngRNA_spacers(self._frame(MERGE_ALLELE[5:25]), {1: MERGE_ALLELE}, {1: after})
+        assert out.loc[0, 'Annotation'].startswith('PE3b')
+
+    def test_a_spacer_outside_the_change_keeps_its_sequence_but_gets_the_new_allele(self):
+        after = MERGE_ALLELE[:45] + 'ttt' + MERGE_ALLELE[48:]   # far from the spacer
+        out = pe.refresh_ngRNA_spacers(self._frame(MERGE_ALLELE[0:20]), {1: MERGE_ALLELE}, {1: after})
+        assert out.loc[0, 'Spacer_sequence'] == MERGE_ALLELE[0:20]   # spacer untouched
+        assert out.loc[0, 'Edit_sequence'] == after                  # but the allele moved
+
+    def test_unchanged_allele_is_a_no_op(self):
+        before = self._frame(MERGE_ALLELE[5:25])
+        out = pe.refresh_ngRNA_spacers(before, {1: MERGE_ALLELE}, {1: MERGE_ALLELE})
+        assert out.loc[0, 'Spacer_sequence'] == MERGE_ALLELE[5:25]
+
+    def test_pegrna_absent_from_the_maps_is_skipped(self):
+        out = pe.refresh_ngRNA_spacers(self._frame(MERGE_ALLELE[5:25]), {}, {})
+        assert out.loc[0, 'Spacer_sequence'] == MERGE_ALLELE[5:25]
+
+    def test_alleles_of_different_length_are_skipped(self):
+        # the swap only substitutes, so a length change means these cannot be aligned
+        out = pe.refresh_ngRNA_spacers(self._frame(MERGE_ALLELE[5:25]),
+                                       {1: MERGE_ALLELE}, {1: MERGE_ALLELE[:-3]})
+        assert out.loc[0, 'Spacer_sequence'] == MERGE_ALLELE[5:25]
+
+    def test_empty_frame_is_returned_unchanged(self):
+        assert len(pe.refresh_ngRNA_spacers(pd.DataFrame(columns=['pegRNA_number']), {}, {})) == 0
