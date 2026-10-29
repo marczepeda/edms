@@ -43,7 +43,9 @@ Usage:
 - _hide_inner_axis_labels(): Hide axis labels for inner panels in a faceted figure to reduce clutter
 - _handle_panel_legend(): Add legend to the appropriate panel in a faceted figure based on user-specified legend location
 - _facet_values(): Return ordered unique facet values
+- _resolve_fig(): Return the figure to draw into & whether the graph method owns it
 - _final_save_show(): Save/show once for the whole figure using your conventions
+- _legend_proxy(): Return a new artist that looks like a legend handle from another figure
 - _make_figure_legend(): Build a single shared legend for the entire figure using handles/labels from the first axis that has one
 - _subplot_titles(): Return appropriate subplot titles based on user input (facet values, facet labels with values, custom titles, or none)
 - _apply_formatter_on_ax(): Apply the formatter to a specific axis with the appropriate subset of data and parameters for that panel
@@ -56,6 +58,7 @@ Usage:
 - stack(): creates stacked bar plot
 - vol(): creates volcano plot
 - caterpillar(): creates caterpillar plot (estimates ranked along x with error bars)
+- grid(): combines graph methods into 1 figure
 
 [Color display methods]
 - matplotlib_cmaps(): view all matplotlib color maps
@@ -73,6 +76,9 @@ import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 from matplotlib.ticker import MaxNLocator
 from matplotlib.font_manager import FontProperties
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
+from matplotlib.collections import PathCollection
 import numpy as np
 import json
 import mpld3
@@ -457,7 +463,8 @@ def save_fig(file: str | None, fig=None, dpi: int = 0, transparent: bool = True,
         fig = plt.gcf()
 
     try:
-        fig.tight_layout()
+        if not fig.subfigs: # tight_layout would replace a composite figure's layout engine
+            fig.tight_layout()
     except Exception:
         pass
 
@@ -1276,6 +1283,18 @@ def _facet_values(df: pd.DataFrame, col: str, order: list=None):
     # stable-ish ordering: keep pandas appearance order
     return df[col].dropna().drop_duplicates().tolist()
 
+def _resolve_fig(fig, figsize: tuple):
+    """
+    _resolve_fig(): Return the figure to draw into & whether this call owns it.
+
+    Parameters:
+    fig (Figure | SubFigure | None): figure supplied by the caller (i.e., a grid() cell); None makes a new figure
+    figsize (tuple): figure size, which only applies to a new figure
+    """
+    if fig is not None: # The caller owns the layout, saving & showing
+        return fig, False
+    return plt.figure(figsize=figsize), True
+
 def _final_save_show(fig, file: str=None, dpi: int=0, transparent: bool=True, PDB_pt: str=None, icon: str='python', show: bool=True):
     """
     _final_save_show(): Save/show once for the whole figure using your conventions.
@@ -1302,27 +1321,61 @@ def _final_save_show(fig, file: str=None, dpi: int=0, transparent: bool=True, PD
         
     plt.close()
 
+def _legend_proxy(handle):
+    """
+    _legend_proxy(): Return a new artist that looks like a legend handle.
+
+    Parameters:
+    handle: legend handle drawn in another figure (i.e., a grid() panel)
+
+    Note: matplotlib refuses to put 1 artist in 2 figures, so a figure legend built from
+    subfigure panels needs copies of the handles rather than the handles themselves.
+    """
+    label = handle.get_label()
+
+    def _first_color(color, default='none'):
+        if color is None:
+            return default
+        if isinstance(color, str):
+            return color
+        color = np.asarray(color)
+        if color.ndim == 2: # Collections hold 1 color per element
+            return tuple(color[0]) if len(color) else default
+        if color.ndim == 1:
+            return tuple(color)
+        return default
+
+    if isinstance(handle, Line2D):
+        return Line2D([], [], color=handle.get_color(), linestyle=handle.get_linestyle(), linewidth=handle.get_linewidth(),
+                      marker=handle.get_marker(), markersize=handle.get_markersize(),
+                      markerfacecolor=handle.get_markerfacecolor(), markeredgecolor=handle.get_markeredgecolor(),
+                      alpha=handle.get_alpha(), label=label)
+
+    if isinstance(handle, PathCollection): # Scatter points keep their marker
+        return Line2D([], [], linestyle='none', marker='o',
+                      markerfacecolor=_first_color(handle.get_facecolor()),
+                      markeredgecolor=_first_color(handle.get_edgecolor()),
+                      alpha=handle.get_alpha(), label=label)
+
+    face = _first_color(handle.get_facecolor()) if hasattr(handle, 'get_facecolor') else 'none'
+    edge = _first_color(handle.get_edgecolor()) if hasattr(handle, 'get_edgecolor') else 'none'
+    return Patch(facecolor=face, edgecolor=edge, alpha=handle.get_alpha(), label=label)
+
 def _make_figure_legend(fig, axes,
                         legend_title: str, legend_title_size: int, legend_title_weight: str, legend_size: int,
                         legend_bbox_to_anchor: tuple, legend_loc: str,
-                        legend_items: tuple, legend_ncol: int):
+                        legend_items: tuple, legend_ncol: int, proxy: bool = False):
     """
     Build one shared figure legend by combining legend entries from all subplot axes.
     Deduplicates by label while preserving first-seen order.
+    Set proxy when the axes belong to subfigures of fig (i.e., grid() panels), which
+    copies the handles since matplotlib cannot place 1 artist in 2 figures.
     """
 
     handles_all = []
     labels_all = []
 
-    for ax in np.array(axes).flatten():
-        leg = ax.get_legend()
-
-        if leg is not None:
-            handles = leg.legend_handles
-            labels = [txt.get_text() for txt in leg.get_texts()]
-        else:
-            handles, labels = ax.get_legend_handles_labels()
-
+    def _collect(handles, labels):
         for h, l in zip(handles, labels):
             if l is None or l == "" or l.startswith("_"):
                 continue
@@ -1330,6 +1383,19 @@ def _make_figure_legend(fig, axes,
             if l not in labels_all:
                 handles_all.append(h)
                 labels_all.append(l)
+
+    for subfig in getattr(fig, 'subfigs', []): # Panel legends (i.e., grid() cells) are folded in before their axes
+        for panel_legend in list(subfig.legends):
+            _collect(panel_legend.legend_handles, [txt.get_text() for txt in panel_legend.get_texts()])
+            panel_legend.remove()
+
+    for ax in np.array(axes).flatten():
+        leg = ax.get_legend()
+
+        if leg is not None:
+            _collect(leg.legend_handles, [txt.get_text() for txt in leg.get_texts()])
+        else:
+            _collect(*ax.get_legend_handles_labels())
 
     # Remove all subplot legends
     for ax in np.array(axes).flatten():
@@ -1343,6 +1409,9 @@ def _make_figure_legend(fig, axes,
     if legend_items != (0, 0):
         handles_all = handles_all[legend_items[0]:legend_items[1]]
         labels_all = labels_all[legend_items[0]:legend_items[1]]
+
+    if proxy: # The handles still belong to their own panel
+        handles_all = [_legend_proxy(handle) for handle in handles_all]
 
     legend_title_props = FontProperties(
         weight=legend_title_weight,
@@ -1455,7 +1524,7 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
         legend_borderpad: float=0.5, legend_handlelength: float=1, html_size_multiplier: float=1.5,
         dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True,
         corr_method: str = None, corr_weight: str = None,
-        **kwargs):
+        fig=None, **kwargs):
     ''' 
     scat(): creates scatter plot related graphs
 
@@ -1540,7 +1609,9 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     corr_method (str, optional): add a correlation line of best fit with (Default: None; Options: 'pearson', 'spearman', 'kendall')
     corr_weight (str, optional): weights column name for correlation line (Default: None; not weighted correlation)
-    
+    fig (Figure | SubFigure, optional): draw into this figure instead of making one, which ignores figsize
+                                       & leaves the layout, saving & showing to the caller (Default: None; see grid())
+
     Dependencies: os, matplotlib, seaborn, formatter(), re_un_cap(), & round_up_pow_10()
     '''
     # Get dataframe from file path if needed
@@ -1603,9 +1674,9 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
     faceting = (facetx is not None) or (facety is not None)
 
     # --- Faceted plotting ---
-    fig, axes = plt.subplots(
+    fig, owns_fig = _resolve_fig(fig, figsize)
+    axes = fig.subplots(
         nrows=nrows, ncols=ncols,
-        figsize=figsize,
         sharex=facety is not None, sharey=facetx is not None
     )
     axes = np.array(axes).reshape(nrows, ncols)
@@ -1884,9 +1955,10 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
             legend_ncol=legend_ncol
         )
 
-    # save/show once
-    fig.tight_layout()
-    _final_save_show(fig, file=file, dpi=dpi, transparent=transparent, PDB_pt=None, icon='scatter', show=show)
+    if owns_fig: # The caller saves, shows & closes a provided figure
+        # save/show once
+        fig.tight_layout()
+        _final_save_show(fig, file=file, dpi=dpi, transparent=transparent, PDB_pt=None, icon='scatter', show=show)
     return fig, axes
 
 def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
@@ -1911,7 +1983,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
         legend_borderpad: float=0.5, legend_handlelength: float=1, html_size_multiplier: float=1.5,
         dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True,
         PDB_pt: str = None,
-        **kwargs):
+        fig=None, **kwargs):
     ''' 
     cat(): creates categorical graphs
 
@@ -1993,7 +2065,9 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
     show (bool, optional): show plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     PDB_pt (str, optional): Path to PDB file for mol* visualization; only intended for fastq plots (Default: None)
-    
+    fig (Figure | SubFigure, optional): draw into this figure instead of making one, which ignores figsize
+                                       & leaves the layout, saving & showing to the caller (Default: None; see grid())
+
     Dependencies: os, matplotlib, seaborn, formatter(), re_un_cap(), & round_up_pow_10()
     '''
     # Get dataframe from file path if needed
@@ -2066,9 +2140,9 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
 
     faceting = (facetx is not None) or (facety is not None)
 
-    fig, axes = plt.subplots(
+    fig, owns_fig = _resolve_fig(fig, figsize)
+    axes = fig.subplots(
         nrows=nrows, ncols=ncols,
-        figsize=figsize,
         sharex=facety is not None, 
         sharey=facetx is not None
     )
@@ -2342,9 +2416,10 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
             legend_ncol=legend_ncol
         )
 
-    # save/show once
-    fig.tight_layout()
-    _final_save_show(fig, file=file, dpi=dpi, transparent=transparent, PDB_pt=PDB_pt, icon='cat', show=show)
+    if owns_fig: # The caller saves, shows & closes a provided figure
+        # save/show once
+        fig.tight_layout()
+        _final_save_show(fig, file=file, dpi=dpi, transparent=transparent, PDB_pt=PDB_pt, icon='cat', show=show)
     return fig, axes
 
 def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_order: list = None, cols_exclude: list | str = None, bins: int = 40, log10_low: int = 0,
@@ -2355,7 +2430,7 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
         legend_title: str = '', legend_title_size: int = 12, legend_title_weight: str = 'bold', legend_size: int = 12, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_items: tuple = (0, 0), legend_ncol: int = 1, legend_mode: str = "figure",
-        dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True, **kwargs):
+        dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True, fig=None, **kwargs):
     ''' 
     dist(): creates distribution graphs
 
@@ -2430,7 +2505,9 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
     transparent (bool, optional): whether to save static images with transparent background (default: True)
     show (bool, optional): show plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
-    
+    fig (Figure | SubFigure, optional): draw into this figure instead of making one, which ignores figsize
+                                       & leaves the layout, saving & showing to the caller (Default: None; see grid())
+
     Dependencies: os, matplotlib, seaborn, io, formatter(), _offset_density(), re_un_cap(), & round_up_pow_10()
     '''
     # Get dataframe from file path if needed
@@ -2484,10 +2561,10 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
     ncols = len(col_vals)
     nrows = len(row_vals)
 
-    fig, axes = plt.subplots(
+    fig, owns_fig = _resolve_fig(fig, figsize)
+    axes = fig.subplots(
         nrows=nrows,
         ncols=ncols,
-        figsize=figsize,
         sharex=facety is not None,
         sharey=facetx is not None
     )
@@ -2745,19 +2822,20 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
             legend_ncol=legend_ncol
         )
 
-    fig.tight_layout()
+    if owns_fig: # The caller saves, shows & closes a provided figure
+        fig.tight_layout()
 
-    _final_save_show(
-        fig,
-        file=file,
-        dpi=dpi,
-        transparent=transparent,
-        PDB_pt=None,
-        icon='histogram',
-        show=show
-    )
+        _final_save_show(
+            fig,
+            file=file,
+            dpi=dpi,
+            transparent=transparent,
+            PDB_pt=None,
+            icon='histogram',
+            show=show
+        )
 
-    plt.close()
+        plt.close()
     return fig, axes
 
 def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vals: str = None, vals_dims: tuple = None,
@@ -2767,7 +2845,7 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vals: str = None,
         title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial', figsize: tuple=(6,6),
         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 45, x_ticks_font: str = 'Arial',
         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial',
-        dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True, **kwargs):
+        dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True, fig=None, **kwargs):
     '''
     heat(): creates heat plot related graphs
 
@@ -2825,7 +2903,9 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vals: str = None,
     transparent (bool, optional): whether to save static images with transparent background (default: True)
     show (bool, optional): show plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
-    
+    fig (Figure | SubFigure, optional): draw into this figure instead of making one, which ignores figsize
+                                       & leaves the layout, saving & showing to the caller (Default: None; see grid())
+
     Dependencies: os, matplotlib, seaborn, formatter(), re_un_cap(), & round_up_pow_10()
     '''
     # Get dataframe from file path if needed
@@ -2877,10 +2957,10 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vals: str = None,
         nrows = 1
         ncols = 1
 
-        fig, axes = plt.subplots(
+        fig, owns_fig = _resolve_fig(fig, figsize)
+        axes = fig.subplots(
             nrows=nrows,
-            ncols=ncols,
-            figsize=figsize
+            ncols=ncols
         )
         axes = np.array(axes).reshape(1, 1)
 
@@ -2896,10 +2976,10 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vals: str = None,
         ncols = len(col_vals)
         nrows = len(row_vals)
 
-        fig, axes = plt.subplots(
+        fig, owns_fig = _resolve_fig(fig, figsize)
+        axes = fig.subplots(
             nrows=nrows,
             ncols=ncols,
-            figsize=figsize,
             sharex=facety is not None,
             sharey=facetx is not None
         )
@@ -2934,8 +3014,8 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vals: str = None,
     cbar_ax = None
     draw_fig_cbar = cbar and cbar_mode == "figure"
 
-    if draw_fig_cbar:
-        if cbar_orientation == "horizontal":
+    if draw_fig_cbar and owns_fig: # Room for these coordinates is made by tight_layout(rect=...) below,
+        if cbar_orientation == "horizontal": # so a provided figure lets seaborn place the colorbar instead
             cbar_ax = fig.add_axes([0.25, 0.04, 0.5, 0.03])
         else:
             cbar_ax = fig.add_axes([0.92, 0.15, 0.03, 0.7])
@@ -3113,31 +3193,32 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vals: str = None,
             fontfamily=title_font
         )
 
-    if draw_fig_cbar:
-        # leave room for shared cbar
-        if cbar_orientation == "horizontal":
-            fig.tight_layout(rect=[0, 0.08, 1, 1])
+    if owns_fig: # The caller saves, shows & closes a provided figure
+        if draw_fig_cbar:
+            # leave room for shared cbar
+            if cbar_orientation == "horizontal":
+                fig.tight_layout(rect=[0, 0.08, 1, 1])
+            else:
+                fig.tight_layout(rect=[0, 0, 0.9, 1])
         else:
-            fig.tight_layout(rect=[0, 0, 0.9, 1])
-    else:
-        fig.tight_layout()
+            fig.tight_layout()
 
-    save_fig(
-        file=file,
-        fig=fig,
-        dpi=dpi,
-        transparent=transparent,
-        icon='heat'
-    )
+        save_fig(
+            file=file,
+            fig=fig,
+            dpi=dpi,
+            transparent=transparent,
+            icon='heat'
+        )
 
-    if show:
-        ext = os.path.basename(file).split('.')[-1].lower() if file is not None else ''
-        if ext not in ('html', 'json'):
-            plt.show()
-        else:
-            mpld3.show()
+        if show:
+            ext = os.path.basename(file).split('.')[-1].lower() if file is not None else ''
+            if ext not in ('html', 'json'):
+                plt.show()
+            else:
+                mpld3.show()
 
-    plt.close()
+        plt.close()
     return fig, axes
 
 def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str = '', cutoff_value: float = 0, cutoff_keep: bool = True, cols_order: list = [], x_order: list = [],
@@ -3148,7 +3229,7 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_dims: tuple = (0, 0),  y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial',
         legend_title: str = '', legend_title_size: int = 12, legend_title_weight: str = 'bold', legend_size: int = 12, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_ncol: int = 1, legend_mode: str = "figure",
         legend_columnspacing: int=0, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=1, html_size_multiplier: float=1.5,
-        dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True, PDB_pt: str = None, **kwargs):
+        dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True, PDB_pt: str = None, fig=None, **kwargs):
     ''' 
     stack(): creates stacked bar plot
 
@@ -3217,7 +3298,9 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
     show (bool, optional): show plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     PDB_pt (str, optional): Path to PDB file for mol* visualization; only intended for fastq plots (Default: None)
-    
+    fig (Figure | SubFigure, optional): draw into this figure instead of making one, which ignores figsize
+                                       & leaves the layout, saving & showing to the caller (Default: None; see grid())
+
     Dependencies: re, os, pandas, numpy, matplotlib.pyplot, & io
     '''
     # Get dataframe from file path if needed
@@ -3269,10 +3352,10 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
     faceting = _is_faceted(facetx, facety)
 
     # Create subplots
-    fig, axes = plt.subplots(
+    fig, owns_fig = _resolve_fig(fig, figsize)
+    axes = fig.subplots(
         nrows=nrows,
         ncols=ncols,
-        figsize=figsize,
         sharex=facety is not None,
         sharey=facetx is not None
     )
@@ -3557,19 +3640,20 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
             legend_ncol=legend_ncol
         )
 
-    fig.tight_layout()
+    if owns_fig: # The caller saves, shows & closes a provided figure
+        fig.tight_layout()
 
-    _final_save_show(
-        fig,
-        file=file,
-        dpi=dpi,
-        transparent=transparent,
-        PDB_pt=PDB_pt,
-        icon='bar',
-        show=show
-    )
+        _final_save_show(
+            fig,
+            file=file,
+            dpi=dpi,
+            transparent=transparent,
+            PDB_pt=PDB_pt,
+            icon='bar',
+            show=show
+        )
 
-    plt.close()
+        plt.close()
     return fig, axes
 
 def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = None, size_dims: tuple = None, label: str = None, stys_order: list = [], mark_order: list = [],
@@ -3583,7 +3667,7 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
         legend_columnspacing: int=-4, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, html_size_multiplier: float=1.5,
         display_legend: bool = True, display_labels: str | list | bool = None, display_lines: bool = False, display_axis: bool = True, return_df: bool = True, dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True,
         PDB_pt: str = None,
-        **kwargs) -> pd.DataFrame:
+        fig=None, **kwargs) -> pd.DataFrame:
     ''' 
     vol(): creates volcano plot
     
@@ -3660,7 +3744,9 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
     show (bool, optional): show plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     PDB_pt (str, optional): Path to PDB file for mol* visualization; only intended for fastq plots (Default: None)
-    
+    fig (Figure | SubFigure, optional): draw into this figure instead of making one, which ignores figsize
+                                       & leaves the layout, saving & showing to the caller (Default: None; see grid())
+
     Dependencies: os, matplotlib, seaborn, & pandas
     '''
     # Get dataframe from file path if needed
@@ -3789,12 +3875,12 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
     nrows = len(row_vals)
     faceting = _is_faceted(facetx, facety)
 
-    fig, axes = plt.subplots(
+    fig, owns_fig = _resolve_fig(fig, figsize)
+    axes = fig.subplots(
         nrows=nrows,
         ncols=ncols,
-        figsize=figsize,
         sharex=facety is not None,
-        sharey=facetx is not None,
+        sharey=facetx is not None
     )
     axes = np.array(axes).reshape(nrows, ncols)
 
@@ -4221,19 +4307,20 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
             legend_ncol=legend_ncol
         )
 
-    fig.tight_layout()
+    if owns_fig: # The caller saves, shows & closes a provided figure
+        fig.tight_layout()
 
-    _final_save_show(
-        fig,
-        file=file,
-        dpi=dpi,
-        transparent=transparent,
-        PDB_pt=PDB_pt,
-        icon='volcano',
-        show=show
-    )
+        _final_save_show(
+            fig,
+            file=file,
+            dpi=dpi,
+            transparent=transparent,
+            PDB_pt=PDB_pt,
+            icon='volcano',
+            show=show
+        )
 
-    plt.close()
+        plt.close()
 
     if return_df:
         return df
@@ -4249,7 +4336,7 @@ def caterpillar(df: pd.DataFrame | str, y: str, yerr: str = None, lower: str = N
                 legend_title: str = '', legend_title_size: int = 12, legend_title_weight: str = 'bold', legend_size: int = 12, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_ncol: int = 1,
                 legend_columnspacing: int = -4, legend_handletextpad: float = 0.5, legend_labelspacing: float = 0.5, legend_borderpad: float = 0.5, legend_handlelength: float = 0.5,
                 display_labels: bool = None, return_df: bool = True, dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True,
-                PDB_pt: str = None) -> pd.DataFrame:
+                PDB_pt: str = None, fig=None) -> pd.DataFrame:
     '''
     caterpillar(): creates caterpillar plot (estimates ranked along x with error bars)
 
@@ -4281,6 +4368,8 @@ def caterpillar(df: pd.DataFrame | str, y: str, yerr: str = None, lower: str = N
     figsize (tuple, optional): figure size
     display_labels (bool, optional): show x-axis tick labels (Default: None; shown when label is provided and there are <= 50 entities)
     return_df (bool, optional): return the ranked dataframe (Default: True)
+    fig (Figure | SubFigure, optional): draw into this figure instead of making one, which ignores figsize
+                                       & leaves the layout, saving & showing to the caller (Default: None; see grid())
 
     Dependencies: pandas, numpy, matplotlib, io, resolve_palette(), & formatter()
 
@@ -4310,7 +4399,8 @@ def caterpillar(df: pd.DataFrame | str, y: str, yerr: str = None, lower: str = N
     else:
         err = None
 
-    fig, ax = plt.subplots(figsize=figsize)
+    fig, owns_fig = _resolve_fig(fig, figsize)
+    ax = fig.subplots()
 
     # Error bars first so the markers sit on top
     if err is not None:
@@ -4349,7 +4439,7 @@ def caterpillar(df: pd.DataFrame | str, y: str, yerr: str = None, lower: str = N
     # Format, save & display plot
     if x_axis == '':
         x_axis = 'rank'
-    formatter(graph='scat', ax=ax, df=df, x='rank', y=y, cols=cols, file=file,
+    formatter(graph='scat', ax=ax, df=df, x='rank', y=y, cols=cols, file=file if owns_fig else None,
               title=title, title_size=title_size, title_weight=title_weight, title_font=title_font,
               x_axis=x_axis, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font,
               x_axis_scale='linear', x_axis_dims=x_axis_dims, x_axis_pad=x_axis_pad,
@@ -4362,11 +4452,122 @@ def caterpillar(df: pd.DataFrame | str, y: str, yerr: str = None, lower: str = N
               legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc, legend_items=(0, 0), legend_ncol=legend_ncol,
               legend_columnspacing=legend_columnspacing, legend_handletextpad=legend_handletextpad,
               legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad, legend_handlelength=legend_handlelength,
-              dpi=dpi, transparent=transparent, show=show, space_capitalize=space_capitalize, PDB_pt=PDB_pt)
+              dpi=dpi, transparent=transparent, show=show and owns_fig, space_capitalize=space_capitalize, PDB_pt=PDB_pt)
 
     if return_df:
         return df
 
+
+def grid(panels: list[dict], nrows: int = 1, ncols: int = None,
+        figsize: tuple = (12, 5), width_ratios: list = None, height_ratios: list = None,
+        panel_labels: bool | list = False, panel_labels_size: int = 14, panel_labels_weight: str = 'bold', panel_labels_font: str = 'Arial',
+        title: str = '', title_size: int = 14, title_weight: str = 'bold', title_font: str = 'Arial',
+        legend_mode: str = 'panels', legend_title: str = '', legend_title_size: int = 12, legend_title_weight: str = 'bold', legend_size: int = 12,
+        legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_items: tuple = (0, 0), legend_ncol: int = 1,
+        dpi: int = 0, transparent: bool = True, show: bool = True, file: str = None):
+    '''
+    grid(): combines graph methods into 1 figure
+
+    Parameters:
+    panels (list[dict]): 1 dictionary per panel, each holding the graph method as 'func' & that method's
+                         arguments as the remaining keys (i.e., {'func': dist, 'graph': 'half_offset',
+                         'df': df, 'x': 'GFP', 'cols': 'Sample'}); every panel keeps its own faceting,
+                         while file, show & fig are set by grid()
+    nrows (int, optional): # of panel rows (Default: 1)
+    ncols (int, optional): # of panel columns (Default: None; enough columns to hold the panels)
+    figsize (tuple, optional): figure size
+    width_ratios (list, optional): relative width per panel column (i.e., [2,1])
+    height_ratios (list, optional): relative height per panel row
+    panel_labels (bool | list, optional): label panels A, B, C... (True) or with the given labels (Default: False)
+    panel_labels_size (int, optional): panel label font size
+    panel_labels_weight (str, optional): panel label bold, italics, etc.
+    panel_labels_font (str, optional): panel label font
+    title (str, optional): figure title
+    title_size (int, optional): figure title font size
+    title_weight (str, optional): figure title bold, italics, etc.
+    title_font (str, optional): figure title font
+    legend_mode (str, optional): keep every panel's own legend ('panels') or combine them into 1 figure legend ('figure'; Default: 'panels')
+    legend_title (str, optional): figure legend title
+    legend_title_size (int, optional): figure legend title font size
+    legend_title_weight (str, optional): figure legend title bold, italics, etc.
+    legend_size (int, optional): figure legend font size
+    legend_bbox_to_anchor (tuple, optional): coordinates for bbox anchor
+    legend_loc (str, optional): figure legend location
+    legend_items (tuple, optional): figure legend items to show (start, end)
+    legend_ncol (int, optional): # of figure legend columns
+    dpi (int, optional): figure dpi (Default: 1200)
+    transparent (bool, optional): whether to save static images with transparent background (Default: True)
+    show (bool, optional): show plot (Default: True)
+    file (str, optional): output plot file path (static images only)
+
+    Dependencies: math, matplotlib, numpy, _resolve_fig(), _make_figure_legend(), & _final_save_show()
+    '''
+    if len(panels) == 0:
+        raise ValueError("panels is empty! Provide 1 dictionary per panel.")
+
+    if ncols is None:
+        ncols = math.ceil(len(panels) / nrows)
+    if nrows * ncols < len(panels):
+        raise ValueError(f"nrows x ncols ({nrows} x {ncols}) is smaller than the number of panels ({len(panels)})!")
+
+    if legend_mode not in ['panels', 'figure']:
+        raise ValueError("Invalid legend_mode! panels, figure")
+
+    if file is not None and file.split('.')[-1].lower() in ['html', 'json']:
+        raise ValueError("grid() saves static images only because mpld3 does not support subfigures!")
+
+    # Constrained layout because tight_layout() cannot arrange subfigures
+    fig = plt.figure(figsize=figsize, layout='constrained')
+    subfigs = np.array(fig.subfigures(nrows, ncols, width_ratios=width_ratios, height_ratios=height_ratios)).reshape(-1)
+
+    if panel_labels is True:
+        labels = [chr(ord('A') + i) for i in range(len(panels))]
+    elif isinstance(panel_labels, (list, tuple)):
+        labels = list(panel_labels)
+    else:
+        labels = []
+
+    panel_axes = []
+    for i, (subfig, panel) in enumerate(zip(subfigs, panels)):
+        panel = dict(panel) # Leave the caller's dictionary alone
+        func = panel.pop('func', None)
+        if func is None:
+            raise ValueError("Every panel needs a 'func' key (i.e., {'func': dist, 'graph': 'half_offset', ...})!")
+
+        panel['fig'] = subfig
+        panel['file'] = None # grid() saves & shows the whole figure once
+        panel['show'] = False
+        func(**panel)
+
+        panel_axes.append(np.array(subfig.axes)) # Collected from the subfigure since the methods return different things
+        if i < len(labels):
+            subfig.text(0, 1, labels[i], fontsize=panel_labels_size, fontweight=panel_labels_weight,
+                        fontfamily=panel_labels_font, ha='left', va='top')
+
+    for subfig in subfigs[len(panels):]: # Leave unused cells blank
+        subfig.set_visible(False)
+
+    if title != '':
+        fig.suptitle(title, fontsize=title_size, fontweight=title_weight, family=title_font)
+
+    if legend_mode == 'figure': # 1 legend built from every panel's entries, panel legends included
+        _make_figure_legend(
+            fig,
+            np.concatenate(panel_axes),
+            legend_title=legend_title,
+            legend_title_size=legend_title_size,
+            legend_title_weight=legend_title_weight,
+            legend_size=legend_size,
+            legend_bbox_to_anchor=legend_bbox_to_anchor,
+            legend_loc=legend_loc,
+            legend_items=legend_items,
+            legend_ncol=legend_ncol,
+            proxy=True
+        )
+
+    _final_save_show(fig, file=file, dpi=dpi, transparent=transparent, PDB_pt=None, icon='python', show=show)
+
+    return fig, panel_axes
 
 # Color display methods
 def matplotlib_cmaps():

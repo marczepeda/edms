@@ -498,3 +498,113 @@ def test_heat_cmap_input_types(cmap):
     fig, axes = p.heat(df, cmap=cmap, show=False)
     assert isinstance(fig, plt.Figure)
     plt.close(fig)
+
+
+# --------------------------------------------------------------------------- #
+# Offset distributions & grid() composition
+# --------------------------------------------------------------------------- #
+
+def test_dist_offset_labels_baselines_with_cols(dist_df):
+    # One baseline per cols value, spaced a full trace height apart, first value on top.
+    fig, axes = p.dist("offset", dist_df, x="val", cols="grp", show=False)
+    ax = axes[0, 0]
+    assert list(ax.get_yticks()) == [1.0, 0.0]
+    assert [t.get_text() for t in ax.get_yticklabels()] == ["A", "B"]
+    plt.close(fig)
+
+
+def test_dist_half_offset_halves_the_spacing(dist_df):
+    fig, axes = p.dist("half_offset", dist_df, x="val", cols="grp", show=False)
+    assert list(axes[0, 0].get_yticks()) == [0.5, 0.0]
+    plt.close(fig)
+
+
+def test_dist_offset_ticks_false_makes_a_legend(dist_df):
+    fig, axes = p.dist("offset", dist_df, x="val", cols="grp", offset_ticks=False, show=False)
+    assert list(axes[0, 0].get_yticks()) == []
+    assert len(fig.legends) == 1
+    plt.close(fig)
+
+
+def test_dist_offset_single_value_category_does_not_raise():
+    # gaussian_kde needs spread; a lone value falls back to a narrow spike.
+    df = pd.DataFrame({"val": [1.0, 2.0, 3.0, 5.0], "grp": ["a", "a", "a", "b"]})
+    fig, axes = p.dist("offset", df, x="val", cols="grp", show=False)
+    assert isinstance(fig, plt.Figure)
+    plt.close(fig)
+
+
+def test_grid_combines_panels_and_saves(tmp_path, dist_df, cat_df):
+    fig, panel_axes = p.grid(
+        panels=[
+            {"func": p.dist, "graph": "half_offset", "df": dist_df, "x": "val", "cols": "grp"},
+            {"func": p.cat, "graph": "bar", "df": cat_df, "x": "grp", "y": "val"},
+        ],
+        width_ratios=[2, 1], file=str(tmp_path / "grid.png"), show=False,
+    )
+    assert isinstance(fig, plt.Figure)
+    assert len(panel_axes) == 2
+    assert (tmp_path / "grid.png").exists()
+    plt.close(fig)
+
+
+def test_grid_panel_keeps_its_own_faceting(dist_df):
+    df = dist_df.assign(rep=["r1", "r2"] * (len(dist_df) // 2))
+    fig, panel_axes = p.grid(
+        panels=[
+            {"func": p.dist, "graph": "kde", "df": df, "x": "val", "cols": "grp", "facetx": "rep"},
+            {"func": p.cat, "graph": "box", "df": df, "x": "grp", "y": "val"},
+        ],
+        show=False,
+    )
+    assert len(panel_axes[0]) == 2  # One axes per facet value inside the panel
+    assert len(panel_axes[1]) == 1
+    plt.close(fig)
+
+
+def test_grid_figure_legend_folds_panel_legends(dist_df, cat_df):
+    fig, _ = p.grid(
+        panels=[
+            {"func": p.dist, "graph": "kde", "df": dist_df, "x": "val", "cols": "grp"},
+            {"func": p.cat, "graph": "bar", "df": cat_df, "x": "grp", "y": "val"},
+        ],
+        legend_mode="figure", show=False,
+    )
+    assert len(fig.legends) == 1
+    assert all(len(subfig.legends) == 0 for subfig in fig.subfigs)
+    plt.close(fig)
+
+
+def test_grid_leaves_unused_cells_blank(dist_df):
+    fig, panel_axes = p.grid(
+        panels=[{"func": p.dist, "graph": "hist", "df": dist_df, "x": "val"}] * 3,
+        nrows=2, ncols=2, show=False,
+    )
+    assert len(panel_axes) == 3
+    assert fig.subfigs[-1].get_visible() is False
+    plt.close(fig)
+
+
+def test_graph_method_given_a_figure_does_not_save(tmp_path, dist_df):
+    # A method drawing into someone else's figure leaves saving & showing to them.
+    fig = plt.figure()
+    subfig = fig.subfigures(1, 1)
+    p.dist("hist", dist_df, x="val", fig=subfig, file=str(tmp_path / "panel.png"), show=False)
+    assert not (tmp_path / "panel.png").exists()
+    assert len(subfig.axes) == 1
+    plt.close(fig)
+
+
+def test_grid_rejects_bad_panels_and_interactive_files(dist_df):
+    panel = {"func": p.dist, "graph": "hist", "df": dist_df, "x": "val"}
+    with pytest.raises(ValueError):
+        p.grid(panels=[], show=False)
+    with pytest.raises(ValueError):
+        p.grid(panels=[{"graph": "hist", "df": dist_df, "x": "val"}], show=False)
+    with pytest.raises(ValueError):
+        p.grid(panels=[panel] * 3, nrows=1, ncols=2, show=False)
+    with pytest.raises(ValueError):
+        p.grid(panels=[panel], file="grid.html", show=False)
+    with pytest.raises(ValueError):
+        p.grid(panels=[panel], legend_mode="nope", show=False)
+    plt.close("all")
