@@ -8,6 +8,7 @@ Usage:
 [Individual GG Cloning]
 - ord_form(): Sigma Alrich ordering formatter
 - tb(): designs top & bottom oligonucleotides
+- get_overhangs(): fill in GG cloning overhangs from the chosen promoter, scaffold, & epegRNA motif
 - sgRNAs(): design GG cloning oligonucleotides for cutting and base editing sgRNAs
 - epegRNAs(): design GG cloning oligonucleotides for prime editing epegRNAs
 - ngRNAs(): design GG cloning oligonucleotides for prime editing ngRNAs
@@ -110,8 +111,45 @@ def tb(df:pd.DataFrame, id:str, seq:str, t5:str, t3:str,
     
     return df
 
+# Overhangs contributed by the promoter & scaffold for sgRNAs, whose spacer is cloned into a vector that already carries the scaffold
+SGRNA_PROMOTER_OVERHANGS = {'hU6': {'t5': 'CACC', 'b3': ''},
+                            '7SK': {'t5': 'TCTC', 'b3': ''}}
+SGRNA_SCAFFOLD_OVERHANGS = {'SpCas9 Flip and Extend': {'t3': '', 'b5': 'AAAC'}}
+
+# Overhangs contributed by the promoter, scaffold, & epegRNA motif for peg/ngRNAs, whose scaffold is a separate GG fragment
+PEGRNA_PROMOTER_OVERHANGS = {'hU6': {'spacer_t5': 'CACC', 'spacer_b3': ''},
+                             '7SK': {'spacer_t5': 'TCTC', 'spacer_b3': ''}}
+PEGRNA_SCAFFOLD_OVERHANGS = {'SpCas9 Flip and Extend': {'spacer_t3': 'GTTTAAGAGC', 'spacer_b5': '',
+                                                        'extension_t5': '', 'extension_b3': 'GCACCGACTC'}}
+EPEGRNA_MOTIF_OVERHANGS = {'tevopreQ1': {'extension_b5': 'CGCG', 'extension_t3': ''},
+                           'tevo2': {'extension_b5': 'GACG', 'extension_t3': ''}}
+
+def get_overhangs(parts: list, **overhangs) -> dict:
+    ''' 
+    get_overhangs(): fill in GG cloning overhangs from the chosen promoter, scaffold, & epegRNA motif
+    
+    Parameters:
+    parts (list): (name, options) tuples pairing each chosen part with its overhang options
+        (i.e., [('hU6', SGRNA_PROMOTER_OVERHANGS), ('SpCas9 Flip and Extend', SGRNA_SCAFFOLD_OVERHANGS)])
+    overhangs: overhangs keyed by name; None takes the chosen part's overhang, anything else overrides it
+    
+    Dependencies: none
+    '''
+    for name,options in parts:
+        if name is None: continue # Part was not chosen; its overhangs stay empty unless specified
+        option_names = {option.lower(): option for option in options} # Match the part name regardless of case
+        if name.lower() not in option_names:
+            raise ValueError(f"'{name}' is not an option; choose from {list(options.keys())} or specify the overhangs directly.")
+        part = option_names[name.lower()]
+        used = {overhang: sequence for overhang,sequence in options[part].items() if overhangs.get(overhang,'') is None} # Overhangs this part supplies that were not specified
+        if used: print(f"{part} overhangs: " + ', '.join(f"{overhang}='{sequence}'" for overhang,sequence in used.items()))
+        overhangs.update(used)
+
+    return {overhang: '' if sequence is None else sequence for overhang,sequence in overhangs.items()}
+
 def sgRNAs(df:pd.DataFrame | str,id:str, spacer: str='Spacer_sequence', 
-           t5: str='CACC', t3: str='',b5: str='AAAC',b3: str='',tG: bool=True, 
+           promoter: str='hU6', scaffold: str='SpCas9 Flip and Extend',
+           t5: str=None, t3: str=None,b5: str=None,b3: str=None,tG: bool=True, 
            order: bool=True, file:str=None) -> pd.DataFrame:
     ''' 
     sgRNAs(): design GG cloning oligonucleotides for cutting and base editing sgRNAs
@@ -120,20 +158,32 @@ def sgRNAs(df:pd.DataFrame | str,id:str, spacer: str='Spacer_sequence',
     df (dataframe | str): Dataframe with sequence information for sgRNAs (or file path)
     id (str): id column name
     spacer (str): spacer column name (Default: Spacer_sequence)
-    t5 (str): top oligonucleotide 5' overhang
-    t3 (str): top oligonucleotide 3' overhang
-    b5 (str): bottom oligonucleotide 5' overhang (revcom)
-    b3 (str): bottom oligonucleotide 3' overhang (revcom)
+    promoter (str, optional): promoter upstream of the spacer (Default: hU6)
+        hU6: CACC t5, '' b3
+        7SK: TCTC t5, '' b3
+    scaffold (str, optional): scaffold downstream of the spacer (Default: SpCas9 Flip and Extend)
+        SpCas9 Flip and Extend: '' t3, AAAC b5
+    t5 (str): top oligonucleotide 5' overhang (Default: from promoter)
+    t3 (str): top oligonucleotide 3' overhang (Default: from scaffold)
+    b5 (str): bottom oligonucleotide 5' overhang (revcom) (Default: from scaffold)
+    b3 (str): bottom oligonucleotide 3' overhang (revcom) (Default: from promoter)
     tG (bool): add 5' G to spacer if needed (Default: True)
     order (bool): order format
     file (str, optional): output file path
     
-    Dependencies: pandas, io, top_bot(), & ord_form()
+    Assumptions:
+    1. sgRNA scaffold: SpCas9 Flip and Extend (GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC)
+    
+    Dependencies: pandas, io, top_bot(), ord_form(), & get_overhangs()
     '''
     if type(df)==str: # Get sgRNAs dataframe from file path if needed
         df = io.get(pt=df)
 
-    df=tb(df=df,id=id,seq=spacer,t5=t5,t3=t3,b5=b5,b3=b3,tG=tG,pre='o') # Make top and bottom oligos for spacer inserts
+    # Fill in the overhangs that were not specified from the chosen promoter & scaffold
+    overhangs = get_overhangs(parts=[(promoter,SGRNA_PROMOTER_OVERHANGS),(scaffold,SGRNA_SCAFFOLD_OVERHANGS)],
+                              t5=t5, t3=t3, b5=b5, b3=b3)
+
+    df=tb(df=df,id=id,seq=spacer,t5=overhangs['t5'],t3=overhangs['t3'],b5=overhangs['b5'],b3=overhangs['b3'],tG=tG,pre='o') # Make top and bottom oligos for spacer inserts
     if order==True: # Sigma order format (or original dataframe with top and bottom oligos)
         df = pd.concat([ord_form(df=df,id=id,seq=spacer,suf='_top',pre='o'), 
                         ord_form(df=df,id=id,seq=spacer,suf='_bot',pre='o')]).reset_index(drop=True)
@@ -143,10 +193,11 @@ def sgRNAs(df:pd.DataFrame | str,id:str, spacer: str='Spacer_sequence',
     return df
 
 def epegRNAs(df: pd.DataFrame | str, id: str, tG: str=True, order: bool=True, make_extension: bool=True,
-             spacer: str='Spacer_sequence', spacer_t5: str='CACC', spacer_t3: str='GTTTAAGAGC', 
-             spacer_b5: str='', spacer_b3: str='', extension: str='Extension_sequence', RTT: str='RTT_sequence',
-             PBS: str='PBS_sequence', linker: str='Linker_sequence', extension_t5: str='', extension_t3: str='',
-             extension_b5: str='CGCG', extension_b3: str='GCACCGACTC',
+             promoter: str='7SK', scaffold: str='SpCas9 Flip and Extend', epegRNA_motif: str='tevo2',
+             spacer: str='Spacer_sequence', spacer_t5: str=None, spacer_t3: str=None, 
+             spacer_b5: str=None, spacer_b3: str=None, extension: str='Extension_sequence', RTT: str='RTT_sequence',
+             PBS: str='PBS_sequence', linker: str='Linker_sequence', extension_t5: str=None, extension_t3: str=None,
+             extension_b5: str=None, extension_b3: str=None,
              order_scaffold: bool=False, file:str=None) -> pd.DataFrame:
     ''' 
     epegRNAs(): design GG cloning oligonucleotides for prime editing epegRNAs
@@ -157,16 +208,24 @@ def epegRNAs(df: pd.DataFrame | str, id: str, tG: str=True, order: bool=True, ma
     tG (bool, optional): add 5' G to spacer if needed (Default: True)
     order (bool, optional): order format (Default: True)
     make_extension (bool, optional): concatenate RTT, PBS, and linker to make extension sequence (Default: True)
+    promoter (str, optional): promoter upstream of the spacer (Default: 7SK)
+        hU6: CACC spacer_t5, '' spacer_b3
+        7SK: TCTC spacer_t5, '' spacer_b3
+    scaffold (str, optional): scaffold between the spacer & extension (Default: SpCas9 Flip and Extend)
+        SpCas9 Flip and Extend: GTTTAAGAGC spacer_t3, '' spacer_b5, '' extension_t5, GCACCGACTC extension_b3
+    epegRNA_motif (str, optional): 3' hairpin motif downstream of the extension (Default: tevo2)
+        tevopreQ1: CGCG extension_b5, '' extension_t3
+        tevo2: GACG extension_b5, '' extension_t3
     spacer (str, optional): epegRNA spacer column name (Default: Spacer_sequence)
-        _t5 (str, optional): top oligonucleotide 5' overhang
-        _t3 (str, optional): top oligonucleotide 3' overhang
-        _b5 (str, optional): bottom oligonucleotide 5' overhang
-        _b3 (str, optional): bottom oligonucleotide 3' overhang
+        _t5 (str, optional): top oligonucleotide 5' overhang (Default: from promoter)
+        _t3 (str, optional): top oligonucleotide 3' overhang (Default: from scaffold)
+        _b5 (str, optional): bottom oligonucleotide 5' overhang (Default: from scaffold)
+        _b3 (str, optional): bottom oligonucleotide 3' overhang (Default: from promoter)
     extension (str, optional): epegRNA extension name (Default: Extension_sequence)
-        _t5 (str, optional): top oligonucleotide 5' overhang
-        _t3 (str, optional): top oligonucleotide 3' overhang
-        _b5 (str, optional): bottom oligonucleotide 5' overhang
-        _b3 (str, optional): bottom oligonucleotide 3' overhang
+        _t5 (str, optional): top oligonucleotide 5' overhang (Default: from scaffold)
+        _t3 (str, optional): top oligonucleotide 3' overhang (Default: from epegRNA_motif)
+        _b5 (str, optional): bottom oligonucleotide 5' overhang (Default: from epegRNA_motif)
+        _b3 (str, optional): bottom oligonucleotide 3' overhang (Default: from scaffold)
     RTT (str, optional): epegRNA reverse transcripase template column name (Default: RTT_sequence)
     PBS (str, optional): epegRNA primer binding site column name (Default: PBS_sequence)
     linker (str, optional): epegRNA linker column name(Default: Linker_sequence)
@@ -174,13 +233,18 @@ def epegRNAs(df: pd.DataFrame | str, id: str, tG: str=True, order: bool=True, ma
     file (str, optional): output file path
     
     Assumptions:
-    1. epegRNA scaffold: GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC
-    2. epegRNA motif: tevoPreQ1 (CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA)
+    1. epegRNA scaffold: SpCas9 Flip and Extend (GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC)
+    2. epegRNA motif: tevo2 (CGTCGGTTCTACCTAGTTACGACGTTAAACCAACTAGGA) or tevopreQ1 (CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA)
     
-    Dependencies: pandas, top_bot(), & ord_form()
+    Dependencies: pandas, top_bot(), ord_form(), & get_overhangs()
     '''
     if type(df)==str: # Get epegRNAs dataframe from file path if needed
         df = io.get(pt=df)
+    
+    # Fill in the overhangs that were not specified from the chosen promoter, scaffold, & epegRNA motif
+    overhangs = get_overhangs(parts=[(promoter,PEGRNA_PROMOTER_OVERHANGS),(scaffold,PEGRNA_SCAFFOLD_OVERHANGS),(epegRNA_motif,EPEGRNA_MOTIF_OVERHANGS)],
+                              spacer_t5=spacer_t5, spacer_t3=spacer_t3, spacer_b5=spacer_b5, spacer_b3=spacer_b3,
+                              extension_t5=extension_t5, extension_t3=extension_t3, extension_b5=extension_b5, extension_b3=extension_b3)
     
     if make_extension==True: 
         if df[RTT].isnull().any():
@@ -191,8 +255,8 @@ def epegRNAs(df: pd.DataFrame | str, id: str, tG: str=True, order: bool=True, ma
             print(f'Warning: Null values found in "{linker}" column for some epegRNAs.')
         df[extension] = [rtt+pbs+linker for rtt,pbs,linker in zip(df[RTT].fillna(""), df[PBS].fillna(""), df[linker].fillna(""))] # Make extension by concatenating RTT, PBS, and linker
     else: print(f'Warning: Did not make extension sequence!\nMake sure "{extension}" column includes RTT+PBS+linker for epegRNAs.')
-    df=tb(df=df,id=id,seq=spacer,t5=spacer_t5,t3=spacer_t3,b5=spacer_b5,b3=spacer_b3,tG=tG,pre='es_') # Make top and bottom oligos for spacer inserts
-    df=tb(df=df,id=id,seq=extension,t5=extension_t5,t3=extension_t3,b5=extension_b5,b3=extension_b3,tG=False,pre='ee_') # Make top and bottom oligos for extension inserts
+    df=tb(df=df,id=id,seq=spacer,t5=overhangs['spacer_t5'],t3=overhangs['spacer_t3'],b5=overhangs['spacer_b5'],b3=overhangs['spacer_b3'],tG=tG,pre='es_') # Make top and bottom oligos for spacer inserts
+    df=tb(df=df,id=id,seq=extension,t5=overhangs['extension_t5'],t3=overhangs['extension_t3'],b5=overhangs['extension_b5'],b3=overhangs['extension_b3'],tG=False,pre='ee_') # Make top and bottom oligos for extension inserts
     if order==True: # Sigma order format (or original dataframe with top and bottom oligos)
         if order_scaffold==True: # Include the scaffold sequence in the order
             df = pd.concat([ord_form(df=df,id=id,seq=spacer,suf='_top',pre='es_'),
@@ -216,8 +280,9 @@ def epegRNAs(df: pd.DataFrame | str, id: str, tG: str=True, order: bool=True, ma
     return df
 
 def ngRNAs(df: pd.DataFrame | str, id: str, tG: bool=True, order: bool=True,
-           spacer: str='Spacer_sequence', spacer_t5: str='CACC', spacer_t3: str='GTTTAAGAGC',
-           spacer_b5: str='', spacer_b3: str='', order_scaffold: bool=False, 
+           promoter: str='7SK', scaffold: str='SpCas9 Flip and Extend',
+           spacer: str='Spacer_sequence', spacer_t5: str=None, spacer_t3: str=None,
+           spacer_b5: str=None, spacer_b3: str=None, order_scaffold: bool=False, 
            file:str=None) -> pd.DataFrame:
     ''' 
     ngRNAs(): design GG cloning oligonucleotides for prime editing ngRNAs
@@ -227,23 +292,32 @@ def ngRNAs(df: pd.DataFrame | str, id: str, tG: bool=True, order: bool=True,
     id (str): id column
     tG (bool, optional): add 5' G to spacer if needed (Default: True)
     order (bool, optional): order format (Default: True)
+    promoter (str, optional): promoter upstream of the spacer (Default: 7SK)
+        hU6: CACC spacer_t5, '' spacer_b3
+        7SK: TCTC spacer_t5, '' spacer_b3
+    scaffold (str, optional): scaffold downstream of the spacer (Default: SpCas9 Flip and Extend)
+        SpCas9 Flip and Extend: GTTTAAGAGC spacer_t3, '' spacer_b5
     spacer (str, optional): ngRNA spacer column name
-    spacer_t5 (str, optional): top oligonucleotide 5' overhang
-    spacer_t3 (str, optional): top oligonucleotide 3' overhang
-    spacer_b5 (str, optional): bottom oligonucleotide 5' overhang
-    spacer_b3 (str, optional): bottom oligonucleotide 3' overhang}
+    spacer_t5 (str, optional): top oligonucleotide 5' overhang (Default: from promoter)
+    spacer_t3 (str, optional): top oligonucleotide 3' overhang (Default: from scaffold)
+    spacer_b5 (str, optional): bottom oligonucleotide 5' overhang (Default: from scaffold)
+    spacer_b3 (str, optional): bottom oligonucleotide 3' overhang (Default: from promoter)
     order_scaffold (bool, optional): order top and bottom oligonucleotide for scaffold sequence (Default: False)
     file (str, optional): output file path
     
     Assumptions:
-    1. ngRNA scaffold: GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC
+    1. ngRNA scaffold: SpCas9 Flip and Extend (GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC)
     
-    Dependencies: pandas, top_bot(), & ord_form()
+    Dependencies: pandas, top_bot(), ord_form(), & get_overhangs()
     '''
     if type(df)==str: # Get ngRNAs dataframe from file path if needed
         df = io.get(pt=df)
     
-    df=tb(df=df,id=id,seq=spacer,t5=spacer_t5,t3=spacer_t3,b5=spacer_b5,b3=spacer_b3,tG=tG,pre='ns_') # Make top and bottom oligos for spacer inserts
+    # Fill in the overhangs that were not specified from the chosen promoter & scaffold
+    overhangs = get_overhangs(parts=[(promoter,PEGRNA_PROMOTER_OVERHANGS),(scaffold,PEGRNA_SCAFFOLD_OVERHANGS)],
+                              spacer_t5=spacer_t5, spacer_t3=spacer_t3, spacer_b5=spacer_b5, spacer_b3=spacer_b3)
+    
+    df=tb(df=df,id=id,seq=spacer,t5=overhangs['spacer_t5'],t3=overhangs['spacer_t3'],b5=overhangs['spacer_b5'],b3=overhangs['spacer_b3'],tG=tG,pre='ns_') # Make top and bottom oligos for spacer inserts
     if order==True: # Sigma order format (or original dataframe with top and bottom oligos)
         if order_scaffold==True: # Include the scaffold sequence in the order
             df = pd.concat([ord_form(df=df,id=id,seq=spacer,suf='_top',pre='ns_'),

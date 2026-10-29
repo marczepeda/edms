@@ -87,6 +87,98 @@ class TestSgRNAs:
 
 
 # ---------------------------------------------------------------------------
+# get_overhangs()
+# ---------------------------------------------------------------------------
+
+PEGRNA_PARTS = lambda promoter=None, scaffold=None, motif=None: [
+    (promoter, clone.PEGRNA_PROMOTER_OVERHANGS),
+    (scaffold, clone.PEGRNA_SCAFFOLD_OVERHANGS),
+    (motif, clone.EPEGRNA_MOTIF_OVERHANGS),
+]
+
+
+class TestGetOverhangs:
+    def test_fills_unspecified_overhangs_from_chosen_parts(self):
+        out = clone.get_overhangs(parts=PEGRNA_PARTS("7SK", "SpCas9 Flip and Extend", "tevo2"),
+                                  spacer_t5=None, spacer_t3=None, spacer_b5=None, spacer_b3=None,
+                                  extension_t5=None, extension_t3=None, extension_b5=None, extension_b3=None)
+        assert out == {"spacer_t5": "TCTC", "spacer_t3": "GTTTAAGAGC", "spacer_b5": "", "spacer_b3": "",
+                       "extension_t5": "", "extension_t3": "", "extension_b5": "GACG", "extension_b3": "GCACCGACTC"}
+
+    def test_hU6_and_tevopreQ1(self):
+        out = clone.get_overhangs(parts=PEGRNA_PARTS(promoter="hU6", motif="tevopreQ1"),
+                                  spacer_t5=None, extension_b5=None)
+        assert out == {"spacer_t5": "CACC", "extension_b5": "CGCG"}
+
+    def test_sgRNA_parts_use_their_own_scaffold_overhangs(self):
+        out = clone.get_overhangs(parts=[("hU6", clone.SGRNA_PROMOTER_OVERHANGS),
+                                         ("SpCas9 Flip and Extend", clone.SGRNA_SCAFFOLD_OVERHANGS)],
+                                  t5=None, t3=None, b5=None, b3=None)
+        assert out == {"t5": "CACC", "t3": "", "b5": "AAAC", "b3": ""}
+
+    def test_explicit_overhang_overrides_the_chosen_part(self):
+        out = clone.get_overhangs(parts=PEGRNA_PARTS(promoter="7SK"), spacer_t5="AAAA", spacer_b3=None)
+        assert out == {"spacer_t5": "AAAA", "spacer_b3": ""}
+
+    def test_empty_string_overrides_rather_than_falls_back(self):
+        out = clone.get_overhangs(parts=PEGRNA_PARTS(promoter="7SK"), spacer_t5="")
+        assert out == {"spacer_t5": ""}
+
+    def test_part_name_is_case_insensitive(self):
+        assert clone.get_overhangs(parts=PEGRNA_PARTS(promoter="7sk"), spacer_t5=None) == {"spacer_t5": "TCTC"}
+        assert clone.get_overhangs(parts=PEGRNA_PARTS(motif="TEVO2"), extension_b5=None) == {"extension_b5": "GACG"}
+
+    def test_part_left_as_none_contributes_nothing(self):
+        assert clone.get_overhangs(parts=PEGRNA_PARTS(), spacer_t5=None, spacer_t3=None) == {"spacer_t5": "", "spacer_t3": ""}
+
+    def test_unrecognized_name_raises(self):
+        with pytest.raises(ValueError, match="not an option"):
+            clone.get_overhangs(parts=PEGRNA_PARTS(promoter="U6"), spacer_t5=None)
+
+    def test_prints_the_defaults_it_supplied(self, capsys):
+        clone.get_overhangs(parts=PEGRNA_PARTS("7SK", "SpCas9 Flip and Extend", "tevo2"),
+                            spacer_t5=None, spacer_t3=None, spacer_b5=None, spacer_b3=None,
+                            extension_t5=None, extension_t3=None, extension_b5=None, extension_b3=None)
+        out = capsys.readouterr().out
+        assert "7SK overhangs: spacer_t5='TCTC', spacer_b3=''" in out
+        assert "SpCas9 Flip and Extend overhangs:" in out
+        assert "tevo2 overhangs:" in out
+
+    def test_says_nothing_when_every_overhang_was_specified(self, capsys):
+        clone.get_overhangs(parts=PEGRNA_PARTS(promoter="7SK"), spacer_t5="AAAA", spacer_b3="TTTT")
+        assert capsys.readouterr().out == ""
+
+    def test_reports_only_the_overhangs_it_actually_supplied(self, capsys):
+        clone.get_overhangs(parts=PEGRNA_PARTS(promoter="7SK"), spacer_t5="AAAA", spacer_b3=None)
+        out = capsys.readouterr().out
+        assert "spacer_b3=''" in out
+        assert "spacer_t5" not in out
+
+
+# ---------------------------------------------------------------------------
+# sgRNAs()
+# ---------------------------------------------------------------------------
+
+class TestSgRNAsOverhangs:
+    def test_default_promoter_and_scaffold_overhangs(self):
+        df = pd.DataFrame({"ID": [1], "Spacer_sequence": ["GTCGATCGAT"]})
+        out = clone.sgRNAs(df=df, id="ID", order=False)
+        assert out["oSpacer_sequence_top"].iloc[0] == "CACC" + "GTCGATCGAT"
+        assert out["oSpacer_sequence_bot"].iloc[0] == "AAAC" + str(Seq("GTCGATCGAT").reverse_complement())
+
+    def test_7SK_promoter(self):
+        df = pd.DataFrame({"ID": [1], "Spacer_sequence": ["GTCGATCGAT"]})
+        out = clone.sgRNAs(df=df, id="ID", order=False, promoter="7SK")
+        assert out["oSpacer_sequence_top"].iloc[0].startswith("TCTC")
+
+    def test_overhangs_override_named_parts(self):
+        df = pd.DataFrame({"ID": [1], "Spacer_sequence": ["GTCGATCGAT"]})
+        out = clone.sgRNAs(df=df, id="ID", order=False, t5="AAAA", b5="TTTT")
+        assert out["oSpacer_sequence_top"].iloc[0].startswith("AAAA")
+        assert out["oSpacer_sequence_bot"].iloc[0].startswith("TTTT")
+
+
+# ---------------------------------------------------------------------------
 # epegRNAs()
 # ---------------------------------------------------------------------------
 
@@ -114,6 +206,45 @@ class TestEpegRNAs:
         captured = capsys.readouterr()
         assert "Null values found" in captured.out
         assert out["Extension_sequence"].iloc[0] == "CCCCGGGG"  # None filled as empty string
+
+    def test_default_promoter_and_motif_overhangs(self):
+        df = pd.DataFrame({
+            "ID": [1],
+            "Spacer_sequence": ["GTCGATCGAT"],
+            "RTT_sequence": ["AAAA"],
+            "PBS_sequence": ["CCCC"],
+            "Linker_sequence": ["GGGG"],
+        })
+        out = clone.epegRNAs(df=df, id="ID", order=False)
+        assert out["es_Spacer_sequence_top"].iloc[0].startswith("TCTC")  # 7SK
+        assert out["es_Spacer_sequence_top"].iloc[0].endswith("GTTTAAGAGC")  # SpCas9 Flip and Extend
+        assert out["ee_Extension_sequence_bot"].iloc[0].startswith("GACG")  # tevo2
+        assert out["ee_Extension_sequence_bot"].iloc[0].endswith("GCACCGACTC")  # SpCas9 Flip and Extend
+
+    def test_named_parts_select_their_overhangs(self):
+        df = pd.DataFrame({
+            "ID": [1],
+            "Spacer_sequence": ["GTCGATCGAT"],
+            "RTT_sequence": ["AAAA"],
+            "PBS_sequence": ["CCCC"],
+            "Linker_sequence": ["GGGG"],
+        })
+        out = clone.epegRNAs(df=df, id="ID", order=False, promoter="hU6", epegRNA_motif="tevopreQ1")
+        assert out["es_Spacer_sequence_top"].iloc[0].startswith("CACC")
+        assert out["ee_Extension_sequence_bot"].iloc[0].startswith("CGCG")
+
+    def test_overhangs_override_named_parts(self):
+        df = pd.DataFrame({
+            "ID": [1],
+            "Spacer_sequence": ["GTCGATCGAT"],
+            "RTT_sequence": ["AAAA"],
+            "PBS_sequence": ["CCCC"],
+            "Linker_sequence": ["GGGG"],
+        })
+        out = clone.epegRNAs(df=df, id="ID", order=False, promoter="7SK", epegRNA_motif="tevo2",
+                             spacer_t5="AAAA", extension_b5="TTTT")
+        assert out["es_Spacer_sequence_top"].iloc[0].startswith("AAAA")
+        assert out["ee_Extension_sequence_bot"].iloc[0].startswith("TTTT")
 
     def test_order_true_without_scaffold(self):
         df = pd.DataFrame({
@@ -156,6 +287,16 @@ class TestNgRNAs:
         df = pd.DataFrame({"ID": [1], "Spacer_sequence": ["ATCGATCGAT"]})
         out = clone.ngRNAs(df=df, id="ID", order=False)
         assert "ns_Spacer_sequence_top" in out.columns
+
+    def test_default_promoter_and_scaffold_overhangs(self):
+        df = pd.DataFrame({"ID": [1], "Spacer_sequence": ["GTCGATCGAT"]})
+        out = clone.ngRNAs(df=df, id="ID", order=False)
+        assert out["ns_Spacer_sequence_top"].iloc[0] == "TCTC" + "GTCGATCGAT" + "GTTTAAGAGC"
+
+    def test_hU6_promoter_and_overhang_override(self):
+        df = pd.DataFrame({"ID": [1], "Spacer_sequence": ["GTCGATCGAT"]})
+        assert clone.ngRNAs(df=df.copy(), id="ID", order=False, promoter="hU6")["ns_Spacer_sequence_top"].iloc[0].startswith("CACC")
+        assert clone.ngRNAs(df=df.copy(), id="ID", order=False, spacer_t5="AAAA")["ns_Spacer_sequence_top"].iloc[0].startswith("AAAA")
 
     def test_order_true_with_scaffold(self):
         df = pd.DataFrame({"ID": [1], "Spacer_sequence": ["ATCGATCGAT"]})
