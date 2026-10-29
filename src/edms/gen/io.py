@@ -133,7 +133,7 @@ def get(pt: str, literal_eval:bool=False, **kwargs) -> pd.DataFrame | dict[pd.Da
         if literal_eval: return df_try_parse(pd.read_csv(filepath_or_buffer=pt,**kwargs))
         else: return pd.read_csv(filepath_or_buffer=pt,**kwargs)
     
-def get_dir(dir: str, suf: str='.csv', literal_eval: bool=False, **kwargs) -> dict[pd.DataFrame]:
+def get_dir(dir: str, suf: str='.csv', literal_eval: bool=False, recursive: bool=False, **kwargs) -> dict[pd.DataFrame]:
     ''' 
     get_dir(): returns python dictionary of dataframe from files within a directory
     
@@ -143,11 +143,14 @@ def get_dir(dir: str, suf: str='.csv', literal_eval: bool=False, **kwargs) -> di
     literal_evals (bool, optional): convert Python literals encoded as strings (Default: False)
         (1) automatically detects and parses columns containing Python literals (e.g., dict, list, set, tuple) encoded as strings
         (2) recursively evaluates nested structures
+    recursive (bool, optional): search subfolders for files (Default: False)
+        (1) keys include the subfolder path relative to dir (e.g., 'sub/file')
     **kwargs: pandas.read_csv() parameters
     
-    Dependencies: pandas
+    Dependencies: pandas, os & relative_paths()
     '''
-    files = [file for file in os.listdir(dir) if file[-len(suf):]==suf]
+    if recursive: files = [file for file in relative_paths(dir) if file[-len(suf):]==suf]
+    else: files = [file for file in os.listdir(dir) if file[-len(suf):]==suf]
     dc = {file[:-len(suf)]:get(os.path.join(dir,file),literal_eval,**kwargs) for file in files}
     print(f"Directory: {dir}\nKeys: {', '.join([key for key in dc.keys()])}")
     for key,df in dc.items():
