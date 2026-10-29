@@ -241,7 +241,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_clone_epegRNA_pool = subparsers_clone.add_parser("epegRNA_pool", help="Design GG oligos for pooled epegRNAs", description="Design GG oligos for pooled epegRNAs", formatter_class=formatter_class)
     
     parser_clone_epegRNA_pool.add_argument("-i", "--df", type=str, help="Input file path", required=True)
-    parser_clone_epegRNA_pool.add_argument("-b", "--barcode", type=str, help="subpool barcode column name", required=True)
+    parser_clone_epegRNA_pool.add_argument("-b", "--barcode", type=str, help="subpool barcode column name (disregarded when barcode_i = 0)", default=None)
     
     parser_clone_epegRNA_pool.add_argument("-f", "--file", type=str, help="Output file path", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_epegRNA_pool.csv')
 
@@ -252,7 +252,7 @@ def add_subparser(subparsers, formatter_class=None):
     parser_clone_epegRNA_pool.add_argument("-R", "--RE_type_IIS_df", type=str, help="RE Type IIS file path", default=argparse.SUPPRESS)
     parser_clone_epegRNA_pool.add_argument("-Ui", "--UMI_i", type=int, help="UMI start index (Default: 0)", default=0)
     parser_clone_epegRNA_pool.add_argument("-e", "--enzymes", type=str, nargs="+", help="List of Type IIS restriction enzymes to check for (Default: Esp3I)", default='Esp3I')
-    parser_clone_epegRNA_pool.add_argument("-bi", "--barcode_i", type=int, help="subpool barcode start index (Default: 0)", default=0)
+    parser_clone_epegRNA_pool.add_argument("-bi", "--barcode_i", type=int, help="subpool barcode start index (Default: 1); 0 omits subpool barcodes and uses 20 nt UMIs instead", default=1)
     parser_clone_epegRNA_pool.add_argument("-fbt5", "--fwd_barcode_t5", type=str, default="Forward Barcode", help="Forward barcode column name")
     parser_clone_epegRNA_pool.add_argument("-rbt3", "--rev_barcode_t3", type=str, default="Reverse Barcode", help="Reverse barcode column name")
     parser_clone_epegRNA_pool.add_argument("-frt5", "--fwd_RE_t5", type=str, default="Forward RE Name", help="Forward restriction enzyme column name")
@@ -1003,7 +1003,7 @@ Examples:[/red]
     # epegRNA_linkers() [linkers]:
     parser_pe_epegRNA_linkers.add_argument("-i", "--pegRNAs", help='Path to pegRNAs file',required=True)
 
-    parser_pe_epegRNA_linkers.add_argument("-ems", '--epegRNA_motif_sequence', default='CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA', help='epegRNA motif sequence (Default: tevopreQ1)')
+    parser_pe_epegRNA_linkers.add_argument("-ems", '--epegRNA_motif_sequence', default='tevo2', help='epegRNA motif name or sequence; tevo2: CGTCGGTTCTACCTAGTTACGACGTTAAACCAACTAGGA, tevopreQ1: CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA (Default: tevo2)')
     parser_pe_epegRNA_linkers.add_argument("-lp", '--linker_pattern', type=str, default=argparse.SUPPRESS, help='epegRNA linker pattern (Default: NNNNNNNN)')
     parser_pe_epegRNA_linkers.add_argument("-em", '--excluded_motifs', type=str, nargs="+", default=['Esp3I'], help="list of motifs or type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to exclude from linker generation (Default: ['Esp3I'])")
     parser_pe_epegRNA_linkers.add_argument("-ko", '--ckpt_dir', type=str, help='Checkpoint directory path (Default: ../epegRNAs/ckpt)', default='../epegRNAs/ckpt')

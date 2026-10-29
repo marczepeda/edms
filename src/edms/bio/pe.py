@@ -1444,7 +1444,10 @@ def merge(epegRNAs: str | dict | pd.DataFrame, ngRNAs: str | dict | pd.DataFrame
     return epeg_ngRNAs
 
 # pegRNA
-def epegRNA_linkers(pegRNAs: str | pd.DataFrame, epegRNA_motif_sequence: str='CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA',
+EPEGRNA_MOTIF_SEQUENCES = {'tevo2': 'CGTCGGTTCTACCTAGTTACGACGTTAAACCAACTAGGA',
+                           'tevopreQ1': 'CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA'}
+
+def epegRNA_linkers(pegRNAs: str | pd.DataFrame, epegRNA_motif_sequence: str='tevo2',
                     linker_pattern: str='NNNNNNNN', excluded_motifs: list=['Esp3I'],
                     ckpt_dir: str=None, ckpt_file=None, ckpt_pt: str='',
                     out_dir: str=None, out_file: str=None, literal_eval: bool=False) -> pd.DataFrame:
@@ -1453,7 +1456,9 @@ def epegRNA_linkers(pegRNAs: str | pd.DataFrame, epegRNA_motif_sequence: str='CG
     
     Parameters:
     pegRNAs (str | dataframe): pegRNAs DataFrame or file path
-    epegRNA_motif_sequence (str, optional): epegRNA motif sequence (Optional, Default: tevopreQ1)
+    epegRNA_motif_sequence (str, optional): epegRNA motif name or sequence (Optional, Default: tevo2)
+        tevo2: CGTCGGTTCTACCTAGTTACGACGTTAAACCAACTAGGA
+        tevopreQ1: CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA
     linker_pattern (str, optional): epegRNA linker pattern (Default: NNNNNNNN)
     excluded_motifs (list, optional): list of motifs or type IIS RE enzymes (i.e., Esp3I, BsaI, BspMI) to exclude from linker generation (Default: ['Esp3I'])
     ckpt_dir (str, optional): Checkpoint directory
@@ -1465,6 +1470,10 @@ def epegRNA_linkers(pegRNAs: str | pd.DataFrame, epegRNA_motif_sequence: str='CG
     '''
     if type(pegRNAs)==str: # Get pegRNAs dataframe from file path if needed
         pegRNAs = io.get(pt=pegRNAs,literal_eval=literal_eval)
+
+    # Replace epegRNA motif name (i.e., tevo2, tevopreQ1) with its sequence
+    motif_names = {name.lower(): sequence for name,sequence in EPEGRNA_MOTIF_SEQUENCES.items()}
+    epegRNA_motif_sequence = motif_names.get(epegRNA_motif_sequence.lower(), epegRNA_motif_sequence)
 
     # Parse excluded_motifs
     if excluded_motifs is not None: # Check if excluded_motifs is a list 

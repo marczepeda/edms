@@ -264,13 +264,13 @@ def ngRNAs(df: pd.DataFrame | str, id: str, tG: bool=True, order: bool=True,
 
 # Library GG cloning
 def epegRNA_pool(
-    df: pd.DataFrame | str, barcode: str, 
+    df: pd.DataFrame | str, barcode: str=None, 
     tG:bool=True,
     make_extension:bool=True,
     UMI_df: pd.DataFrame | str=None,
     PCR_df: pd.DataFrame| str=None,
     RE_type_IIS_df: pd.DataFrame| str=None,
-    UMI_i: int=0, enzymes: list=['Esp3I'], barcode_i:int=0, 
+    UMI_i: int=0, enzymes: list=['Esp3I'], barcode_i:int=1, 
     fwd_barcode_t5:str='Forward Barcode', rev_barcode_t3:str='Reverse Barcode',
     fwd_RE_t5:str='Forward RE Name', rev_RE_t3:str='Reverse RE Name',
     fwd_homology_t5:str='Forward Homology Name', rev_homology_t3:str='Reverse Homology Name',
@@ -285,7 +285,7 @@ def epegRNA_pool(
     
     Parameters:
     df (dataframe | str): Dataframe with sequence information for epegRNAs (or file path)
-    barcode (str): subpool barcode column name in df
+    barcode (str, optional): subpool barcode column name in df (Default: None); disregarded when barcode_i = 0
     tG (bool, optional): add 5' G(s) to spacer if needed (Default: True); leading G yields optimal expression and G(s) may be added to avoid creating an Esp3I site at promoter-spacer junction
     make_extension (bool, optional): concatenate RTT, PBS, and linker to make extension sequence (Default: True)
     UMI_df (dataframe | str, optional): Dataframe with UMI sequences (or file path)
@@ -293,7 +293,7 @@ def epegRNA_pool(
     RE_type_IIS_df (dataframe | str, optional): Dataframe with Type IIS restriction enzyme information (or file path)
     UMI_i (int, optional): UMI start index (Default: 0)
     enzymes (list, optional): list of Type IIS restriction enzymes to check for (Default: ['Esp3I'])
-    barcode_i (int, optional): subpool barcode start index (Default: 0)
+    barcode_i (int, optional): subpool barcode start index (Default: 1); 0 omits the forward and reverse subpool barcodes (barcode is disregarded) and uses 20 nt UMIs instead of 15 nt UMIs
     fwd_barcode_t5 (str, optional): forward barcode column name (Default: 'Forward Barcode')
     rev_barcode_t3 (str, optional): reverse barcode column name (Default: 'Reverse Barcode')
     fwd_RE_t5 (str, optional): forward restriction enzyme column name (Default: 'Forward RE Name')
@@ -341,16 +341,20 @@ def epegRNA_pool(
         RE_type_IIS_df = RE_type_IIS_df.copy()
     
     # Load UMI and PCR dataframes from resources if not provided
+    subpool = barcode_i != 0 # barcode_i = 0 => no subpool barcodes; 20 nt UMIs take their place
+    if subpool == False: barcode = None # Disregard subpool barcode column
     save_time = False
     if UMI_df is None and PCR_df is None and RE_type_IIS_df is None and enzymes == ['Esp3I']: # Default UMI, PCR, Enzyme dataframes, and enzymes (save time)
-        UMI_df = load_resource_csv(filename='UMI_15_hamming_4_yield_18687_Esp3I_0.csv')
+        if subpool: UMI_df = load_resource_csv(filename='UMI_15_hamming_4_yield_18687_Esp3I_0.csv')
+        else: UMI_df = load_resource_csv(filename='UMI_10_hamming_5_yield_73_2_combinations_interleaved_Esp3I_0.csv')
         PCR_df = load_resource_csv(filename='edms_pcr.csv')
         RE_type_IIS_df = load_resource_csv(filename='RE_type_IIS.csv')
         save_time = True
     
     else: # Not default (checking for RE sites)
         if UMI_df is None: # Get UMI dataframe from resources if not provided
-            UMI_df = load_resource_csv(filename='UMI_15_hamming_4_yield_19356.csv')
+            if subpool: UMI_df = load_resource_csv(filename='UMI_15_hamming_4_yield_19356.csv')
+            else: UMI_df = load_resource_csv(filename='UMI_10_hamming_5_yield_73_2_combinations_interleaved_Esp3I_0.csv')
         
         if PCR_df is None: # Get PCR dataframe from resources if not provided
             PCR_df = load_resource_csv(filename='edms_pcr.csv')
@@ -378,11 +382,18 @@ def epegRNA_pool(
     ]
 
     # Assign subpool barcodes
-    barcodes = sorted(df[barcode].unique())
-    PCR_barcodes = PCR_df.iloc[barcode_i:barcode_i+len(barcodes)] # Get corresponding barcodes from PCR dataframe starting at barcode_i
-    PCR_barcodes[barcode] = barcodes
-    df = pd.merge(left=df,right=PCR_barcodes,on=barcode)
-    print(f'{len(PCR_barcodes)} Barcodes: index = [{barcode_i}:{barcode_i+PCR_barcodes.shape[0]}]')    
+    if subpool:
+        barcodes = sorted(df[barcode].unique())
+        PCR_barcodes = PCR_df.iloc[barcode_i:barcode_i+len(barcodes)] # Get corresponding barcodes from PCR dataframe starting at barcode_i
+        PCR_barcodes[barcode] = barcodes
+        df = pd.merge(left=df,right=PCR_barcodes,on=barcode)
+        print(f'{len(PCR_barcodes)} Barcodes: index = [{barcode_i}:{barcode_i+PCR_barcodes.shape[0]}]')    
+    else: # barcode_i = 0: no subpool barcodes, keep the RE and homology sequences from the first PCR dataframe row
+        PCR_barcodes = PCR_df.iloc[:1].copy()
+        PCR_barcodes[fwd_barcode_t5] = ''
+        PCR_barcodes[rev_barcode_t3] = ''
+        for col,val in PCR_barcodes.iloc[0].items(): df[col] = val
+        print('0 Barcodes: no subpool barcodes (20 nt UMIs instead)')
 
     # Check for RE sites in UMI sequences + subpool barcodes (discard UMIs with RE sites)
     if save_time == False: # Not default UMI, PCR, Enzyme dataframes, and enzymes (do not save time)
