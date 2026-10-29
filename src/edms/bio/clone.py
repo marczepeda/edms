@@ -349,7 +349,7 @@ def epegRNA_pool(
     fwd_RE_t5:str='Forward RE Name', rev_RE_t3:str='Reverse RE Name',
     fwd_homology_t5:str='Forward Homology Name', rev_homology_t3:str='Reverse Homology Name',
     fwd_RE_t5_val:str='Esp3I', rev_RE_t3_val:str='Esp3I',
-    fwd_homology_t5_val:str='7SK', rev_homology_t3_val:str='tevopreQ1',
+    fwd_homology_t5_val:str='7SK', rev_homology_t3_val:str='tevo2',
     epegRNA_spacer:str='Spacer_sequence', epegRNA_scaffold:str='Scaffold_sequence',
     epegRNA_extension:str='Extension_sequence', epegRNA_RTT:str='RTT_sequence',
     epegRNA_PBS:str='PBS_sequence', epegRNA_linker:str='Linker_sequence',
@@ -387,9 +387,15 @@ def epegRNA_pool(
     file (str, optional): output file path (Default: None)
     return_df (bool, optional): return dataframe (Default: True)
 
-    Assumptions:
+    barcode_i > 0 Assumptions:
     1. Oligo Template: FWD UMI - FWD Barcode - FWD RE - FWD Homology - epegRNA_spacer - epegRNA_scaffold - epegRNA_extension - RE Homology - REV RE - REV Barcode - REV UMI
-    2. epegRNA motif: tevoPreQ1 (CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA)
+    2. epegRNA motif: tevoPreQ1 (CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA) or tevo2 (CGTCGGTTCTACCTAGTTACGACGTTAAACCAACTAGGA)
+    3. epegRNA scaffold: SpCas9 Flip and Extend (GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC)
+    
+    barcode_i = 0 Assumptions:
+    1. Oligo Template: FWD UMI - FWD RE - FWD Homology - epegRNA_spacer - epegRNA_scaffold - epegRNA_extension - RE Homology - REV RE - REV UMI
+    2. epegRNA motif: tevoPreQ1 (CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA) or tevo2 (CGTCGGTTCTACCTAGTTACGACGTTAAACCAACTAGGA)
+    3. epegRNA scaffold: SpCas9 Flip and Extend (GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC)
     
     Dependencies: pandas,
     '''
