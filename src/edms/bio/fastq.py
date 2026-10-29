@@ -3945,7 +3945,7 @@ def _parse_cutadapt_log(log: str) -> dict:
 
 def trim_motifs_summary(pt: str='./trim_motifs', out_dir: str=None,
                         csv_file: str='trim_motifs_summary.csv', plot_file: str='trim_motifs_summary.pdf',
-                        palette_or_cmap: str | list | dict | mcolors.Colormap = ['#D1495B','#EDAE49','#4EC569'],
+                        palette_or_cmap: str | list | dict | mcolors.Colormap = ['#D1495B','#EDAE49','#4EC569'], palette_shift: int = 0,
                         figsize_width: float=6, figsize_height_per_fastq: float=0.35, figsize_height_pad: float=1.5,
                         legend_loc: str='upper center', legend_bbox_to_anchor: tuple=(0.5,0), legend_ncol: int=3,
                         title: str='Cutadapt Summary', show: bool=False, **plot_kwargs) -> pd.DataFrame:
@@ -3958,6 +3958,7 @@ def trim_motifs_summary(pt: str='./trim_motifs', out_dir: str=None,
     csv_file (str, optional): summary .csv file name (Default: trim_motifs_summary.csv)
     plot_file (str, optional): summary plot file name (Default: trim_motifs_summary.pdf)
     palette_or_cmap (str | list | dict | Colormap, optional): adapter status colors (Default: red, yellow, green)
+    palette_shift (int, optional): shift palette_or_cmap colors by n (Default: 0; i.e., 1 starts at the 2nd color & -1 shifts the other direction)
     figsize_width (float, optional): figure width (Default: 6)
     figsize_height_per_fastq (float, optional): figure height per FASTQ file (Default: 0.35)
     figsize_height_pad (float, optional): additional figure height for axis labels & legend (Default: 1.5)
@@ -4028,7 +4029,7 @@ def trim_motifs_summary(pt: str='./trim_motifs', out_dir: str=None,
     # Scale figure height with the number of fastq files; barh draws the first index at the bottom, so reverse for top-to-bottom order
     p.stack(df=trim_motifs_summary_tidy_df, x='fastq_file', y='reads', cols='adapter_status',
             cols_order=list(adapter_statuses.values()), x_order=list(trim_motifs_summary_df['fastq_file'])[::-1],
-            vertical=False, palette_or_cmap=palette_or_cmap,
+            vertical=False, palette_or_cmap=palette_or_cmap, palette_shift=palette_shift,
             figsize=(figsize_width, figsize_height_pad + figsize_height_per_fastq*len(trim_motifs_summary_df)),
             x_axis='FASTQ File', y_axis='Total Reads', legend_title='Adapter Status',
             legend_loc=legend_loc, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_ncol=legend_ncol, title=title,
@@ -5021,7 +5022,7 @@ def add_label_info(df: pd.DataFrame, label: str='Edit', label_size: int=16, labe
 # Plot methods
 def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_order: list = None, cats_exclude: list|str = None, cols: str=None, cols_order: list=None, cols_exclude: list|str=None, PDB_pt: str=None, line: float | list[float] = None,
         facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
-        file: str=None, palette_or_cmap: str | list | dict | mcolors.Colormap='colorblind', alpha: float=1.0, dodge: bool=True, jitter: bool=True, size: float=5, edgecol: str='black', lw: int=1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
+        file: str=None, palette_or_cmap: str | list | dict | mcolors.Colormap='colorblind', palette_shift: int=0, alpha: float=1.0, dodge: bool=True, jitter: bool=True, size: float=5, edgecol: str='black', lw: int=1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
         figsize: tuple=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_scale: str='linear', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_scale: str='linear', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
@@ -5052,6 +5053,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_order: li
     file (str, optional): output plot file path
     palette_or_cmap (str | list | dict | Colormap, optional): seaborn palette name, matplotlib color map
                                                             (name or object), list of colors, or {category: color} dictionary
+    palette_shift (int, optional): shift palette_or_cmap colors by n (Default: 0; i.e., 1 starts at the 2nd color & -1 shifts the other direction)
     alpha (float, optional): Alpha (transparency) for scatter points (0 to 1)
     dodge (bool, optional): whether to separate points by color category
     jitter (bool, optional): whether to add jitter to points (for strip plots)
@@ -5144,7 +5146,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_order: li
 
     p.cat(graph=graph,df=df,x=x,y=y,cats_order=cats_order,cats_exclude=cats_exclude,cols=cols,cols_order=cols_order,cols_exclude=cols_exclude,PDB_pt=PDB_pt,line=line,
           facetx=facetx,facety=facety,facetx_order=facetx_order,facety_order=facety_order,subplot_titles=subplot_titles,
-          file=file,palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
+          file=file,palette_or_cmap=palette_or_cmap,palette_shift=palette_shift,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
           figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
           x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_axis_pad=x_axis_pad,x_ticks_size=x_ticks_size,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,x_ticks=x_ticks,
           y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_scale=y_axis_scale,y_axis_dims=y_axis_dims,y_axis_pad=y_axis_pad,y_ticks_size=y_ticks_size,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,y_ticks=y_ticks,
@@ -5154,7 +5156,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_order: li
 
 def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: str='Edit', cutoff_group: str='fastq_file', cutoff_value: float=0, cutoff_keep: bool=True, 
           cols_order: list=[], x_order: list=[], facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values', PDB_pt: str=None,
-          file: str=None, palette_or_cmap: str | list | dict | mcolors.Colormap='tab20', repeats: int=1, errcap: int=4, vertical: bool=True,
+          file: str=None, palette_or_cmap: str | list | dict | mcolors.Colormap='tab20', palette_shift: int=0, repeats: int=1, errcap: int=4, vertical: bool=True,
           figsize: tuple=(6,6), title: str='Editing Outcomes', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
           x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial',
           y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial',
@@ -5183,6 +5185,7 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
     file (str, optional): output plot file path
     palette_or_cmap (str | list | dict | Colormap, optional): seaborn palette name, matplotlib color map
                                                             (name or object), list of colors, or {category: color} dictionary
+    palette_shift (int, optional): shift palette_or_cmap colors by n (Default: 0; i.e., 1 starts at the 2nd color & -1 shifts the other direction)
     repeats (int, optional): number of color palette or map repeats (Default: 1)
     errcap (int, optional): error bar cap line width
     vertical (bool, optional): vertical orientation; otherwise horizontal (Default: True)
@@ -5268,7 +5271,7 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
 
     # Make stacked barplot
     p.stack(df=df_cut,x=x,y=y,cols=cols,cutoff_group=cutoff_group,cutoff_value=0,cutoff_keep=cutoff_keep,cols_order=cols_order,x_order=x_order,facetx=facetx,facety=facety,facetx_order=facetx_order,facety_order=facety_order,subplot_titles=subplot_titles,
-            file=file,palette_or_cmap=palette_or_cmap,repeats=repeats,errcap=errcap,vertical=vertical,
+            file=file,palette_or_cmap=palette_or_cmap,palette_shift=palette_shift,repeats=repeats,errcap=errcap,vertical=vertical,
             figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
             x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_pad=x_axis_pad,x_ticks_size=x_ticks_size,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,
             y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_dims=y_axis_dims,y_axis_pad=y_axis_pad,y_ticks_size=y_ticks_size,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,

@@ -424,7 +424,7 @@ def pymol_script(
 
 # Plot functions
 def hist(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new", line: float | list[float] = None,
-    file: str = None, palette_or_cmap: str | list | dict | mcolors.Colormap = 'turbo', alpha: float = 1.0, dodge: bool = False, jitter: bool = True, size: float = 5, edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
+    file: str = None, palette_or_cmap: str | list | dict | mcolors.Colormap = 'turbo', palette_shift: int = 0, alpha: float = 1.0, dodge: bool = False, jitter: bool = True, size: float = 5, edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
     figsize: tuple=(6,6), title: str = 'Number of Edits in Clusters', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
     x_axis: str = 'Cluster #', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
     y_axis: str = 'Count', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
@@ -441,6 +441,7 @@ def hist(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new", line: float |
     file (str, optional): output plot file path (including the file extension)
     palette_or_cmap (str | list | dict | Colormap, optional): seaborn palette name, matplotlib color map
                                                             (name or object), list of colors, or {category: color} dictionary
+    palette_shift (int, optional): shift palette_or_cmap colors by n (Default: 0; i.e., 1 starts at the 2nd color & -1 shifts the other direction)
     alpha (float, optional): Alpha value for transparency of markers.
     edgecol (str, optional): Edge color for markers.
     figsize (tuple, optional): Figure size for the plot.
@@ -498,7 +499,7 @@ def hist(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new", line: float |
     clust_counts[cluster_col] = clust_counts[cluster_col].astype(str)  # Ensure cluster labels are strings for categorical plotting
 
     p.cat(graph='bar', df=clust_counts, x=cluster_col, y="count", line=line,
-        file=f'{".".join(file.split(".")[:-1])}_hist.{file.split(".")[-1]}' if file else "hist.all", palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
+        file=f'{".".join(file.split(".")[:-1])}_hist.{file.split(".")[-1]}' if file else "hist.all", palette_or_cmap=palette_or_cmap,palette_shift=palette_shift,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
         figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
         x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_axis_pad=x_axis_pad,x_ticks_size=x_ticks_size,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,x_ticks=x_ticks,
         y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_scale=y_axis_scale,y_axis_dims=y_axis_dims,y_axis_pad=y_axis_pad,y_ticks_size=y_ticks_size,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,y_ticks=y_ticks,
@@ -507,7 +508,7 @@ def hist(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new", line: float |
         dpi=dpi,transparent=transparent,show=show,space_capitalize=space_capitalize,**kwargs)
 
 def cat(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new",scores_col: str = "log2(FC)", line: float | list[float] = None,
-    file: str = None, palette_or_cmap: str | list | dict | mcolors.Colormap = 'turbo', alpha: float = 0.5, dodge: bool = False, jitter: bool = True, size: float = 5, edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
+    file: str = None, palette_or_cmap: str | list | dict | mcolors.Colormap = 'turbo', palette_shift: int = 0, alpha: float = 0.5, dodge: bool = False, jitter: bool = True, size: float = 5, edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
     figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
     x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
     y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
@@ -525,6 +526,7 @@ def cat(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new",scores_col: str
     file (str, optional): output plot file path (including the file extension)
     palette_or_cmap (str | list | dict | Colormap, optional): seaborn palette name, matplotlib color map
                                                             (name or object), list of colors, or {category: color} dictionary
+    palette_shift (int, optional): shift palette_or_cmap colors by n (Default: 0; i.e., 1 starts at the 2nd color & -1 shifts the other direction)
     alpha (float, optional): Alpha value for transparency of markers.
     edgecol (str, optional): Edge color for markers.
     figsize (tuple, optional): Figure size for the plot.
@@ -583,7 +585,7 @@ def cat(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new",scores_col: str
 
     # Categorical bar chart of cluster counts
     p.cat(graph='strip', df=df_clus, x=cluster_col, y=scores_col, line=line,
-        file=f'{".".join(file.split(".")[:-1])}_strip.{file.split(".")[-1]}' if file else f"strip.all", palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
+        file=f'{".".join(file.split(".")[:-1])}_strip.{file.split(".")[-1]}' if file else f"strip.all", palette_or_cmap=palette_or_cmap,palette_shift=palette_shift,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
         figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
         x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_axis_pad=x_axis_pad,x_ticks_size=x_ticks_size,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,x_ticks=x_ticks,
         y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_scale=y_axis_scale,y_axis_dims=y_axis_dims,y_axis_pad=y_axis_pad,y_ticks_size=y_ticks_size,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,y_ticks=y_ticks,
@@ -592,7 +594,7 @@ def cat(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new",scores_col: str
         dpi=dpi,transparent=transparent,show=show,space_capitalize=space_capitalize,**kwargs)
 
     p.cat(graph='box', df=df_clus, x=cluster_col, y=scores_col, line=line,
-        file=f'{".".join(file.split(".")[:-1])}_box.{file.split(".")[-1]}' if file else f"box.all", palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
+        file=f'{".".join(file.split(".")[:-1])}_box.{file.split(".")[-1]}' if file else f"box.all", palette_or_cmap=palette_or_cmap,palette_shift=palette_shift,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
         figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
         x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_axis_pad=x_axis_pad,x_ticks_size=x_ticks_size,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,x_ticks=x_ticks,
         y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_scale=y_axis_scale,y_axis_dims=y_axis_dims,y_axis_pad=y_axis_pad,y_ticks_size=y_ticks_size,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,y_ticks=y_ticks,
@@ -601,7 +603,7 @@ def cat(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new",scores_col: str
         dpi=dpi,transparent=transparent,show=show,space_capitalize=space_capitalize,**kwargs)
     
     p.cat(graph='box_strip', df=df_clus, x=cluster_col, y=scores_col, line=line,
-        file=f'{".".join(file.split(".")[:-1])}_box_strip.{file.split(".")[-1]}' if file else f"box_strip.all", palette_or_cmap=palette_or_cmap,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
+        file=f'{".".join(file.split(".")[:-1])}_box_strip.{file.split(".")[-1]}' if file else f"box_strip.all", palette_or_cmap=palette_or_cmap,palette_shift=palette_shift,alpha=alpha,dodge=dodge,jitter=jitter,size=size,edgecol=edgecol,lw=lw,errorbar=errorbar,errwid=errwid,errcap=errcap,
         figsize=figsize,title=title,title_size=title_size,title_weight=title_weight,title_font=title_font,
         x_axis=x_axis,x_axis_size=x_axis_size,x_axis_weight=x_axis_weight,x_axis_font=x_axis_font,x_axis_scale=x_axis_scale,x_axis_dims=x_axis_dims,x_axis_pad=x_axis_pad,x_ticks_size=x_ticks_size,x_ticks_rot=x_ticks_rot,x_ticks_font=x_ticks_font,x_ticks=x_ticks,
         y_axis=y_axis,y_axis_size=y_axis_size,y_axis_weight=y_axis_weight,y_axis_font=y_axis_font,y_axis_scale=y_axis_scale,y_axis_dims=y_axis_dims,y_axis_pad=y_axis_pad,y_ticks_size=y_ticks_size,y_ticks_rot=y_ticks_rot,y_ticks_font=y_ticks_font,y_ticks=y_ticks,
@@ -612,7 +614,7 @@ def cat(df_clus: pd.DataFrame | str, cluster_col: str = "cl_new",scores_col: str
 def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="cl_new", scores_col: str="log2(FC)", individual: bool=True, size: str=None, size_dims: tuple=None, label: str='Edit', label_size: int=16,
         label_info: bool=True, aa_properties: bool | list=True, cBioPortal: str=None, only_clinical: bool=False, UniProt: str=None, PhosphoSitePlus: str=None, PDB_contacts: str=None, PDB_neighbors: str=None, DSSP: str=None, chain_id: str=None, ss_h: int=None, ss_y: int=None,
         y_err: str = None, err_capsize: float = 0.2, err_alpha: float = 1.0, err_color: str = 'black',
-        file: str=None, palette_or_cmap: str | list | dict | mcolors.Colormap = 'turbo', edgecol: str='black', figsize=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
+        file: str=None, palette_or_cmap: str | list | dict | mcolors.Colormap = 'turbo', palette_shift: int = 0, edgecol: str='black', figsize=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
         x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
         y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
         legend_title: str='',legend_title_size: int=12, legend_title_weight: str ='bold', legend_size: int = 12, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1, 
@@ -653,6 +655,7 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
     palette_or_cmap (str | list | dict | Colormap, optional): seaborn palette name, matplotlib color map
                                                             (name or object), list of colors, or {category: color} dictionary
                                                             (only used if individual parameter is specified)
+    palette_shift (int, optional): shift palette_or_cmap colors by n (Default: 0; i.e., 1 starts at the 2nd color & -1 shifts the other direction)
     edgecol (str, optional): point edge color
     figsize (tuple, optional): figure size
     title (str, optional): plot title
@@ -978,7 +981,7 @@ def torn(df: pd.DataFrame | str, df_clus: pd.DataFrame | str, cluster_col: str="
             data=clus_df,
             x='AA Number', y=scores_col,
             hue=cluster_col, edgecolor=edgecol,
-            palette=p.resolve_palette(palette_or_cmap, cats=clus_df[cluster_col].dropna().drop_duplicates().tolist()),
+            palette=p.resolve_palette(palette_or_cmap, cats=clus_df[cluster_col].dropna().drop_duplicates().tolist(), shift=palette_shift),
             style=stys, style_order=stys_order if stys_order else None, markers=mark_order if mark_order else None,
             size=size if display_legend else None, sizes=(50,50), size_norm=size_norm,
             legend=False, zorder = 2,

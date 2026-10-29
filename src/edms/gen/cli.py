@@ -79,6 +79,7 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
         subparser.add_argument("-st", "--stys", type=str, help="Style column name")
         subparser.add_argument("-so", "--stys_order", nargs="+", help="Style order (list of values)")
         subparser.add_argument("-mo", "--mark_order", nargs="+", help="Marker order (list of marker styles)")
+        subparser.add_argument("-mos", "--mark_shift", type=int, default=0, help="Shift the markers by n; negative shifts the other direction (Default: 0)")
     else:
         subparser.add_argument("-si", "--size", type=str, help="Column name used to scale point sizes (Default: None", default=argparse.SUPPRESS)
         subparser.add_argument("-sd", "--size_dims", type=parse_tuple_float, help="Size range for points formatted as min,max")
@@ -111,6 +112,7 @@ def add_common_plot_scat_args(subparser, fastq_torn_parser=False, fastq_corr_par
     subparser.add_argument("-f", "--file", help="Output file path", type=str, required=False, default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_scat.all')
     if fastq_torn_parser == False and fastq_corr_parser == False:
         subparser.add_argument("-pc", "--palette_or_cmap", type=str, default="colorblind", help="Seaborn palette or matplotlib colormap")
+        subparser.add_argument("-pcs", "--palette_shift", type=int, default=0, help="Shift the palette or colormap colors by n; negative shifts the other direction (Default: 0)")
     if fastq_torn_parser == False and fastq_corr_parser == False and pwes_torn_parser == False:
         subparser.add_argument('-a', "--alpha", type=float, default=1, help="Alpha (transparency) for scatter points (0 to 1)")
     subparser.add_argument("-ec", "--edgecol", type=str, default="black", help="Edge color for scatter points")
@@ -210,6 +212,7 @@ def add_common_plot_cat_args(subparser, fastq_parser=False, pwes_parsers=False):
 
     subparser.add_argument("-f", "--file", type=str, help="Output file path", default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_plot_cat.all')
     subparser.add_argument("-pc", "--palette_or_cmap", type=str, default="colorblind", help="Seaborn color palette or matplotlib colormap")
+    subparser.add_argument("-pcs", "--palette_shift", type=int, default=0, help="Shift the palette or colormap colors by n; negative shifts the other direction (Default: 0)")
     subparser.add_argument('-a', "--alpha", type=float, default=1, help="Alpha (transparency) for scatter points (0 to 1)")
     subparser.add_argument("-do", "--dodge", action='store_false', default=False, help="Separate points by color category")
     subparser.add_argument("-nj", "--no_jitter", dest="jitter", action='store_false', default=True, help="Don't add jitter for points in strip plots")
@@ -298,7 +301,17 @@ def add_common_plot_dist_args(subparser):
     # Plot customization
     subparser.add_argument("-b", "--bins", type=int, default=40, help="Number of bins for histogram")
     subparser.add_argument("-LL", "--log10_low", type=int, default=0, help="Log10 scale lower bound (e.g., 1 = 10^1 = 10)")
+
+    # Offset graph customization (offset & half_offset)
+    subparser.add_argument("-os", "--offset_spacing", type=float, default=None, help="Baseline spacing for offset graphs in trace heights (Default: 1 for offset & 0.5 for half_offset)")
+    subparser.add_argument("-on", "--offset_norm", type=str, default="max", choices=['max', 'common'], help="Offset graph trace scaling: 'max' gives every trace the same height & 'common' keeps densities comparable")
+    subparser.add_argument("-onf", "--offset_no_fill", dest="offset_fill", action="store_false", help="Draw offset graph traces as colored outlines instead of filled curves")
+    subparser.add_argument("-oa", "--offset_alpha", type=float, default=1, help="Offset graph fill transparency (0 to 1)")
+    subparser.add_argument("-ob", "--offset_bw_adjust", type=float, default=1, help="Multiplier for the offset graph kernel bandwidth (< 1 is less smooth)")
+    subparser.add_argument("-og", "--offset_grid", type=int, default=200, help="Number of points that offset graph densities are evaluated on")
+    subparser.add_argument("-ont", "--offset_no_ticks", dest="offset_ticks", action="store_false", help="Make a legend for offset graphs instead of labeling baselines with cols values")
     subparser.add_argument("-pc", "--palette_or_cmap", type=str, default="colorblind", help="Seaborn color palette or matplotlib colormap")
+    subparser.add_argument("-pcs", "--palette_shift", type=int, default=0, help="Shift the palette or colormap colors by n; negative shifts the other direction (Default: 0)")
     subparser.add_argument("-ec", "--edgecol", type=str, default="black", help="Edge color of histogram bars")
     subparser.add_argument("-lw", "--lw", type=int, default=1, help="Line width for edges")
     subparser.add_argument("-fx", "--facetx", type=str, help="Column name for facet columns (creates one subplot per category in this column, arranged in separate columns)")
@@ -470,6 +483,7 @@ def add_common_plot_stack_args(subparser, fastq_parser=False):
     subparser.add_argument("-fyo", "--facety_order", nargs="+", help="Order of facet rows")
     subparser.add_argument("-spt", "--subplot_titles", type=str, nargs="+", default='facet_values', help="Subplot titles can be set to facet values (Default: 'facet_values'), facet labels with values ('facet_labels'), custom titles (must provide same number of titles as subplots), or none")
     subparser.add_argument("-pc", "--palette_or_cmap", type=str, default="Set2", help="Seaborn palette or Matplotlib colormap for stacked bars")
+    subparser.add_argument("-pcs", "--palette_shift", type=int, default=0, help="Shift the palette or colormap colors by n; negative shifts the other direction (Default: 0)")
     subparser.add_argument("-ec", "--errcap", type=int, default=4, help="Width of error bar caps")
     subparser.add_argument("-v", "--vertical", action="store_true", help="Stack bars vertically (default True)", default=False)
     if fastq_parser==True:
@@ -669,12 +683,14 @@ def add_subparser(subparsers, formatter_class=None):
         add_common_plot_cat_args(parser_plot_cat)
         parser_plot_cat.set_defaults(func=p.cat)
 
-    # dist(): Creates distribution graphs (hist, kde, hist_kde, ridge)
+    # dist(): Creates distribution graphs (hist, kde, hist_kde, offset, half_offset)
     parser_plot_type_hist = subparsers_plot.add_parser("hist", help="Create histogram plot", description="Create histogram plot", formatter_class=formatter_class)
     parser_plot_type_kde = subparsers_plot.add_parser("kde", help="Create density plot", description="Create density plot", formatter_class=formatter_class)
     parser_plot_type_hist_kde = subparsers_plot.add_parser("hist_kde", help="Create histogram + density plot", description="Create histogram + density plot", formatter_class=formatter_class)
+    parser_plot_type_offset = subparsers_plot.add_parser("offset", help="Create offset density plot (1 non-overlapping curve per color column value)", description="Create offset density plot (1 non-overlapping curve per color column value)", formatter_class=formatter_class)
+    parser_plot_type_half_offset = subparsers_plot.add_parser("half_offset", help="Create half offset density plot (1 curve per color column value, overlapping by half)", description="Create half offset density plot (1 curve per color column value, overlapping by half)", formatter_class=formatter_class)
 
-    for parser_plot_dist in [parser_plot_type_hist, parser_plot_type_kde, parser_plot_type_hist_kde]:
+    for parser_plot_dist in [parser_plot_type_hist, parser_plot_type_kde, parser_plot_type_hist_kde, parser_plot_type_offset, parser_plot_type_half_offset]:
         add_common_plot_dist_args(parser_plot_dist)
         parser_plot_dist.set_defaults(func=p.dist)
 

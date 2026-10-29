@@ -26,11 +26,13 @@ Usage:
 - palette_colors(): returns a discrete list of colors from a palette name, color map, or list of colors
 - resolve_palette(): returns a seaborn-ready palette from a palette name, color map, color list, or {category: color} dictionary
 - repeat_palette_cmap(): returns a list of a repeated seaborn palette or matplotlib color map
+- shift_markers(): returns a list of marker styles rotated by n & cycled/truncated to the requested length
 - _as_cmap(): returns a matplotlib color map from a palette name, color map, or list of colors
 - _category_color_map: a dictionary mapping category names to colors for categorical plots
 - _is_blank_label(): True when user did not explicitly set the axis label
 - autoscale_limits(): Compute axis limits from data with proportional padding.
 - autoscale_xy(): Compute x and y axis limits with proportional padding.
+- _offset_density(): Compute a kernel density estimate on a shared grid for offset graphs
 - formatter(): formats, displays, and saves plots
 
 [Facet Handling Methods]
@@ -74,6 +76,7 @@ from matplotlib.font_manager import FontProperties
 import numpy as np
 import json
 import mpld3
+from scipy.stats import gaussian_kde
 from pathlib import Path
 import shutil
 import importlib.resources as pkg_resources
@@ -686,7 +689,20 @@ def _get_cmap(palette_or_cmap, n_colors: int = None) -> mcolors.Colormap:
     cmap = palette_or_cmap if isinstance(palette_or_cmap, mcolors.Colormap) else mpl.colormaps[palette_or_cmap]
     return cmap if n_colors is None else cmap.resampled(n_colors)
 
-def palette_colors(palette_or_cmap, n_colors: int = None) -> list:
+def _is_discrete_palette(palette_or_cmap) -> bool:
+    '''
+    _is_discrete_palette(): True when colors are taken in order (& cycled) rather than sampled across a color map
+
+    Parameters:
+    palette_or_cmap: value supplied to a plotting method's palette_or_cmap/cmap parameter
+
+    Dependencies: _is_color_list()
+    '''
+    if _is_color_list(palette_or_cmap): # Color lists are cycled/truncated
+        return True
+    return isinstance(palette_or_cmap, str) and palette_or_cmap in SEABORN_PALETTE_NAMES and palette_or_cmap not in ('husl', 'hsv') # Seaborn qualitative palettes
+
+def palette_colors(palette_or_cmap, n_colors: int = None, shift: int = 0) -> list:
     '''
     palette_colors(): returns a discrete list of colors from a seaborn palette name,
     matplotlib color map (name or object), or list of colors
@@ -697,9 +713,24 @@ def palette_colors(palette_or_cmap, n_colors: int = None) -> list:
                                              (i.e., ['#4EC569','red',(0,0,1)])
     n_colors (int, optional): number of colors to return (color lists are cycled/truncated
                               & palettes/color maps are sampled; None returns the natural length)
+    shift (int, optional): shift the colors by n (Default: 0); positive skips the first n colors
+                           (i.e., 1 starts at the 2nd color) & negative shifts the other direction
+                           (discrete palettes start at the last n colors & color maps skip the last n colors)
 
-    Dependencies: numpy, matplotlib, seaborn, _is_color_list(), & _get_cmap()
+    Dependencies: numpy, matplotlib, seaborn, _is_color_list(), _is_discrete_palette(), & _get_cmap()
     '''
+    if shift:
+        if not isinstance(shift, (int, np.integer)):
+            raise ValueError(f"shift={shift} must be an integer.")
+        if n_colors is None or _is_discrete_palette(palette_or_cmap): # Rotate the natural-length palette (then cycle/truncate)
+            colors = palette_colors(palette_or_cmap)
+            shift = shift % len(colors)
+            colors = colors[shift:] + colors[:shift]
+            return colors if n_colors is None else palette_colors(colors, n_colors=n_colors)
+        # Color maps: sample extra colors & drop them from the low (positive) or high (negative) end
+        colors = palette_colors(palette_or_cmap, n_colors=n_colors + abs(shift))
+        return colors[shift:] if shift > 0 else colors[:shift]
+
     if _is_color_list(palette_or_cmap): # List of colors: cycle (or truncate) to the requested length
         colors = [mcolors.to_rgba(color) for color in palette_or_cmap]
         if n_colors is not None:
@@ -720,7 +751,7 @@ def palette_colors(palette_or_cmap, n_colors: int = None) -> list:
     print(f'{palette_or_cmap} is not a valid seaborn color palette, matplotlib color map, or list of colors; used colorblind instead.')
     return list(sns.color_palette('colorblind', n_colors=n_colors))
 
-def resolve_palette(palette_or_cmap, cats: list = None):
+def resolve_palette(palette_or_cmap, cats: list = None, shift: int = 0):
     '''
     resolve_palette(): returns a seaborn-ready palette from a seaborn palette name,
     matplotlib color map (name or object), list of colors, or {category: color} dictionary
@@ -731,6 +762,7 @@ def resolve_palette(palette_or_cmap, cats: list = None):
                                                     {category: color} dictionary
     cats (list, optional): categories that the colors are assigned to in order
                            (returns a {category: color} dictionary when provided)
+    shift (int, optional): shift the colors by n; negative shifts the other direction (Default: 0; see palette_colors())
 
     Dependencies: seaborn, _category_color_map(), & palette_colors()
 
@@ -739,13 +771,13 @@ def resolve_palette(palette_or_cmap, cats: list = None):
     '''
     if isinstance(palette_or_cmap, dict): # Already a {category: color} map
         return palette_or_cmap
-    if isinstance(palette_or_cmap, str): # Seaborn/matplotlib name; seaborn handles both
+    if isinstance(palette_or_cmap, str) and not shift: # Seaborn/matplotlib name; seaborn handles both
         return palette_or_cmap
     if cats is None or len(cats) == 0: # Categories unknown (i.e., no hue), so return a color list
-        return palette_colors(palette_or_cmap)
-    return _category_color_map(cats, palette_or_cmap=palette_or_cmap, order=cats)
+        return palette_colors(palette_or_cmap, shift=shift)
+    return _category_color_map(cats, palette_or_cmap=palette_or_cmap, order=cats, shift=shift)
 
-def repeat_palette_cmap(palette_or_cmap, repeats: int):
+def repeat_palette_cmap(palette_or_cmap, repeats: int, shift: int = 0):
     '''
     repeat_palette_cmap(): returns a list of a repeated seaborn palette or matplotlib color map
 
@@ -753,12 +785,16 @@ def repeat_palette_cmap(palette_or_cmap, repeats: int):
     palette_or_cmap (str | list | Colormap): seaborn palette name, matplotlib color map
                                              (name or object), or list of colors
     repeats (int): number of color map repeats
+    shift (int, optional): rotate the colors by n before repeating; negative rotates the other direction (Default: 0; see palette_colors())
 
-    Dependencies: matplotlib, seaborn, _is_color_list(), & _get_cmap()
+    Dependencies: matplotlib, seaborn, _is_color_list(), _get_cmap(), & palette_colors()
     '''
     # Check repeats is a positive integer
     if not isinstance(repeats, int) or repeats <= 0:
         raise ValueError(f"repeats={repeats} must be a positive integer.")
+
+    if shift: # Shifted colors become a color list (repeated below)
+        palette_or_cmap = palette_colors(palette_or_cmap, shift=shift)
 
     if _is_color_list(palette_or_cmap): # Check if palette_or_cmap is a list of colors
         return mcolors.ListedColormap([mcolors.to_rgba(color) for color in palette_or_cmap] * repeats) # Repeats the color list
@@ -792,7 +828,34 @@ def _as_cmap(palette_or_cmap, n_colors: int = None) -> mcolors.Colormap | str:
         return mcolors.ListedColormap(sns.color_palette(palette_or_cmap, n_colors=n_colors))
     return palette_or_cmap # Matplotlib color map name (handled downstream)
 
-def _category_color_map(values, palette_or_cmap='colorblind', order=None) -> dict:
+def shift_markers(mark_order: list = None, n_markers: int = None, shift: int = 0) -> list:
+    '''
+    shift_markers(): returns a list of marker styles rotated by n & cycled/truncated to the requested length
+
+    Parameters:
+    mark_order (list, optional): marker styles (Default: None; seaborn's distinct markers)
+    n_markers (int, optional): number of markers to return (Default: None; natural length)
+    shift (int, optional): rotate the markers by n (Default: 0); positive skips the first n markers
+                           (i.e., 1 starts at the 2nd marker) & negative starts at the last n markers
+
+    Dependencies: numpy & seaborn
+    '''
+    if not isinstance(shift, (int, np.integer)):
+        raise ValueError(f"shift={shift} must be an integer.")
+
+    if mark_order: # User-specified markers
+        markers = list(mark_order)
+    else: # Seaborn's distinct markers (starts with 9 well distinguishable markers)
+        from seaborn._base import unique_markers
+        markers = unique_markers(max(n_markers or 0, 9))
+
+    shift = shift % len(markers)
+    markers = markers[shift:] + markers[:shift]
+    if n_markers is None:
+        return markers
+    return [markers[i % len(markers)] for i in range(n_markers)]
+
+def _category_color_map(values, palette_or_cmap='colorblind', order=None, shift: int = 0) -> dict:
     '''
     _category_color_map(): returns a {category: color} dictionary for a categorical variable
 
@@ -802,6 +865,7 @@ def _category_color_map(values, palette_or_cmap='colorblind', order=None) -> dic
                                                     (name or object), list of colors, or
                                                     {category: color} dictionary
     order (list, optional): category order (defaults to order of appearance)
+    shift (int, optional): shift the colors by n; negative shifts the other direction (Default: 0; see palette_colors())
 
     Dependencies: pandas & palette_colors()
     '''
@@ -813,7 +877,7 @@ def _category_color_map(values, palette_or_cmap='colorblind', order=None) -> dic
     if isinstance(palette_or_cmap, dict): # Already a {category: color} map
         return palette_or_cmap
 
-    colors = palette_colors(palette_or_cmap, n_colors=len(cats))
+    colors = palette_colors(palette_or_cmap, n_colors=len(cats), shift=shift)
 
     # Include string keys since seaborn converts categorical levels to strings for some plots
     lut = dict()
@@ -897,6 +961,31 @@ def autoscale_xy(df, x, y, x_axis_dims, y_axis_dims, x_axis_scale, y_axis_scale,
 
     return x_axis_dims, y_axis_dims
 
+def _offset_density(values, grid: np.ndarray, bw_adjust: float = 1) -> np.ndarray:
+    """
+    _offset_density(): Compute a kernel density estimate on a shared grid for offset graphs
+
+    Parameters:
+    values: numeric values for a single offset trace
+    grid (np.ndarray): x values that the density is evaluated on
+    bw_adjust (float, optional): multiplier for the kernel bandwidth (Default: 1)
+
+    Dependencies: numpy, pandas, & scipy.stats.gaussian_kde
+    """
+    values = pd.to_numeric(pd.Series(list(values)), errors='coerce').dropna().to_numpy(dtype=float)
+    values = values[np.isfinite(values)]
+
+    if len(values) == 0:
+        return None
+
+    if len(values) < 2 or np.ptp(values) == 0: # gaussian_kde needs spread, so draw a narrow spike instead
+        spread = 2 * np.ptp(grid) / len(grid) if np.ptp(grid) > 0 else 1
+        return np.exp(-0.5 * ((grid - values.mean()) / (spread * bw_adjust)) ** 2)
+
+    kde = gaussian_kde(values)
+    kde.set_bandwidth(kde.factor * bw_adjust)
+    return kde(grid)
+
 def formatter(graph: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: str, title: str, title_size: int, title_weight: str, title_font: str,
               x_axis: str, x_axis_size: int, x_axis_weight: str, x_axis_font: str, x_axis_scale: str, x_axis_dims: tuple, x_axis_pad: int, x_ticks_size: int, x_ticks_rot: int, x_ticks_font: str, x_ticks: list,
               y_axis: str, y_axis_size: int, y_axis_weight: str, y_axis_font: str, y_axis_scale: str, y_axis_dims: tuple, y_axis_pad: int, y_ticks_size: int, y_ticks_rot: int, y_ticks_font: str, y_ticks: list,
@@ -964,7 +1053,7 @@ def formatter(graph: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file:
     # Define graph types
     scats = ['scat', 'line', 'line_scat', 'scat_line']
     cats = ['bar', 'box', 'violin', 'swarm', 'strip', 'point', 'count', 'bar_strip', 'box_strip', 'violin_strip','bar_swarm', 'box_swarm', 'violin_swarm']
-    dists = ['hist', 'kde', 'hist_kde','ridge']
+    dists = ['hist', 'kde', 'hist_kde', 'ridge', 'offset', 'half_offset']
     heats = ['ht']
 
     # Determine if file is html
@@ -1348,9 +1437,9 @@ def _apply_formatter_on_ax(*, ax, df_sub: pd.DataFrame, graph: str,
 # Graph methods
 def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
         cols: str = None, cols_order: list = None, cols_exclude: list | str = None,
-        stys: str = None, stys_order: list = None, mark_order: list = None, label: str | None = None,
+        stys: str = None, stys_order: list = None, mark_order: list = None, mark_shift: int = 0, label: str | None = None,
         facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
-        file: str = None, palette_or_cmap: str | list | dict | mcolors.Colormap = 'colorblind', alpha: float = 1.0, size: float | str = None, edgecol: str = 'black',
+        file: str = None, palette_or_cmap: str | list | dict | mcolors.Colormap = 'colorblind', palette_shift: int = 0, alpha: float = 1.0, size: float | str = None, edgecol: str = 'black',
         figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
         x_axis: str | list = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial',
         x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None,
@@ -1381,6 +1470,7 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
     stys (str, optional): styles column name
     stys_order (list, optional): styles order (Default: None; order inferred from the data)
     mark_order (list, optional): marker order (Default: None; distinct markers assigned automatically)
+    mark_shift (int, optional): shift the markers by n (Default: 0; i.e., 1 starts at the 2nd marker & -1 starts at the last marker)
     label (str, optional): column name for point labels; static text for images, interactive tooltips for HTML
     facetx (str, optional): column name for facet columns (creates one subplot per category in this column, arranged in separate columns)
     facety (str, optional): column name for facet rows (creates one subplot per category in this column, arranged in separate rows)
@@ -1392,6 +1482,7 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
                                                             matplotlib color map (name or object),
                                                             list of colors (i.e., ['#4EC569','red']),
                                                             or {category: color} dictionary
+    palette_shift (int, optional): shift palette_or_cmap colors by n (Default: 0; i.e., 1 starts at the 2nd color & -1 shifts the other direction)
     alpha (float, optional): Alpha (transparency) for scatter points (0 to 1)
     size (float | str, optional): marker size as diameter in points, matching cat(),
                                   or a column name to scale marker size by that column's values
@@ -1479,6 +1570,9 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
     # Let seaborn infer style order & markers when unspecified (empty list == unspecified)
     if not stys_order:
         stys_order = None
+    if stys is not None and mark_shift: # Shift markers across the style levels
+        n_stys = len(stys_order) if stys_order else df[stys].dropna().nunique()
+        mark_order = shift_markers(mark_order, n_markers=n_stys, shift=mark_shift)
     if not mark_order:
         mark_order = True
 
@@ -1487,10 +1581,11 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
         palette = _category_color_map(
             df[cols],
             palette_or_cmap=palette_or_cmap,
-            order=cols_order
+            order=cols_order,
+            shift=palette_shift
         )
     else:
-        palette = resolve_palette(palette_or_cmap)
+        palette = resolve_palette(palette_or_cmap, shift=palette_shift)
 
     # Set global autoscale limits if not provided
     x_axis_dims, y_axis_dims = autoscale_xy(
@@ -1799,7 +1894,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
         cols: str = None, cols_order: list = None, cols_exclude: list | str = None,
         line: float | list[float] = None, facetx: str = None, facety: str = None,
         facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
-        file: str = None, palette_or_cmap: str | list | dict | mcolors.Colormap = 'colorblind', alpha: float = 1.0,
+        file: str = None, palette_or_cmap: str | list | dict | mcolors.Colormap = 'colorblind', palette_shift: int = 0, alpha: float = 1.0,
         dodge: bool = False, jitter: bool = True, size: float = 5,
         edgecol: str = 'black', lw: int = 1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
         figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
@@ -1841,6 +1936,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
                                                             matplotlib color map (name or object),
                                                             list of colors (i.e., ['#4EC569','red']),
                                                             or {category: color} dictionary
+    palette_shift (int, optional): shift palette_or_cmap colors by n (Default: 0; i.e., 1 starts at the 2nd color & -1 shifts the other direction)
     alpha (float, optional): Alpha (transparency) for scatter points (0 to 1)
     dodge (bool, optional): whether to separate points by color category
     jitter (bool, optional): whether to add jitter to points (for strip plots)
@@ -1935,7 +2031,8 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
         palette = _category_color_map(
             df[cols],
             palette_or_cmap=palette_or_cmap,
-            order=cols_order
+            order=cols_order,
+            shift=palette_shift
         )
     else:
         # Without cols, seaborn colors the categorical axis itself; map the colors onto
@@ -1949,7 +2046,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
                 if axis_col != '' and not pd.api.types.is_numeric_dtype(df[axis_col]):
                     cats_palette = df[axis_col].dropna().drop_duplicates().tolist()
                     break
-        palette = resolve_palette(palette_or_cmap, cats=cats_palette)
+        palette = resolve_palette(palette_or_cmap, cats=cats_palette, shift=palette_shift)
 
     # Set global autoscale limits if not provided
     # (cat()'s own x/y "not specified" sentinel is '', unlike autoscale_xy's
@@ -2251,7 +2348,8 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
     return fig, axes
 
 def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_order: list = None, cols_exclude: list | str = None, bins: int = 40, log10_low: int = 0,
-        file: str = None, palette_or_cmap: str | list | dict | mcolors.Colormap = 'colorblind', edgecol: str = 'black', lw: int = 1,
+        offset_spacing: float = None, offset_norm: str = 'max', offset_fill: bool = True, offset_alpha: float = 1, offset_bw_adjust: float = 1, offset_grid: int = 200, offset_ticks: bool = True,
+        file: str = None, palette_or_cmap: str | list | dict | mcolors.Colormap = 'colorblind', palette_shift: int = 0, edgecol: str = 'black', lw: int = 1,
         facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
         figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
@@ -2262,7 +2360,9 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
     dist(): creates distribution graphs
 
     Parameters:
-    graph (str): graph type (hist, kde, hist_kde)
+    graph (str): graph type (hist, kde, hist_kde, offset, half_offset;
+                             offset & half_offset stack one density curve per cols value on its own baseline,
+                             which do not overlap for offset & overlap by half for half_offset)
     df (dataframe | str): pandas dataframe (or file path)
     x (str): x-axis column name
     cols (str, optional): color column name
@@ -2270,11 +2370,19 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
     cols_exclude (list | str, optional): color column values exclude
     bins (int, optional): # of bins for histogram
     log10_low (int, optional): log scale lower bound
+    offset_spacing (float, optional): baseline spacing for offset graphs in trace heights (Default: None; 1 for offset & 0.5 for half_offset)
+    offset_norm (str, optional): offset graph trace scaling; 'max' gives every trace the same height & 'common' keeps densities comparable (Default: 'max')
+    offset_fill (bool, optional): fill offset graph traces with their color (Default: True)
+    offset_alpha (float, optional): offset graph fill transparency (0 to 1; Default: 1)
+    offset_bw_adjust (float, optional): multiplier for the offset graph kernel bandwidth (Default: 1; < 1 is less smooth)
+    offset_grid (int, optional): # of points that offset graph densities are evaluated on (Default: 200)
+    offset_ticks (bool, optional): label offset graph baselines with cols values instead of making a legend (Default: True)
     file (str, optional): output plot file path
     palette_or_cmap (str | list | dict | Colormap, optional): seaborn color palette name,
                                                             matplotlib color map (name or object),
                                                             list of colors (i.e., ['#4EC569','red']),
                                                             or {category: color} dictionary
+    palette_shift (int, optional): shift palette_or_cmap colors by n (Default: 0; i.e., 1 starts at the 2nd color & -1 shifts the other direction)
     edgecol (str, optional): point edge color
     lw (int, optional): line width
     facetx (str, optional): column name for facet columns (creates one subplot per category in this column, arranged in separate columns)
@@ -2323,7 +2431,7 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
     show (bool, optional): show plot (Default: True)
     space_capitalize (bool, optional): use re_un_cap() method when applicable (Default: True)
     
-    Dependencies: os, matplotlib, seaborn, io, formatter(), re_un_cap(), & round_up_pow_10()
+    Dependencies: os, matplotlib, seaborn, io, formatter(), _offset_density(), re_un_cap(), & round_up_pow_10()
     '''
     # Get dataframe from file path if needed
     if type(df) == str:
@@ -2345,10 +2453,24 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
         palette = _category_color_map(
             df[cols],
             palette_or_cmap=palette_or_cmap,
-            order=cols_order
+            order=cols_order,
+            shift=palette_shift
         )
     else:
-        palette = resolve_palette(palette_or_cmap)
+        palette = resolve_palette(palette_or_cmap, shift=palette_shift)
+
+    # Offset graph setup (baselines are shared across facets so traces line up)
+    offsets = ['offset', 'half_offset']
+    if graph in offsets:
+        if offset_norm not in ['max', 'common']:
+            raise ValueError("Invalid offset_norm! max, common")
+        offset_cats = _facet_values(df, cols, order=cols_order) # [None] when cols is not specified
+        offset_spacing = offset_spacing if offset_spacing is not None else (1 if graph == 'offset' else 0.5)
+        if cols is None:
+            offset_colors = {None: palette_colors(palette_or_cmap, n_colors=1, shift=palette_shift)[0]}
+        else:
+            offset_colors = palette
+    legend_cols = None if (graph in offsets and offset_ticks) else cols # Offset graphs label baselines instead of making a legend
 
     # Set global autoscale limits if not provided
     x_axis_dims, y_axis_dims = autoscale_xy(
@@ -2391,13 +2513,17 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
         x_plot = x
         x_axis_scale_panel = x_axis_scale
         x_axis_panel_default = x
+        x_axis_dims_panel = x_axis_dims
 
-        if x_axis_scale == 'log' and graph in ['kde', 'hist_kde']:
+        if x_axis_scale == 'log' and graph in ['kde', 'hist_kde'] + offsets:
             x_plot = f'log10({x})'
             df_sub = df_sub.copy()
             df_sub[x_plot] = np.maximum(np.log10(df_sub[x]), log10_low)
             x_axis_scale_panel = 'linear'
             x_axis_panel_default = x_plot
+            if x_axis_dims_panel != (0, 0): # Limits are in x units, so move them to log10 units too
+                x_axis_dims_panel = tuple(max(np.log10(dim), log10_low) if dim > 0 else log10_low
+                                          for dim in x_axis_dims_panel)
 
         if graph == 'hist':
             sns.histplot(
@@ -2451,8 +2577,54 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
             y_axis_default = 'Count'
             ax.yaxis.set_major_locator(MaxNLocator(integer=True))
 
+        elif graph in offsets:
+            vals = pd.to_numeric(df_sub[x_plot], errors='coerce').dropna()
+            grid = np.linspace(vals.min(), vals.max(), offset_grid)
+
+            # Density per cols value on the shared grid
+            curves = {cat: _offset_density(vals if cat is None else df_sub.loc[df_sub[cols] == cat, x_plot],
+                                           grid, bw_adjust=offset_bw_adjust)
+                      for cat in offset_cats}
+            peaks = [curve.max() for curve in curves.values() if curve is not None and curve.max() > 0]
+            peak = max(peaks) if peaks else 1
+
+            n = len(offset_cats)
+            for k, cat in enumerate(offset_cats): # First cols value on top, later ones drawn in front
+                curve = curves[cat]
+                if curve is None:
+                    continue
+                scale = curve.max() if offset_norm == 'max' else peak
+                if scale > 0:
+                    curve = curve / scale
+
+                base = (n - 1 - k) * offset_spacing
+                color = offset_colors.get(cat, offset_colors.get(str(cat), 'grey'))
+
+                if offset_fill:
+                    ax.fill_between(grid, base, base + curve, color=color, alpha=offset_alpha,
+                                    lw=0, zorder=2 * k, label=str(cat), **kwargs)
+                    outline = edgecol
+                else:
+                    outline = color
+                ax.plot(grid, base + curve, color=outline, lw=lw, zorder=2 * k + 1,
+                        label=None if offset_fill else str(cat), **({} if offset_fill else kwargs))
+                ax.plot([grid[0], grid[-1]], [base, base], color=outline, lw=lw, zorder=2 * k + 1)
+
+            ax.set_ylim(-0.05, (n - 1) * offset_spacing + 1.05)
+            if offset_ticks and cols is not None: # Label each baseline with its cols value
+                ax.set_yticks([(n - 1 - k) * offset_spacing for k in range(n)])
+                ax.set_yticklabels([_fmt_name(str(cat), space_capitalize) for cat in offset_cats])
+            elif cols is None:
+                ax.set_yticks([])
+            else:
+                ax.set_yticks([])
+                ax.legend(title=legend_title if legend_title != '' else cols)
+
+            y_plot = ''
+            y_axis_default = cols if (cols is not None and offset_ticks) else 'Density'
+
         else:
-            raise ValueError("Invalid graph! hist, kde, hist_kde")
+            raise ValueError("Invalid graph! hist, kde, hist_kde, offset, half_offset")
 
         x_axis_panel, y_axis_panel = _facet_axis_labels(
             x_axis,
@@ -2476,7 +2648,7 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
             graph=graph,
             x=x_plot,
             y=y_plot,
-            cols=cols,
+            cols=legend_cols,
             file=file,
             title='' if faceting else title,
             title_size=title_size,
@@ -2487,7 +2659,7 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
             x_axis_weight=x_axis_weight,
             x_axis_font=x_axis_font,
             x_axis_scale=x_axis_scale_panel,
-            x_axis_dims=x_axis_dims,
+            x_axis_dims=x_axis_dims_panel,
             x_axis_pad=x_axis_pad,
             x_ticks_size=x_ticks_size,
             x_ticks_rot=x_ticks_rot,
@@ -2549,7 +2721,7 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
                     fontfamily=title_font
                 )
 
-            if cols is not None and legend_mode != "figure":
+            if legend_cols is not None and legend_mode != "figure":
                 _handle_panel_legend(ax, legend_mode=legend_mode, i=i, j=j)
 
             _hide_inner_axis_labels(ax, i=i, j=j, nrows=nrows, ncols=ncols)
@@ -2557,7 +2729,7 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
     if title != '' and faceting:
         fig.suptitle(title, fontsize=title_size, fontweight=title_weight, family=title_font)
 
-    if cols is not None and legend_mode == "figure":
+    if legend_cols is not None and legend_mode == "figure":
         _legend_title = legend_title if legend_title != '' else cols
 
         _make_figure_legend(
@@ -2970,7 +3142,7 @@ def heat(df: pd.DataFrame | str, x: str = None, y: str = None, vals: str = None,
 
 def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str = '', cutoff_value: float = 0, cutoff_keep: bool = True, cols_order: list = [], x_order: list = [],
         facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
-        file: str = None, palette_or_cmap: str | list | dict | mcolors.Colormap = 'tab20', repeats: int = 1, errcap: int = 4, vertical: bool = True,
+        file: str = None, palette_or_cmap: str | list | dict | mcolors.Colormap = 'tab20', palette_shift: int = 0, repeats: int = 1, errcap: int = 4, vertical: bool = True,
         figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial',
         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_dims: tuple = (0, 0),  y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial',
@@ -3000,6 +3172,7 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
                                                             matplotlib color map (name or object),
                                                             list of colors (i.e., ['#4EC569','red']),
                                                             or {category: color} dictionary
+    palette_shift (int, optional): shift palette_or_cmap colors by n (Default: 0; i.e., 1 starts at the 2nd color & -1 shifts the other direction)
     repeats (int, optional): number of color palette or map repeats (Default: 1)
     errcap (int, optional): error bar cap line width
     vertical (bool, optional): vertical orientation; otherwise horizontal (Default: True)
@@ -3119,6 +3292,7 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
     # generate colors once
     cmap = repeat_palette_cmap(
         palette_or_cmap,
+        shift=palette_shift,
         repeats=max(
             repeats,
             int(np.ceil(len(all_categories)/20))
@@ -4067,7 +4241,7 @@ def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = No
 
 def caterpillar(df: pd.DataFrame | str, y: str, yerr: str = None, lower: str = None, upper: str = None, label: str = None, cols: str = None,
                 sort: bool = True, ascending: bool = True, reference: float = None, reference_color: str = 'black', reference_style: str = '--', reference_width: float = 1,
-                palette_or_cmap='Set2', color: str = 'tab:blue', marker: str = 'o', marker_size: float = 3, alpha: float = 0.9,
+                palette_or_cmap='Set2', palette_shift: int = 0, color: str = 'tab:blue', marker: str = 'o', marker_size: float = 3, alpha: float = 0.9,
                 err_color: str = 'gray', err_width: float = 0.8, err_alpha: float = 0.4, err_capsize: float = 0,
                 file: str = None, figsize: tuple = (8, 5), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
                 x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_dims: tuple = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
@@ -4094,6 +4268,7 @@ def caterpillar(df: pd.DataFrame | str, y: str, yerr: str = None, lower: str = N
     reference_style (str, optional): matplotlib line style for the reference line
     reference_width (float, optional): line width for the reference line
     palette_or_cmap (str | list | dict | Colormap, optional): colors for the color column
+    palette_shift (int, optional): shift palette_or_cmap colors by n (Default: 0; i.e., 1 starts at the 2nd color & -1 shifts the other direction)
     color (str, optional): matplotlib color for points when cols is not provided
     marker (str, optional): matplotlib marker style
     marker_size (float, optional): marker size
@@ -4147,9 +4322,9 @@ def caterpillar(df: pd.DataFrame | str, y: str, yerr: str = None, lower: str = N
         cats = df[cols].drop_duplicates().tolist()
         try: cats = sorted(cats)
         except TypeError: pass
-        palette = resolve_palette(palette_or_cmap, cats=cats)
+        palette = resolve_palette(palette_or_cmap, cats=cats, shift=palette_shift)
         if not isinstance(palette, dict): # seaborn palette names pass through resolve_palette() untouched
-            palette = dict(zip(cats, palette_colors(palette_or_cmap, n_colors=len(cats))))
+            palette = dict(zip(cats, palette_colors(palette_or_cmap, n_colors=len(cats), shift=palette_shift)))
         for cat in cats:
             sub = df[df[cols] == cat]
             ax.plot(sub['rank'], sub[y], linestyle='none', marker=marker, markersize=marker_size,
