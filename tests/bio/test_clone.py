@@ -134,13 +134,13 @@ class TestScaffoldChoiceReachesTheOrder:
 
     def test_ngRNAs_orders_the_chosen_scaffold(self):
         df = pd.DataFrame({"ID": [1], "Spacer_sequence": ["GTCGATCGAT"]})
-        out = clone.ngRNAs(df=df, id="ID", order=True, order_scaffold=True, scaffold="SpCas9 mod_7")
+        out = clone.ngRNAs(df=df, id="ID", order=True, order_scaffold=True, vector_scaffold=False, scaffold="SpCas9 mod_7")
         ordered = out.loc[out["Oligo Name"] == "ngRNA_scaffold_top", "Sequence"].iloc[0]
         assert ordered == clone.SCAFFOLD_SEQUENCES["SpCas9 mod_7"][10:]
 
     def test_mod_7_spacer_oligo_carries_its_own_first_10_nt(self):
         df = pd.DataFrame({"ID": [1], "Spacer_sequence": ["GTCGATCGAT"]})
-        out = clone.ngRNAs(df=df, id="ID", order=False, scaffold="SpCas9 mod_7")
+        out = clone.ngRNAs(df=df, id="ID", order=False, vector_scaffold=False, scaffold="SpCas9 mod_7")
         assert out["ns_Spacer_sequence_top"].iloc[0].endswith("GTTTCAGAGC")
 
 
@@ -367,9 +367,29 @@ class TestNgRNAs:
         out = clone.ngRNAs(df=df, id="ID", order=False)
         assert "ns_Spacer_sequence_top" in out.columns
 
-    def test_default_promoter_and_scaffold_overhangs(self):
+    def test_default_is_the_vector_scaffold_sgRNA_style_oligos(self):
         df = pd.DataFrame({"ID": [1], "Spacer_sequence": ["GTCGATCGAT"]})
         out = clone.ngRNAs(df=df, id="ID", order=False)
+        assert out["ns_Spacer_sequence_top"].iloc[0] == "TCTC" + "GTCGATCGAT"  # 7SK, no scaffold on the top oligo
+        assert out["ns_Spacer_sequence_bot"].iloc[0] == "AAAC" + str(Seq("GTCGATCGAT").reverse_complement())
+
+    def test_vector_scaffold_matches_sgRNAs_apart_from_the_promoter(self):
+        df = pd.DataFrame({"ID": [1], "Spacer_sequence": ["GTCGATCGAT"]})
+        ng = clone.ngRNAs(df=df.copy(), id="ID", order=False, promoter="hU6")
+        sg = clone.sgRNAs(df=df.copy(), id="ID", order=False)
+        assert ng["ns_Spacer_sequence_top"].iloc[0] == sg["oSpacer_sequence_top"].iloc[0]
+        assert ng["ns_Spacer_sequence_bot"].iloc[0] == sg["oSpacer_sequence_bot"].iloc[0]
+
+    def test_both_scaffolds_give_the_same_vector_scaffold_overhangs(self):
+        df = pd.DataFrame({"ID": [1], "Spacer_sequence": ["GTCGATCGAT"]})
+        mod_7 = clone.ngRNAs(df=df.copy(), id="ID", order=False, scaffold="SpCas9 mod_7")
+        flip = clone.ngRNAs(df=df.copy(), id="ID", order=False, scaffold="SpCas9 Flip and Extend")
+        assert mod_7["ns_Spacer_sequence_top"].iloc[0] == flip["ns_Spacer_sequence_top"].iloc[0]
+        assert mod_7["ns_Spacer_sequence_bot"].iloc[0] == flip["ns_Spacer_sequence_bot"].iloc[0]
+
+    def test_no_vector_scaffold_restores_the_GG_fragment_overhangs(self):
+        df = pd.DataFrame({"ID": [1], "Spacer_sequence": ["GTCGATCGAT"]})
+        out = clone.ngRNAs(df=df, id="ID", order=False, vector_scaffold=False, scaffold="SpCas9 Flip and Extend")
         assert out["ns_Spacer_sequence_top"].iloc[0] == "TCTC" + "GTCGATCGAT" + "GTTTAAGAGC"
 
     def test_hU6_promoter_and_overhang_override(self):
@@ -379,10 +399,17 @@ class TestNgRNAs:
 
     def test_order_true_with_scaffold(self):
         df = pd.DataFrame({"ID": [1], "Spacer_sequence": ["ATCGATCGAT"]})
-        out = clone.ngRNAs(df=df, id="ID", order=True, order_scaffold=True)
+        out = clone.ngRNAs(df=df, id="ID", order=True, order_scaffold=True, vector_scaffold=False)
         assert len(out) == 4  # spacer top/bot + scaffold top/bot
         assert "ngRNA_scaffold_top" in out["Oligo Name"].tolist()
         assert "ngRNA_scaffold_bot" in out["Oligo Name"].tolist()
+
+    def test_order_scaffold_is_ignored_under_vector_scaffold(self, capsys):
+        df = pd.DataFrame({"ID": [1], "Spacer_sequence": ["ATCGATCGAT"]})
+        out = clone.ngRNAs(df=df, id="ID", order=True, order_scaffold=True)
+        assert "Did not order the scaffold" in capsys.readouterr().out
+        assert len(out) == 2  # spacer top/bot only
+        assert "ngRNA_scaffold_top" not in out["Oligo Name"].tolist()
 
 
 # ---------------------------------------------------------------------------

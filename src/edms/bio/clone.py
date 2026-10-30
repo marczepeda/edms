@@ -131,6 +131,12 @@ PEGRNA_SCAFFOLD_OVERHANGS = {scaffold: {'spacer_t3': sequence[:10], 'spacer_b5':
 EPEGRNA_MOTIF_OVERHANGS = {'tevopreQ1': {'extension_b5': 'CGCG', 'extension_t3': ''},
                            'tevo2': {'extension_b5': 'GACG', 'extension_t3': ''}}
 
+# ngRNAs cloned into a vector that already carries the scaffold take the sgRNA overhangs under the spacer_ names
+NGRNA_VECTOR_PROMOTER_OVERHANGS = {promoter: {f'spacer_{overhang}': sequence for overhang,sequence in overhangs.items()}
+                                   for promoter,overhangs in SGRNA_PROMOTER_OVERHANGS.items()}
+NGRNA_VECTOR_SCAFFOLD_OVERHANGS = {scaffold: {f'spacer_{overhang}': sequence for overhang,sequence in overhangs.items()}
+                                   for scaffold,overhangs in SGRNA_SCAFFOLD_OVERHANGS.items()}
+
 def get_scaffold_oligos(scaffold: str, pre: str) -> pd.DataFrame:
     ''' 
     get_scaffold_oligos(): top & bottom oligonucleotides for ordering the scaffold
@@ -311,8 +317,8 @@ def epegRNAs(df: pd.DataFrame | str, id: str, tG: str=True, order: bool=True, ma
     io.save(obj=df, file=file)  
     return df
 
-def ngRNAs(df: pd.DataFrame | str, id: str, tG: bool=True, order: bool=True,
-           promoter: str='7SK', scaffold: str='SpCas9 Flip and Extend',
+def ngRNAs(df: pd.DataFrame | str, id: str, tG: bool=True, order: bool=True, vector_scaffold: bool=True,
+           promoter: str='7SK', scaffold: str='SpCas9 mod_7',
            spacer: str='Spacer_sequence', spacer_t5: str=None, spacer_t3: str=None,
            spacer_b5: str=None, spacer_b3: str=None, order_scaffold: bool=False, 
            file:str=None) -> pd.DataFrame:
@@ -324,18 +330,23 @@ def ngRNAs(df: pd.DataFrame | str, id: str, tG: bool=True, order: bool=True,
     id (str): id column
     tG (bool, optional): add 5' G to spacer if needed (Default: True)
     order (bool, optional): order format (Default: True)
+    vector_scaffold (bool, optional): the vector already carries the scaffold, so the spacer is cloned like an sgRNA (Default: True)
+        True: the scaffold contributes '' spacer_t3 & AAAC spacer_b5, and there is no scaffold to order
+        False: the scaffold is a separate GG fragment, so it contributes its own ends & can be ordered
     promoter (str, optional): promoter upstream of the spacer (Default: 7SK)
         hU6: CACC spacer_t5, '' spacer_b3
         7SK: TCTC spacer_t5, '' spacer_b3
-    scaffold (str, optional): scaffold downstream of the spacer (Default: SpCas9 Flip and Extend)
-        SpCas9 Flip and Extend: GTTTAAGAGC spacer_t3, '' spacer_b5
-        SpCas9 mod_7: GTTTCAGAGC spacer_t3, '' spacer_b5
+    scaffold (str, optional): scaffold downstream of the spacer (Default: SpCas9 mod_7)
+        vector_scaffold=True, both options: '' spacer_t3, AAAC spacer_b5
+        vector_scaffold=False, SpCas9 Flip and Extend: GTTTAAGAGC spacer_t3, '' spacer_b5
+        vector_scaffold=False, SpCas9 mod_7: GTTTCAGAGC spacer_t3, '' spacer_b5
     spacer (str, optional): ngRNA spacer column name
     spacer_t5 (str, optional): top oligonucleotide 5' overhang (Default: from promoter)
     spacer_t3 (str, optional): top oligonucleotide 3' overhang (Default: from scaffold)
     spacer_b5 (str, optional): bottom oligonucleotide 5' overhang (Default: from scaffold)
     spacer_b3 (str, optional): bottom oligonucleotide 3' overhang (Default: from promoter)
     order_scaffold (bool, optional): order top and bottom oligonucleotide for scaffold sequence (Default: False)
+        ignored when vector_scaffold=True, since the vector carries the scaffold
     file (str, optional): output file path
     
     Assumptions:
@@ -348,8 +359,14 @@ def ngRNAs(df: pd.DataFrame | str, id: str, tG: bool=True, order: bool=True,
         df = io.get(pt=df)
     
     # Fill in the overhangs that were not specified from the chosen promoter & scaffold
-    overhangs = get_overhangs(parts=[(promoter,PEGRNA_PROMOTER_OVERHANGS),(scaffold,PEGRNA_SCAFFOLD_OVERHANGS)],
+    if vector_scaffold==True: parts = [(promoter,NGRNA_VECTOR_PROMOTER_OVERHANGS),(scaffold,NGRNA_VECTOR_SCAFFOLD_OVERHANGS)] # The vector carries the scaffold, so the spacer is cloned like an sgRNA
+    else: parts = [(promoter,PEGRNA_PROMOTER_OVERHANGS),(scaffold,PEGRNA_SCAFFOLD_OVERHANGS)] # The scaffold is a separate GG fragment
+    overhangs = get_overhangs(parts=parts,
                               spacer_t5=spacer_t5, spacer_t3=spacer_t3, spacer_b5=spacer_b5, spacer_b3=spacer_b3)
+    
+    if (order_scaffold==True)&(vector_scaffold==True): # The vector carries the scaffold, so there is nothing to order
+        print('Warning: Did not order the scaffold oligonucleotides!\nThe vector carries the scaffold when vector_scaffold=True.')
+        order_scaffold = False
     
     df=tb(df=df,id=id,seq=spacer,t5=overhangs['spacer_t5'],t3=overhangs['spacer_t3'],b5=overhangs['spacer_b5'],b3=overhangs['spacer_b3'],tG=tG,pre='ns_') # Make top and bottom oligos for spacer inserts
     if order==True: # Sigma order format (or original dataframe with top and bottom oligos)

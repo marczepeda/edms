@@ -233,9 +233,10 @@ def add_subparser(subparsers, formatter_class=None):
     
     parser_clone_ngRNAs.add_argument("-dg", "--dont_tG", dest="tG", default=True, action="store_false", help="Don't add 5' G to spacer if needed")
     parser_clone_ngRNAs.add_argument("-do", "--dont_order", dest="order", default=True, action="store_false", help="Don't format output for ordering oligos")
-    parser_clone_ngRNAs.add_argument("-os", "--order_scaffold", action="store_true", help="Include scaffold sequence in the oligo order")
+    parser_clone_ngRNAs.add_argument("-os", "--order_scaffold", action="store_true", help="Include scaffold sequence in the oligo order; ignored unless --no_vector_scaffold is given")
+    parser_clone_ngRNAs.add_argument("-nvs", "--no_vector_scaffold", dest="vector_scaffold", default=True, action="store_false", help="Clone the scaffold as a separate GG fragment instead of from a vector that already carries it")
     parser_clone_ngRNAs.add_argument("-p", "--promoter", type=str, default="7SK", help="Promoter upstream of the spacer; hU6: CACC spacer_t5, 7SK: TCTC spacer_t5 (Default: 7SK)")
-    parser_clone_ngRNAs.add_argument("-sc", "--scaffold", type=str, default="SpCas9 Flip and Extend", help="Scaffold downstream of the spacer; SpCas9 Flip and Extend: GTTTAAGAGC spacer_t3, SpCas9 mod_7: GTTTCAGAGC spacer_t3 (Default: SpCas9 Flip and Extend)")
+    parser_clone_ngRNAs.add_argument("-sc", "--scaffold", type=str, default="SpCas9 mod_7", help="Scaffold downstream of the spacer; AAAC spacer_b5 for both options, or with --no_vector_scaffold, SpCas9 Flip and Extend: GTTTAAGAGC spacer_t3, SpCas9 mod_7: GTTTCAGAGC spacer_t3 (Default: SpCas9 mod_7)")
     parser_clone_ngRNAs.add_argument("-s", "--spacer", type=str, default="Spacer_sequence", help="Column name for spacer sequence")
     parser_clone_ngRNAs.add_argument("-st5", "--spacer_t5", type=str, default=None, help="Top strand 5' overhang; overrides --promoter")
     parser_clone_ngRNAs.add_argument("-st3", "--spacer_t3", type=str, default=None, help="Top strand 3' overhang; overrides --scaffold")
