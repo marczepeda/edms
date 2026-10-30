@@ -66,6 +66,85 @@ class TestTb:
 
 
 # ---------------------------------------------------------------------------
+# Scaffold options
+# ---------------------------------------------------------------------------
+
+FLIP_AND_EXTEND_TOP = "TATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC"
+FLIP_AND_EXTEND_PEG_BOT = "GGTGCCACTTGGGTGGGATGCTCGCAGGCATTCAGCCAAGTTGATAACGGACTAGCCTTATTTAAACTTGCTATGCTGTTTCCAGCATAGCTCTTAAAC"
+FLIP_AND_EXTEND_NG_BOT = "AAAAGCACCGACTCGGTGCCACTTGGGTGGGATGCTCGCAGGCATTCAGCCAAGTTGATAACGGACTAGCCTTATTTAAACTTGCTATGCTGTTTCCAGCATAGCTCTTAAAC"
+
+
+class TestScaffoldOverhangs:
+    def test_flip_and_extend_overhangs_are_unchanged(self):
+        # These were hardcoded before the overhangs were taken from the scaffold sequence.
+        assert clone.SGRNA_SCAFFOLD_OVERHANGS["SpCas9 Flip and Extend"] == {"t3": "", "b5": "AAAC"}
+        assert clone.PEGRNA_SCAFFOLD_OVERHANGS["SpCas9 Flip and Extend"] == {
+            "spacer_t3": "GTTTAAGAGC", "spacer_b5": "", "extension_t5": "", "extension_b3": "GCACCGACTC"}
+
+    def test_mod_7_shares_the_sgRNA_overhangs(self):
+        assert clone.SGRNA_SCAFFOLD_OVERHANGS["SpCas9 mod_7"] == clone.SGRNA_SCAFFOLD_OVERHANGS["SpCas9 Flip and Extend"]
+
+    def test_mod_7_differs_only_in_the_spacer_t3(self):
+        mod_7 = clone.PEGRNA_SCAFFOLD_OVERHANGS["SpCas9 mod_7"]
+        assert mod_7 == {"spacer_t3": "GTTTCAGAGC", "spacer_b5": "", "extension_t5": "", "extension_b3": "GCACCGACTC"}
+
+    def test_overhangs_are_the_ends_of_the_scaffold(self):
+        for scaffold, sequence in clone.SCAFFOLD_SEQUENCES.items():
+            assert clone.PEGRNA_SCAFFOLD_OVERHANGS[scaffold]["spacer_t3"] == sequence[:10]
+            assert clone.PEGRNA_SCAFFOLD_OVERHANGS[scaffold]["extension_b3"] == str(Seq(sequence[-10:]).reverse_complement())
+            assert clone.SGRNA_SCAFFOLD_OVERHANGS[scaffold]["b5"] == str(Seq(sequence[:4]).reverse_complement())
+
+
+class TestGetScaffoldOligos:
+    def test_flip_and_extend_pegRNA_oligos_are_unchanged(self):
+        out = clone.get_scaffold_oligos(scaffold="SpCas9 Flip and Extend", pre="pegRNA")
+        assert out["Oligo Name"].tolist() == ["pegRNA_scaffold_top", "pegRNA_scaffold_bot"]
+        assert out["Sequence"].tolist() == [FLIP_AND_EXTEND_TOP, FLIP_AND_EXTEND_PEG_BOT]
+        assert out["bp"].tolist() == [99, 99]
+
+    def test_flip_and_extend_ngRNA_oligos_are_unchanged(self):
+        out = clone.get_scaffold_oligos(scaffold="SpCas9 Flip and Extend", pre="ngRNA")
+        assert out["Sequence"].tolist() == [FLIP_AND_EXTEND_TOP, FLIP_AND_EXTEND_NG_BOT]
+        assert out["bp"].tolist() == [99, 113]
+
+    def test_mod_7_oligos_follow_its_own_sequence(self):
+        sequence = clone.SCAFFOLD_SEQUENCES["SpCas9 mod_7"]
+        peg = clone.get_scaffold_oligos(scaffold="SpCas9 mod_7", pre="pegRNA")
+        ng = clone.get_scaffold_oligos(scaffold="SpCas9 mod_7", pre="ngRNA")
+        assert peg["Sequence"].tolist() == [sequence[10:], str(Seq(sequence[:-10]).reverse_complement())]
+        assert ng["Sequence"].tolist() == [sequence[10:], "AAAA" + str(Seq(sequence).reverse_complement())]
+        assert peg["bp"].tolist() == [66, 66]  # shorter scaffold than Flip and Extend
+
+    def test_scaffold_name_is_case_insensitive(self):
+        assert clone.get_scaffold_oligos(scaffold="spcas9 mod_7", pre="pegRNA")["Sequence"].tolist() == \
+               clone.get_scaffold_oligos(scaffold="SpCas9 mod_7", pre="pegRNA")["Sequence"].tolist()
+
+    def test_unrecognized_scaffold_raises(self):
+        with pytest.raises(ValueError, match="not an option"):
+            clone.get_scaffold_oligos(scaffold="SpCas9", pre="pegRNA")
+
+
+class TestScaffoldChoiceReachesTheOrder:
+    def test_epegRNAs_orders_the_chosen_scaffold(self):
+        df = pd.DataFrame({"ID": [1], "Spacer_sequence": ["GTCGATCGAT"], "RTT_sequence": ["AAAA"],
+                           "PBS_sequence": ["CCCC"], "Linker_sequence": ["GGGG"]})
+        out = clone.epegRNAs(df=df, id="ID", order=True, order_scaffold=True, scaffold="SpCas9 mod_7")
+        ordered = out.loc[out["Oligo Name"] == "pegRNA_scaffold_top", "Sequence"].iloc[0]
+        assert ordered == clone.SCAFFOLD_SEQUENCES["SpCas9 mod_7"][10:]
+
+    def test_ngRNAs_orders_the_chosen_scaffold(self):
+        df = pd.DataFrame({"ID": [1], "Spacer_sequence": ["GTCGATCGAT"]})
+        out = clone.ngRNAs(df=df, id="ID", order=True, order_scaffold=True, scaffold="SpCas9 mod_7")
+        ordered = out.loc[out["Oligo Name"] == "ngRNA_scaffold_top", "Sequence"].iloc[0]
+        assert ordered == clone.SCAFFOLD_SEQUENCES["SpCas9 mod_7"][10:]
+
+    def test_mod_7_spacer_oligo_carries_its_own_first_10_nt(self):
+        df = pd.DataFrame({"ID": [1], "Spacer_sequence": ["GTCGATCGAT"]})
+        out = clone.ngRNAs(df=df, id="ID", order=False, scaffold="SpCas9 mod_7")
+        assert out["ns_Spacer_sequence_top"].iloc[0].endswith("GTTTCAGAGC")
+
+
+# ---------------------------------------------------------------------------
 # sgRNAs()
 # ---------------------------------------------------------------------------
 

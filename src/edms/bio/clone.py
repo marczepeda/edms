@@ -9,6 +9,7 @@ Usage:
 - ord_form(): Sigma Alrich ordering formatter
 - tb(): designs top & bottom oligonucleotides
 - get_overhangs(): fill in GG cloning overhangs from the chosen promoter, scaffold, & epegRNA motif
+- get_scaffold_oligos(): top & bottom oligonucleotides for ordering the scaffold
 - sgRNAs(): design GG cloning oligonucleotides for cutting and base editing sgRNAs
 - epegRNAs(): design GG cloning oligonucleotides for prime editing epegRNAs
 - ngRNAs(): design GG cloning oligonucleotides for prime editing ngRNAs
@@ -111,18 +112,48 @@ def tb(df:pd.DataFrame, id:str, seq:str, t5:str, t3:str,
     
     return df
 
+SCAFFOLD_SEQUENCES = {'SpCas9 Flip and Extend': 'GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC',
+                      'SpCas9 mod_7': 'GTTTCAGAGCTAGAAATAGCAAGTTGAAATAAGACTAGTTCGTTATCACGCCGAAAGGCGGGCACCGAGTCGGTGC'}
+
 # Overhangs contributed by the promoter & scaffold for sgRNAs, whose spacer is cloned into a vector that already carries the scaffold
 SGRNA_PROMOTER_OVERHANGS = {'hU6': {'t5': 'CACC', 'b3': ''},
                             '7SK': {'t5': 'TCTC', 'b3': ''}}
-SGRNA_SCAFFOLD_OVERHANGS = {'SpCas9 Flip and Extend': {'t3': '', 'b5': 'AAAC'}}
+SGRNA_SCAFFOLD_OVERHANGS = {scaffold: {'t3': '', # The vector carries the scaffold, so the spacer only needs the scaffold's first 4 nt on the bottom oligo
+                                       'b5': str(Seq(sequence[:4]).reverse_complement())}
+                            for scaffold,sequence in SCAFFOLD_SEQUENCES.items()}
 
 # Overhangs contributed by the promoter, scaffold, & epegRNA motif for peg/ngRNAs, whose scaffold is a separate GG fragment
 PEGRNA_PROMOTER_OVERHANGS = {'hU6': {'spacer_t5': 'CACC', 'spacer_b3': ''},
                              '7SK': {'spacer_t5': 'TCTC', 'spacer_b3': ''}}
-PEGRNA_SCAFFOLD_OVERHANGS = {'SpCas9 Flip and Extend': {'spacer_t3': 'GTTTAAGAGC', 'spacer_b5': '',
-                                                        'extension_t5': '', 'extension_b3': 'GCACCGACTC'}}
+PEGRNA_SCAFFOLD_OVERHANGS = {scaffold: {'spacer_t3': sequence[:10], 'spacer_b5': '', # The spacer insert carries the scaffold's first 10 nt
+                                        'extension_t5': '', 'extension_b3': str(Seq(sequence[-10:]).reverse_complement())} # The extension insert carries the scaffold's last 10 nt
+                             for scaffold,sequence in SCAFFOLD_SEQUENCES.items()}
 EPEGRNA_MOTIF_OVERHANGS = {'tevopreQ1': {'extension_b5': 'CGCG', 'extension_t3': ''},
                            'tevo2': {'extension_b5': 'GACG', 'extension_t3': ''}}
+
+def get_scaffold_oligos(scaffold: str, pre: str) -> pd.DataFrame:
+    ''' 
+    get_scaffold_oligos(): top & bottom oligonucleotides for ordering the scaffold
+    
+    Parameters:
+    scaffold (str): scaffold name (i.e., SpCas9 Flip and Extend, SpCas9 mod_7)
+    pre (str): prefix for the oligonucleotide names (i.e., pegRNA, ngRNA)
+    
+    Dependencies: pandas & Bio.Seq
+    '''
+    scaffold_names = {name.lower(): name for name in SCAFFOLD_SEQUENCES} # Match the scaffold name regardless of case
+    if scaffold is None or scaffold.lower() not in scaffold_names:
+        raise ValueError(f"'{scaffold}' is not an option; choose from {list(SCAFFOLD_SEQUENCES.keys())} to order the scaffold.")
+    sequence = SCAFFOLD_SEQUENCES[scaffold_names[scaffold.lower()]]
+
+    top = sequence[10:] # The spacer insert carries the first 10 nt
+    if pre=='ngRNA': bot = 'AAAA'+str(Seq(sequence).reverse_complement()) # ngRNAs have no extension insert, so the scaffold carries the vector's overhang
+    else: bot = str(Seq(sequence[:-10]).reverse_complement()) # The extension insert carries the last 10 nt
+
+    return pd.DataFrame({'Oligo Name': [f'{pre}_scaffold_top',f'{pre}_scaffold_bot'],
+                         'Sequence': [top,bot],
+                         'Scale (µmol)': [0.05, 0.05],
+                         'bp': [len(top),len(bot)]})
 
 def get_overhangs(parts: list, **overhangs) -> dict:
     ''' 
@@ -163,6 +194,7 @@ def sgRNAs(df:pd.DataFrame | str,id:str, spacer: str='Spacer_sequence',
         7SK: TCTC t5, '' b3
     scaffold (str, optional): scaffold downstream of the spacer (Default: SpCas9 Flip and Extend)
         SpCas9 Flip and Extend: '' t3, AAAC b5
+        SpCas9 mod_7: '' t3, AAAC b5
     t5 (str): top oligonucleotide 5' overhang (Default: from promoter)
     t3 (str): top oligonucleotide 3' overhang (Default: from scaffold)
     b5 (str): bottom oligonucleotide 5' overhang (revcom) (Default: from scaffold)
@@ -173,6 +205,7 @@ def sgRNAs(df:pd.DataFrame | str,id:str, spacer: str='Spacer_sequence',
     
     Assumptions:
     1. sgRNA scaffold: SpCas9 Flip and Extend (GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC)
+       or SpCas9 mod_7 (GTTTCAGAGCTAGAAATAGCAAGTTGAAATAAGACTAGTTCGTTATCACGCCGAAAGGCGGGCACCGAGTCGGTGC)
     
     Dependencies: pandas, io, top_bot(), ord_form(), & get_overhangs()
     '''
@@ -213,6 +246,7 @@ def epegRNAs(df: pd.DataFrame | str, id: str, tG: str=True, order: bool=True, ma
         7SK: TCTC spacer_t5, '' spacer_b3
     scaffold (str, optional): scaffold between the spacer & extension (Default: SpCas9 Flip and Extend)
         SpCas9 Flip and Extend: GTTTAAGAGC spacer_t3, '' spacer_b5, '' extension_t5, GCACCGACTC extension_b3
+        SpCas9 mod_7: GTTTCAGAGC spacer_t3, '' spacer_b5, '' extension_t5, GCACCGACTC extension_b3
     epegRNA_motif (str, optional): 3' hairpin motif downstream of the extension (Default: tevo2)
         tevopreQ1: CGCG extension_b5, '' extension_t3
         tevo2: GACG extension_b5, '' extension_t3
@@ -234,6 +268,7 @@ def epegRNAs(df: pd.DataFrame | str, id: str, tG: str=True, order: bool=True, ma
     
     Assumptions:
     1. epegRNA scaffold: SpCas9 Flip and Extend (GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC)
+       or SpCas9 mod_7 (GTTTCAGAGCTAGAAATAGCAAGTTGAAATAAGACTAGTTCGTTATCACGCCGAAAGGCGGGCACCGAGTCGGTGC)
     2. epegRNA motif: tevo2 (CGTCGGTTCTACCTAGTTACGACGTTAAACCAACTAGGA) or tevopreQ1 (CGCGGTTCTATCTAGTTACGCGTTAAACCAACTAGAA)
     
     Dependencies: pandas, top_bot(), ord_form(), & get_overhangs()
@@ -263,11 +298,8 @@ def epegRNAs(df: pd.DataFrame | str, id: str, tG: str=True, order: bool=True, ma
                             ord_form(df=df,id=id,seq=spacer,suf='_bot',pre='es_'),
                             ord_form(df=df,id=id,seq=extension,suf='_top',pre='ee_'),
                             ord_form(df=df,id=id,seq=extension,suf='_bot',pre='ee_'),
-                            pd.DataFrame({'Oligo Name': ['pegRNA_scaffold_top','pegRNA_scaffold_bot'],
-                                          'Sequence': ['TATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC','GGTGCCACTTGGGTGGGATGCTCGCAGGCATTCAGCCAAGTTGATAACGGACTAGCCTTATTTAAACTTGCTATGCTGTTTCCAGCATAGCTCTTAAAC'],
-                                          'Scale (µmol)': [0.05, 0.05],
-                                          'bp': [99, 99]}
-                            )]).reset_index(drop=True)
+                            get_scaffold_oligos(scaffold=scaffold, pre='pegRNA')
+                            ]).reset_index(drop=True)
         else: # Do not include the scaffold sequence in the order
             df = pd.concat([ord_form(df=df,id=id,seq=spacer,suf='_top',pre='es_'),
                             ord_form(df=df,id=id,seq=spacer,suf='_bot',pre='es_'),
@@ -297,6 +329,7 @@ def ngRNAs(df: pd.DataFrame | str, id: str, tG: bool=True, order: bool=True,
         7SK: TCTC spacer_t5, '' spacer_b3
     scaffold (str, optional): scaffold downstream of the spacer (Default: SpCas9 Flip and Extend)
         SpCas9 Flip and Extend: GTTTAAGAGC spacer_t3, '' spacer_b5
+        SpCas9 mod_7: GTTTCAGAGC spacer_t3, '' spacer_b5
     spacer (str, optional): ngRNA spacer column name
     spacer_t5 (str, optional): top oligonucleotide 5' overhang (Default: from promoter)
     spacer_t3 (str, optional): top oligonucleotide 3' overhang (Default: from scaffold)
@@ -307,6 +340,7 @@ def ngRNAs(df: pd.DataFrame | str, id: str, tG: bool=True, order: bool=True,
     
     Assumptions:
     1. ngRNA scaffold: SpCas9 Flip and Extend (GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC)
+       or SpCas9 mod_7 (GTTTCAGAGCTAGAAATAGCAAGTTGAAATAAGACTAGTTCGTTATCACGCCGAAAGGCGGGCACCGAGTCGGTGC)
     
     Dependencies: pandas, top_bot(), ord_form(), & get_overhangs()
     '''
@@ -322,10 +356,7 @@ def ngRNAs(df: pd.DataFrame | str, id: str, tG: bool=True, order: bool=True,
         if order_scaffold==True: # Include the scaffold sequence in the order
             df = pd.concat([ord_form(df=df,id=id,seq=spacer,suf='_top',pre='ns_'),
                             ord_form(df=df,id=id,seq=spacer,suf='_bot',pre='ns_'),
-                            pd.DataFrame({'Oligo Name': ['ngRNA_scaffold_top','ngRNA_scaffold_bot'],
-                                          'Sequence': ['TATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC','AAAAGCACCGACTCGGTGCCACTTGGGTGGGATGCTCGCAGGCATTCAGCCAAGTTGATAACGGACTAGCCTTATTTAAACTTGCTATGCTGTTTCCAGCATAGCTCTTAAAC'],
-                                          'Scale (µmol)': [0.05, 0.05],
-                                          'bp': [99, 113]})
+                            get_scaffold_oligos(scaffold=scaffold, pre='ngRNA')
                             ]).reset_index(drop=True)
         else: # Do not include the scaffold sequence in the order
             df = pd.concat([ord_form(df=df,id=id,seq=spacer,suf='_top',pre='ns_'),
