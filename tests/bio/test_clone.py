@@ -69,9 +69,17 @@ class TestTb:
 # Scaffold options
 # ---------------------------------------------------------------------------
 
-FLIP_AND_EXTEND_TOP = "TATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC"
-FLIP_AND_EXTEND_PEG_BOT = "GGTGCCACTTGGGTGGGATGCTCGCAGGCATTCAGCCAAGTTGATAACGGACTAGCCTTATTTAAACTTGCTATGCTGTTTCCAGCATAGCTCTTAAAC"
-FLIP_AND_EXTEND_NG_BOT = "AAAAGCACCGACTCGGTGCCACTTGGGTGGGATGCTCGCAGGCATTCAGCCAAGTTGATAACGGACTAGCCTTATTTAAACTTGCTATGCTGTTTCCAGCATAGCTCTTAAAC"
+# 'SpCas9 Flip and Extend' is the shorter scaffold; the com-modified variant
+# required for VLPs is a separate entry. Both are pinned here so a change to
+# either sequence has to be deliberate.
+FLIP_AND_EXTEND_TOP = "TATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC"
+FLIP_AND_EXTEND_PEG_BOT = "GGTGCCACTTTTTCAAGTTGATAACGGACTAGCCTTATTTAAACTTGCTATGCTGTTTCCAGCATAGCTCTTAAAC"
+FLIP_AND_EXTEND_NG_BOT = "AAAAGCACCGACTCGGTGCCACTTTTTCAAGTTGATAACGGACTAGCCTTATTTAAACTTGCTATGCTGTTTCCAGCATAGCTCTTAAAC"
+
+COM_MODIFIED = "SpCas9 Flip and Extend + com-modified"
+COM_MODIFIED_TOP = "TATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGGCTGAATGCCTGCGAGCATCCCACCCAAGTGGCACCGAGTCGGTGC"
+COM_MODIFIED_PEG_BOT = "GGTGCCACTTGGGTGGGATGCTCGCAGGCATTCAGCCAAGTTGATAACGGACTAGCCTTATTTAAACTTGCTATGCTGTTTCCAGCATAGCTCTTAAAC"
+COM_MODIFIED_NG_BOT = "AAAAGCACCGACTCGGTGCCACTTGGGTGGGATGCTCGCAGGCATTCAGCCAAGTTGATAACGGACTAGCCTTATTTAAACTTGCTATGCTGTTTCCAGCATAGCTCTTAAAC"
 
 
 class TestScaffoldOverhangs:
@@ -100,12 +108,27 @@ class TestGetScaffoldOligos:
         out = clone.get_scaffold_oligos(scaffold="SpCas9 Flip and Extend", pre="pegRNA")
         assert out["Oligo Name"].tolist() == ["pegRNA_scaffold_top", "pegRNA_scaffold_bot"]
         assert out["Sequence"].tolist() == [FLIP_AND_EXTEND_TOP, FLIP_AND_EXTEND_PEG_BOT]
-        assert out["bp"].tolist() == [99, 99]
+        assert out["bp"].tolist() == [76, 76]
 
     def test_flip_and_extend_ngRNA_oligos_are_unchanged(self):
         out = clone.get_scaffold_oligos(scaffold="SpCas9 Flip and Extend", pre="ngRNA")
         assert out["Sequence"].tolist() == [FLIP_AND_EXTEND_TOP, FLIP_AND_EXTEND_NG_BOT]
+        assert out["bp"].tolist() == [76, 90]
+
+    def test_com_modified_pegRNA_oligos_are_unchanged(self):
+        out = clone.get_scaffold_oligos(scaffold=COM_MODIFIED, pre="pegRNA")
+        assert out["Oligo Name"].tolist() == ["pegRNA_scaffold_top", "pegRNA_scaffold_bot"]
+        assert out["Sequence"].tolist() == [COM_MODIFIED_TOP, COM_MODIFIED_PEG_BOT]
+        assert out["bp"].tolist() == [99, 99]
+
+    def test_com_modified_ngRNA_oligos_are_unchanged(self):
+        out = clone.get_scaffold_oligos(scaffold=COM_MODIFIED, pre="ngRNA")
+        assert out["Sequence"].tolist() == [COM_MODIFIED_TOP, COM_MODIFIED_NG_BOT]
         assert out["bp"].tolist() == [99, 113]
+
+    def test_com_modified_is_longer_than_flip_and_extend(self):
+        assert len(clone.SCAFFOLD_SEQUENCES[COM_MODIFIED]) > \
+               len(clone.SCAFFOLD_SEQUENCES["SpCas9 Flip and Extend"])
 
     def test_mod_7_oligos_follow_its_own_sequence(self):
         sequence = clone.SCAFFOLD_SEQUENCES["SpCas9 mod_7"]
