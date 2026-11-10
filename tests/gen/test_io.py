@@ -967,3 +967,146 @@ def test_create_pipeline_submit_is_quiet_when_paths_already_exist(tmp_path):
     assert done.returncode == 0, done.stderr
     assert "Created" not in done.stdout
     assert "not found" not in done.stdout
+
+
+# --------------------------------------------------------------------------- #
+# FCS (flow cytometry standard)
+# --------------------------------------------------------------------------- #
+
+def _write_fcs(path, version, datatype, byteord, channels, data,
+               header_offsets=True, delim=b"/", extra=()):
+    """Write a minimal but spec-shaped .fcs file for round-trip testing.
+
+    channels: list of dicts with N (+ optional S/B/R/E); data: (events, par) ndarray.
+    """
+    import numpy as np
+
+    par, tot = len(channels), data.shape[0]
+    endian = "<" if byteord.split(",")[0] == "1" else ">"
+    kw = [("$BEGINANALYSIS", "0"), ("$ENDANALYSIS", "0"), ("$NEXTDATA", "0"),
+          ("$DATATYPE", datatype), ("$MODE", "L"), ("$BYTEORD", byteord),
+          ("$PAR", str(par)), ("$TOT", str(tot)), ("$CYT", "TestCyt")]
+    kw += list(extra)
+    fmts = []
+    for i, c in enumerate(channels, start=1):
+        kw += [(f"$P{i}N", c["N"]), (f"$P{i}S", c.get("S", "")),
+               (f"$P{i}B", str(c["B"])), (f"$P{i}R", c.get("R", "1024")),
+               (f"$P{i}E", c.get("E", "0,0"))]
+        fmts.append({"I": f"{endian}u{c['B'] // 8}",
+                     "F": f"{endian}f4", "D": f"{endian}f8"}[datatype])
+
+    event_bytes = sum(c["B"] for c in channels) // 8
+    offs = np.cumsum([0] + [c["B"] // 8 for c in channels[:-1]]).tolist()
+    dt = np.dtype({"names": [f"c{i}" for i in range(par)], "formats": fmts,
+                   "offsets": offs, "itemsize": event_bytes})
+    arr = np.zeros(tot, dtype=dt)
+    for i in range(par):
+        arr[f"c{i}"] = data[:, i]
+    payload = arr.tobytes()
+
+    # Two passes so $BEGINDATA/$ENDDATA and the HEADER offsets agree.
+    text_start = 256
+    for _ in range(3):
+        body = delim + delim.join(
+            delim.join([k.encode(), v.encode()]) for k, v in kw) + delim
+        text_end = text_start + len(body) - 1
+        data_start, data_end = text_end + 1, text_end + len(payload)
+        kw = [(k, v) for k, v in kw if k not in ("$BEGINDATA", "$ENDDATA")]
+        kw += [("$BEGINDATA", str(data_start)), ("$ENDDATA", str(data_end))]
+
+    f8 = lambda v: str(v).rjust(8).encode()
+    header = version.ljust(6).encode() + b"    " + f8(text_start) + f8(text_end)
+    header += (f8(data_start) + f8(data_end)) if header_offsets else (f8(0) + f8(0))
+    header += f8(0) + f8(0)
+    path.write_bytes(header + b" " * (text_start - len(header)) + body + payload)
+
+
+def test_get_fcs_float32(tmp_path):
+    import numpy as np
+    data = np.array([[1.5, -2.25, 1e4], [0.0, 3.75, 2e4]], dtype=np.float32)
+    pt = tmp_path / "floaty.fcs"
+    # $P1S is empty, which is byte-identical to an escaped delimiter.
+    _write_fcs(pt, "FCS3.1", "F", "1,2,3,4",
+               [{"N": "FSC-A", "S": "", "B": 32, "R": "262144"},
+                {"N": "SSC-A", "S": "ssc", "B": 32, "R": "262144"},
+                {"N": "FITC-A", "S": "GFP", "B": 32, "R": "262144"}], data)
+
+    df = io.get(str(pt))
+    assert list(df.columns) == ["FSC-A", "SSC-A", "FITC-A"]
+    assert np.allclose(df.values, data)
+    assert df.attrs["fcs_version"] == "FCS3.1"
+    assert df.attrs["fcs"]["$CYT"] == "TestCyt"
+    assert df.attrs["fcs_channels"][2]["$PnS"] == "GFP"
+
+
+def test_get_fcs_integer_mask_and_log_amp(tmp_path):
+    import numpy as np
+    # 1724 overflows $PnR=1024, so the high bits are masked off to 700.
+    data = np.array([[1023, 512], [0, 1724]], dtype=np.uint16)
+    pt = tmp_path / "ints.fcs"
+    _write_fcs(pt, "FCS3.0", "I", "1,2,3,4",
+               [{"N": "FSC-H", "S": "fwd", "B": 16, "R": "1024"},
+                {"N": "FL1-H", "S": "fl1", "B": 16, "R": "1024", "E": "4,1"}], data)
+
+    df = io.get(str(pt))
+    assert np.allclose(df["FSC-H"], [1023, 0])
+    assert np.allclose(df["FL1-H"], [10 ** (4 * 512 / 1024), 10 ** (4 * 700 / 1024)])
+
+    raw = io.get(str(pt), transform=False)
+    assert np.allclose(raw["FL1-H"], [512, 700])
+
+
+def test_get_fcs_big_endian_mixed_widths_and_begindata(tmp_path):
+    import numpy as np
+    data = np.array([[65535, 100000], [1, 2]], dtype=np.uint32)
+    pt = tmp_path / "mixed.fcs"
+    # HEADER data offsets are 0, so $BEGINDATA/$ENDDATA must be used instead.
+    _write_fcs(pt, "FCS2.0", "I", "4,3,2,1",
+               [{"N": "A", "S": "a", "B": 16, "R": "65536"},
+                {"N": "B", "S": "b", "B": 32, "R": "262144"}],
+               data, header_offsets=False)
+
+    df = io.get(str(pt))
+    assert np.allclose(df.values, data)
+    assert df.attrs["fcs_version"] == "FCS2.0"
+
+
+def test_get_fcs_duplicate_and_escaped_delimiter(tmp_path):
+    import numpy as np
+    data = np.array([[1.0, 2.0]], dtype=np.float32)
+    pt = tmp_path / "dup.fcs"
+    _write_fcs(pt, "FCS3.1", "F", "1,2,3,4",
+               [{"N": "Time", "S": "t", "B": 32, "R": "0"},
+                {"N": "Time", "S": "t", "B": 32, "R": "0"}], data,
+               delim=b"|", extra=[("$COM", "Test||Cyt")])
+
+    df = io.get(str(pt))
+    assert list(df.columns) == ["Time", "Time.1"]
+    assert df.attrs["fcs"]["$COM"] == "Test|Cyt"
+
+
+def test_get_fcs_bad_file_raises(tmp_path):
+    pt = tmp_path / "nope.fcs"
+    pt.write_bytes(b"not an fcs file at all, just some bytes" * 3)
+    with pytest.raises(ValueError):
+        io.get(str(pt))
+
+
+def test_get_dir_fcs(tmp_path):
+    import numpy as np
+    a = np.array([[1.0], [2.0]], dtype=np.float32)
+    b = np.array([[3.0]], dtype=np.float32)
+    ch = [{"N": "X", "S": "x", "B": 32, "R": "0"}]
+    _write_fcs(tmp_path / "a.fcs", "FCS3.1", "F", "1,2,3,4", ch, a)
+    (tmp_path / "sub").mkdir()
+    _write_fcs(tmp_path / "sub" / "b.fcs", "FCS3.1", "F", "1,2,3,4", ch, b)
+    (tmp_path / "ignore.csv").write_text("x\n1\n")
+
+    dc = io.get_dir(str(tmp_path), suf=".fcs")
+    assert set(dc) == {"a"}
+    assert np.allclose(dc["a"]["X"], [1.0, 2.0])
+    assert dc["a"].attrs["fcs"]["$PAR"] == "1"
+
+    dc = io.get_dir(str(tmp_path), suf=".fcs", recursive=True)
+    assert set(dc) == {"a", os.path.join("sub", "b")}
+    assert np.allclose(dc[os.path.join("sub", "b")]["X"], [3.0])

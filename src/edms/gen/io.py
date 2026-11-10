@@ -10,6 +10,7 @@ Usage:
 - recursive_json_decode(): recursively decode JSON strings in a nested structure
 
 [Input]
+- read_fcs(): returns pandas dataframe (events x channels) from a .fcs file
 - get(): returns pandas dataframe from a file
 - get_dir(): returns python dictionary of dataframe from files within a directory
 
@@ -36,6 +37,7 @@ Usage:
 
 # Import packages
 import pandas as pd
+import numpy as np
 import os
 import ast
 import csv
@@ -89,31 +91,268 @@ def recursive_json_decode(obj):
             return obj
     return obj
 
+# FCS (Flow Cytometry Standard)
+def _fcs_split_text(segment: bytes, escape: bool=True) -> list[bytes]:
+    '''
+    _fcs_split_text(): split an FCS TEXT segment into delimiter separated tokens
+
+    Parameters:
+    segment (bytes): raw TEXT (or supplemental TEXT) segment, including the leading delimiter
+    escape (bool, optional): treat a doubled delimiter as an escaped literal delimiter (Default: True)
+
+    Dependencies: None
+
+    Note: FCS3.1 3.2.1 escapes a literal delimiter by doubling it, which is indistinguishable
+          from a keyword with an empty value; escape=False reads doubled delimiters as empty values.
+    '''
+    if not segment: return []
+    delim = segment[0:1] # The first byte of the segment defines the delimiter
+    body = segment[1:]
+    tokens = []
+    current = bytearray()
+    i = 0
+    while i < len(body):
+        if body[i:i+1]==delim:
+            if escape and body[i+1:i+2]==delim: # Escaped delimiter
+                current += delim
+                i += 2
+                continue
+            tokens.append(bytes(current))
+            current = bytearray()
+            i += 1
+            continue
+        current.append(body[i])
+        i += 1
+    tokens.append(bytes(current))
+    if tokens and tokens[-1]==b'': tokens.pop() # The segment ends with the delimiter
+    return tokens
+
+def _fcs_decode(raw: bytes) -> str:
+    '''
+    _fcs_decode(): decode an FCS keyword or value as text
+
+    Parameters:
+    raw (bytes): keyword or value from the TEXT segment
+
+    Dependencies: None
+    '''
+    try: return raw.decode('utf-8')
+    except UnicodeDecodeError: return raw.decode('latin-1')
+
+def _fcs_parse_text(segment: bytes, escape: bool=True) -> dict[str,str]:
+    '''
+    _fcs_parse_text(): returns dictionary of keyword/value pairs from an FCS TEXT segment
+
+    Parameters:
+    segment (bytes): raw TEXT (or supplemental TEXT) segment, including the leading delimiter
+    escape (bool, optional): treat a doubled delimiter as an escaped literal delimiter (Default: True)
+
+    Dependencies: _fcs_split_text() & _fcs_decode()
+    '''
+    tokens = _fcs_split_text(segment,escape=escape)
+    return {_fcs_decode(tokens[i]).strip(): _fcs_decode(tokens[i+1]).strip()
+            for i in range(0,len(tokens)-1,2)}
+
+def _fcs_int(value, default: int=0) -> int:
+    '''
+    _fcs_int(): returns integer from an FCS keyword value (blank & malformed values fall back to default)
+
+    Parameters:
+    value: FCS keyword value
+    default (int, optional): value returned when the keyword is missing or not an integer (Default: 0)
+
+    Dependencies: None
+    '''
+    try: return int(str(value).strip())
+    except (TypeError, ValueError): return default
+
+def _fcs_complete(kw: dict) -> bool:
+    '''
+    _fcs_complete(): returns whether an FCS keyword dictionary holds every keyword needed to read DATA
+
+    Parameters:
+    kw (dict): uppercased FCS keyword/value pairs
+
+    Dependencies: _fcs_int()
+    '''
+    if not {'$PAR','$DATATYPE','$MODE'}.issubset(kw.keys()): return False
+    par = _fcs_int(kw.get('$PAR'))
+    if par<=0: return False
+    return all(f'$P{i}B' in kw and f'$P{i}N' in kw for i in range(1,par+1))
+
+def read_fcs(pt: str, transform: bool=True) -> pd.DataFrame:
+    '''
+    read_fcs(): returns pandas dataframe (events x channels) from a .fcs file
+
+    Parameters:
+    pt (str): file path to a FCS2.0, FCS3.0, or FCS3.1 file
+    transform (bool, optional): apply $PnE log amplification to integer data (Default: True)
+
+    Dependencies: numpy, pandas, _fcs_parse_text(), _fcs_int()
+
+    Note: columns are named by $PnN; FCS keywords are stored in df.attrs['fcs'],
+          the version in df.attrs['fcs_version'], and per channel details ($PnN, $PnS,
+          $PnB, $PnR, $PnE, $PnG) in df.attrs['fcs_channels']. $PnG gain is not applied.
+    '''
+    with open(pt,'rb') as f:
+
+        # HEADER: version & the ASCII byte offsets of the TEXT and DATA segments
+        header = f.read(58)
+        if len(header)<58: raise ValueError(f"Not a valid FCS file (header is too short).\nFile: {pt}")
+        version = header[0:6].decode('latin-1').strip()
+        if not version.upper().startswith('FCS'):
+            raise ValueError(f"Not a valid FCS file (missing FCS version in header).\nFile: {pt}")
+        offsets = [_fcs_int(header[10+i*8:18+i*8].decode('latin-1')) for i in range(4)]
+        (text_start,text_end,data_start,data_end) = offsets
+        if text_end<=text_start: raise ValueError(f"Not a valid FCS file (empty TEXT segment).\nFile: {pt}")
+
+        # TEXT segment (primary and, when present, supplemental)
+        f.seek(text_start)
+        text = f.read(text_end-text_start+1)
+        meta = _fcs_parse_text(text)
+        kw = {key.upper(): value for key,value in meta.items()}
+        if not _fcs_complete(kw):
+            # Keywords written with an empty value (e.g., an unstained channel's $PnS) look
+            # like escaped delimiters and shift every pair that follows; reread without escaping.
+            plain = _fcs_parse_text(text,escape=False)
+            plain.pop('',None)
+            plain_kw = {key.upper(): value for key,value in plain.items()}
+            if _fcs_complete(plain_kw): meta,kw = plain,plain_kw
+        stext_start = _fcs_int(kw.get('$BEGINSTEXT'))
+        stext_end = _fcs_int(kw.get('$ENDSTEXT'))
+        if stext_end>stext_start>0:
+            f.seek(stext_start)
+            smeta = _fcs_parse_text(f.read(stext_end-stext_start+1))
+            smeta.pop('',None)
+            meta.update(smeta)
+            kw.update({key.upper(): value for key,value in smeta.items()})
+
+        # DATA segment offsets: the HEADER holds 0 when the offsets do not fit in 8 ASCII bytes
+        if data_start==0 or data_end==0:
+            data_start = _fcs_int(kw.get('$BEGINDATA'))
+            data_end = _fcs_int(kw.get('$ENDDATA'))
+        if data_start<=0: raise ValueError(f"Could not locate the DATA segment.\nFile: {pt}")
+
+        # Required keywords
+        mode = kw.get('$MODE','L').upper()
+        if mode!='L': raise NotImplementedError(f"Only list mode ($MODE/L) .fcs files are supported; got $MODE/{mode}.\nFile: {pt}")
+        datatype = kw.get('$DATATYPE','').upper()
+        if datatype not in {'I','F','D','A'}: raise ValueError(f"Unsupported $DATATYPE '{datatype}'.\nFile: {pt}")
+        par = _fcs_int(kw.get('$PAR'))
+        tot = _fcs_int(kw.get('$TOT'))
+        if par<=0: raise ValueError(f"Missing or invalid $PAR.\nFile: {pt}")
+        endian = '<' if kw.get('$BYTEORD','1,2,3,4').split(',')[0].strip()=='1' else '>'
+
+        # Per channel keywords
+        names = []
+        bits = []
+        ranges = []
+        logs = []
+        gains = []
+        for i in range(1,par+1):
+            name = kw.get(f'$P{i}N','').strip() or f'P{i}'
+            bit = kw.get(f'$P{i}B','').strip()
+            if bit=='*': raise NotImplementedError(f"Variable width parameters ($P{i}B/*) are not supported.\nFile: {pt}")
+            bit = _fcs_int(bit)
+            if bit<=0 or bit%8!=0: raise NotImplementedError(f"Only byte aligned parameters are supported; got $P{i}B/{bit}.\nFile: {pt}")
+            try: rng = float(kw.get(f'$P{i}R','0').strip() or 0)
+            except ValueError: rng = 0.0
+            try: f1,f2 = (float(v) for v in kw.get(f'$P{i}E','0,0').split(',')[:2])
+            except ValueError: f1,f2 = 0.0,0.0
+            try: gain = float(kw.get(f'$P{i}G','1').strip() or 1)
+            except ValueError: gain = 1.0
+            names.append(name)
+            bits.append(bit)
+            ranges.append(rng)
+            logs.append((f1,f2))
+            gains.append(gain)
+
+        # Numpy format per channel
+        if datatype=='I':
+            fmts = []
+            for i,bit in enumerate(bits):
+                if bit not in (8,16,32,64): raise NotImplementedError(f"Unsupported integer width $P{i+1}B/{bit}.\nFile: {pt}")
+                fmts.append(f'{endian}u{bit//8}')
+        elif datatype=='F':
+            if set(bits)!={32}: raise ValueError(f"$DATATYPE/F requires $PnB/32; got {sorted(set(bits))}.\nFile: {pt}")
+            fmts = [f'{endian}f4']*par
+        elif datatype=='D':
+            if set(bits)!={64}: raise ValueError(f"$DATATYPE/D requires $PnB/64; got {sorted(set(bits))}.\nFile: {pt}")
+            fmts = [f'{endian}f8']*par
+        else: # ASCII
+            fmts = [f'S{bit//8}' for bit in bits]
+
+        # DATA segment
+        event_bytes = sum(bits)//8
+        f.seek(data_start)
+        available = data_end-data_start+1 if data_end>=data_start else None
+        expected = tot*event_bytes if tot>0 else (available or 0)
+        buffer = f.read(expected if available is None else min(expected,available))
+        events = len(buffer)//event_bytes
+        if tot>0 and events<tot:
+            print(f"Warning: expected {tot} events but the DATA segment only holds {events}.\nFile: {pt}")
+        buffer = buffer[:events*event_bytes]
+
+    # Unpack events x channels
+    offsets = np.cumsum([0]+[bit//8 for bit in bits[:-1]]).tolist()
+    dtype = np.dtype({'names': [f'c{i}' for i in range(par)],
+                      'formats': fmts,
+                      'offsets': offsets,
+                      'itemsize': event_bytes})
+    array = np.frombuffer(buffer,dtype=dtype,count=events)
+
+    columns = {}
+    used = {}
+    for i,name in enumerate(names):
+        raw = array[f'c{i}']
+        if datatype=='A': values = np.array([float(v.strip() or 0) for v in raw],dtype=np.float64)
+        elif datatype=='I':
+            rng = ranges[i]
+            if rng>1: # Mask off the high bits that are not part of the measurement (FCS3.1 3.3.4)
+                valid = int(np.ceil(np.log2(rng)))
+                if valid<bits[i]: raw = raw & raw.dtype.type((1<<valid)-1)
+            values = raw.astype(np.float64)
+            f1,f2 = logs[i]
+            if transform and f1>0 and rng>0: # Log amplification
+                values = 10**(f1*values/rng)*(f2 if f2>0 else 1.0)
+        else: values = raw.astype(np.float64)
+        used[name] = used.get(name,0)+1
+        columns[name if used[name]==1 else f'{name}.{used[name]-1}'] = values
+
+    df = pd.DataFrame(columns)
+    df.attrs['fcs'] = meta
+    df.attrs['fcs_version'] = version
+    df.attrs['fcs_channels'] = [{'$PnN': names[i], '$PnS': kw.get(f'$P{i+1}S','').strip(),
+                                 '$PnB': bits[i], '$PnR': ranges[i],
+                                 '$PnE': logs[i], '$PnG': gains[i]} for i in range(par)]
+    return df
+
 # Input
 def get(pt: str, literal_eval:bool=False, **kwargs) -> pd.DataFrame | dict[pd.DataFrame]:
     ''' 
     get(): returns pandas dataframe from a file
     
     Parameters:    
-    pt (str): file path
+    pt (str): file path (.csv, .tsv, .xlsx, .html, or .fcs)
     literal_evals (bool, optional): convert Python literals encoded as strings (Default: False)
         (1) automatically detects and parses columns containing Python literals (e.g., dict, list, set, tuple) encoded as strings
         (2) recursively evaluates nested structures
-    **kwargs: pandas.read_csv() parameters
+        (3) ignored for .fcs files, which hold numeric event data
+    **kwargs: pandas.read_csv() parameters (read_fcs() parameters for .fcs files)
     
-    Dependencies: pandas,ast,utils[try_parse(),recursive_parse()],df_try_parse()
+    Dependencies: pandas,ast,utils[try_parse(),recursive_parse()],df_try_parse(),read_fcs()
     '''
-    suf = pt.split('.')[-1]
+    suf = pt.split('.')[-1].lower()
     if suf=='csv': 
         if literal_eval: df = df_try_parse(pd.read_csv(filepath_or_buffer=pt,sep=',',**kwargs))
         else: df = pd.read_csv(filepath_or_buffer=pt,sep=',',**kwargs)
-        print(f"CSV file: {pt}\nColumns: {', '.join([col for col in df.columns])}")
+        print(f"CSV file: {pt}\nColumns: {', '.join([str(col) for col in df.columns])}")
         return df
 
     elif suf=='tsv': 
         if literal_eval: df = df_try_parse(pd.read_csv(filepath_or_buffer=pt,sep='\t',**kwargs))
         else: df = pd.read_csv(filepath_or_buffer=pt,sep='\t',**kwargs)
-        print(f"TSV file: {pt}\nColumns: {', '.join([col for col in df.columns])}")
+        print(f"TSV file: {pt}\nColumns: {', '.join([str(col) for col in df.columns])}")
         return df
 
     elif suf=='xlsx': 
@@ -121,10 +360,15 @@ def get(pt: str, literal_eval:bool=False, **kwargs) -> pd.DataFrame | dict[pd.Da
                                 for sheet_name in pd.ExcelFile(pt).sheet_names}
         else: dc = {sheet_name: pd.read_excel(pt,sheet_name,**kwargs)
                                 for sheet_name in pd.ExcelFile(pt).sheet_names}
-        print(f"Excel file: {pt}\nKeys: {', '.join([key for key in dc.keys()])}")
+        print(f"Excel file: {pt}\nKeys: {', '.join([str(key) for key in dc.keys()])}")
         for key,df in dc.items():
-            print(f"Key: {key}\nColumns: {', '.join([col for col in df.columns])}")
+            print(f"Key: {key}\nColumns: {', '.join([str(col) for col in df.columns])}")
         return dc
+
+    elif suf=='fcs':
+        df = read_fcs(pt,**kwargs)
+        print(f"FCS file: {pt}\nColumns: {', '.join([str(col) for col in df.columns])}")
+        return df
 
     elif suf=='html': 
         if literal_eval: return df_try_parse(pd.read_html(pt,**kwargs))
@@ -139,22 +383,22 @@ def get_dir(dir: str, suf: str='.csv', literal_eval: bool=False, recursive: bool
     
     Parameters:
     dir (str): directory path with files
-    suf (str): file type suffix
+    suf (str): file type suffix (e.g., '.csv', '.tsv', '.xlsx', '.html', or '.fcs')
     literal_evals (bool, optional): convert Python literals encoded as strings (Default: False)
         (1) automatically detects and parses columns containing Python literals (e.g., dict, list, set, tuple) encoded as strings
         (2) recursively evaluates nested structures
     recursive (bool, optional): search subfolders for files (Default: False)
         (1) keys include the subfolder path relative to dir (e.g., 'sub/file')
-    **kwargs: pandas.read_csv() parameters
+    **kwargs: pandas.read_csv() parameters (read_fcs() parameters for .fcs files)
     
-    Dependencies: pandas, os & relative_paths()
+    Dependencies: pandas, os, get() & relative_paths()
     '''
     if recursive: files = [file for file in relative_paths(dir) if file[-len(suf):]==suf]
     else: files = [file for file in os.listdir(dir) if file[-len(suf):]==suf]
     dc = {file[:-len(suf)]:get(os.path.join(dir,file),literal_eval,**kwargs) for file in files}
-    print(f"Directory: {dir}\nKeys: {', '.join([key for key in dc.keys()])}")
+    print(f"Directory: {dir}\nKeys: {', '.join([str(key) for key in dc.keys()])}")
     for key,df in dc.items():
-        print(f"Key: {key}\nColumns: {', '.join([col for col in df.columns])}")
+        print(f"Key: {key}\nColumns: {', '.join([str(col) for col in df.columns])}")
     return dc
 
 # Output
