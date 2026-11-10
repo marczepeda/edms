@@ -316,6 +316,49 @@ def test_pcrs_without_pcr2_umi():
 
 
 # --------------------------------------------------------------------------- #
+# pcrs() input files
+# --------------------------------------------------------------------------- #
+def _write_samples_xlsx(pt, sheet_name="Samples", df=None):
+    """Writes the samples dataframe to sheet_name alongside other tabs"""
+    with pd.ExcelWriter(pt) as writer:
+        pd.DataFrame({"Name": ["bc1"], "Sequence": ["ACGT"]}).to_excel(writer, sheet_name="Barcodes", index=False)
+        (_pcrs_df() if df is None else df).to_excel(writer, sheet_name=sheet_name, index=False)
+    return pt
+
+
+def test_pcrs_xlsx_input_uses_samples_tab(tmp_path):
+    pivots = ngs.pcrs(df=str(_write_samples_xlsx(tmp_path / "ngs.xlsx")))[0]
+    assert pivots["96-well_ID"].notna().to_numpy().sum() == 3   # Samples tab was used (not Barcodes)
+
+
+def test_pcrs_xlsx_input_matches_csv_input(tmp_path):
+    csv_pt = tmp_path / "ngs.csv"
+    _pcrs_df().to_csv(csv_pt, index=False)
+    xlsx_pivots = ngs.pcrs(df=str(_write_samples_xlsx(tmp_path / "ngs.xlsx")))[0]
+    csv_pivots = ngs.pcrs(df=str(csv_pt))[0]
+    assert xlsx_pivots.keys() == csv_pivots.keys()
+    for key, pivot in xlsx_pivots.items():
+        pd.testing.assert_frame_equal(pivot, csv_pivots[key])
+
+
+def test_pcrs_xlsx_input_accepts_sheet_name(tmp_path):
+    pt = str(_write_samples_xlsx(tmp_path / "ngs.xlsx", sheet_name="NGS Samples"))
+    pivots = ngs.pcrs(df=pt, sheet_name="NGS Samples")[0]
+    assert pivots["96-well_ID"].notna().to_numpy().sum() == 3
+
+
+def test_pcrs_xlsx_input_missing_sheet_name_raises(tmp_path):
+    pt = str(_write_samples_xlsx(tmp_path / "ngs.xlsx", sheet_name="NGS Samples"))
+    with pytest.raises(ValueError, match="Samples"):
+        ngs.pcrs(df=pt)
+
+
+def test_pcrs_dict_input_uses_samples_tab():
+    pivots = ngs.pcrs(df={"Barcodes": pd.DataFrame({"Name": ["bc1"]}), "Samples": _pcrs_df()})[0]
+    assert pivots["96-well_ID"].notna().to_numpy().sum() == 3
+
+
+# --------------------------------------------------------------------------- #
 # excel_colors() / pcrs() Excel styling
 # --------------------------------------------------------------------------- #
 def test_excel_colors_cycles_set3_and_reuses_colors():

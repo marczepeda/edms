@@ -136,3 +136,50 @@ def test_pcrs_end_to_end_plate_and_mm(pcr1_df, tmp_path):
 
     assert list(pcr1_mms.keys()) == [("F1", "R1")]
     assert list(pcr1_thermo.keys()) == ["F1_R1_65°C"]
+
+
+# --------------------------------------------------------------------------- #
+# pcrs() input files
+# --------------------------------------------------------------------------- #
+def _write_samples_xlsx(pt, df, sheet_name="Samples"):
+    """Writes the samples dataframe to sheet_name alongside another tab"""
+    with pd.ExcelWriter(pt) as writer:
+        pd.DataFrame({"Name": ["bc1"], "Sequence": ["ACGT"]}).to_excel(writer, sheet_name="Barcodes", index=False)
+        df.to_excel(writer, sheet_name=sheet_name, index=False)
+    return str(pt)
+
+
+def _filled_ids(pivots):
+    return set(pivots["96-well_ID"].stack(future_stack=True).dropna().values)
+
+
+def test_pcrs_xlsx_input_uses_samples_tab(pcr1_df, tmp_path):
+    pivots = sanger.pcrs(df=_write_samples_xlsx(tmp_path / "sanger.xlsx", pcr1_df))[0]
+    assert _filled_ids(pivots) == {"s1", "s2", "s3"}   # Samples tab was used (not Barcodes)
+
+
+def test_pcrs_xlsx_input_matches_csv_input(pcr1_df, tmp_path):
+    csv_pt = tmp_path / "sanger.csv"
+    pcr1_df.to_csv(csv_pt, index=False)
+    xlsx_pivots = sanger.pcrs(df=_write_samples_xlsx(tmp_path / "sanger.xlsx", pcr1_df))[0]
+    csv_pivots = sanger.pcrs(df=str(csv_pt))[0]
+    assert xlsx_pivots.keys() == csv_pivots.keys()
+    for key, pivot in xlsx_pivots.items():
+        pd.testing.assert_frame_equal(pivot, csv_pivots[key])
+
+
+def test_pcrs_xlsx_input_accepts_sheet_name(pcr1_df, tmp_path):
+    pt = _write_samples_xlsx(tmp_path / "sanger.xlsx", pcr1_df, sheet_name="Sanger Samples")
+    pivots = sanger.pcrs(df=pt, sheet_name="Sanger Samples")[0]
+    assert _filled_ids(pivots) == {"s1", "s2", "s3"}
+
+
+def test_pcrs_xlsx_input_missing_sheet_name_raises(pcr1_df, tmp_path):
+    pt = _write_samples_xlsx(tmp_path / "sanger.xlsx", pcr1_df, sheet_name="Sanger Samples")
+    with pytest.raises(ValueError, match="Samples"):
+        sanger.pcrs(df=pt)
+
+
+def test_pcrs_dict_input_uses_samples_tab(pcr1_df):
+    pivots = sanger.pcrs(df={"Barcodes": pd.DataFrame({"Name": ["bc1"]}), "Samples": pcr1_df})[0]
+    assert _filled_ids(pivots) == {"s1", "s2", "s3"}

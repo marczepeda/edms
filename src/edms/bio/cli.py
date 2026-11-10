@@ -52,7 +52,8 @@ def add_subparser(subparsers, formatter_class=None):
     parser_ngs_pcrs = subparsers_ngs.add_parser("pcrs", help="Plan NGS PCRs", description="Plan NGS PCRs", formatter_class=formatter_class)
 
     # pcrs(): Core parameters
-    parser_ngs_pcrs.add_argument("-i","--df", help="Input file", type=str, required=True)
+    parser_ngs_pcrs.add_argument("-i","--df", help="Input file (.csv, .tsv, or .xlsx)", type=str, required=True)
+    parser_ngs_pcrs.add_argument("-s","--sheet_name", help="Tab with the NGS samples for .xlsx input files", type=str, default='Samples')
     
     parser_ngs_pcrs.add_argument("-f","--file", help="Output file path (.xlsx)", type=str, default=f'./{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_NGS_plan.xlsx')
     parser_ngs_pcrs.add_argument("-u","--ultra", help="Using NEB Ultra II reagents", action="store_true")
@@ -131,7 +132,8 @@ def add_subparser(subparsers, formatter_class=None):
     parser_sanger_pcrs = subparsers_sanger.add_parser("pcrs", help="Plan Sanger PCRs", description="Plan Sanger PCRs", formatter_class=formatter_class)
 
     # pcrs(): Core parameters
-    parser_sanger_pcrs.add_argument("-i", "--df", help="Input file", type=str, required=True)
+    parser_sanger_pcrs.add_argument("-i", "--df", help="Input file (.csv, .tsv, or .xlsx)", type=str, required=True)
+    parser_sanger_pcrs.add_argument("-s", "--sheet_name", help="Tab with the Sanger samples for .xlsx input files", type=str, default='Samples')
     parser_sanger_pcrs.add_argument("--file", help="Output file path (.xlsx)", type=str, default=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_Sanger_plan.xlsx')
     parser_sanger_pcrs.add_argument("--cycles", help="Number of cycles for PCR1", type=str, default='30')
     parser_sanger_pcrs.add_argument("--ultra", help="Using NEB Ultra II reagents", action="store_true")

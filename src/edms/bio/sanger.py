@@ -210,16 +210,18 @@ def pcr_mm_ultra(primers: pd.Series, template: str, template_uL: int,
                                                         },index=pd.Index(list(np.arange(1,7)), name=f"{pcr1_fwd}_{pcr1_rev}"))
     return pcr_mm_dc
 
-def pcrs(df: pd.DataFrame | str, file:str=None, gDNA_id_col: str='ID', 
+def pcrs(df: pd.DataFrame | dict[str,pd.DataFrame] | str, file:str=None, gDNA_id_col: str='ID', 
          pcr1_id_col: str='PCR1 ID', pcr1_fwd_col: str='PCR1 FWD', pcr1_rev_col: str='PCR1 REV', 
          Q5_mm_x_stock: int=5, dNTP_mM_stock: int=10, fwd_uM_stock: int=10, rev_uM_stock: int=10, Q5_U_uL_stock: int=2,
          Q5_mm_x_desired: int=1,dNTP_mM_desired: float=0.2, fwd_uM_desired: float=0.5, rev_uM_desired: float=0.5, Q5_U_uL_desired: float=0.02,
-         total_uL:int=20, mm_x: float=1.1, cycles: int | str = None, ultra: bool=False) -> tuple[dict[pd.DataFrame]]:
+         total_uL:int=20, mm_x: float=1.1, cycles: int | str = None, ultra: bool=False,
+         sheet_name: str='Samples') -> tuple[dict[pd.DataFrame]]:
     '''
     pcrs(): generates Sanger PCR plan automatically
     
     Parameters:
-    df (DataFrame | str): Sanger samples dataframe (or file path)
+    df (DataFrame | dict[str,DataFrame] | str): Sanger samples dataframe (or file path to .csv, .tsv, or .xlsx file; dictionary of dataframes)
+        (1) .xlsx files (& dictionaries of dataframes) use the sheet_name tab (Default: 'Samples')
     file (str, optional): output file path
     gDNA_id_col (str, optional): gDNA ID column name (Default: 'ID')
     pcr1_id_col (str, optional): PCR1 ID column name (Default: 'PCR1 ID')
@@ -243,12 +245,17 @@ def pcrs(df: pd.DataFrame | str, file:str=None, gDNA_id_col: str='ID',
     mm_x (float, optional): master mix multiplier (Default: 1.1)
     cycles (int | str): Number of cycles for the PCR1 process (Default: None -> 30).
     ultra (bool, optional): use NEB Ultra II reagents (Default: False)
+    sheet_name (str, optional): tab with the Sanger samples for .xlsx files & dictionaries of dataframes; ignored otherwise (Default: 'Samples')
 
     Dependencies: pandas,numpy,os,io,tidy,thermocycler(),pcr_mm(),pcr_mm_ultra()
     '''
-    # Get samples dataframe from file path if needed
-    if type(df)==str:
+    # Get samples dataframe from file path if needed (.xlsx files return a dictionary of dataframes)
+    if isinstance(df,str):
         df = io.get(pt=df)
+    if isinstance(df,dict): # Isolate the samples tab from the dictionary of dataframes
+        if sheet_name not in df.keys():
+            raise ValueError(f"sheet_name '{sheet_name}' is not one of the tabs: {', '.join(str(key) for key in df.keys())}")
+        df = df[sheet_name].copy()
     else:
         df = df.copy()
 

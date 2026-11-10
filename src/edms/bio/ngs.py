@@ -390,18 +390,20 @@ def to_excel_styled(table: pd.DataFrame, writer: pd.ExcelWriter, sheet_name: str
             ws.fitted_widths[c] = width
             ws.column_dimensions[get_column_letter(c)].width = width
 
-def pcrs(df: pd.DataFrame | str, file:str=None, gDNA_id_col: str='ID', 
+def pcrs(df: pd.DataFrame | dict[str,pd.DataFrame] | str, file:str=None, gDNA_id_col: str='ID', 
          pcr1_id_col: str='PCR1 ID', pcr1_fwd_col: str='PCR1 FWD', pcr1_rev_col: str='PCR1 REV', 
          pcr2_id_col: str='PCR2 ID', pcr2_fwd_col: str='PCR2 FWD', pcr2_rev_col: str='PCR2 REV', umi_col: str='UMI',
          Q5_mm_x_stock: int=5, dNTP_mM_stock: int=10, fwd_uM_stock: int=10, rev_uM_stock: int=10, Q5_U_uL_stock: int=2,
          Q5_mm_x_desired: int=1,dNTP_mM_desired: float=0.2, fwd_uM_desired: float=0.5, rev_uM_desired: float=0.5, Q5_U_uL_desired: float=0.02,
          pcr1_total_uL: int=20, pcr2_total_uL: int=20, mm_x: float=1.1, ultra: bool=False, syber: bool=False, inner1: bool=False, inner2: bool=False, max_well_uL: float=50, palette_or_cmap: str | list | dict='Set3', pcr2: bool=True,
-         pcr1_cycles: int | str = None, pcr2_cycles: int | str = None, umi_cycles: int | str = None, pcr1_5_Tm: int | str = None, split_pcr1_primers: bool=True) -> tuple[dict[pd.DataFrame]]:
+         pcr1_cycles: int | str = None, pcr2_cycles: int | str = None, umi_cycles: int | str = None, pcr1_5_Tm: int | str = None, split_pcr1_primers: bool=True,
+         sheet_name: str='Samples') -> tuple[dict[pd.DataFrame]]:
     '''
     pcrs(): generates NGS PCR plan automatically
     
     Parameters:
-    df (DataFrame | str): NGS samples dataframe (or file path)
+    df (DataFrame | dict[str,DataFrame] | str): NGS samples dataframe (or file path to .csv, .tsv, or .xlsx file; dictionary of dataframes)
+        (1) .xlsx files (& dictionaries of dataframes) use the sheet_name tab (Default: 'Samples')
     file (str, optional): output file path
     gDNA_id_col (str, optional): gDNA ID column name (Default: 'ID')
     pcr1_id_col (str, optional): PCR1 ID column name (Default: 'PCR1 ID')
@@ -437,12 +439,17 @@ def pcrs(df: pd.DataFrame | str, file:str=None, gDNA_id_col: str='ID',
     pcr1_5_Tm (int | str): Annealing temperature for PCR1.5 process (Default: None -> 65; P5-FWD & P7-REV primers).
     split_pcr1_primers (bool, optional): whether to split PCR1 plate arragement based on primer (Default: True)
     pcr2 (bool, optional): include PCR2 plates, master mixes, & thermocycler; PCR2 columns are not required if False (Default: True)
+    sheet_name (str, optional): tab with the NGS samples for .xlsx files & dictionaries of dataframes; ignored otherwise (Default: 'Samples')
 
     Dependencies: pandas,numpy,os,io,tidy,thermocycler(),pcr_mm(),pcr_mm_ultra(),add_syber(),excel_colors(),to_excel_styled()
     '''
-    # Get samples dataframe from file path if needed
-    if type(df)==str:
+    # Get samples dataframe from file path if needed (.xlsx files return a dictionary of dataframes)
+    if isinstance(df,str):
         df = io.get(pt=df)
+    if isinstance(df,dict): # Isolate the samples tab from the dictionary of dataframes
+        if sheet_name not in df.keys():
+            raise ValueError(f"sheet_name '{sheet_name}' is not one of the tabs: {', '.join(str(key) for key in df.keys())}")
+        df = df[sheet_name].copy()
     else:
         df = df.copy()
 
