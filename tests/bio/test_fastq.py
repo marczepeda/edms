@@ -645,7 +645,11 @@ def test_trim_motifs_derives_motif5_motif3_from_target_sequence(tmp_path, mocker
     })
 
     mock_run = mocker.patch("edms.bio.fastq.subprocess.run", return_value=_FakeCompletedProcess())
-    fastq.trim_motifs(fastq_dir=str(fastq_dir), out_dir=str(tmp_path / "out"), in_file=in_file, motif_length=10)
+    # subprocess.run is mocked, so cutadapt never writes the logs that
+    # trim_motifs_summary() reads; summary=False keeps this test on the
+    # motif derivation it is checking.
+    fastq.trim_motifs(fastq_dir=str(fastq_dir), out_dir=str(tmp_path / "out"), in_file=in_file,
+                      motif_length=10, summary=False)
 
     assert mock_run.call_count == 2
     first_command = mock_run.call_args_list[0][0][0]
