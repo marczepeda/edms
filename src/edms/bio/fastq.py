@@ -122,7 +122,7 @@ from ..gen import io, tidy as t, plot as p, stat as st
 from ..data import uniprot, pdb, dssp
 from ..utils import memory_timer, mkdir, load_resource_csv
 from .. import config
-from ..gen.plot import _facet_values, _facet_values, _subset_for_facet, _is_faceted, _facet_axis_labels, _handle_panel_legend, _hide_inner_axis_labels, _make_figure_legend, _final_save_show, re_un_cap, _subplot_title, autoscale_xy
+from ..gen.plot import _facet_values, _facet_values, _subset_for_facet, _norm_axis_dims, _axis_dims_share, _facet_panel_dims, _is_faceted, _facet_axis_labels, _handle_panel_legend, _hide_inner_axis_labels, _make_figure_legend, _final_save_show, re_un_cap, _subplot_title, autoscale_xy
 
 # Supporting methods
 def fuzzy_substring_search(text: str, pattern: str, max_distance: int):
@@ -5024,8 +5024,8 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_order: li
         facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
         file: str=None, palette_or_cmap: str | list | dict | mcolors.Colormap='colorblind', palette_shift: int=0, alpha: float=1.0, dodge: bool=True, jitter: bool=True, size: float=5, edgecol: str='black', lw: int=1, errorbar: str = 'sd', errwid: int = 1, errcap: float = 0.1,
         figsize: tuple=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
-        x_axis: str='', x_axis_size=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_scale: str='linear', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
-        y_axis: str='', y_axis_size=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_scale: str='linear', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
+        x_axis: str='', x_axis_size=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_scale: str='linear', x_axis_dims: tuple | list[tuple]=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
+        y_axis: str='', y_axis_size=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_scale: str='linear', y_axis_dims: tuple | list[tuple]=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
         legend_title: str='', legend_title_size: int=12, legend_title_weight: str='bold', legend_size: int = 12, legend_bbox_to_anchor=(1,1), legend_loc: str='upper left', legend_items: tuple=(0,0), legend_ncol: int=1, legend_mode: str='figure',
         legend_columnspacing: int=0, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=1, html_size_multiplier: float=1.5,
         dpi: int=0, transparent: bool=True, show: bool=True, space_capitalize: bool=True,
@@ -5073,7 +5073,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_order: li
     x_axis_weight (str, optional): x-axis name bold, italics, etc.
     x_axis_font (str, optional): x-axis font
     x_axis_scale (str, optional): x-axis scale linear, log, etc.
-    x_axis_dims (tuple, optional): x-axis dimensions (start, end)
+    x_axis_dims (tuple | list[tuple], optional): x-axis dimensions (start, end); a list sets 1 per facetx column or 1 per panel (row-major), where (0,0) autoscales
     x_axis_pad (int, optional): x-axis label padding
     x_ticks_size (int, optional): x-axis ticks font size
     x_ticks_rot (int, optional): x-axis ticks rotation
@@ -5084,7 +5084,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_order: li
     y_axis_weight (str, optional): y-axis name bold, italics, etc.
     y_axis_font (str, optional): y-axis font
     y_axis_scale (str, optional): y-axis scale linear, log, etc.
-    y_axis_dims (tuple, optional): y-axis dimensions (start, end)
+    y_axis_dims (tuple | list[tuple], optional): y-axis dimensions (start, end); a list sets 1 per facety row or 1 per panel (row-major), where (0,0) autoscales
     y_axis_pad (int, optional): y-axis label padding
     y_ticks_size (int, optional): y-axis ticks font size
     y_ticks_rot (int, optional): y-axis ticks rotation
@@ -5159,7 +5159,7 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
           file: str=None, palette_or_cmap: str | list | dict | mcolors.Colormap='tab20', palette_shift: int=0, repeats: int=1, errcap: int=4, vertical: bool=True,
           figsize: tuple=(6,6), title: str='Editing Outcomes', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
           x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial',
-          y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial',
+          y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple | list[tuple]=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial',
           legend_title: str='', legend_title_size: int=12, legend_title_weight: str='bold', legend_size: int=12,legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1, legend_mode: str = "figure",
           legend_columnspacing: int=0, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=1, html_size_multiplier: float=1.5,
           dpi: int=0, transparent: bool=True, show: bool=True, space_capitalize: bool=True, **kwargs):
@@ -5206,7 +5206,7 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
     y_axis_size (int, optional): y-axis name font size
     y_axis_weight (str, optional): y-axis name bold, italics, etc.
     y_axis_font (str, optional): y-axis font
-    y_axis_dims (tuple, optional): y-axis dimensions (start, end)
+    y_axis_dims (tuple | list[tuple], optional): y-axis dimensions (start, end); a list sets 1 per facety row or 1 per panel (row-major), where (0,0) autoscales
     y_axis_pad (int, optional): y-axis label padding
     y_ticks_size (int, optional): y-axis ticks font size
     y_ticks_rot (int, optional): y-axis ticks rotation
@@ -5285,8 +5285,8 @@ def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple
         facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
         file: str=None, color: str='lightgray', alpha: float=0.5, edgecol: str='black', vertical: bool=True,
         figsize: tuple=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
-        x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
-        y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
+        x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple | list[tuple]=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
+        y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple | list[tuple]=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
         legend_title: str='',legend_title_size: int=12, legend_title_weight: str='bold', legend_size: int = 12, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1, legend_mode = "figure",
         legend_columnspacing: int=-4, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, html_size_multiplier: float=1.5, 
         display_legend: bool=True, display_labels: str | list | bool = None, display_lines: bool=False, display_axis: bool=True, return_df: bool=True, dpi: int = 0, transparent: bool=True, show: bool=True, space_capitalize: bool=True,
@@ -5336,7 +5336,7 @@ def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple
     x_axis_size (int, optional): x-axis name font size
     x_axis_weight (str, optional): x-axis name bold, italics, etc.
     x_axis_font (str, optional): x-axis font
-    x_axis_dims (tuple, optional): x-axis dimensions (start, end)
+    x_axis_dims (tuple | list[tuple], optional): x-axis dimensions (start, end); a list sets 1 per facetx column or 1 per panel (row-major), where (0,0) autoscales
     x_axis_pad (int, optional): x-axis label padding
     x_ticks_size (int, optional): x-axis ticks font size
     x_ticks_rot (int, optional): x-axis ticks rotation
@@ -5346,7 +5346,7 @@ def vol(df: pd.DataFrame | str, x: str, y: str, size: str=None, size_dims: tuple
     y_axis_size (int, optional): y-axis name font size
     y_axis_weight (str, optional): y-axis name bold, italics, etc.
     y_axis_font (str, optional): y-axis font
-    y_axis_dims (tuple, optional): y-axis dimensions (start, end)
+    y_axis_dims (tuple | list[tuple], optional): y-axis dimensions (start, end); a list sets 1 per facety row or 1 per panel (row-major), where (0,0) autoscales
     y_axis_pad (int, optional): y-axis label padding
     y_ticks_size (int, optional): y-axis ticks font size
     y_ticks_rot (int, optional): y-axis ticks rotation
@@ -5429,8 +5429,8 @@ def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, siz
         facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
         y_err: str = None, err_capsize: float = 0.2, err_alpha: float = 1.0, err_color: str = 'black',
         file: str=None, edgecol: str='black', figsize: tuple=(6,6), title: str='', title_size: int = 12, title_weight: str='bold', title_font: str='Arial',
-        x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
-        y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
+        x_axis: str='', x_axis_size: int=12, x_axis_weight: str='bold', x_axis_font: str='Arial', x_axis_dims: tuple | list[tuple]=(0,0), x_axis_pad: int=None, x_ticks_size: int = 12, x_ticks_rot: int=0, x_ticks_font: str='Arial', x_ticks: list=[],
+        y_axis: str='', y_axis_size: int=12, y_axis_weight: str='bold', y_axis_font: str='Arial', y_axis_dims: tuple | list[tuple]=(0,0), y_axis_pad: int=None, y_ticks_size: int = 12, y_ticks_rot: int=0, y_ticks_font: str='Arial', y_ticks: list=[],
         legend_title: str='',legend_title_size: int=12, legend_title_weight: str='bold', legend_size: int = 12, legend_bbox_to_anchor: tuple=(1,1), legend_loc: str='upper left', legend_ncol: int=1, legend_mode: str = "figure",
         legend_columnspacing: int=-3, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, html_size_multiplier: float=1.5,
         display_legend: bool=True, display_labels: bool | list = False, display_axis: bool=True, return_df: bool=True, dpi: int = 0, transparent: bool=True, show: bool=True, space_capitalize: bool=True,
@@ -5478,7 +5478,7 @@ def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, siz
     x_axis_size (int, optional): x-axis name font size
     x_axis_weight (str, optional): x-axis name bold, italics, etc.
     x_axis_font (str, optional): x-axis font
-    x_axis_dims (tuple, optional): x-axis dimensions (start, end)
+    x_axis_dims (tuple | list[tuple], optional): x-axis dimensions (start, end); a list sets 1 per facetx column or 1 per panel (row-major), where (0,0) autoscales
     x_axis_pad (int, optional): x-axis label padding
     x_ticks_size (int, optional): x-axis ticks font size
     x_ticks_rot (int, optional): x-axis ticks rotation
@@ -5488,7 +5488,7 @@ def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, siz
     y_axis_size (int, optional): y-axis name font size
     y_axis_weight (str, optional): y-axis name bold, italics, etc.
     y_axis_font (str, optional): y-axis font
-    y_axis_dims (tuple, optional): y-axis dimensions (start, end)
+    y_axis_dims (tuple | list[tuple], optional): y-axis dimensions (start, end); a list sets 1 per facety row or 1 per panel (row-major), where (0,0) autoscales
     y_axis_pad (int, optional): y-axis label padding
     y_ticks_size (int, optional): y-axis ticks font size
     y_ticks_rot (int, optional): y-axis ticks rotation
@@ -5530,16 +5530,25 @@ def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, siz
         raise ValueError(f"y_err column '{y_err}' not found in dataframe columns: {list(df.columns)}")
 
     # Set global autoscale limits if not provided; include error bar extents in y-axis limits
-    x_axis_dims, y_axis_dims = autoscale_xy(
-        df=df, x=x, y=y if y_err is None else None, x_axis_dims=x_axis_dims, y_axis_dims=y_axis_dims,
-        x_axis_scale='linear', y_axis_scale='linear'
-    )
-    if y_err is not None:
-        _, y_axis_dims = autoscale_xy(
-            df=pd.DataFrame({y: pd.concat([df[y] - df[y_err], df[y] + df[y_err]], ignore_index=True).dropna()}),
-            x=None, y=y, x_axis_dims=x_axis_dims, y_axis_dims=y_axis_dims,
+    # (lists hold 1 entry per facet column/row/panel)
+    x_axis_dims, y_axis_dims = _norm_axis_dims(x_axis_dims), _norm_axis_dims(y_axis_dims)
+    def _autoscale(df_dims, x_dims, y_dims, fill: bool = True):
+        x_dims, y_dims = autoscale_xy(
+            df=df_dims, x=x, y=y if y_err is None else None, x_axis_dims=x_dims, y_axis_dims=y_dims,
             x_axis_scale='linear', y_axis_scale='linear'
         )
+        if y_err is not None:
+            _, y_dims = autoscale_xy(
+                df=pd.DataFrame({y: pd.concat([df_dims[y] - df_dims[y_err], df_dims[y] + df_dims[y_err]], ignore_index=True).dropna()}),
+                x=None, y=y, x_axis_dims=x_dims, y_axis_dims=y_dims,
+                x_axis_scale='linear', y_axis_scale='linear'
+            )
+        if fill and x_dims == (0, 0): # Panel dims for list entries of (0,0)
+            x_dims = (min(df_dims[x]), max(df_dims[x]))
+        if fill and y_dims == (0, 0):
+            y_dims = (min(df_dims[y]), max(df_dims[y]))
+        return x_dims, y_dims
+    x_axis_dims, y_axis_dims = _autoscale(df, x_axis_dims, y_axis_dims, fill=False)
 
     # Organize data by conservation (changed to)
     stys = 'Change'
@@ -5613,6 +5622,7 @@ def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, siz
         x_axis_dims = (min(df[x]), max(df[x]))
     if y_axis_dims == (0, 0):
         y_axis_dims = (min(df[y]), max(df[y]))
+    x_axis_dims_all, y_axis_dims_all = x_axis_dims, y_axis_dims
 
     # Generate figure
     col_vals = _facet_values(df, facetx, order=facetx_order)
@@ -5625,8 +5635,8 @@ def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, siz
         nrows=nrows,
         ncols=ncols,
         figsize=figsize,
-        sharex=facety is not None,
-        sharey=facetx is not None,
+        sharex=_axis_dims_share(x_axis_dims, 'x', nrows, ncols, facety is not None),
+        sharey=_axis_dims_share(y_axis_dims, 'y', nrows, ncols, facetx is not None),
     )
     axes = np.array(axes).reshape(nrows, ncols)
 
@@ -5817,6 +5827,10 @@ def torn(df: pd.DataFrame | str, y: str, x: str='AA Number', size: str=None, siz
             raise(ValueError("display_labels must be a boolean or a list. Set to True to display all labels, False to display no labels, or a list of specific labels to display."))
 
     def _draw_panel(df_sub: pd.DataFrame, ax, *, c=None, r=None, i=0, j=0):
+        x_axis_dims, y_axis_dims = _facet_panel_dims(
+            df, x_axis_dims_all, y_axis_dims_all, i=i, j=j, c=c, r=r, nrows=nrows, ncols=ncols,
+            facetx=facetx, facety=facety, autoscale=_autoscale
+        )
         plt.sca(ax)
 
         _size = size if display_legend else None
