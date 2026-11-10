@@ -23,8 +23,13 @@ Usage:
 - filter_GC(): filters sequences based on GC content
 - shuffle(): randomly reorganizes a list
 - encode_sequences(): Convert sequences to integer arrays for fast comparison.
+- hamming_matrix(): pairwise Hamming distances between two encoded sequence sets
+- min_hamming_within(): minimum Hamming distance from each sequence to any other sequence in the list
+- gc_fractions(): GC content of each sequence as a fraction of its length
+- max_homopolymers(): longest run of a single repeated base in each sequence
 - fast_filter_by_hamming(): fastFilter sequences such that all retained sequences have a Hamming distance 'min_distance' from each other, using NumPy for speed.
 - count_csv_rows(): counts number of rows in a csv file (subtracting 1 for header)
+- umi_report(): print summary statistics for a set of UMIs
 - umi(): generates unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance
 
 [Master Mix]
@@ -40,6 +45,7 @@ import pandas as pd
 import numpy as np
 import os
 import random
+import time
 from Bio.Align import PairwiseAligner
 from Bio.Seq import Seq
 import datetime
@@ -926,38 +932,173 @@ def shuffle(ls: list) -> list:
 def encode_sequences(seq_list: list) -> np.ndarray:
     """
     encode_sequences(): Convert sequences to integer arrays for fast comparison.
-    
-    Parameters:
-    seq_list (list of str): List of DNA sequences (A/C/G/T).
-    """
-    base_to_int = {'A': 0, 'C': 1, 'G': 2, 'T': 3}
-    return np.array([[base_to_int[base] for base in seq] for seq in seq_list], dtype=np.uint8)
 
-def fast_filter_by_hamming(sequences: list, min_distance: int) -> list:
+    Parameters:
+    seq_list (list of str): List of equal-length DNA sequences (A/C/G/T).
+
+    Dependencies: numpy
     """
-    fast_filter_by_hamming(): fastFilter sequences such that all retained sequences have a Hamming distance 'min_distance' from each other, using NumPy for speed.
-    
+    if len(seq_list) == 0:
+        return np.empty((0, 0), dtype=np.uint8)
+
+    lengths = {len(seq) for seq in seq_list}
+    if len(lengths) > 1:
+        raise ValueError(f"encode_sequences() requires equal-length sequences; found lengths {sorted(lengths)}.")
+
+    # Pack every sequence into one ascii buffer, then map bases through a lookup table (much faster than a Python loop)
+    ascii_arr = np.frombuffer(''.join(seq_list).encode('ascii'), dtype=np.uint8).reshape(len(seq_list), -1)
+    lut = np.full(256, 255, dtype=np.uint8)
+    for i, base in enumerate('ACGT'):
+        lut[ord(base)] = i
+    encoded = lut[ascii_arr]
+    if np.any(encoded == 255):
+        raise ValueError("encode_sequences() found a character outside A/C/G/T.")
+    return encoded
+
+
+def hamming_matrix(a_encoded: np.ndarray, b_encoded: np.ndarray) -> np.ndarray:
+    """
+    hamming_matrix(): pairwise Hamming distances between two encoded sequence sets.
+
+    Parameters:
+    a_encoded (ndarray): (m, length) encoded sequences from encode_sequences()
+    b_encoded (ndarray): (n, length) encoded sequences from encode_sequences()
+
+    Returns (m, n) ndarray of Hamming distances.
+
+    Dependencies: numpy
+    """
+    distances = np.zeros((a_encoded.shape[0], b_encoded.shape[0]), dtype=np.int16)
+    for position in range(a_encoded.shape[1]):  # accumulate per position to avoid an (m, n, length) temporary
+        distances += (a_encoded[:, position][:, None] != b_encoded[None, :, position])
+    return distances
+
+
+def min_hamming_within(sequences: list, block: int = 256) -> np.ndarray:
+    """
+    min_hamming_within(): minimum Hamming distance from each sequence to any OTHER sequence in the list.
+
     Parameters:
     sequences (list of str): List of equal-length DNA sequences (A/C/G/T).
-    min_distance (int): Minimum required Hamming distance.
+    block (int, optional): # of sequences compared per block, trades memory for speed (Default: 256)
+
+    Dependencies: numpy, encode_sequences(), hamming_matrix()
     """
-    if not sequences:
-        return []
+    n = len(sequences)
+    if n < 2:
+        return np.full(n, np.nan)
 
     encoded = encode_sequences(sequences)
-    keep_indices = [0]
-    
-    for i in range(1, len(encoded)):
-        current = encoded[i]
-        kept = encoded[keep_indices]
-        
-        # Compute Hamming distances in batch
-        distances = np.count_nonzero(kept != current, axis=1)
-        
-        if np.all(distances > min_distance):
-            keep_indices.append(i)
-    
-    return [sequences[i] for i in keep_indices]
+    length = encoded.shape[1]
+    out = np.empty(n, dtype=np.int32)
+    for start in range(0, n, block):
+        stop = min(start + block, n)
+        distances = hamming_matrix(encoded[start:stop], encoded).astype(np.int32)
+        np.fill_diagonal(distances[:, start:stop], length + 1)  # ignore each sequence's distance to itself
+        out[start:stop] = distances.min(axis=1)
+    return out
+
+
+def gc_fractions(sequences: list) -> np.ndarray:
+    """
+    gc_fractions(): GC content of each sequence as a fraction of its length.
+
+    Parameters:
+    sequences (list of str): List of equal-length DNA sequences (A/C/G/T).
+
+    Dependencies: numpy & encode_sequences()
+    """
+    if len(sequences) == 0:
+        return np.empty(0)
+    encoded = encode_sequences(sequences)
+    return ((encoded == 1) | (encoded == 2)).sum(axis=1) / encoded.shape[1]  # C=1, G=2
+
+
+def max_homopolymers(sequences: list) -> np.ndarray:
+    """
+    max_homopolymers(): longest run of a single repeated base in each sequence.
+
+    Parameters:
+    sequences (list of str): List of equal-length DNA sequences (A/C/G/T).
+
+    Dependencies: numpy & encode_sequences()
+    """
+    if len(sequences) == 0:
+        return np.empty(0, dtype=np.int16)
+    encoded = encode_sequences(sequences)
+    longest = np.ones(encoded.shape[0], dtype=np.int16)
+    current = np.ones(encoded.shape[0], dtype=np.int16)
+    for position in range(1, encoded.shape[1]):
+        current = np.where(encoded[:, position] == encoded[:, position - 1], current + 1, 1)
+        longest = np.maximum(longest, current)
+    return longest
+
+
+def fast_filter_by_hamming(sequences: list, min_distance: int, kept: list = None,
+                           return_min_distances: bool = False):
+    """
+    fast_filter_by_hamming(): greedily filter sequences so that every retained sequence is more than
+    'min_distance' away from every other retained sequence, using NumPy for speed.
+
+    NOTE: the comparison is strictly greater than ('> min_distance'), so the smallest Hamming distance
+    in the returned set is min_distance + 1. This is the long-standing behavior of this function.
+
+    Parameters:
+    sequences (list of str): List of equal-length DNA sequences (A/C/G/T) to consider, in priority order.
+    min_distance (int): Hamming distance that retained sequences must exceed.
+    kept (list, optional): sequences already retained from a previous call; they are kept as-is and
+        included in the returned list (Default: None, start a new set)
+    return_min_distances (bool, optional): also return, for each input sequence, its minimum Hamming
+        distance to the retained set at the moment it was evaluated (np.nan if the set was empty)
+        (Default: False)
+
+    Dependencies: numpy, encode_sequences() & hamming_matrix()
+    """
+    kept_ls = list(kept) if kept is not None else []
+
+    if not sequences:
+        return (kept_ls, np.empty(0)) if return_min_distances else kept_ls
+
+    encoded = encode_sequences(sequences)
+    length = encoded.shape[1]
+    min_distances = np.full(len(sequences), np.nan)
+
+    # Buffer holding the encoded retained set; grows in place as sequences are added
+    kept_encoded = encode_sequences(kept_ls) if kept_ls else np.empty((0, length), dtype=np.uint8)
+    if kept_encoded.shape[0] and kept_encoded.shape[1] != length:
+        raise ValueError("fast_filter_by_hamming() requires 'kept' sequences of the same length as 'sequences'.")
+    buffer = np.empty((len(kept_ls) + len(sequences), length), dtype=np.uint8)
+    buffer[:len(kept_ls)] = kept_encoded
+    n_kept = len(kept_ls)
+
+    # Vectorized prefilter: anything already too close to the pre-existing retained set can never be added
+    if n_kept:
+        prefilter = np.empty(len(sequences), dtype=np.int32)
+        block = max(1, int(2e7 // n_kept))  # cap each distance matrix at ~40 MB
+        for start in range(0, len(sequences), block):
+            stop = min(start + block, len(sequences))
+            prefilter[start:stop] = hamming_matrix(encoded[start:stop], buffer[:n_kept]).min(axis=1)
+        min_distances[:] = prefilter
+        candidates = np.flatnonzero(prefilter > min_distance)
+    else:
+        candidates = np.arange(len(sequences))
+
+    # Sequential pass over the survivors, which only have to be checked against sequences added here
+    n_start = n_kept
+    for i in candidates:
+        if n_kept > n_start:
+            distances = np.count_nonzero(buffer[n_start:n_kept] != encoded[i], axis=1)
+            closest = distances.min()
+            if not np.isnan(min_distances[i]):
+                closest = min(closest, min_distances[i])
+            min_distances[i] = closest
+            if closest <= min_distance:
+                continue
+        buffer[n_kept] = encoded[i]
+        n_kept += 1
+        kept_ls.append(sequences[i])
+
+    return (kept_ls, min_distances) if return_min_distances else kept_ls
 
 def count_csv_rows(pt:str) -> int:
     '''
@@ -969,50 +1110,183 @@ def count_csv_rows(pt:str) -> int:
     with open(pt, 'r') as f:
         return sum(1 for line in f) - 1  # subtract 1 for header
 
-def umi(length: int = 10, GC_fract: tuple = (0.4, 0.6), hamming: int = 4, 
-        nrows: int=1000, pt: str=None, dir: str = '../out'):
+
+def umi_report(kept: list, GC_fract: tuple, hamming: int, min_distances: np.ndarray = None):
+    """
+    umi_report(): print stage-independent summary statistics for a set of UMIs.
+
+    Parameters:
+    kept (list of str): retained UMI sequences
+    GC_fract (tuple): pair of GC content boundaries written as fractions
+    hamming (int): Hamming distance that retained UMIs were required to exceed
+    min_distances (ndarray, optional): minimum Hamming distance within the retained set, one per UMI;
+        recomputed here if not provided (Default: None)
+
+    Dependencies: numpy, pandas, min_hamming_within(), gc_fractions() & max_homopolymers()
+    """
+    if not kept:
+        print('  No UMIs retained; nothing to report.')
+        return
+
+    print(f'\n--- UMI set summary (n = {len(kept)}) ---')
+
+    # Hamming distance distribution (minimum distance from each UMI to any other retained UMI)
+    if min_distances is None:
+        min_distances = min_hamming_within(sequences=kept)
+    valid = min_distances[~np.isnan(min_distances)]
+    if valid.size:
+        print('  Minimum Hamming distance to the nearest other UMI:')
+        print(f'    min {int(valid.min())} | median {np.median(valid):.1f} | mean {valid.mean():.2f} | max {int(valid.max())}')
+        counts = pd.Series(valid.astype(int)).value_counts().sort_index()
+        for distance, count in counts.items():
+            print(f'    d = {distance}: {count} UMIs ({count/len(kept)*100:.1f}%)')
+        if valid.min() <= hamming:
+            print(f'    WARNING: {int((valid <= hamming).sum())} UMIs are within the requested distance of {hamming}.')
+
+    # GC content distribution
+    gc = gc_fractions(sequences=kept)
+    print(f'  GC fraction (requested strictly between {GC_fract[0]} and {GC_fract[1]}):')
+    print(f'    min {gc.min():.2f} | median {np.median(gc):.2f} | mean {gc.mean():.3f} | max {gc.max():.2f}')
+    gc_counts = pd.Series(gc).round(3).value_counts().sort_index()
+    for fraction, count in gc_counts.items():
+        print(f'    GC = {fraction:.3f}: {count} UMIs ({count/len(kept)*100:.1f}%)')
+
+    # Per-position base composition; a biased position shows up as a value far from 0.25
+    encoded = encode_sequences(kept)
+    print('  Per-position base frequency:')
+    print(f'    {"pos":>4}  {"A":>6}  {"C":>6}  {"G":>6}  {"T":>6}')
+    for position in range(encoded.shape[1]):
+        frequencies = [np.count_nonzero(encoded[:, position] == code)/len(kept) for code in range(4)]
+        print(f'    {position+1:>4}  ' + '  '.join(f'{frequency:>6.3f}' for frequency in frequencies))
+
+    # Homopolymer runs
+    runs = max_homopolymers(sequences=kept)
+    print('  Longest homopolymer run:')
+    run_counts = pd.Series(runs).value_counts().sort_index()
+    for run, count in run_counts.items():
+        print(f'    {run}x: {count} UMIs ({count/len(kept)*100:.1f}%)')
+    print('-' * 40 + '\n')
+
+
+def umi(length: int = 10, GC_fract: tuple = (0.4, 0.6), hamming: int = 4,
+        nrows: int = 1000, mode: str = 'filter', pt: str = None,
+        dir: str = '../out', file: str = None, verbose: bool = False) -> pd.DataFrame:
     '''
     umi(): generates unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance
-    
+
     Parameters:
     length (int, optional): length of the unique molecular identifiers (Default: 10)
-    GC_fract (tuple, optional): pair of GC content boundaries written as fractions (Default: (0.4, 0.6))
-    hamming (int, optional): Minimum Hamming distance between UMIs (Default: 4)
+    GC_fract (tuple, optional): pair of GC content boundaries written as fractions; the bounds are
+        exclusive, so (0.4, 0.6) at length 10 keeps only 5 G/C bases (Default: (0.4, 0.6))
+    hamming (int, optional): Hamming distance that retained UMIs must exceed; the smallest distance in
+        the output is therefore hamming + 1 (Default: 4)
     nrows (int, optional): # of UMIs to compare iteratively for hamming filtering (Default: 1000)
-    pt (str, optional): Shuffled UMI file path if already made (Default: None)
-    dir (str, optional): save directory
+    mode (str, optional): 'filter' drops every UMI that fails the GC or Hamming filter and writes only
+        the survivors; 'keep' writes every candidate UMI annotated with GC_fract, GC_pass, min_hamming,
+        max_homopolymer and keep, so the thresholds can be revisited without regenerating (Default: 'filter')
+    pt (str, optional): shuffled UMI candidate file path if already made, reused so a run can be
+        resumed in the same order (Default: None)
+    dir (str, optional): save directory (Default: '../out')
+    file (str, optional): output file name; built from the parameters if not provided (Default: None)
+    verbose (bool, optional): print stage counts, timing, Hamming distance distribution, GC and
+        per-position composition, and homopolymer runs (Default: False)
+
+    Dependencies: pandas, numpy, os, time, datetime, io, generate_sequences(), shuffle(), gc_fractions(),
+        max_homopolymers(), fast_filter_by_hamming(), min_hamming_within() & umi_report()
     '''
-    if pt is None: # Start from scratch if no file path is provided
-        sequences = generate_sequences(length=length) # Generate all possible sequences of specified length
-        filtered_sequences = filter_GC(sequences=sequences, GC_fract=GC_fract) # Filter sequences based on GC content
-        print(f'Generated {len(filtered_sequences)} sequences of length {length} with GC content between {GC_fract[0]} and {GC_fract[1]}.')
+    modes = ('filter', 'keep')
+    if mode not in modes:
+        raise ValueError(f"umi() mode must be one of {modes}; got '{mode}'.")
 
-        filtered_sequences = shuffle(ls=filtered_sequences)
-        io.save(obj=pd.DataFrame({'UMI_sequence': filtered_sequences}),
-                file=os.path.join(dir, f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{length}.csv'))
-        
-        stop = len(filtered_sequences)
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    start_time = time.time()
 
-    else: # Load from provided file path
-        filtered_sequences = io.get(pt=pt)['UMI_sequence'].tolist()
-        filtered_sequences_set = set(filtered_sequences)
-        sequences = generate_sequences(length=length) # Generate all possible sequences of specified length
-        new_filtered_sequences = filter_GC(sequences=sequences, GC_fract=GC_fract) # Filter sequences based on GC content
-        filtered_sequences.extend([seq for seq in new_filtered_sequences if seq not in filtered_sequences_set])
-        print(f'Generated {len(filtered_sequences)-len(filtered_sequences_set)} additional sequences of length {length} with GC content between {GC_fract[0]} and {GC_fract[1]}.')
-        
-        stop = len(filtered_sequences)
-    
-    filtered_sequences_save = [] # List to save filtered sequences iteratively
-    for i in np.arange(start=0, stop=stop, step=nrows): # Process in chunks of nrows
-        # Filter sequences based on Hamming distance & compare to previously saved sequences
-        filtered_sequences_save = fast_filter_by_hamming(sequences = filtered_sequences_save + filtered_sequences[i:i+nrows],
-                                                         min_distance = hamming)
+    def elapsed(message: str):
+        if verbose:
+            print(f'[{time.time()-start_time:7.1f}s] {message}')
 
-        # Save the filtered sequences after each iteration
-        print(f'Kept {len(filtered_sequences_save)} sequences so far...')
-        io.save(obj=pd.DataFrame({'UMI_sequence': filtered_sequences_save}),
-                file=os.path.join(dir, f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_UMI_{length}_hamming_{hamming}_yield_{len(filtered_sequences_save)}.csv'))
+    # Build the candidate pool, either from scratch or from a previously shuffled file
+    if pt is None:
+        sequences = generate_sequences(length=length)  # Generate all possible sequences of specified length
+        elapsed(f'Generated {len(sequences)} sequences of length {length}.')
+        candidates = shuffle(ls=sequences)
+        io.save(obj=pd.DataFrame({'UMI_sequence': candidates}),
+                file=os.path.join(dir, f'{timestamp}_UMI_{length}_candidates.csv'))
+        elapsed(f'Shuffled and saved {len(candidates)} candidate sequences.')
+    else:
+        candidates = io.get(pt=pt)['UMI_sequence'].tolist()
+        candidates_set = set(candidates)
+        elapsed(f'Loaded {len(candidates)} candidate sequences from {pt}.')
+        missing = [sequence for sequence in generate_sequences(length=length) if sequence not in candidates_set]
+        if missing:  # Top up the pool if the loaded file predates a wider search space
+            candidates.extend(shuffle(ls=missing))
+            elapsed(f'Added {len(missing)} sequences of length {length} missing from {pt}.')
+
+    # GC filter; in 'keep' mode nothing is dropped, the result is recorded instead
+    gc = gc_fractions(sequences=candidates)
+    gc_pass = (gc > GC_fract[0]) & (gc < GC_fract[1])
+    print(f'{int(gc_pass.sum())} of {len(candidates)} sequences of length {length} have GC content strictly between {GC_fract[0]} and {GC_fract[1]}.')
+    hamming_input = [candidate for candidate, passed in zip(candidates, gc_pass) if passed]
+    elapsed(f'GC filter kept {len(hamming_input)} sequences.')
+
+    # Hamming filter, processed in chunks of nrows so a long run checkpoints as it goes
+    out_file = file if file is not None else f'{timestamp}_UMI_{length}_hamming_{hamming}_{mode}.csv'
+    checkpoint = os.path.join(dir, out_file if mode == 'filter' else f'{timestamp}_UMI_{length}_hamming_{hamming}_checkpoint.csv')
+    kept = []
+    eval_distances = np.full(len(hamming_input), np.nan)
+    for i in np.arange(start=0, stop=len(hamming_input), step=nrows):
+        chunk = hamming_input[i:i+nrows]
+        kept, chunk_distances = fast_filter_by_hamming(sequences=chunk, min_distance=hamming,
+                                                       kept=kept, return_min_distances=True)
+        eval_distances[i:i+len(chunk)] = chunk_distances
+
+        # Checkpoint the retained set after each chunk so a long run can be interrupted
+        print(f'Kept {len(kept)} sequences so far...')
+        elapsed(f'Compared {min(i+nrows, len(hamming_input))} of {len(hamming_input)} sequences.')
+        io.save(obj=pd.DataFrame({'UMI_sequence': kept}), file=checkpoint)
+
+    elapsed(f'Hamming filter kept {len(kept)} of {len(hamming_input)} sequences.')
+
+    # Recompute each retained UMI's distance to the final set; the value recorded during the greedy
+    # pass only reflects the UMIs retained before it, which can overstate the true minimum
+    kept_distances = min_hamming_within(sequences=kept) if len(kept) <= 20000 else None
+    if kept_distances is None and verbose:
+        print(f'  Skipped the final distance recomputation: {len(kept)} retained UMIs is above the 20000 limit.')
+    if kept_distances is not None:
+        elapsed('Recomputed minimum Hamming distances within the retained set.')
+
+    # Assemble and save the output
+    kept_set = set(kept)
+    if mode == 'filter':
+        df = pd.DataFrame({'UMI_sequence': kept})
+    else:
+        kept_index = {sequence: i for i, sequence in enumerate(kept)}
+        min_hamming = np.full(len(candidates), np.nan)
+        keep_flags = np.zeros(len(candidates), dtype=bool)
+        hamming_positions = np.flatnonzero(gc_pass)
+        min_hamming[hamming_positions] = eval_distances  # distance at the moment each candidate was evaluated
+        for position, candidate in zip(hamming_positions, hamming_input):
+            if candidate in kept_index:
+                keep_flags[position] = True
+                if kept_distances is not None:
+                    min_hamming[position] = kept_distances[kept_index[candidate]]
+        df = pd.DataFrame({'UMI_sequence': candidates,
+                           'GC_fract': gc,
+                           'GC_pass': gc_pass,
+                           'min_hamming': min_hamming,
+                           'max_homopolymer': max_homopolymers(sequences=candidates),
+                           'keep': keep_flags})
+    io.save(obj=df, file=os.path.join(dir, out_file))
+    if mode == 'keep' and os.path.exists(checkpoint):
+        os.remove(checkpoint)  # the annotated table supersedes the checkpoint
+    print(f'Kept {len(kept_set)} UMIs of length {length} (Hamming distance > {hamming}); wrote {len(df)} rows to {os.path.join(dir, out_file)}.')
+
+    if verbose:
+        umi_report(kept=kept, GC_fract=GC_fract, hamming=hamming, min_distances=kept_distances)
+        print(f'Total time: {time.time()-start_time:.1f}s')
+
+    return df
+
 
 # Master Mix
 def pcr_mm(primers: pd.Series, template_uL: int, template: str='1-2 ng/uL template',

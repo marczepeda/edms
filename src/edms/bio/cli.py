@@ -315,8 +315,11 @@ def add_subparser(subparsers, formatter_class=None):
     parser_clone_umi.add_argument("-g", "--GC_fract", type=parse_tuple_float, default=(0.4,0.6), help="Pair of GC content boundaries written as fractions (Default: 0.4,0.6)")
     parser_clone_umi.add_argument("-ha", "--hamming", type=int, help="Minimum Hamming distance between UMIs (Default: 4)", default=4)
     parser_clone_umi.add_argument("-nr", "--nrows", type=int, help="# of UMIs to compare iteratively for hamming filtering (Default: 1000)", default=1000)
-    parser_clone_umi.add_argument("-i", "--pt", type=str, help="Shuffled UMI file path if already made (Default: None)", default=argparse.SUPPRESS)
+    parser_clone_umi.add_argument("-m", "--mode", type=str, choices=['filter','keep'], default='filter', help="filter: write only the UMIs that pass the GC and Hamming filters. keep: write every candidate UMI annotated with GC_fract, GC_pass, min_hamming, max_homopolymer and keep, so the thresholds can be revisited without regenerating (Default: filter)")
+    parser_clone_umi.add_argument("-i", "--pt", type=str, help="Shuffled UMI candidate file path if already made (Default: None)", default=argparse.SUPPRESS)
     parser_clone_umi.add_argument("-o", "--dir", type=str, help="Output directory", default='../out')
+    parser_clone_umi.add_argument("-f", "--file", type=str, help="Output file name (Default: built from the parameters)", default=argparse.SUPPRESS)
+    parser_clone_umi.add_argument("-v", "--verbose", action="store_true", default=False, help="Print stage counts and timing, Hamming distance distribution, GC and per-position composition, and homopolymer runs (Default: False)")
     parser_clone_umi.set_defaults(func=cl.umi)
 
     # pcr_sim(): returns dataframe with simulated pcr product 
