@@ -5,6 +5,7 @@ src/edms/bio/                   EDMS Biology module
 ├── cli.py                      Command Line Interface
 ├── clone.py                    Clone module
 ├── fastq.py                    FASTQ module
+├── fcs.py                      Flow Cytometry Standard module
 ├── genbank.py                  GenBank module
 ├── ngs.py                      Next-generation Sequencing module
 ├── pe.py                       Prime Editing module

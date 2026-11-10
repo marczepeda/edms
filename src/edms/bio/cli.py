@@ -4,6 +4,7 @@
 ├── cli.py                      Command Line Interface
 ├── clone.py                    Clone module
 ├── fastq.py                    FASTQ module
+├── fcs.py                      Flow Cytometry Standard module
 ├── genbank.py                  GenBank module
 ├── ngs.py                      Next-generation Sequencing module
 ├── pe.py                       Prime Editing module
@@ -22,7 +23,7 @@ import sys
 from rich import print as rprint
 import json
 
-from . import ngs, pe, sanger, clone as cl, fastq as fq, qPCR, transfect as tf, plate as pt, pwes, dms
+from . import ngs, pe, sanger, clone as cl, fastq as fq, qPCR, transfect as tf, plate as pt, pwes, dms, fcs
 from ..utils import parse_tuple_int, parse_tuple_float
 from ..gen.cli import add_common_plot_cat_args, add_common_plot_heat_args, add_common_plot_scat_args, add_common_plot_stack_args, add_common_plot_vol_args
 
@@ -440,6 +441,24 @@ def add_subparser(subparsers, formatter_class=None):
 
     add_common_plot_scat_args(parser_qPCR_amp, qPCR_amp_parser=True)
     parser_qPCR_amp.set_defaults(func=qPCR.amp, x_axis="Cycle", y_axis="RFU", file=f'./out/{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_qPCR_amp.all')
+
+    '''
+    edms.bio.fcs:
+    - ncf_to_fcs(): convert every sample holding data in a NovoCyte .ncf file to FCS 3.1 files
+    '''
+    parser_fcs = subparsers.add_parser("fcs", help="Flow cytometry standard files", description="Flow cytometry standard files", formatter_class=formatter_class)
+    subparsers_fcs = parser_fcs.add_subparsers()
+
+    # ncf_to_fcs(): convert every sample holding data in a NovoCyte .ncf file to FCS 3.1 files
+    parser_fcs_ncf = subparsers_fcs.add_parser("ncf", help="Convert a NovoCyte .ncf file to FCS 3.1 files", description="Convert every sample holding data in a NovoCyte .ncf file to FCS 3.1 files", formatter_class=formatter_class)
+
+    parser_fcs_ncf.add_argument("-i", "--pt", type=str, required=True, help="Input NovoCyte .ncf file")
+    parser_fcs_ncf.add_argument("-d", "--dir", type=str, help="Output directory (Default: an 'fcs' directory beside the .ncf)", default=None)
+    parser_fcs_ncf.add_argument("-r", "--rename", type=str, nargs="+", help="Detector renaming (e.g., -r BL1=B530 YL2=Y615; Default: BL1=B530 YL2=Y615)", default=True)
+    parser_fcs_ncf.add_argument("-nr", "--no_rename", dest="rename", action="store_false", help="Keep the original NovoCyte detector names (BL1-A, YL2-A, ...)")
+    parser_fcs_ncf.add_argument("-q", "--quiet", dest="show", action="store_false", help="Don't print a line per converted sample", default=True)
+
+    parser_fcs_ncf.set_defaults(func=fcs.ncf_to_fcs)
 
     '''
     edms.bio.fastq:
