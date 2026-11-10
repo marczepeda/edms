@@ -28,6 +28,9 @@ Covers:
 - _signature_phred_summary(): per-signature Phred quality summaries
 - extract_umis() / trim_motifs(): subprocess command construction (mocked; the
   underlying binaries are not installed in this env)
+- _parse_cutadapt_log() / trim_motifs_summary(): cutadapt log parsing and the
+  read-fate summary built from it (logs are written as fixtures, so cutadapt
+  itself is not needed)
 """
 import gzip
 import os
@@ -744,3 +747,179 @@ def test_count_signatures_falls_back_to_spacer_search_without_nick_columns(tmp_p
     lib['Signature'] = lib['Signature'].astype(str)               # string Signatures, as loaded from a saved library
     out = _cs_run(tmp_path, lib, reads, sequence=CS_REGION, fastq_col='fastq')
     assert out["ID"].tolist() == ["p1 indels", "Not WT"]          # ngRNA search is off without ngRNA_spacer_col
+
+
+# =========================================================================== #
+# trim_motifs_summary(): cutadapt log parsing & read-fate summary
+# =========================================================================== #
+def _cutadapt_log(total: int, adapters: int, percent: str=None) -> str:
+    """A cutadapt log carrying the two lines trim_motifs_summary() reads."""
+    if percent is None:
+        percent = f"{100*adapters/total:.1f}" if total else "nan"
+    return ("This is cutadapt 4.4 with Python 3.12.2\n"
+            "Command line parameters: -g GGGGGGGGGG -e 0.1 --trimmed-only -o out.fastq in.fastq\n"
+            "Processing single-end reads on 1 core ...\n"
+            "Finished in 0.001 s (1.000 us/read; 60.000 M reads/minute).\n"
+            "\n=== Summary ===\n\n"
+            f"Total reads processed:               {total:,}\n"
+            f"Reads with adapters:                 {adapters:,} ({percent}%)\n"
+            f"Reads written (passing filters):     {adapters:,} ({percent}%)\n")
+
+
+def _write_cutadapt_logs(log_dir, logs: dict):
+    """logs: {fastq file name: (trim5 log, trim53 log or None)}"""
+    os.makedirs(log_dir, exist_ok=True)
+    for name, (trim5, trim53) in logs.items():
+        with open(os.path.join(log_dir, f"{name}_trim5.log"), "w") as handle:
+            handle.write(trim5)
+        if trim53 is not None:
+            with open(os.path.join(log_dir, f"{name}_trim53.log"), "w") as handle:
+                handle.write(trim53)
+
+
+@pytest.fixture
+def no_plot(mocker):
+    """Isolate the log parsing from the stacked bar plot."""
+    return mocker.patch("edms.bio.fastq.p.stack")
+
+
+def test_parse_cutadapt_log_reads_counts_and_percent():
+    out = fastq._parse_cutadapt_log(_cutadapt_log(total=1000, adapters=900))
+    assert out == {"total_reads_processed": 1000, "reads_with_adapters": 900,
+                   "reads_with_adapters_percent": 90.0}
+
+
+def test_parse_cutadapt_log_derives_percent_when_cutadapt_reports_nan():
+    # cutadapt prints 'nan%' when it cannot compute the percentage itself
+    out = fastq._parse_cutadapt_log(_cutadapt_log(total=200, adapters=50, percent="nan"))
+    assert out["reads_with_adapters_percent"] == 25.0
+
+
+def test_parse_cutadapt_log_percent_is_none_without_reads():
+    out = fastq._parse_cutadapt_log(_cutadapt_log(total=0, adapters=0))
+    assert out["total_reads_processed"] == 0
+    assert out["reads_with_adapters_percent"] is None
+
+
+def test_parse_cutadapt_log_missing_fields_are_none():
+    out = fastq._parse_cutadapt_log("This is cutadapt 4.4\nno summary here\n")
+    assert out == {"total_reads_processed": None, "reads_with_adapters": None,
+                   "reads_with_adapters_percent": None}
+
+
+def test_trim_motifs_summary_read_fates_sum_to_the_reads_entering_the_5prime_trim(tmp_path, no_plot):
+    # 1,000 reads in; 900 keep the 5' motif; of those, 750 also keep the 3' motif
+    _write_cutadapt_logs(tmp_path, {"sample1.fastq": (_cutadapt_log(1000, 900),
+                                                      _cutadapt_log(900, 750))})
+    out = fastq.trim_motifs_summary(pt=str(tmp_path))
+
+    assert out["fastq_file"].tolist() == ["sample1.fastq"]
+    row = out.iloc[0]
+    assert row["trim5_total_reads_processed"] == 1000
+    assert row["trim5_reads_with_adapters"] == 900
+    assert row["trim3_total_reads_processed"] == 900
+    assert row["missing 5' trim adapter"] == 100
+    assert row["missing 3' trim adapter"] == 150
+    assert row["found 5' and 3' adapters"] == 750
+    # The 3' trim reads the 5' trim's output, so the three fates partition the input
+    assert (row["missing 5' trim adapter"] + row["missing 3' trim adapter"]
+            + row["found 5' and 3' adapters"]) == row["trim5_total_reads_processed"]
+
+
+def test_trim_motifs_summary_writes_the_csv(tmp_path, no_plot):
+    _write_cutadapt_logs(tmp_path, {"sample1.fastq": (_cutadapt_log(10, 8), _cutadapt_log(8, 6))})
+    out = fastq.trim_motifs_summary(pt=str(tmp_path), csv_file="summary.csv")
+
+    written = pd.read_csv(tmp_path / "summary.csv")
+    assert written["fastq_file"].tolist() == out["fastq_file"].tolist()
+    assert written["found 5' and 3' adapters"].tolist() == [6]
+
+
+def test_trim_motifs_summary_finds_the_trim_motifs_subdirectory(tmp_path, no_plot):
+    _write_cutadapt_logs(tmp_path / ".trim_motifs",
+                         {"sample1.fastq": (_cutadapt_log(10, 9), _cutadapt_log(9, 8))})
+    out = fastq.trim_motifs_summary(pt=str(tmp_path))  # the output directory, not the log subdirectory
+
+    assert out["fastq_file"].tolist() == ["sample1.fastq"]
+    assert (tmp_path / ".trim_motifs" / "trim_motifs_summary.csv").exists()
+
+
+def test_trim_motifs_summary_orders_fastq_files_naturally(tmp_path, no_plot):
+    _write_cutadapt_logs(tmp_path, {name: (_cutadapt_log(10, 9), _cutadapt_log(9, 8))
+                                    for name in ("sample10.fastq", "sample2.fastq", "sample1.fastq")})
+    out = fastq.trim_motifs_summary(pt=str(tmp_path))
+    assert out["fastq_file"].tolist() == ["sample1.fastq", "sample2.fastq", "sample10.fastq"]
+
+
+def test_trim_motifs_summary_keeps_an_empty_fastq_with_no_percent(tmp_path, no_plot):
+    _write_cutadapt_logs(tmp_path, {"empty.fastq": (_cutadapt_log(0, 0), _cutadapt_log(0, 0))})
+    out = fastq.trim_motifs_summary(pt=str(tmp_path))
+
+    assert out["trim5_total_reads_processed"].tolist() == [0]
+    assert pd.isna(out["trim5_reads_with_adapters_percent"].iloc[0])
+
+
+def test_trim_motifs_summary_skips_a_fastq_missing_its_3prime_log(tmp_path, no_plot, capsys):
+    _write_cutadapt_logs(tmp_path, {"paired.fastq": (_cutadapt_log(10, 9), _cutadapt_log(9, 8)),
+                                    "lonely.fastq": (_cutadapt_log(10, 9), None)})
+    out = fastq.trim_motifs_summary(pt=str(tmp_path))
+
+    assert out["fastq_file"].tolist() == ["paired.fastq"]
+    assert "3' trim log not found for lonely.fastq" in capsys.readouterr().out
+
+
+def test_trim_motifs_summary_skips_an_unparseable_log(tmp_path, no_plot, capsys):
+    _write_cutadapt_logs(tmp_path, {"good.fastq": (_cutadapt_log(10, 9), _cutadapt_log(9, 8)),
+                                    "truncated.fastq": ("cutadapt died before the summary\n",
+                                                        _cutadapt_log(9, 8))})
+    out = fastq.trim_motifs_summary(pt=str(tmp_path))
+
+    assert out["fastq_file"].tolist() == ["good.fastq"]
+    assert "could not parse cutadapt logs for truncated.fastq" in capsys.readouterr().out
+
+
+def test_trim_motifs_summary_raises_without_any_5prime_logs(tmp_path, no_plot):
+    (tmp_path / "sample1.fastq_trim53.log").write_text(_cutadapt_log(9, 8))
+    with pytest.raises(ValueError, match="no '\\*_trim5.log' cutadapt logs found"):
+        fastq.trim_motifs_summary(pt=str(tmp_path))
+
+
+def test_trim_motifs_summary_raises_when_nothing_can_be_summarized(tmp_path, no_plot):
+    _write_cutadapt_logs(tmp_path, {"lonely.fastq": (_cutadapt_log(10, 9), None)})
+    with pytest.raises(ValueError, match="no cutadapt logs could be summarized"):
+        fastq.trim_motifs_summary(pt=str(tmp_path))
+
+
+def test_trim_motifs_summary_raises_for_a_missing_path(tmp_path, no_plot):
+    with pytest.raises(ValueError, match="cutadapt log directory or file not found"):
+        fastq.trim_motifs_summary(pt=str(tmp_path / "absent"))
+
+
+def test_trim_motifs_summary_reads_a_combined_sh_log(tmp_path, no_plot):
+    combined = tmp_path / "20260101_000000.log"
+    combined.write_text(
+        "preamble that belongs to no source file\n"
+        "### SOURCE_FILE: sample1.fastq_trim5.log\n" + _cutadapt_log(1000, 900) +
+        "### SOURCE_FILE: sample1.fastq_trim53.log\n" + _cutadapt_log(900, 750) +
+        "### SOURCE_FILE: 20260101_000000_memories.csv\n" + "Task,Memory, MB,Time, s\n")
+    out = fastq.trim_motifs_summary(pt=str(combined))
+
+    assert out["fastq_file"].tolist() == ["sample1.fastq"]
+    assert out.iloc[0]["found 5' and 3' adapters"] == 750
+    assert (tmp_path / "trim_motifs_summary.csv").exists()  # beside the combined log
+
+
+def test_trim_motifs_summary_writes_the_plot(tmp_path):
+    _write_cutadapt_logs(tmp_path, {"sample1.fastq": (_cutadapt_log(1000, 900), _cutadapt_log(900, 750)),
+                                    "sample2.fastq": (_cutadapt_log(500, 400), _cutadapt_log(400, 300))})
+    fastq.trim_motifs_summary(pt=str(tmp_path), plot_file="summary.pdf")  # real plot, Agg backend
+
+    plot = tmp_path / "summary.pdf"
+    assert plot.exists() and plot.stat().st_size > 0
+
+
+def test_trim_motifs_summary_respects_out_dir(tmp_path, no_plot):
+    _write_cutadapt_logs(tmp_path / "logs", {"sample1.fastq": (_cutadapt_log(10, 9), _cutadapt_log(9, 8))})
+    out_dir = tmp_path / "elsewhere"
+    fastq.trim_motifs_summary(pt=str(tmp_path / "logs"), out_dir=str(out_dir), csv_file="summary.csv")
+    assert (out_dir / "summary.csv").exists()
