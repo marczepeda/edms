@@ -1820,6 +1820,27 @@ def _cut_site_rows(fastq_df_ref: pd.DataFrame, id_col: str, edit_col: str, previ
     cut_site_df[edit_col] = edits
     return cut_site_df, cut_site_outcomes
 
+def _count_fractions(fastq_df_ref_by: pd.DataFrame, fastq_name: str) -> pd.DataFrame:
+    '''
+    _count_fractions(): Compute 'fraction' & 'percent' columns from the 'count' column
+
+    Parameters:
+    fastq_df_ref_by (dataframe): counts merged with fastq reference library dataframe
+    fastq_name (str): fastq file name (used for the no assigned reads warning)
+
+    Dependencies: pandas
+
+    Note: fractions & percents are 0 when no reads were assigned (e.g., empty fastq file or no reads spanning the region)
+    '''
+    total_count = sum(fastq_df_ref_by['count'])
+    if total_count == 0:
+        print(f"Warning: {fastq_name} has 0 assigned reads; fractions & percents were set to 0.")
+        fastq_df_ref_by['fraction'] = [0.0]*len(fastq_df_ref_by)
+    else:
+        fastq_df_ref_by['fraction'] = [cts/total_count for cts in fastq_df_ref_by['count']]
+    fastq_df_ref_by['percent'] = [frac*100 for frac in fastq_df_ref_by['fraction']]
+    return fastq_df_ref_by
+
 def _aggregate_edit_outcomes(fastq_df_ref_by: pd.DataFrame, id_col: str, edit_col: str, cut_site_outcomes: dict, edit_row: dict) -> pd.DataFrame:
     '''
     _aggregate_edit_outcomes(): Return WT, Not WT, Edit, (Edit indels, Edit non-indels, Edit ngRNA indels, & Edit ngRNA non-indels) aggregate rows
@@ -2513,9 +2534,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
         fastq_df_ref_by_id[edit_col] = [id if isinstance(edit, float) else edit for edit,id in t.zip_cols(
             df=fastq_df_ref_by_id, cols=[edit_col, id_col])]
         fastq_df_ref_by_id.fillna(value={'count': 0},inplace=True)
-        total_count = sum(fastq_df_ref_by_id['count'])
-        fastq_df_ref_by_id['fraction'] = [cts/total_count for cts in fastq_df_ref_by_id['count']]
-        fastq_df_ref_by_id['percent'] = [frac*100 for frac in fastq_df_ref_by_id['fraction']]
+        fastq_df_ref_by_id = _count_fractions(fastq_df_ref_by=fastq_df_ref_by_id, fastq_name=fastq_name)
         fastq_df_ref_by_id = pd.merge(
             left=fastq_df_ref_by_id,
             right=phred_by_id,
@@ -2530,7 +2549,6 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
         out_df2 = pd.concat([out_df2,fastq_df_ref_by_id_agg], ignore_index=True)
 
         # Save memory & clear for next use
-        del total_count
         del fastq_df_ref_by_id
         del fastq_df_ref_by_id_agg
 
@@ -2539,9 +2557,7 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
             fastq_df_ref_by_exact = pd.merge(left=fastq_df_ref,right=df_fastq['Exact_match'].value_counts().reset_index(), left_on=id_col, right_on="Exact_match", how='left')
             fastq_df_ref_by_exact[edit_col] = [id if isinstance(edit, float) else edit for edit,id in t.zip_cols(df=fastq_df_ref_by_exact, cols=[edit_col, id_col])]
             fastq_df_ref_by_exact.fillna(value={'count': 0},inplace=True)
-            total_count = sum(fastq_df_ref_by_exact['count'])
-            fastq_df_ref_by_exact['fraction'] = [cts/total_count for cts in fastq_df_ref_by_exact['count']]
-            fastq_df_ref_by_exact['percent'] = [frac*100 for frac in fastq_df_ref_by_exact['fraction']]
+            fastq_df_ref_by_exact = _count_fractions(fastq_df_ref_by=fastq_df_ref_by_exact, fastq_name=fastq_name)
             fastq_df_ref_by_exact['fastq_file'] = [fastq_file]*len(fastq_df_ref_by_exact)
             out_df3 = pd.concat([out_df3,fastq_df_ref_by_exact], ignore_index=True)
 
@@ -2551,7 +2567,6 @@ def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str
             out_df4 = pd.concat([out_df4,fastq_df_ref_by_exact_agg], ignore_index=True)
 
             # Save memory & clear for next use
-            del total_count
             del fastq_df_ref_by_exact
             del fastq_df_ref_by_exact_agg
 
@@ -2840,9 +2855,7 @@ def count_signatures_dir(df_ref: pd.DataFrame | str, signature_col: str, id_col:
         fastq_df_ref_by_id[edit_col] = [id if isinstance(edit, float) else edit for edit,id in t.zip_cols(
             df=fastq_df_ref_by_id, cols=[edit_col, id_col])]
         fastq_df_ref_by_id.fillna(value={'count': 0},inplace=True)
-        total_count = sum(fastq_df_ref_by_id['count'])
-        fastq_df_ref_by_id['fraction'] = [cts/total_count for cts in fastq_df_ref_by_id['count']]
-        fastq_df_ref_by_id['percent'] = [frac*100 for frac in fastq_df_ref_by_id['fraction']]
+        fastq_df_ref_by_id = _count_fractions(fastq_df_ref_by=fastq_df_ref_by_id, fastq_name=fastq_name)
         if phred_by_id is not None:
             fastq_df_ref_by_id = pd.merge(
                 left=fastq_df_ref_by_id,
@@ -2861,7 +2874,6 @@ def count_signatures_dir(df_ref: pd.DataFrame | str, signature_col: str, id_col:
         out_df2 = pd.concat([out_df2,fastq_df_ref_by_id_agg], ignore_index=True)
 
         # Save memory & clear for next use
-        del total_count
         del fastq_df_ref_by_id
         del fastq_df_ref_by_id_agg
 
@@ -2872,9 +2884,7 @@ def count_signatures_dir(df_ref: pd.DataFrame | str, signature_col: str, id_col:
             fastq_df_ref_by_exact = pd.merge(left=fastq_df_ref,right=df_fastq['Exact_match'].value_counts().reset_index(), left_on=id_col, right_on="Exact_match", how='left')
             fastq_df_ref_by_exact[edit_col] = [id if isinstance(edit, float) else edit for edit,id in t.zip_cols(df=fastq_df_ref_by_exact, cols=[edit_col, id_col])]
             fastq_df_ref_by_exact.fillna(value={'count': 0},inplace=True)
-            total_count = sum(fastq_df_ref_by_exact['count'])
-            fastq_df_ref_by_exact['fraction'] = [cts/total_count for cts in fastq_df_ref_by_exact['count']]
-            fastq_df_ref_by_exact['percent'] = [frac*100 for frac in fastq_df_ref_by_exact['fraction']]
+            fastq_df_ref_by_exact = _count_fractions(fastq_df_ref_by=fastq_df_ref_by_exact, fastq_name=fastq_name)
             fastq_df_ref_by_exact['fastq_file'] = [fastq_file]*len(fastq_df_ref_by_exact)
             out_df3 = pd.concat([out_df3,fastq_df_ref_by_exact], ignore_index=True)
 
@@ -2887,7 +2897,6 @@ def count_signatures_dir(df_ref: pd.DataFrame | str, signature_col: str, id_col:
             out_df4 = pd.concat([out_df4,fastq_df_ref_by_exact_agg], ignore_index=True)
 
             # Save memory & clear for next use
-            del total_count
             del fastq_df_ref_by_exact
             del fastq_df_ref_by_exact_agg
 
@@ -3711,8 +3720,10 @@ def editing_per_library(edit_dc: dict | str, paired_regions_dc: dict | str, fast
         paired_regions_df[f'{count}+{psuedocount}'] = paired_regions_df['count']+psuedocount
         total_count = paired_regions_df[count].sum()
         total_count_psuedocount = paired_regions_df[f'{count}+{psuedocount}'].sum()
-        paired_regions_df['fraction'] = [count/total_count for count in paired_regions_df[count]]
-        paired_regions_df[f'fraction+{psuedocount}'] = [count_psuedocount/total_count_psuedocount for count_psuedocount in paired_regions_df[f'{count}+{psuedocount}']]
+        if total_count == 0: # No desired epeg-ngRNAs were counted (e.g., empty paired regions file or all chimeras)
+            print(f"Warning: {paired_regions_fq} has 0 desired epeg-ngRNA counts; fractions were set to 0.")
+        paired_regions_df['fraction'] = [count/total_count if total_count>0 else 0.0 for count in paired_regions_df[count]]
+        paired_regions_df[f'fraction+{psuedocount}'] = [count_psuedocount/total_count_psuedocount if total_count_psuedocount>0 else 0.0 for count_psuedocount in paired_regions_df[f'{count}+{psuedocount}']]
         
         # ...to determine fraction of total epeg-ngRNAs for each edit and the editing per library
         library_count_psuedocount = []

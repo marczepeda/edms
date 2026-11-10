@@ -26,6 +26,10 @@ Covers:
 - genotype(), outcomes(), abundances(): edit-calling and tidy summarization
 - edit_change(): amino-acid property/conservation classification
 - _signature_phred_summary(): per-signature Phred quality summaries
+- _count_fractions() / _aggregate_edit_outcomes(): count -> fraction/percent conversion
+  behind count_signatures(), including fastq files with no assigned reads
+- editing_per_library(): editing relative to epeg-ngRNA library abundance, including
+  paired regions files with no desired counts
 - extract_umis() / trim_motifs(): subprocess command construction (mocked; the
   underlying binaries are not installed in this env)
 - _parse_cutadapt_log() / trim_motifs_summary(): cutadapt log parsing and the
@@ -34,6 +38,7 @@ Covers:
 """
 import gzip
 import os
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -923,3 +928,83 @@ def test_trim_motifs_summary_respects_out_dir(tmp_path, no_plot):
     out_dir = tmp_path / "elsewhere"
     fastq.trim_motifs_summary(pt=str(tmp_path / "logs"), out_dir=str(out_dir), csv_file="summary.csv")
     assert (out_dir / "summary.csv").exists()
+
+
+# ---------------------------------------------------------------------------
+# _count_fractions(): count -> fraction/percent, including the empty-fastq case
+# ---------------------------------------------------------------------------
+
+def test_count_fractions_divides_counts_by_the_total():
+    df = fastq._count_fractions(
+        fastq_df_ref_by=pd.DataFrame({"ID": ["WT", "Not WT", "e1"], "count": [50.0, 25.0, 25.0]}),
+        fastq_name="sample1.fastq")
+
+    assert df["fraction"].tolist() == [0.5, 0.25, 0.25]
+    assert df["percent"].tolist() == [50.0, 25.0, 25.0]
+
+
+def test_count_fractions_returns_zeros_when_no_reads_were_assigned(capsys):
+    df = fastq._count_fractions(
+        fastq_df_ref_by=pd.DataFrame({"ID": ["WT", "Not WT", "e1"], "count": [0.0, 0.0, 0.0]}),
+        fastq_name="empty.fastq")
+
+    assert df["fraction"].tolist() == [0.0, 0.0, 0.0]  # no ZeroDivisionError
+    assert df["percent"].tolist() == [0.0, 0.0, 0.0]
+    assert "empty.fastq has 0 assigned reads" in capsys.readouterr().out
+
+
+def test_count_fractions_handles_an_empty_reference():
+    df = fastq._count_fractions(fastq_df_ref_by=pd.DataFrame({"ID": [], "count": []}),
+                                fastq_name="empty.fastq")
+
+    assert df["fraction"].tolist() == []
+    assert df["percent"].tolist() == []
+
+
+def test_aggregate_edit_outcomes_sums_zero_fractions_from_an_empty_fastq():
+    counts = fastq._count_fractions(
+        fastq_df_ref_by=pd.DataFrame({"ID": ["WT", "Not WT", "e1", "e2"],
+                                      "Edit": ["WT", "Not WT", "A1G", "C2T"],
+                                      "count": [0.0, 0.0, 0.0, 0.0]}),
+        fastq_name="empty.fastq")
+    agg = fastq._aggregate_edit_outcomes(fastq_df_ref_by=counts, id_col="ID", edit_col="Edit",
+                                         cut_site_outcomes={}, edit_row={"fastq_file": ["empty.fastq"]})
+
+    assert agg["ID"].tolist() == ["WT", "Not WT", "Edit"]
+    assert agg["count"].tolist() == [0.0, 0.0, 0.0]
+    assert agg["fraction"].tolist() == [0.0, 0.0, 0.0]
+    assert agg["percent"].tolist() == [0.0, 0.0, 0.0]
+
+
+# ---------------------------------------------------------------------------
+# editing_per_library(): editing relative to library abundance
+# ---------------------------------------------------------------------------
+
+def _editing_per_library_inputs(desired):
+    """edit outcomes + paired regions (3x A1G, 1x C2T) keyed to one fastq pair."""
+    edit_df = pd.DataFrame({"Edit": ["A1G", "C2T"], "fraction": [0.5, 0.25]})
+    paired_regions_df = pd.DataFrame({"Edit": ["A1G"]*3 + ["C2T"],
+                                      "ID": ["pegA"]*3 + ["pegC"],
+                                      "desired": [desired]*4})
+    fastq_ids = pd.DataFrame({"genotyping": ["g1.csv"], "paired_regions": ["p1.csv"]})
+    return {"g1.csv": edit_df}, {"p1.csv": paired_regions_df}, fastq_ids
+
+
+def test_editing_per_library_divides_edit_fraction_by_library_fraction():
+    edit_dc, paired_regions_dc, fastq_ids = _editing_per_library_inputs(desired=True)
+    out = fastq.editing_per_library(edit_dc=edit_dc, paired_regions_dc=paired_regions_dc, fastq_ids=fastq_ids)
+
+    assert out["library_count+1"].tolist() == [4, 2]  # 3+1 and 1+1
+    assert out["library_fraction+1"].tolist() == pytest.approx([4/6, 2/6])
+    assert out["editing_per_library"].tolist() == pytest.approx([0.5/(4/6), 0.25/(2/6)])
+
+
+def test_editing_per_library_returns_zeros_when_every_read_is_a_chimera(capsys):
+    edit_dc, paired_regions_dc, fastq_ids = _editing_per_library_inputs(desired=False)
+    with warnings.catch_warnings():  # an unguarded 0/0 divide would be a RuntimeWarning (or ZeroDivisionError)
+        warnings.simplefilter("error", RuntimeWarning)
+        out = fastq.editing_per_library(edit_dc=edit_dc, paired_regions_dc=paired_regions_dc, fastq_ids=fastq_ids)
+
+    assert "p1.csv has 0 desired epeg-ngRNA counts" in capsys.readouterr().out
+    assert out["library_count+1"].tolist() == [1, 1]  # pseudocount only; no ZeroDivisionError
+    assert out["library_fraction+1"].tolist() == pytest.approx([0.5, 0.5])
