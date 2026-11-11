@@ -24,6 +24,8 @@ Usage:
 - shuffle(): randomly reorganizes a list
 - encode_sequences(): Convert sequences to integer arrays for fast comparison.
 - hamming_matrix(): pairwise Hamming distances between two encoded sequence sets
+- min_hamming_to(): minimum Hamming distance from each sequence to any sequence in a reference set
+- read_sequences(): read a list of DNA sequences from a file path, dataframe, series, or iterable
 - min_hamming_within(): minimum Hamming distance from each sequence to any other sequence in the list
 - gc_fractions(): GC content of each sequence as a fraction of its length
 - max_homopolymers(): longest run of a single repeated base in each sequence
@@ -974,6 +976,75 @@ def hamming_matrix(a_encoded: np.ndarray, b_encoded: np.ndarray) -> np.ndarray:
     return distances
 
 
+def min_hamming_to(sequences: list, reference: list) -> np.ndarray:
+    """
+    min_hamming_to(): minimum Hamming distance from each sequence to any sequence in a reference set.
+
+    Parameters:
+    sequences (list of str): List of equal-length DNA sequences (A/C/G/T).
+    reference (list of str): List of sequences of the same length to measure against.
+
+    Returns one distance per sequence, or np.nan throughout if the reference set is empty.
+
+    Dependencies: numpy, encode_sequences() & hamming_matrix()
+    """
+    if len(sequences) == 0:
+        return np.empty(0)
+    if not reference:
+        return np.full(len(sequences), np.nan)
+
+    encoded = encode_sequences(sequences)
+    reference_encoded = encode_sequences(reference)
+    if encoded.shape[1] != reference_encoded.shape[1]:
+        raise ValueError(f"min_hamming_to() needs equal lengths; sequences are {encoded.shape[1]} nt and reference sequences are {reference_encoded.shape[1]} nt.")
+
+    out = np.empty(len(sequences), dtype=np.int32)
+    block = max(1, int(2e7 // len(reference)))  # cap each distance matrix at ~40 MB
+    for start in range(0, len(sequences), block):
+        stop = min(start + block, len(sequences))
+        out[start:stop] = hamming_matrix(encoded[start:stop], reference_encoded).min(axis=1)
+    return out
+
+
+def read_sequences(obj, col: str = 'UMI_sequence', length: int = None) -> list:
+    """
+    read_sequences(): read a list of DNA sequences from a file path, dataframe, series, or iterable.
+
+    Sequences are uppercased and stripped, blanks and duplicates are dropped, and order is preserved.
+
+    Parameters:
+    obj (str | DataFrame | Series | list | None): file path, dataframe, series or iterable of sequences;
+        None returns an empty list
+    col (str, optional): column name holding the sequences when obj is a file path or dataframe
+        (Default: 'UMI_sequence')
+    length (int, optional): raise if any sequence is not this length (Default: None, no check)
+
+    Dependencies: pandas & io
+    """
+    if obj is None:
+        return []
+    if isinstance(obj, str):
+        obj = io.get(pt=obj)
+
+    if isinstance(obj, pd.DataFrame):
+        if col not in obj.columns:
+            raise ValueError(f"read_sequences() could not find column '{col}'; the file or dataframe has {list(obj.columns)}.")
+        values = obj[col]
+    elif isinstance(obj, pd.Series):
+        values = obj
+    else:
+        values = pd.Series(list(obj), dtype=object)
+
+    sequences = [str(value).strip().upper() for value in values.dropna()]
+    sequences = list(dict.fromkeys(sequence for sequence in sequences if sequence))  # drop blanks & duplicates
+
+    if length is not None:
+        wrong = sorted({len(sequence) for sequence in sequences} - {length})
+        if wrong:
+            raise ValueError(f"read_sequences() expected sequences of length {length}; found lengths {wrong}. Hamming distances are only defined between equal-length sequences.")
+    return sequences
+
+
 def min_hamming_within(sequences: list, block: int = 256) -> np.ndarray:
     """
     min_hamming_within(): minimum Hamming distance from each sequence to any OTHER sequence in the list.
@@ -1111,7 +1182,8 @@ def count_csv_rows(pt:str) -> int:
         return sum(1 for line in f) - 1  # subtract 1 for header
 
 
-def umi_report(kept: list, GC_fract: tuple, hamming: int, min_distances: np.ndarray = None):
+def umi_report(kept: list, GC_fract: tuple, hamming: int, min_distances: np.ndarray = None,
+               exclude: list = None, exclude_hamming: int = None):
     """
     umi_report(): print stage-independent summary statistics for a set of UMIs.
 
@@ -1121,8 +1193,10 @@ def umi_report(kept: list, GC_fract: tuple, hamming: int, min_distances: np.ndar
     hamming (int): Hamming distance that retained UMIs were required to exceed
     min_distances (ndarray, optional): minimum Hamming distance within the retained set, one per UMI;
         recomputed here if not provided (Default: None)
+    exclude (list of str, optional): reserved sequences the retained UMIs had to stay away from (Default: None)
+    exclude_hamming (int, optional): Hamming distance the retained UMIs had to exceed from 'exclude' (Default: None)
 
-    Dependencies: numpy, pandas, min_hamming_within(), gc_fractions() & max_homopolymers()
+    Dependencies: numpy, pandas, min_hamming_within(), min_hamming_to(), gc_fractions() & max_homopolymers()
     """
     if not kept:
         print('  No UMIs retained; nothing to report.')
@@ -1142,6 +1216,14 @@ def umi_report(kept: list, GC_fract: tuple, hamming: int, min_distances: np.ndar
             print(f'    d = {distance}: {count} UMIs ({count/len(kept)*100:.1f}%)')
         if valid.min() <= hamming:
             print(f'    WARNING: {int((valid <= hamming).sum())} UMIs are within the requested distance of {hamming}.')
+
+    # Distance to the reserved set, if one was supplied
+    if exclude:
+        to_exclude = min_hamming_to(sequences=kept, reference=exclude)
+        print(f'  Minimum Hamming distance to the {len(exclude)} excluded sequences:')
+        print(f'    min {int(to_exclude.min())} | median {np.median(to_exclude):.1f} | mean {to_exclude.mean():.2f} | max {int(to_exclude.max())}')
+        if exclude_hamming is not None and to_exclude.min() <= exclude_hamming:
+            print(f'    WARNING: {int((to_exclude <= exclude_hamming).sum())} UMIs are within the requested distance of {exclude_hamming} of an excluded sequence.')
 
     # GC content distribution
     gc = gc_fractions(sequences=kept)
@@ -1170,6 +1252,7 @@ def umi_report(kept: list, GC_fract: tuple, hamming: int, min_distances: np.ndar
 
 def umi(length: int = 10, GC_fract: tuple = (0.4, 0.6), hamming: int = 4,
         nrows: int = 1000, mode: str = 'filter', pt: str = None,
+        exclude=None, exclude_col: str = 'UMI_sequence', exclude_hamming: int = None,
         dir: str = '../out', file: str = None, verbose: bool = False) -> pd.DataFrame:
     '''
     umi(): generates unique molecular identifiers (UMIs) of specified length, GC content, and Hamming distance
@@ -1181,22 +1264,32 @@ def umi(length: int = 10, GC_fract: tuple = (0.4, 0.6), hamming: int = 4,
     hamming (int, optional): Hamming distance that retained UMIs must exceed; the smallest distance in
         the output is therefore hamming + 1 (Default: 4)
     nrows (int, optional): # of UMIs to compare iteratively for hamming filtering (Default: 1000)
-    mode (str, optional): 'filter' drops every UMI that fails the GC or Hamming filter and writes only
-        the survivors; 'keep' writes every candidate UMI annotated with GC_fract, GC_pass, min_hamming,
-        max_homopolymer and keep, so the thresholds can be revisited without regenerating (Default: 'filter')
+    mode (str, optional): 'filter' drops every UMI that fails the GC, exclusion or Hamming filter and
+        writes only the survivors; 'keep' writes every candidate UMI annotated with GC_fract, GC_pass,
+        min_hamming, max_homopolymer, keep and, when 'exclude' is given, min_hamming_exclude, so the
+        thresholds can be revisited without regenerating (Default: 'filter')
     pt (str, optional): shuffled UMI candidate file path if already made, reused so a run can be
         resumed in the same order (Default: None)
+    exclude (str | DataFrame | Series | list, optional): reserved UMI sequences the output must stay
+        away from, as a file path, dataframe, series or list; useful for generating a new UMI set that
+        will not be confused with one already in use (Default: None)
+    exclude_col (str, optional): column holding the sequences when 'exclude' is a file path or
+        dataframe (Default: 'UMI_sequence')
+    exclude_hamming (int, optional): Hamming distance that retained UMIs must exceed from every
+        excluded sequence; 0 removes exact matches only (Default: None, use 'hamming')
     dir (str, optional): save directory (Default: '../out')
     file (str, optional): output file name; built from the parameters if not provided (Default: None)
     verbose (bool, optional): print stage counts, timing, Hamming distance distribution, GC and
         per-position composition, and homopolymer runs (Default: False)
 
     Dependencies: pandas, numpy, os, time, datetime, io, generate_sequences(), shuffle(), gc_fractions(),
-        max_homopolymers(), fast_filter_by_hamming(), min_hamming_within() & umi_report()
+        max_homopolymers(), read_sequences(), min_hamming_to(), fast_filter_by_hamming(),
+        min_hamming_within() & umi_report()
     '''
     modes = ('filter', 'keep')
     if mode not in modes:
         raise ValueError(f"umi() mode must be one of {modes}; got '{mode}'.")
+    exclude_distance = hamming if exclude_hamming is None else exclude_hamming
 
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     start_time = time.time()
@@ -1226,8 +1319,30 @@ def umi(length: int = 10, GC_fract: tuple = (0.4, 0.6), hamming: int = 4,
     gc = gc_fractions(sequences=candidates)
     gc_pass = (gc > GC_fract[0]) & (gc < GC_fract[1])
     print(f'{int(gc_pass.sum())} of {len(candidates)} sequences of length {length} have GC content strictly between {GC_fract[0]} and {GC_fract[1]}.')
-    hamming_input = [candidate for candidate, passed in zip(candidates, gc_pass) if passed]
+    hamming_positions = np.flatnonzero(gc_pass)
+    hamming_input = [candidates[position] for position in hamming_positions]
     elapsed(f'GC filter kept {len(hamming_input)} sequences.')
+
+    # Exclusion filter; candidates too close to a reserved set can never be retained, so they are
+    # removed before the greedy pass rather than competing for space in it
+    exclude_sequences = read_sequences(exclude, col=exclude_col, length=length)
+    exclude_distances = np.full(len(candidates), np.nan)
+    if exclude_sequences:
+        distances = min_hamming_to(sequences=hamming_input, reference=exclude_sequences)
+        exclude_distances[hamming_positions] = distances
+        too_close = distances <= exclude_distance
+        hamming_positions = hamming_positions[~too_close]
+        hamming_input = [candidate for candidate, close in zip(hamming_input, too_close) if not close]
+        print(f'{int(too_close.sum())} of {len(too_close)} GC-passing sequences are within {exclude_distance} of the {len(exclude_sequences)} excluded sequences.')
+        if not hamming_input:
+            # A set produced by this function at distance d covers the whole pool at radius d: every
+            # candidate it rejected was rejected for being within d of something it kept. Excluding a
+            # complete previous run at the same distance therefore always leaves nothing behind.
+            print(f'No candidates survive the exclusion filter. If the excluded sequences are a complete '
+                  f'umi() run at hamming={exclude_distance}, they already cover the whole search space at '
+                  f'that distance; exclude only the sequences actually in use, lower exclude_hamming, or '
+                  f'raise length.')
+        elapsed(f'Exclusion filter kept {len(hamming_input)} sequences.')
 
     # Hamming filter, processed in chunks of nrows so a long run checkpoints as it goes
     out_file = file if file is not None else f'{timestamp}_UMI_{length}_hamming_{hamming}_{mode}.csv'
@@ -1263,7 +1378,6 @@ def umi(length: int = 10, GC_fract: tuple = (0.4, 0.6), hamming: int = 4,
         kept_index = {sequence: i for i, sequence in enumerate(kept)}
         min_hamming = np.full(len(candidates), np.nan)
         keep_flags = np.zeros(len(candidates), dtype=bool)
-        hamming_positions = np.flatnonzero(gc_pass)
         min_hamming[hamming_positions] = eval_distances  # distance at the moment each candidate was evaluated
         for position, candidate in zip(hamming_positions, hamming_input):
             if candidate in kept_index:
@@ -1276,13 +1390,16 @@ def umi(length: int = 10, GC_fract: tuple = (0.4, 0.6), hamming: int = 4,
                            'min_hamming': min_hamming,
                            'max_homopolymer': max_homopolymers(sequences=candidates),
                            'keep': keep_flags})
+        if exclude_sequences:  # distance to the reserved set; NaN where the GC filter already dropped the candidate
+            df.insert(3, 'min_hamming_exclude', exclude_distances)
     io.save(obj=df, file=os.path.join(dir, out_file))
     if mode == 'keep' and os.path.exists(checkpoint):
         os.remove(checkpoint)  # the annotated table supersedes the checkpoint
     print(f'Kept {len(kept_set)} UMIs of length {length} (Hamming distance > {hamming}); wrote {len(df)} rows to {os.path.join(dir, out_file)}.')
 
     if verbose:
-        umi_report(kept=kept, GC_fract=GC_fract, hamming=hamming, min_distances=kept_distances)
+        umi_report(kept=kept, GC_fract=GC_fract, hamming=hamming, min_distances=kept_distances,
+                   exclude=exclude_sequences, exclude_hamming=exclude_distance)
         print(f'Total time: {time.time()-start_time:.1f}s')
 
     return df
