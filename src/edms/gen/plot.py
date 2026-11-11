@@ -33,6 +33,9 @@ Usage:
 - autoscale_limits(): Compute axis limits from data with proportional padding.
 - autoscale_xy(): Compute x and y axis limits with proportional padding.
 - _offset_density(): Compute a kernel density estimate on a shared grid for offset graphs
+- log_ticks(): put a log axis' major ticks on powers of 10 & its minor ticks on the decade in between
+- _Log10SubsLocator: minor tick positions for a linear axis that holds log10 values
+- log10_ticks(): put a log10 valued axis' major ticks on powers of 10 & its minor ticks on the decade in between
 - formatter(): formats, displays, and saves plots
 
 [Facet Handling Methods]
@@ -74,7 +77,8 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib.colors as mcolors
-from matplotlib.ticker import MaxNLocator
+from matplotlib.ticker import (FuncFormatter, Locator, LogFormatterSciNotation, LogLocator,
+                               MaxNLocator, MultipleLocator, NullFormatter)
 from matplotlib.font_manager import FontProperties
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
@@ -993,6 +997,92 @@ def _offset_density(values, grid: np.ndarray, bw_adjust: float = 1) -> np.ndarra
     kde.set_bandwidth(kde.factor * bw_adjust)
     return kde(grid)
 
+def log_ticks(ax, axis: str = 'both', subs=None, numticks: int = 100) -> None:
+    '''
+    log_ticks(): put a log axis' major ticks on powers of 10 & its minor ticks on the decade in between
+
+    Parameters:
+    ax: matplotlib axis
+    axis (str, optional): which axis to tick ('x', 'y', or 'both'; Default: 'both')
+    subs (optional): minor tick multiples of each power of 10 (Default: None; 0.1, 0.2, ... 0.9)
+    numticks (int, optional): maximum ticks the locators may place (Default: 100)
+
+    Note: an axis that is not on a log scale is left alone, so this is safe to call
+          whenever the scale was requested rather than only once it is known to apply.
+
+    Note: matplotlib drops minor ticks once a log axis spans more decades than it thinks
+          it can label, hence the raised numticks; the minor ticks are left unlabeled.
+
+    Dependencies: numpy & matplotlib.ticker
+    '''
+    if axis not in ('x', 'y', 'both'):
+        raise ValueError("Invalid axis! x, y, both")
+    if subs is None:
+        subs = np.arange(1, 10) * 0.1 # 0.1x10^n lands on 10^(n-1), under that decade's major tick
+
+    for name in (['x', 'y'] if axis == 'both' else [axis]):
+        if getattr(ax, f'get_{name}scale')() != 'log':
+            continue
+        axis_obj = getattr(ax, f'{name}axis')
+        axis_obj.set_major_locator(LogLocator(base=10, numticks=numticks))
+        axis_obj.set_major_formatter(LogFormatterSciNotation(base=10))
+        axis_obj.set_minor_locator(LogLocator(base=10, subs=subs, numticks=numticks))
+        axis_obj.set_minor_formatter(NullFormatter())
+
+class _Log10SubsLocator(Locator):
+    '''
+    _Log10SubsLocator: minor tick positions for a linear axis that holds log10 values
+
+    Parameters:
+    subs: minor tick multiples of each power of 10 (i.e., 0.1, 0.2, ... 0.9)
+
+    Note: a multiple m of 10^n sits at n + log10(m) once the values are log10, so the
+          offsets are constant & every decade in view gets the same set.
+    '''
+    def __init__(self, subs):
+        self.offsets = np.log10(np.asarray(subs, dtype=float))
+
+    def __call__(self):
+        return self.tick_values(*self.axis.get_view_interval())
+
+    def tick_values(self, vmin, vmax):
+        if vmin > vmax:
+            vmin, vmax = vmax, vmin
+        decades = np.arange(np.floor(vmin), np.ceil(vmax) + 1)
+        ticks = (decades[:, None] + self.offsets[None, :]).ravel()
+        return ticks[(ticks >= vmin) & (ticks <= vmax)]
+
+def log10_ticks(ax, axis: str = 'both', subs=None) -> None:
+    '''
+    log10_ticks(): put a log10 valued axis' major ticks on powers of 10 & its minor ticks on the decade in between
+
+    Parameters:
+    ax: matplotlib axis
+    axis (str, optional): which axis to tick ('x', 'y', or 'both'; Default: 'both')
+    subs (optional): minor tick multiples of each power of 10 (Default: None; 0.1, 0.2, ... 0.9)
+
+    Note: for an axis that is linear because its values were log10 transformed first, which
+          is how dist() draws kde & offset graphs on a log scale; log_ticks() is the one for
+          an axis that is on a log scale itself, and an axis already on a log scale is left
+          alone here so that calling both is safe.
+
+    Dependencies: numpy & matplotlib.ticker
+    '''
+    if axis not in ('x', 'y', 'both'):
+        raise ValueError("Invalid axis! x, y, both")
+    if subs is None:
+        subs = np.arange(1, 10) * 0.1 # 0.1x10^n lands on 10^(n-1), under that decade's major tick
+
+    for name in (['x', 'y'] if axis == 'both' else [axis]):
+        if getattr(ax, f'get_{name}scale')() != 'linear':
+            continue
+        axis_obj = getattr(ax, f'{name}axis')
+        axis_obj.set_major_locator(MultipleLocator(1)) # 1 unit on a log10 axis is 1 decade
+        axis_obj.set_major_formatter(FuncFormatter(
+            lambda value, pos: f'$\\mathdefault{{10^{{{value:.0f}}}}}$')) # matches LogFormatterSciNotation
+        axis_obj.set_minor_locator(_Log10SubsLocator(subs))
+        axis_obj.set_minor_formatter(NullFormatter())
+
 def formatter(graph: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file: str, title: str, title_size: int, title_weight: str, title_font: str,
               x_axis: str, x_axis_size: int, x_axis_weight: str, x_axis_font: str, x_axis_scale: str, x_axis_dims: tuple, x_axis_pad: int, x_ticks_size: int, x_ticks_rot: int, x_ticks_font: str, x_ticks: list,
               y_axis: str, y_axis_size: int, y_axis_weight: str, y_axis_font: str, y_axis_scale: str, y_axis_dims: tuple, y_axis_pad: int, y_ticks_size: int, y_ticks_rot: int, y_ticks_font: str, y_ticks: list,
@@ -1087,6 +1177,7 @@ def formatter(graph: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file:
                 if (x_axis_dims==(0,0))&(x_axis_scale=='log'): plt.xlim(round_down_pow_10(min(df[x])),round_up_pow_10(max(df[x])))
                 elif x_axis_dims==(0,0): print('Default x axis dimensions.')
                 else: plt.xlim(x_axis_dims[0],x_axis_dims[1])
+                log_ticks(ax,'x') # 10^n majors with the decade in between as minors
             else:
                 if is_html: # put one tick per category, centered on each bar row
                     ls = df[x].unique().tolist() if cats_order is None else cats_order
@@ -1116,6 +1207,7 @@ def formatter(graph: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file:
                 if (y_axis_dims==(0,0))&(y_axis_scale=='log'): plt.ylim(round_down_pow_10(min(df[y])),round_up_pow_10(max(df[y])))
                 elif y_axis_dims==(0,0): print('Default y axis dimensions.')
                 else: plt.ylim(y_axis_dims[0],y_axis_dims[1])
+                log_ticks(ax,'y') # 10^n majors with the decade in between as minors
             else:
                 if is_html: # put one tick per category, centered on each bar row
                     ls = df[y].unique().tolist() if cats_order is None else cats_order
@@ -2714,7 +2806,7 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
             df_sub = df_sub.copy()
             df_sub[x_plot] = np.maximum(np.log10(df_sub[x]), log10_low)
             x_axis_scale_panel = 'linear'
-            x_axis_panel_default = x_plot
+            x_axis_panel_default = x # The ticks read 10^n, so the label is the column, not log10(column)
             if x_axis_dims_panel != (0, 0): # Limits are in x units, so move them to log10 units too
                 x_axis_dims_panel = tuple(max(np.log10(dim), log10_low) if dim > 0 else log10_low
                                           for dim in x_axis_dims_panel)
@@ -2891,6 +2983,9 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
             icon='histogram',
             cats_order=None
         )
+
+        if x_plot != x: # The values were log10 transformed, so the axis is linear in decades
+            log10_ticks(ax, 'x')
 
     for i, r in enumerate(row_vals):
         for j, c in enumerate(col_vals):

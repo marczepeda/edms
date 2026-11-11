@@ -94,6 +94,199 @@ def test_autoscale_limits_empty_returns_min_range_centered_on_zero():
     assert hi == pytest.approx(2.0)
 
 
+def _visible_ticks(ax, axis="x", minor=False):
+    """Tick locations inside the axis limits, which is what the reader actually sees."""
+    lo, hi = ax.get_xlim() if axis == "x" else ax.get_ylim()
+    locs = ax.get_xticks(minor=minor) if axis == "x" else ax.get_yticks(minor=minor)
+    return [loc for loc in locs if lo <= loc <= hi]
+
+
+def _visible_tick_labels(ax, axis="x"):
+    """Major tick label text for the ticks inside the axis limits.
+
+    A locator may hand back a tick just past each end; those are never drawn, but
+    get_xticklabels() still lists them, so they are filtered out by position here.
+    """
+    lo, hi = ax.get_xlim() if axis == "x" else ax.get_ylim()
+    labels = ax.get_xticklabels() if axis == "x" else ax.get_yticklabels()
+    pos = 0 if axis == "x" else 1
+    return [t.get_text() for t in labels if lo <= t.get_position()[pos] <= hi]
+
+
+def test_log_ticks_majors_on_powers_of_ten():
+    fig, ax = plt.subplots()
+    ax.set_xscale("log")
+    ax.set_xlim(1e2, 1e7)
+    p.log_ticks(ax, "x")
+    assert _visible_ticks(ax, "x") == pytest.approx([1e2, 1e3, 1e4, 1e5, 1e6, 1e7])
+    plt.close(fig)
+
+
+def test_log_ticks_minors_span_the_decade():
+    fig, ax = plt.subplots()
+    ax.set_xscale("log")
+    ax.set_xlim(1e3, 1e4)
+    p.log_ticks(ax, "x")
+    # 0.1x10^n coincides with a major tick, so matplotlib leaves 0.2 through 0.9 showing
+    assert _visible_ticks(ax, "x", minor=True) == pytest.approx(
+        [sub * 1e4 for sub in (0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9)]
+    )
+    plt.close(fig)
+
+
+def test_log_ticks_minors_are_unlabeled():
+    fig, ax = plt.subplots()
+    ax.set_yscale("log")
+    ax.set_ylim(1e0, 1e3)
+    p.log_ticks(ax, "y")
+    fig.canvas.draw()
+    assert all(t.get_text() == "" for t in ax.get_yticklabels(minor=True))
+    labels = _visible_tick_labels(ax, "y")
+    assert all("10^{" in label for label in labels)
+    assert any("10^{1}" in label for label in labels)
+    plt.close(fig)
+
+
+def test_log_ticks_both_axes():
+    fig, ax = plt.subplots()
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xlim(1e1, 1e3)
+    ax.set_ylim(1e1, 1e3)
+    p.log_ticks(ax)
+    assert _visible_ticks(ax, "x") == pytest.approx([1e1, 1e2, 1e3])
+    assert _visible_ticks(ax, "y") == pytest.approx([1e1, 1e2, 1e3])
+    plt.close(fig)
+
+
+def test_log_ticks_leaves_a_linear_axis_alone():
+    fig, ax = plt.subplots()
+    ax.set_xlim(0, 10)
+    before = list(ax.get_xticks())
+    p.log_ticks(ax, "x")
+    assert list(ax.get_xticks()) == before
+    assert _visible_ticks(ax, "x", minor=True) == []
+    plt.close(fig)
+
+
+def test_log_ticks_custom_subs():
+    fig, ax = plt.subplots()
+    ax.set_xscale("log")
+    ax.set_xlim(1e2, 1e3)
+    p.log_ticks(ax, "x", subs=(0.5,))
+    assert _visible_ticks(ax, "x", minor=True) == pytest.approx([5e2])
+    plt.close(fig)
+
+
+def test_log_ticks_invalid_axis_raises():
+    fig, ax = plt.subplots()
+    with pytest.raises(ValueError):
+        p.log_ticks(ax, "z")
+    plt.close(fig)
+
+
+def test_scat_log_scale_gets_decade_ticks():
+    df = pd.DataFrame({"x": [1e2, 1e4, 1e6], "y": [1e1, 1e2, 1e3]})
+    fig, axes = p.scat("scat", df, x="x", y="y",
+                       x_axis_scale="log", y_axis_scale="log",
+                       x_axis_dims=(1e2, 1e6), y_axis_dims=(1e1, 1e3), show=False)
+    ax = axes[0, 0]
+    assert _visible_ticks(ax, "x") == pytest.approx([1e2, 1e3, 1e4, 1e5, 1e6])
+    assert len(_visible_ticks(ax, "x", minor=True)) == 8 * 4  # 0.2 to 0.9 per decade
+    assert _visible_ticks(ax, "y") == pytest.approx([1e1, 1e2, 1e3])
+    plt.close(fig)
+
+
+def test_log10_ticks_majors_on_whole_decades():
+    fig, ax = plt.subplots()
+    ax.set_xlim(3.0, 6.0)  # linear axis holding log10 values
+    p.log10_ticks(ax, "x")
+    fig.canvas.draw()
+    assert _visible_ticks(ax, "x") == pytest.approx([3.0, 4.0, 5.0, 6.0])
+    assert _visible_tick_labels(ax, "x") == [
+        f"$\\mathdefault{{10^{{{n}}}}}$" for n in (3, 4, 5, 6)
+    ]
+    plt.close(fig)
+
+
+def test_log10_ticks_minors_sit_at_log10_of_the_subs():
+    fig, ax = plt.subplots()
+    ax.set_xlim(4.0, 5.0)
+    p.log10_ticks(ax, "x")
+    # 0.1x10^5 is 10^4, which coincides with a major, leaving 0.2 through 0.9 of that decade
+    assert _visible_ticks(ax, "x", minor=True) == pytest.approx(
+        [5 + math.log10(sub) for sub in (0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9)]
+    )
+    plt.close(fig)
+
+
+def test_log10_ticks_handles_negative_decades():
+    fig, ax = plt.subplots()
+    ax.set_xlim(-2.0, 0.0)
+    p.log10_ticks(ax, "x")
+    fig.canvas.draw()
+    assert _visible_ticks(ax, "x") == pytest.approx([-2.0, -1.0, 0.0])
+    assert _visible_tick_labels(ax, "x")[0] == "$\\mathdefault{10^{-2}}$"
+    plt.close(fig)
+
+
+def test_log10_ticks_leaves_a_log_axis_alone():
+    fig, ax = plt.subplots()
+    ax.set_xscale("log")
+    ax.set_xlim(1e2, 1e4)
+    p.log10_ticks(ax, "x")
+    assert _visible_ticks(ax, "x") == pytest.approx([1e2, 1e3, 1e4])  # not 2, 3, 4
+    plt.close(fig)
+
+
+def test_log10_ticks_invalid_axis_raises():
+    fig, ax = plt.subplots()
+    with pytest.raises(ValueError):
+        p.log10_ticks(ax, "z")
+    plt.close(fig)
+
+
+@pytest.mark.parametrize("graph", ["kde", "hist_kde", "offset", "half_offset"])
+def test_dist_log_scale_log10_graphs_get_decade_ticks(graph):
+    rng = np.random.default_rng(3)
+    df = pd.DataFrame({"v": 10 ** rng.normal(4, 0.5, 300), "g": ["a", "b", "c"] * 100})
+    fig, axes = p.dist(graph, df, x="v", cols="g", x_axis_scale="log", show=False)
+    ax = axes[0, 0]
+    assert ax.get_xscale() == "linear"  # the values were log10 transformed for the kde
+    assert all(float(t).is_integer() for t in _visible_ticks(ax, "x"))
+    assert all("10^{" in label for label in _visible_tick_labels(ax, "x"))
+    assert len(_visible_ticks(ax, "x", minor=True)) > 0
+    assert "log10" not in ax.get_xlabel().lower()  # the ticks already say the decade
+    plt.close(fig)
+
+
+def test_dist_hist_log_scale_uses_a_real_log_axis():
+    rng = np.random.default_rng(4)
+    df = pd.DataFrame({"v": 10 ** rng.normal(4, 0.5, 300)})
+    fig, axes = p.dist("hist", df, x="v", x_axis_scale="log", show=False)
+    ax = axes[0, 0]
+    assert ax.get_xscale() == "log"
+    assert all("10^{" in label for label in _visible_tick_labels(ax, "x"))
+    plt.close(fig)
+
+
+def test_dist_linear_scale_is_untouched():
+    rng = np.random.default_rng(5)
+    df = pd.DataFrame({"v": rng.normal(0, 1, 200)})
+    fig, axes = p.dist("half_offset", df, x="v", show=False)
+    ax = axes[0, 0]
+    assert _visible_ticks(ax, "x", minor=True) == []
+    assert ax.get_xlabel() == "V"
+    plt.close(fig)
+
+
+def test_scat_linear_scale_keeps_default_ticks():
+    df = pd.DataFrame({"x": [1.0, 2.0, 3.0], "y": [1.0, 2.0, 3.0]})
+    fig, axes = p.scat("scat", df, x="x", y="y", show=False)
+    assert _visible_ticks(axes[0, 0], "x", minor=True) == []
+    plt.close(fig)
+
+
 def test_repeat_palette_cmap_matplotlib_cmap():
     cmap = p.repeat_palette_cmap("viridis", repeats=2)
     assert isinstance(cmap, matplotlib.colors.ListedColormap)
