@@ -16,6 +16,7 @@ Usage:
 [Run commands]
 - example(): write an annotated starting run spec
 - init(): start a run from a spec
+- input(): add an input table to a run that is already going
 - plan(): resolve and render the protocol for a run
 - status(): print a run's status
 
@@ -159,6 +160,36 @@ def init(spec: str = None, template: str = None, input: list = None, set: list =
 
     if plan:
         _plan(run_dir, tpl=tpl)
+
+def input(run_dir: str, input: list = None, sheet: list = None,
+          replace: bool = False, plan: bool = True):
+    '''
+    input(): add an input table to a run that is already going
+
+    For tables that are not known on day one, such as an NGS sample sheet that
+    depends on primers chosen after the harvest.
+
+    Parameters:
+    run_dir (str): run directory
+    input (list, optional): 'name=path' pairs; repeatable
+    sheet (list, optional): 'name=sheet' pairs for .xlsx inputs
+    replace (bool, optional): overwrite an input the run already froze
+    plan (bool, optional): re-render the protocol afterwards (Default: True)
+
+    Dependencies: spec._pairs(), run.add_input()
+    '''
+    pairs = spec_mod._pairs(input, parse=False)
+    if not pairs:
+        raise SystemExit('Pass at least one -I NAME=PATH')
+    sheets = spec_mod._pairs(sheet, parse=False)
+
+    for name, pt in pairs.items():
+        state = run_mod.add_input(run_dir, name=name, pt=pt,
+                                  sheet=sheets.get(name), replace=replace)
+        rprint(f'[green]Added input[/green] {name} [dim]<-[/dim] {pt}')
+
+    if plan:
+        _plan(run_dir)
 
 def _plan(run_dir, tpl=None, format: str = 'html', file: str = None,
           strict: bool = False, compute: bool = True, theme: str = None):
@@ -347,6 +378,13 @@ def add_subparser(subparsers, formatter_class=None):
     p_init.add_argument("-d", "--dir", type=str, default='.', help="Parent directory for the run (Default: .)")
     p_init.add_argument("-o", "--overwrite", action="store_true", help="Replace an existing run directory")
     p_init.add_argument("-n", "--no_plan", dest="plan", action="store_false", default=True, help="Don't render the protocol straight away")
+
+    p_input = add("input", "Add an input table to a run that is already going", input)
+    p_input.add_argument("run_dir", type=str, help="Run directory")
+    p_input.add_argument("-I", "--input", action="append", metavar="NAME=PATH", required=True, help="Input table; repeatable")
+    p_input.add_argument("-H", "--sheet", action="append", metavar="NAME=SHEET", help="Tab to read for an .xlsx input; repeatable")
+    p_input.add_argument("-R", "--replace", action="store_true", help="Overwrite an input the run already froze")
+    p_input.add_argument("-n", "--no_plan", dest="plan", action="store_false", default=True, help="Don't re-render the protocol afterwards")
 
     p_plan = add("plan", "Resolve and render the protocol for a run", plan)
     p_plan.add_argument("run_dir", type=str, help="Run directory")

@@ -60,6 +60,13 @@ edms -h # or edms <TAB>
     edms work status <run_dir>
     ```
 
+    Inputs are frozen into the run at `init`, so a finished run still describes
+    what was actually used. Tables that are not known on day one are added as
+    they arrive, and the steps waiting on them calculate from that point:
+    ```shell
+    edms work input <run_dir> -I ngs_samples=ngs_samples.csv
+    ```
+
     Steps that declare a `compute` target call straight into the rest of edms,
     so the transfection volumes and PCR plans in a rendered protocol are
     calculated from your own inputs rather than copied from a previous entry.

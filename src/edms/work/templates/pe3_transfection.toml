@@ -174,9 +174,9 @@ text = """
 Plate layouts, master mixes and thermocycler programs for PCR1
 ({pcr1_cycles} cycles) and PCR2 ({pcr2_cycles} cycles).
 
-This step needs the ngs_samples input. Add it to your run spec once the
-primers are chosen, then re-run:
-  edms work plan <run_dir>
+This step needs the ngs_samples input, which is not known on day one. Add it
+once the primers are chosen and the protocol re-renders with the plan:
+  edms work input <run_dir> -I ngs_samples=ngs_samples.csv
 """
 
 [steps.args]

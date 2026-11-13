@@ -7,6 +7,7 @@ planners elsewhere in the package do not have.
 """
 import json
 
+import pandas as pd
 import pytest
 
 from edms.work import run as run_mod
@@ -244,3 +245,83 @@ def test_load_rejects_a_ledger_from_a_future_edms(started_run):
 def test_load_without_a_run_file_is_rejected(tmp_path):
     with pytest.raises(FileNotFoundError, match="No run.json"):
         run_mod.load(tmp_path)
+
+
+# --------------------------------------------------------------------------- #
+# add_input()
+# --------------------------------------------------------------------------- #
+def test_add_input_freezes_a_later_table(started_run, tmp_path, tpl):
+    run_dir, _ = started_run
+    extra = tmp_path / "extra.csv"
+    extra.write_text("id\nx\n")
+
+    state = run_mod.add_input(run_dir, name="extra", pt=extra, tpl=tpl)
+    frozen = run_dir / state["inputs"]["extra"]["frozen"]
+    assert frozen.exists()
+    assert frozen.read_text() == "id\nx\n"
+    assert state["inputs"]["extra"]["source"] == str(extra)
+
+
+def test_add_input_unblocks_a_step_that_was_waiting(started_run, tmp_path, tpl):
+    from edms.work import plan as plan_mod
+
+    run_dir, _ = started_run
+    waiting = [s for s in plan_mod.resolve(run_dir).steps if s.id == "optional_step"][0]
+    assert waiting.compute_skipped
+
+    extra = tmp_path / "extra.csv"
+    pd.DataFrame({"id": [1, 2]}).to_csv(extra, index=False)
+    run_mod.add_input(run_dir, name="extra", pt=extra, tpl=tpl)
+
+    now = [s for s in plan_mod.resolve(run_dir).steps if s.id == "optional_step"][0]
+    assert now.compute_skipped is None
+    assert now.error is None
+    assert now.tables
+
+
+def test_add_input_rejects_an_undeclared_name(started_run, tmp_path, tpl):
+    run_dir, _ = started_run
+    f = tmp_path / "f.csv"
+    f.write_text("a\n1\n")
+    with pytest.raises(ValueError, match="does not declare an input 'ghost'"):
+        run_mod.add_input(run_dir, name="ghost", pt=f, tpl=tpl)
+
+
+def test_add_input_rejects_a_missing_file(started_run, tmp_path, tpl):
+    run_dir, _ = started_run
+    with pytest.raises(FileNotFoundError, match="not found"):
+        run_mod.add_input(run_dir, name="extra", pt=tmp_path / "absent.csv", tpl=tpl)
+
+
+def test_add_input_will_not_silently_swap_a_frozen_table(started_run, tmp_path, tpl):
+    run_dir, _ = started_run
+    f = tmp_path / "other.csv"
+    f.write_text("id\n9\n")
+    with pytest.raises(ValueError, match="already froze an input 'samples'"):
+        run_mod.add_input(run_dir, name="samples", pt=f, tpl=tpl)
+
+
+def test_add_input_replace_swaps_it_and_records_the_event(started_run, tmp_path, tpl):
+    run_dir, _ = started_run
+    f = tmp_path / "other.csv"
+    f.write_text("id\n9\n")
+    state = run_mod.add_input(run_dir, name="samples", pt=f, replace=True, tpl=tpl)
+    assert (run_dir / state["inputs"]["samples"]["frozen"]).read_text() == "id\n9\n"
+    assert state["events"][-1]["action"] == "replace_input"
+
+
+def test_add_input_logs_an_event(started_run, tmp_path, tpl):
+    run_dir, _ = started_run
+    f = tmp_path / "extra.csv"
+    f.write_text("id\nx\n")
+    state = run_mod.add_input(run_dir, name="extra", pt=f, tpl=tpl)
+    assert state["events"][-1]["action"] == "add_input"
+    assert "extra" in state["events"][-1]["detail"]
+
+
+def test_template_for_falls_back_to_the_bundled_name(started_run):
+    run_dir, state = started_run
+    state["template"] = {"name": "pe3_transfection", "version": 1,
+                         "title": "", "source": "/gone/missing.toml"}
+    run_mod.save(state, run_dir)
+    assert run_mod._template_for(run_mod.load(run_dir)).name == "pe3_transfection"

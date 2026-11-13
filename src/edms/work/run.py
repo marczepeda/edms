@@ -14,6 +14,7 @@ Usage:
 - init(): create a run directory and its ledger
 - load(): read a run ledger
 - save(): write a run ledger
+- add_input(): freeze a further input table into a run that is already going
 
 [Status]
 - start(): mark a step in progress
@@ -225,6 +226,73 @@ def save(state: dict, run_dir: str | Path) -> Path:
         json.dump(state, fh, indent=2)
         fh.write('\n')
     return path
+
+def _template_for(state: dict):
+    '''
+    _template_for(): load the template a run was started from.
+
+    Falls back to the bundled name when the file it was read from has moved.
+
+    Parameters:
+    state (dict): ledger
+    '''
+    ref = state['template']
+    source = ref.get('source')
+    return template_mod.load(source if source and Path(source).exists() else ref['name'])
+
+def add_input(run_dir, name: str, pt: str | Path, sheet: str = None,
+              replace: bool = False, tpl=None) -> dict:
+    '''
+    add_input(): freeze a further input table into a run that is already going.
+
+    Inputs are frozen at init so that a finished run still describes what was
+    actually used, but some tables are not known on day one - an NGS sample
+    sheet, say, which depends on primers chosen after the harvest. This adds
+    one, copies it in beside the others, and records where it came from.
+
+    Parameters:
+    run_dir (str | Path): run directory
+    name (str): input name, as the template declares it
+    pt (str | Path): path to the table
+    sheet (str, optional): tab to read, for .xlsx inputs
+    replace (bool, optional): overwrite an input the run already froze
+        (Default: False)
+    tpl (Template, optional): loaded template (Default: None -> from the ledger)
+
+    Dependencies: shutil, load(), save(), _template_for()
+    '''
+    run_dir = run_path(run_dir).parent
+    state = load(run_dir)
+    if tpl is None:
+        tpl = _template_for(state)
+
+    declared = {i.name for i in tpl.inputs}
+    if name not in declared:
+        raise ValueError(
+            f"Template '{tpl.name}' does not declare an input '{name}'. "
+            f"Inputs: {', '.join(sorted(declared)) or '(none)'}")
+    if name in state['inputs'] and not replace:
+        raise ValueError(
+            f"Run already froze an input '{name}'. Pass replace=True to swap it, "
+            f'which is worth doing only when the first copy was wrong.')
+
+    src = Path(pt).expanduser().resolve()
+    if not src.exists():
+        raise FileNotFoundError(f"Input '{name}' not found at {src}")
+
+    frozen = run_dir / 'inputs' / f'{name}{src.suffix}'
+    frozen.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, frozen)
+
+    action = 'replace_input' if name in state['inputs'] else 'add_input'
+    state['inputs'][name] = {
+        'source': str(src),
+        'frozen': str(frozen.relative_to(run_dir)),
+        'sheet': sheet,
+    }
+    _event(state, None, action, f'{name} <- {src}')
+    save(state, run_dir)
+    return state
 
 # Status
 def _find(state: dict, step_id: str) -> dict:

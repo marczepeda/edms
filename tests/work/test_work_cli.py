@@ -188,3 +188,39 @@ def test_where_prints_a_real_path(capsys):
     _dispatch(parser, ["work", "where", "pe3_transfection"])
     out = capsys.readouterr().out.strip()
     assert out.endswith("pe3_transfection.toml")
+
+
+# --------------------------------------------------------------------------- #
+# Adding an input part-way through a run
+# --------------------------------------------------------------------------- #
+def test_input_command_adds_a_table_and_re_renders(template_file, samples_csv, tmp_path):
+    parser = _build_parser()
+    runs = tmp_path / "runs"
+    _dispatch(parser, ["work", "init", "-t", str(template_file),
+                       "-I", f"samples={samples_csv}", "-r", "late", "-d", str(runs)])
+    run_dir = next(runs.glob("*_late"))
+    assert "Not calculated" in (run_dir / "protocol.html").read_text()
+
+    extra = tmp_path / "extra.csv"
+    pd.DataFrame({"id": [1, 2]}).to_csv(extra, index=False)
+    _dispatch(parser, ["work", "input", str(run_dir), "-I", f"extra={extra}"])
+
+    assert "extra" in run_mod.load(run_dir)["inputs"]
+    assert "Not calculated" not in (run_dir / "protocol.html").read_text()
+
+
+def test_input_command_requires_a_pair():
+    parser = _build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["work", "input", "somewhere"])
+
+
+def test_input_command_refuses_to_swap_without_replace(template_file, samples_csv, tmp_path):
+    parser = _build_parser()
+    runs = tmp_path / "runs"
+    _dispatch(parser, ["work", "init", "-t", str(template_file),
+                       "-I", f"samples={samples_csv}", "-r", "swap", "-d", str(runs)])
+    run_dir = next(runs.glob("*_swap"))
+    with pytest.raises(SystemExit, match="already froze"):
+        _dispatch(parser, ["work", "input", str(run_dir),
+                           "-I", f"samples={samples_csv}", "-n"])

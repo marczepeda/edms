@@ -301,9 +301,7 @@ def resolve(run_dir: str | Path, tpl=None, strict: bool = False,
     state = run_mod.load(run_dir)
 
     if tpl is None:
-        ref = state['template']
-        source = ref.get('source')
-        tpl = template_mod.load(source if source and Path(source).exists() else ref['name'])
+        tpl = run_mod._template_for(state)
 
     params = dict(state['params'])
     inputs = load_inputs(state, run_dir) if compute else {}
