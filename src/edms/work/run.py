@@ -373,6 +373,10 @@ def done(run_dir, step: str, note: str = None, force: bool = False) -> dict:
     '''
     state = load(run_dir)
     entry = _find(state, step)
+    if entry['status'] == 'done':
+        raise ValueError(
+            f"Step '{step}' is already done. Use note() to add to it, or "
+            f'reopen() to redo it.')
     blockers = _blockers(state, entry)
     if blockers and not force:
         raise ValueError(

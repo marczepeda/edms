@@ -325,3 +325,22 @@ def test_template_for_falls_back_to_the_bundled_name(started_run):
                          "title": "", "source": "/gone/missing.toml"}
     run_mod.save(state, run_dir)
     assert run_mod._template_for(run_mod.load(run_dir)).name == "pe3_transfection"
+
+
+def test_done_refuses_a_step_that_is_already_done(started_run):
+    # Symmetry with start(): re-finishing is almost always a mistake, and
+    # silently appending a second copy of the note is the wrong repair.
+    run_dir, _ = started_run
+    run_mod.done(run_dir, "prep", note="first")
+    with pytest.raises(ValueError, match="already done"):
+        run_mod.done(run_dir, "prep", note="second")
+    assert len(run_mod._find(run_mod.load(run_dir), "prep")["notes"]) == 1
+
+
+def test_note_is_how_you_add_to_a_finished_step(started_run):
+    run_dir, _ = started_run
+    run_mod.done(run_dir, "prep", note="first")
+    state = run_mod.note(run_dir, "prep", text="second")
+    entry = run_mod._find(state, "prep")
+    assert entry["status"] == "done"
+    assert [n["text"] for n in entry["notes"]] == ["first", "second"]
