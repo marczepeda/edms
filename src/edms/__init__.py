@@ -9,6 +9,7 @@ src/edms                        EDMS package
 ├── resources/                  Resources
 ├── gen/                        General module
 ├── bio/                        Biology module 
+├── work/                       Experiment planning & tracking module
 ├── dat/                        Database module
 ├── scripts/                    Scripts directory
 └── resources/                  Resources directory

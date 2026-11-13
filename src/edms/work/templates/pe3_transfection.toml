@@ -1,0 +1,216 @@
+# PE3 transfection -> harvest -> NGS
+#
+# Bundled example template. Copy it, edit the prose and the defaults to match
+# how your lab actually runs this, and keep your copy under version control:
+#   cp "$(edms work where pe3_transfection)" ./my_pe3.toml
+#   edms work init -t ./my_pe3.toml -i run.toml
+
+name = "pe3_transfection"
+version = 1
+title = "PE3 transfection of HEK293T"
+description = """
+Prime editing with an epegRNA + ngRNA pair in HEK293T, from seeding through
+gDNA harvest and NGS amplicon prep. The transfection arithmetic comes from
+edms.bio.transfect:PE3 and the PCR plan from edms.bio.ngs:pcrs, so the numbers
+in this protocol are calculated from your own plasmid concentrations rather
+than copied from a previous entry.
+"""
+
+[params]
+# Culture
+plate_format    = "96-well"
+cells_per_well  = 15000
+media           = "DMEM + 10% FBS, no antibiotics"
+# Transfection (passed to edms.bio.transfect:PE3)
+PE_plasmid      = "pMUZ86.7"
+reps            = 3
+mm_x            = 1.1
+epegRNA_ng      = 66
+ngRNA_ng        = 22
+PE_ng           = 200
+well_uL         = 10
+# Harvest
+harvest_day     = 3
+# NGS (passed to edms.bio.ngs:pcrs)
+pcr1_cycles     = 30
+pcr2_cycles     = 8
+ultra           = false
+pcr2            = true
+
+[[inputs]]
+name = "plasmids"
+description = "Nanodrop concentrations for every plasmid used"
+required_columns = ["Plasmid", "Description", "Colony", "ng/uL"]
+
+[[inputs]]
+name = "epegRNAs"
+description = "epegRNAs from PrimeDesign"
+required_columns = ["pegRNA_number", "Name"]
+
+[[inputs]]
+name = "ngRNAs"
+description = "ngRNAs from PrimeDesign"
+required_columns = ["pegRNA_number", "Name"]
+
+[[inputs]]
+name = "ngs_samples"
+description = "NGS samples sheet with PCR1/PCR2 primer columns; add it once you know what you are sequencing"
+required_columns = ["ID", "PCR1 ID", "PCR1 FWD", "PCR1 REV"]
+optional = true
+
+# --------------------------------------------------------------------------- #
+
+[[steps]]
+id = "seed"
+title = "Seed HEK293T"
+day = -1
+duration = "30 min"
+text = """
+Seed {cells_per_well} HEK293T per well of a {plate_format} plate in {media}.
+Seed one well per condition per replicate ({reps} replicates), plus an
+untransfected control well.
+
+Cells should be 70-90% confluent at the time of transfection tomorrow.
+"""
+checks = [
+  "Cells were below passage 20 and free of mycoplasma",
+  "Enough wells seeded for {reps} replicates plus controls",
+]
+
+[[steps]]
+id = "transfection_plan"
+title = "Calculate the transfection plan"
+day = 0
+depends_on = ["seed"]
+duration = "5 min"
+compute = "edms.bio.transfect:PE3"
+outputs = ["tube_A", "tube_B"]
+text = """
+Tube A and Tube B volumes below are calculated from the nanodrop
+concentrations in the plasmids input, at {epegRNA_ng} ng epegRNA,
+{ngRNA_ng} ng ngRNA and {PE_ng} ng {PE_plasmid} per well, {well_uL} uL of
+transfection mix per well, {reps} replicates, with a {mm_x}x master mix excess.
+
+Re-run this step after any nanodrop re-reading:
+  edms work plan <run_dir>
+"""
+
+[steps.args]
+plasmids   = "@plasmids"
+epegRNAs   = "@epegRNAs"
+ngRNAs     = "@ngRNAs"
+PE_plasmid = "$PE_plasmid"
+reps       = "$reps"
+mm_x       = "$mm_x"
+epegRNA_ng = "$epegRNA_ng"
+ngRNA_ng   = "$ngRNA_ng"
+PE_ng      = "$PE_ng"
+well_uL    = "$well_uL"
+
+[[steps]]
+id = "transfect"
+title = "Transfect"
+day = 0
+depends_on = ["transfection_plan"]
+duration = "1 h"
+text = """
+Follow the Tube A / Tube B tables from the previous step.
+
+1. Make up each Tube A (plasmids + Optimem) and the shared Tube B
+   (Optimem + Lipofectamine 2000).
+2. Incubate Tube B 5 min at room temperature.
+3. Combine A and B 1:1, mix gently, incubate 15-20 min at room temperature.
+4. Add {well_uL} uL of the combined mix dropwise per well.
+
+Record the actual confluency with:
+  edms work note <run_dir> -s transfect -n "..."
+"""
+checks = [
+  "Confluency was 70-90% at transfection",
+  "Untransfected control well received Optimem only",
+]
+
+[[steps]]
+id = "media_change"
+title = "Media change"
+day = 1
+depends_on = ["transfect"]
+duration = "20 min"
+text = """
+Replace with fresh {media} roughly 24 h after transfection. Note any wells
+that look unhealthy before changing media, since this is usually where
+lipofection toxicity shows up.
+"""
+
+[[steps]]
+id = "harvest"
+title = "Harvest gDNA"
+day = 3
+depends_on = ["media_change"]
+duration = "2 h"
+text = """
+Harvest on day {harvest_day} post-transfection.
+
+1. Aspirate media, wash once with PBS.
+2. Lyse in place and extract gDNA by your usual method.
+3. Quantify and record concentrations; you will need them for the PCR plan.
+
+Keep the well-to-sample mapping consistent with the Tube A table, so that the
+NGS samples sheet lines up with the transfection conditions.
+"""
+checks = [
+  "gDNA concentrations recorded",
+  "Sample IDs match the transfection conditions",
+]
+
+[[steps]]
+id = "ngs_plan"
+title = "Calculate the NGS PCR plan"
+depends_on = ["harvest"]
+duration = "10 min"
+compute = "edms.bio.ngs:pcrs"
+outputs = ["pcr1", "pcr2"]
+text = """
+Plate layouts, master mixes and thermocycler programs for PCR1
+({pcr1_cycles} cycles) and PCR2 ({pcr2_cycles} cycles).
+
+This step needs the ngs_samples input. Add it to your run spec once the
+primers are chosen, then re-run:
+  edms work plan <run_dir>
+"""
+
+[steps.args]
+df          = "@ngs_samples"
+pcr1_cycles = "$pcr1_cycles"
+pcr2_cycles = "$pcr2_cycles"
+ultra       = "$ultra"
+pcr2        = "$pcr2"
+
+[[steps]]
+id = "ngs_pcr"
+title = "Run the NGS PCRs"
+depends_on = ["ngs_plan"]
+duration = "4 h"
+text = """
+Follow the plate layouts and thermocycler programs from the previous step.
+Run PCR1, check a subset on a gel, then index with PCR2.
+
+Record any cycle-number change as a deviation rather than a note, so it stays
+queryable later:
+  edms work deviate <run_dir> -s ngs_pcr -p pcr1_cycles -v 35 -w "faint PCR1 bands"
+"""
+checks = [
+  "PCR1 products visible at the expected size",
+  "No-template control is clean",
+]
+
+[[steps]]
+id = "submit"
+title = "Pool and submit"
+depends_on = ["ngs_pcr"]
+duration = "1 h"
+text = """
+Quantify, pool to equal molarity, and submit for sequencing. Record the
+submission ID as a note so the run ledger points at the data:
+  edms work note <run_dir> -s submit -n "submission ..."
+"""

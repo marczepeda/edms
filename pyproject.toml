@@ -75,6 +75,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 "edms.resources" = ["*.tff", "*.csv", "molstar/*", "icon/*"]
 "edms.scripts" = ["*.sh"]
+"edms.work" = ["templates/*.toml"]
 
 [tool.setuptools_scm]
 version_scheme = "post-release"

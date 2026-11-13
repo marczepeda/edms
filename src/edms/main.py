@@ -32,6 +32,7 @@ from . import utils
 from .bio import cli as bio_cli
 from .data import cli as data_cli
 from .gen import cli as gen_cli
+from .work import cli as work_cli
 
 # Show post-install notice only once per version
 try:
@@ -170,6 +171,9 @@ def main():
 
     # Bio module subparser
     bio_cli.add_subparser(subparsers, MyFormatter)
+
+    # Work module subparser
+    work_cli.add_subparser(subparsers, MyFormatter)
 
     # Enable autocomplete
     argcomplete.autocomplete(parser)

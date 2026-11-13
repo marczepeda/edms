@@ -38,6 +38,35 @@ edms -h # or edms <TAB>
     import edms.data.pdb as pdb
     import edms.data.uniprot as uniprot
     ```
+- work: planning experiments from protocol templates and tracking them as they run.
+    ```shell
+    import edms.work.template as wt
+    import edms.work.spec as ws
+    import edms.work.plan as wp
+    import edms.work.run as wr
+    import edms.work.render as wrd
+    ```
+
+    A template describes a protocol once; a run spec says what you are running
+    this time; the run directory remembers what actually happened.
+    ```shell
+    edms work templates                 # what is available
+    edms work show pe3_transfection     # parameters, inputs, and steps
+    edms work example                   # write a starting run spec
+    edms work init -i run.toml -d runs/ # start a run; writes protocol.html
+    edms work done <run_dir> -s seed -n "82% confluent"
+    edms work deviate <run_dir> -s transfect -p reps -v 2 -w "lost a well"
+    edms work plan <run_dir>            # re-render with the new numbers
+    edms work status <run_dir>
+    ```
+
+    Steps that declare a `compute` target call straight into the rest of edms,
+    so the transfection volumes and PCR plans in a rendered protocol are
+    calculated from your own inputs rather than copied from a previous entry.
+    Copy a bundled template to start your own:
+    ```shell
+    cp "$(edms work where pe3_transfection)" ./my_protocol.toml
+    ```
 
 ## PyPI Instructions
 ### Install
