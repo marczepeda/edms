@@ -99,3 +99,29 @@ def run_spec(template_file, samples_csv, tmp_path):
 def started_run(run_spec, tpl, tmp_path):
     """An initialised run directory; returns (run_dir, state)."""
     return run_mod.init(run_spec, tpl=tpl, dir=tmp_path / "runs")
+
+
+@pytest.fixture
+def virus_run(tmp_path):
+    """A resolved virus_production run, with its inputs, for the renderer."""
+    import pandas as pd
+
+    from edms.work import plan
+
+    plasmids = tmp_path / "plasmids.csv"
+    pd.DataFrame({
+        "Plasmid": ["pMUZ26.6", "pMUZ26.7", "pMUZ310", "pMUZ311"],
+        "Description": ["VSVG", "GagPol", "transfer A", "transfer B"],
+        "Colony": ["c1", "c1", "c2", "c1"],
+        "ng/uL": [412.0, 388.5, 265.3, 301.8],
+    }).to_csv(plasmids, index=False)
+
+    run_dir, _ = run_mod.init(spec_mod.RunSpec(
+        template="virus_production",
+        run_id="iatest",
+        inputs={"plasmids": str(plasmids)},
+        params={"plate_format": "96-well", "transfers": 2, "reps": 2},
+        source=tmp_path / "run.toml",
+    ), dir=tmp_path / "runs")
+    protocol = plan.resolve(run_dir, write=False)
+    return protocol, protocol.inputs

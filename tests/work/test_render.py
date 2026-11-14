@@ -29,7 +29,12 @@ def test_html_is_a_standalone_document(protocol):
     assert html.startswith("<!doctype html>")
     assert "<style>" in html          # CSS inlined, no external stylesheet
     assert "<link" not in html
-    assert "<script" not in html
+    # The calculators are inlined too, so the file still opens off a USB
+    # stick with no network: standalone means no external reference, not no
+    # script.
+    assert "<link" not in html
+    assert ' src="' not in html
+    assert 'href="http' not in html
 
 
 def test_html_includes_every_step(protocol):

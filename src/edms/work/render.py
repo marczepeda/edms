@@ -33,19 +33,19 @@ CSS = '''
 :root {
   --bg: #ffffff; --fg: #1a1a1a; --muted: #666; --line: #e3e3e3;
   --accent: #2b6cb0; --warn: #b7791f; --err: #c53030; --done: #2f855a;
-  --card: #fafafa;
+  --card: #fafafa; --zebra: #f4f5f7; --hi: #eef4fc;
 }
 :root:not([data-theme="light"]) {
   @media (prefers-color-scheme: dark) {
     --bg: #15171a; --fg: #e8e8e8; --muted: #9aa0a6; --line: #2d3137;
     --accent: #7eb3e8; --warn: #e0b35c; --err: #f08a8a; --done: #7fc79b;
-    --card: #1c1f23;
+    --card: #1c1f23; --zebra: #1f2328; --hi: #1e2936;
   }
 }
 :root[data-theme="dark"] {
   --bg: #15171a; --fg: #e8e8e8; --muted: #9aa0a6; --line: #2d3137;
   --accent: #7eb3e8; --warn: #e0b35c; --err: #f08a8a; --done: #7fc79b;
-  --card: #1c1f23;
+  --card: #1c1f23; --zebra: #1f2328; --hi: #1e2936;
 }
 * { box-sizing: border-box; }
 body {
@@ -78,6 +78,50 @@ table { border-collapse: collapse; width: 100%; font-size: .82rem; }
 th, td { text-align: left; padding: 5px 9px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--card); }
 tr:last-child td { border-bottom: 0; }
+/* Alternating rows: a master mix is read across, and a wrong row is the
+   easiest mistake a table like this causes. */
+tbody tr:nth-child(even) { background: var(--zebra); }
+tbody tr:hover { background: var(--hi); }
+td.edit { cursor: text; border-bottom: 1px dashed var(--accent); }
+td.edit:focus { outline: 2px solid var(--accent); background: var(--hi); }
+.pv-empty { color: var(--muted); font-style: italic; }
+
+/* Controls */
+.edms-panel { border: 1px solid var(--line); border-radius: 10px;
+  background: var(--card); padding: 14px 16px; margin: 0 0 22px; }
+.edms-panel h2 { margin: 0 0 4px; font-size: .95rem; }
+.edms-panel .hint { color: var(--muted); font-size: .78rem; margin: 0 0 10px; }
+#edms-controls { display: grid; gap: 8px 14px;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+.edms-ctl { display: flex; flex-direction: column; gap: 3px; font-size: .74rem; }
+.edms-ctl span { color: var(--muted); }
+.edms-ctl.inert span { opacity: .5; }
+.edms-ctl input, .edms-ctl select { font: inherit; font-size: .8rem;
+  padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--bg); color: var(--fg); width: 100%; }
+.edms-dirty { font-size: .78rem; color: var(--muted); margin-top: 12px; }
+.edms-dirty.on { color: var(--warn); }
+.edms-dirty button { font: inherit; font-size: .74rem; margin-left: 8px;
+  padding: 3px 9px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--bg); color: var(--fg); cursor: pointer; }
+#edms-why { font: inherit; font-size: .78rem; padding: 4px 6px; margin-top: 8px;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--bg);
+  color: var(--fg); width: 100%; }
+
+/* Plate maps */
+.pv-wrap { display: flex; flex-wrap: wrap; gap: 14px; margin: 10px 0 2px; }
+.pv { max-width: 100%; height: auto; }
+.pv-body { fill: var(--card); stroke: var(--line); }
+.pv-well, .pv-dish { fill: var(--bg); stroke: var(--line); stroke-width: 1; }
+.pv-well.pv-on, .pv-dish.pv-on { stroke: var(--fg); stroke-width: .6; }
+.pv-ax { font-size: 8px; fill: var(--muted); text-anchor: middle; }
+.pv-cap { font-size: 9px; fill: var(--muted); text-anchor: middle; }
+.pv-cap-left { text-anchor: start; }
+.pv-lab-dish { font-size: 9px; fill: var(--bg); text-anchor: middle; }
+.pv-key { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .72rem;
+  color: var(--muted); margin-bottom: 4px; }
+.pv-key i { display: inline-block; width: 9px; height: 9px; border-radius: 2px;
+  margin-right: 5px; vertical-align: middle; }
 .tname { font-size: .8rem; color: var(--accent); margin-top: 14px; font-weight: 600; }
 .more { font-size: .78rem; color: var(--muted); padding: 6px 9px; }
 @media print {
@@ -95,12 +139,15 @@ def _esc(x) -> str:
     '''
     return html_mod.escape('' if x is None else str(x))
 
-def _table_html(df: pd.DataFrame) -> str:
+def _table_html(df: pd.DataFrame, wrap: bool = True) -> str:
     '''
     _table_html(): render a DataFrame as an HTML table, truncated.
 
     Parameters:
     df (pd.DataFrame): table to render
+    wrap (bool, optional): wrap in the scrolling container; False when the
+        caller supplies its own, so the recompute engine can repaint inside it
+        (Default: True)
     '''
     shown = df.head(MAX_ROWS)
     head = ''.join(f'<th>{_esc(c)}</th>' for c in shown.columns)
@@ -111,7 +158,8 @@ def _table_html(df: pd.DataFrame) -> str:
     if len(df) > MAX_ROWS:
         more = (f'<div class="more">{len(df) - MAX_ROWS} more row(s) - '
                 f'see the .xlsx in outputs/</div>')
-    return f'<div class="scroll"><table><thead><tr>{head}</tr></thead><tbody>{rows}</tbody></table>{more}</div>'
+    inner = f'<table><thead><tr>{head}</tr></thead><tbody>{rows}</tbody></table>{more}'
+    return inner if not wrap else f'<div class="scroll">{inner}</div>'
 
 def _md_table(df: pd.DataFrame) -> list[str]:
     '''
@@ -135,15 +183,18 @@ def _md_table(df: pd.DataFrame) -> list[str]:
         out.append('| ' + ' | '.join(cell(v) for v in row) + ' |')
     return out
 
-def to_html(protocol, theme: str = None) -> str:
+def to_html(protocol, theme: str = None, interactive: bool = True) -> str:
     '''
     to_html(): render a resolved protocol as standalone HTML.
 
     Parameters:
     protocol (ResolvedProtocol): from plan.resolve()
     theme (str, optional): 'light' or 'dark' to pin the theme (Default: None -> follow the viewer)
+    interactive (bool, optional): embed the recalculation panel, the plate
+        maps and the calculators, so the page can be poked at without a
+        server. False gives the flat record it always was (Default: True)
 
-    Dependencies: datetime, html, pandas
+    Dependencies: datetime, html, pandas, interactive
     '''
     closed = sum(1 for s in protocol.steps if s.status in ('done', 'skipped'))
     total = len(protocol.steps) or 1
@@ -156,6 +207,36 @@ def to_html(protocol, theme: str = None) -> str:
         ('Generated', datetime.datetime.now().strftime('%Y-%m-%d %H:%M')),
     ]
     meta_html = ''.join(f'<div><b>{_esc(k)}</b>{_esc(v)}</div>' for k, v in meta)
+
+    panel_html = ''
+    if interactive and protocol.params:
+        panel_html = (
+            '<div class="edms-panel">'
+            '<h2>Recalculate</h2>'
+            '<p class="hint">Change a parameter, or edit a number in an input '
+            'table, and every table below that edms can compute here repaints. '
+            'Nothing is written to the run: keeping a change means recording '
+            'it with <code>edms work deviate</code>, and the button builds '
+            'that command.</p>'
+            '<div id="edms-controls"></div>'
+            '<input id="edms-why" type="text" placeholder="why, if you keep it">'
+            '<div id="edms-dirty" class="edms-dirty"></div>'
+            '<div id="edms-errors"></div>'
+            '<div id="edms-static" class="hint"></div>'
+            '</div>')
+
+    inputs_html = ''
+    if interactive and getattr(protocol, 'inputs', None):
+        blocks = []
+        for name, df in protocol.inputs.items():
+            blocks.append(f'<div class="tname">{_esc(name)}</div>'
+                          f'<div class="scroll" data-input="{_esc(name)}">'
+                          f'{_table_html(df, wrap=False)}</div>')
+        inputs_html = ('<div class="step"><div class="hd"><h2>Inputs</h2></div>'
+                       '<p class="text">Measured values this run was planned '
+                       'from. Edit a number to see what it would have done; '
+                       'the run keeps the value it was given.</p>'
+                       + ''.join(blocks) + '</div>')
 
     params_html = ''
     if protocol.params:
@@ -184,7 +265,11 @@ def to_html(protocol, theme: str = None) -> str:
             parts.append(f'<ul class="checks">{items}</ul>')
         for name, table in s.tables.items():
             parts.append(f'<div class="tname">{_esc(name)}</div>')
-            parts.append(_table_html(table))
+            parts.append(f'<div class="scroll" data-step="{_esc(s.id)}" '
+                         f'data-table="{_esc(name)}">'
+                         f'{_table_html(table, wrap=False)}</div>')
+        if s.compute and s.compute.endswith(':geometry'):
+            parts.append(f'<div data-plate="{_esc(s.id)}"></div>')
         if s.compute_skipped:
             parts.append(f'<div class="note">Not calculated: {_esc(s.compute_skipped)}</div>')
         if s.error:
@@ -198,6 +283,14 @@ def to_html(protocol, theme: str = None) -> str:
                          f'<span class="id">{_esc(n["ts"])}</span></div>')
 
         steps_html.append(f'<div class="step {s.status}">' + ''.join(parts) + '</div>')
+
+    scripts_html = ''
+    if interactive:
+        from . import interactive as interactive_mod
+        try:
+            scripts_html = interactive_mod.scripts(protocol, protocol.inputs)
+        except Exception as e:  # a protocol that cannot be made live still renders
+            scripts_html = f'<!-- interactive disabled: {_esc(e)} -->'
 
     attr = f' data-theme="{theme}"' if theme in ('light', 'dark') else ''
     desc = f'<p class="sub">{_esc(protocol.description)}</p>' if protocol.description else ''
@@ -216,9 +309,12 @@ def to_html(protocol, theme: str = None) -> str:
 {desc}
 <div class="meta">{meta_html}</div>
 <div class="bar"><i style="width:{pct}%"></i></div>
+{panel_html}
+{inputs_html}
 {params_html}
 {''.join(steps_html)}
 </div>
+{scripts_html}
 </body>
 </html>
 '''

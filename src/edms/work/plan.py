@@ -50,6 +50,8 @@ class ResolvedStep:
     notes (list): notes recorded against the step
     deviations (list): parameter changes recorded against the step
     compute (str | None): the function this step called
+    args (dict): the template's unresolved args for compute, kept so a
+        renderer can say which params a step's numbers actually depend on
     tables (dict): name -> DataFrame produced by compute
     error (str | None): why compute failed, if it did
     compute_skipped (str | None): why compute was not attempted, when an
@@ -66,6 +68,7 @@ class ResolvedStep:
     notes: list = field(default_factory=list)
     deviations: list = field(default_factory=list)
     compute: str | None = None
+    args: dict = field(default_factory=dict)
     tables: dict = field(default_factory=dict)
     error: str | None = None
     compute_skipped: str | None = None
@@ -326,6 +329,7 @@ def resolve(run_dir: str | Path, tpl=None, strict: bool = False,
             notes=list(entry.get('notes', [])),
             deviations=list(entry.get('deviations', [])),
             compute=s.compute,
+            args=dict(s.args),
         )
 
         if s.compute and compute:
