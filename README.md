@@ -93,7 +93,12 @@ edms -h # or edms <TAB>
     ```shell
     edms work deviate <run_dir> -s plate_plan -p plate_format -v "10-cm" -w "scaling up"
     ```
-    96-well, 48-well, 24-well, 12-well, 6-well, 10-cm and 15-cm are supported.
+    96-well, 48-well, 24-well, 12-well, 6-well, 6-cm, 10-cm and 15-cm are
+    supported, with areas and media volumes from Thermo Fisher's useful-
+    numbers table rather than Corning's, because that is what the bench uses.
+    Thermo's own Lipofectamine 3000 lentiviral scale-up is growth-area
+    proportional off the 6-well to within 2%, which is an outside check on
+    the approach.
 
 ## PyPI Instructions
 ### Install

@@ -6,7 +6,7 @@
 #   edms work init -t ./my_virus.toml -i run.toml
 
 name = "virus_production"
-version = 1
+version = 2
 title = "Lentivirus production in HEK293T"
 description = """
 Third-generation lentivirus packaging in HEK293T, from seeding through a
@@ -14,6 +14,12 @@ clarified, aliquoted stock ready to titer. The transfection arithmetic comes
 from edms.bio.transfect:virus by way of edms.work.plates, so the DNA amounts
 and the Lipofectamine volumes rescale with the plate format instead of staying
 pinned to the 6-well numbers.
+
+The 6-well amounts are Thermo's own Lipofectamine 3000 lentiviral protocol:
+3 ug of DNA per well at 3:1 packaging to transfer, 6 uL of P3000, 7 uL of
+Lipofectamine 3000 and 500 uL of complex. Thermo's scale-up to 60 mm, 10 cm
+and T175 is growth-area proportional off that 6-well anchor to within 2%,
+which is what edms.work.plates:virus does for any format.
 """
 
 [params]
@@ -22,6 +28,7 @@ plate_format    = "6-well"
 media           = "DMEM + 10% FBS, no antibiotics"
 transfers       = 1
 reps            = 1
+seed_per_cm2    = 125000
 # Packaging plasmids (passed to edms.work.plates:virus)
 VSVG_plasmid    = "pMUZ26.6"
 GagPol_plasmid  = "pMUZ26.7"
@@ -31,7 +38,9 @@ VSVG_ng         = 750
 GagPol_ng       = 1500
 transfer_ng     = 750
 well_uL         = 500
-# Harvest
+# Harvest. Thermo's protocol for this reagent changes media at 6 h and
+# harvests at 24 h and 52 h; 48/72 is the slower schedule this lab runs.
+complex_h       = 24
 harvest_1_h     = 48
 harvest_2_h     = 72
 filter_um       = 0.45
@@ -57,9 +66,13 @@ text = """
 Geometry for a {plate_format} vessel, and what {transfers} transfer
 plasmid(s) at {reps} replicate(s) will need.
 
-Seeding density is held constant across formats at the 96-well number this
-lab already uses, so switching format changes the cell count and the volumes
-but not the confluency you are aiming for.
+Seeding is at {seed_per_cm2} cells per cm2, which is Thermo's lentiviral
+number rather than the lighter density a plain transfection uses. Packaging
+wants the cells at 95-99% confluent on the day, not the 70-90% a PE3
+transfection is seeded for, and that is a different plate the day before.
+
+Density is held constant across formats, so switching format changes the cell
+count and the volumes but not what you are aiming for.
 
 To run this in a different vessel:
   edms work deviate <run_dir> -s plate_plan -p plate_format -v "10-cm" -w "scaling up"
@@ -69,6 +82,7 @@ To run this in a different vessel:
 plate_format = "$plate_format"
 reps         = "$reps"
 conditions   = "$transfers"
+seed_per_cm2 = "$seed_per_cm2"
 
 [[steps]]
 id = "seed"
@@ -79,6 +93,9 @@ duration = "30 min"
 text = """
 Seed HEK293T in {media} at the density in the table above, one well per
 transfer plasmid per replicate.
+
+They should be 95-99% confluent tomorrow. Virus production is the one step
+here that wants a denser plate than it feels right to seed.
 
 Use a low-passage, healthy stock. Packaging is the step where tired HEK293T
 show up as a quiet two-fold loss in titer, and nothing downstream will tell
@@ -153,12 +170,19 @@ day = 1
 depends_on = ["transfect"]
 duration = "20 min"
 text = """
-Replace with fresh {media} roughly 24 h after transfection, adding back the
+Replace with fresh {media} {complex_h} h after transfection, adding back the
 smallest volume that keeps the monolayer covered. Every mL you leave out is
 titer you do not have to concentrate back later.
 
 Change media gently: by now the monolayer is loosely attached, and cells that
 come off here end up in the harvest as debris.
+
+Thermo takes the complexes off at 6 h rather than {complex_h} h and harvests
+at 24 h and 52 h instead of {harvest_1_h} h and {harvest_2_h} h. Their
+schedule is validated for this reagent and is worth trying against yours on
+one batch; leaving the complexes on longer is the usual reason a monolayer
+looks rough by harvest. To run theirs:
+  edms work deviate <run_dir> -s media_change -p complex_h -v 6 -w "Thermo schedule"
 """
 checks = [
   "Monolayer still intact",

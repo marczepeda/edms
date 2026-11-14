@@ -46,7 +46,7 @@ def pe3_tables():
 # --------------------------------------------------------------------------- #
 def test_names_are_ordered_smallest_area_first():
     assert plates.names() == ["96-well", "48-well", "24-well", "12-well",
-                              "6-well", "10-cm", "15-cm"]
+                              "6-well", "6-cm", "10-cm", "15-cm"]
 
 
 def test_every_requested_format_is_present():
@@ -93,7 +93,9 @@ def test_seeding_density_is_constant_across_formats():
     for name in plates.names():
         s = plates.spec(name)
         exact = s["area_cm2"] * plates.SEED_PER_CM2
-        assert s["seed_HEK293T"] == pytest.approx(exact, rel=0.02)
+        # Seeding numbers are rounded to two significant figures so they are
+        # worth pipetting, which can move one by up to ~5%
+        assert s["seed_HEK293T"] == pytest.approx(exact, rel=0.05)
 
 
 def test_seeding_keeps_the_labs_own_96_well_number():
@@ -219,6 +221,88 @@ def test_virus_scales_the_lipofectamine_volumes(packaging):
         assert big == pytest.approx(small * factor, rel=0.01)
 
 
+# Thermo Fisher's Lipofectamine 3000 lentiviral protocol, Tables 1 and 2:
+# per-vessel P3000, Lipofectamine 3000 and total DNA. Their own scale-up is
+# growth-area proportional off the 6-well anchor, which is what plates.virus
+# does, so these are an outside check on the scaling rather than a
+# restatement of it.
+THERMO_LENTI = [
+    # vessel, P3000 uL, L3000 uL, total DNA ug
+    ("6-well", 6, 7, 3.0),
+    ("6-cm", 13, 15, 6.7),
+    ("10-cm", 35, 41, 17.3),
+]
+
+
+@pytest.mark.parametrize("vessel,p3000,l3000,dna_ug", THERMO_LENTI)
+def test_virus_scaling_matches_thermos_own_table(vessel, p3000, l3000, dna_ug):
+    """Growth-area scaling off the 6-well lands on Thermo's published rows."""
+    factor = plates.scale(vessel, "6-well")
+    assert 6 * factor == pytest.approx(p3000, rel=0.05)
+    assert 7 * factor == pytest.approx(l3000, rel=0.05)
+    assert 3.0 * factor == pytest.approx(dna_ug, rel=0.05)
+
+
+def test_virus_plan_scales_by_the_same_factor_thermo_uses(packaging):
+    """Whatever the plan's absolute volumes are, the ratio is the area ratio."""
+    six = plates.virus(packaging.copy(), plate_format="6-well")
+    ten = plates.virus(packaging.copy(), plate_format="10-cm")
+    factor = plates.scale("10-cm", "6-well")
+    for reagent in ("P3000 Enhancer", "L3000"):
+        small = six[six["Description"] == reagent]["uL"].iloc[0]
+        big = ten[ten["Description"] == reagent]["uL"].iloc[0]
+        assert big / small == pytest.approx(factor, rel=0.01)
+    # and Thermo scales 35/6 and 41/7 the same way
+    assert 35 / 6 == pytest.approx(factor, rel=0.05)
+    assert 41 / 7 == pytest.approx(factor, rel=0.05)
+
+
+def test_virus_total_dna_matches_thermos_three_micrograms():
+    """750 + 1500 + 750 ng is Thermo's 3 ug at 3:1 packaging to transfer."""
+    from edms.bio import transfect
+    import inspect
+
+    defaults = inspect.signature(transfect.virus).parameters
+    vsvg = defaults["VSVG_ng"].default
+    gagpol = defaults["GagPol_ng"].default
+    transfer = defaults["transfer_ng"].default
+    assert vsvg + gagpol + transfer == 3000
+    assert (vsvg + gagpol) / transfer == 3.0
+    assert defaults["P3000_uL_per_well"].default == 6
+    assert defaults["L3000_uL_per_well"].default == 7
+    assert defaults["well_uL"].default == 500
+
+
+def test_virus_seeding_density_is_thermos_lentiviral_number():
+    """1.2e6 per 6-well is what the protocol specifies, not the PE3 density."""
+    plan = plates.geometry("6-well", seed_per_cm2=plates.VIRUS_SEED_PER_CM2)
+    assert plan["Seed HEK293T per well"].iloc[0] == 1200000
+    assert plates.VIRUS_SEED_PER_CM2 > plates.SEED_PER_CM2
+
+
+def test_geometry_defaults_to_the_transfection_density():
+    assert (plates.geometry("6-well")["Seed HEK293T per well"].iloc[0]
+            != plates.geometry("6-well",
+                               seed_per_cm2=plates.VIRUS_SEED_PER_CM2
+                               )["Seed HEK293T per well"].iloc[0])
+
+
+def test_vessel_areas_are_thermos_not_cornings():
+    """The bench uses Thermo plates; MUZ361 names them. The two differ."""
+    assert plates.spec("48-well")["area_cm2"] == 1.1     # Corning: 0.95
+    assert plates.spec("12-well")["area_cm2"] == 3.5     # Corning: 3.8
+    assert plates.spec("15-cm")["area_cm2"] == 145.0     # Corning: 152
+
+
+@pytest.mark.parametrize("spelling,expected", [
+    ("60mm", "6-cm"), ("100 mm", "10-cm"), ("150mm", "15-cm"),
+    ("6", "6-well"), ("6cm", "6-cm"),
+])
+def test_canonical_resolves_thermos_millimetre_spellings(spelling, expected):
+    """'6' is a 6-well plate to anyone who types it, not a 60 mm dish."""
+    assert plates.canonical(spelling) == expected
+
+
 def test_virus_does_not_mutate_the_input_frame(packaging):
     before = packaging.copy()
     plates.virus(packaging, plate_format="24-well")
@@ -269,7 +353,7 @@ def test_expansion_flags_a_wide_split():
 def test_expansion_covers_every_rung_between_the_ends():
     ladder = plates.expansion("96-well", "15-cm", skip=())
     assert list(ladder["From"]) == ["96-well", "48-well", "24-well",
-                                    "12-well", "6-well", "10-cm"]
+                                    "12-well", "6-well", "6-cm", "10-cm"]
     assert ladder["To"].iloc[-1] == "15-cm"
 
 

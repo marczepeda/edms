@@ -22,6 +22,7 @@ Usage:
 - transduction(): the pair of mixes a transduction needs
 
 [Seeding from confluency]
+- confluent_cells(): cells a vessel holds at a given confluency
 - per_mL(): estimate a harvest's concentration from how confluent it looked
 - seed_plan(): spin volume per sample for one arm of an experiment
 - competitive_growth(): both arms of a transduction + competitive growth setup
@@ -35,15 +36,35 @@ import pandas as pd
 
 from ..gen import io
 
-# Assumed concentration (cells/mL) of a harvest taken from a vessel that was
-# 100% confluent, trypsinised and resuspended the usual way. This is an
-# estimate, not geometry: it depends on how much media the harvest goes into,
-# and it is the number to revise when the seeding comes out wrong. The values
-# below are the ones MUZ361 used on 10/30/26; the same entry had used 1.5e6
-# for a 15 cm dish a week earlier, so treat it as a lab calibration.
-CONFLUENT_PER_ML = {
+# Cells in a 100% confluent vessel, from Thermo Fisher's 'Useful Numbers for
+# Cell Culture' table. Measured with HeLa, so a bigger or smaller line will
+# sit above or below these; they are a starting point, not a property of the
+# plastic.
+CONFLUENT_CELLS = {
+    '96-well': 0.04e6,
+    '48-well': 0.12e6,
+    '24-well': 0.24e6,
+    '12-well': 0.5e6,
     '6-well': 1.2e6,
-    '15-cm': 2.0e6,
+    '6-cm': 3.2e6,
+    '10-cm': 8.8e6,
+    '15-cm': 20.0e6,
+}
+
+# Assumed concentration (cells/mL) of a harvest from a vessel that was 100%
+# confluent, trypsinised and resuspended the usual way. This conflates two
+# things -- how many cells the vessel held, and how much media they went into
+# -- which is why the same entry can give two different values for one vessel:
+# MUZ361 used 1.5e6 for a 15 cm dish in one week and 2.0e6 the next.
+#
+# Both of those are the same cell count at a different resuspension volume.
+# The values below are 10/30/26's, and they are exactly the Thermo confluent
+# counts above at a 1 mL resuspension for a 6-well and a 10 mL resuspension
+# for a 15 cm dish. Pass harvest_mL to per_mL() and it works the concentration
+# out that way instead, for any vessel.
+CONFLUENT_PER_ML = {
+    '6-well': CONFLUENT_CELLS['6-well'] / 1.0,
+    '15-cm': CONFLUENT_CELLS['15-cm'] / 10.0,
 }
 
 def drug_mm(stock: float, desired: float, wells: int, drug_media_mL: float=1.0,
@@ -182,7 +203,51 @@ def transduction(wells: int, flow_per_mL: float, cells_per_well: float,
     return tables
 
 # Seeding from confluency
-def per_mL(vessel: str, confluency: float, confluent_per_mL: dict=None) -> float:
+def confluent_cells(vessel: str, confluency: float=100, recovery: float=1.0,
+                    confluent_cells_: dict=None) -> float:
+    '''
+    confluent_cells(): cells a vessel holds at a given confluency.
+
+    Unlike per_mL() this does not depend on what the harvest is resuspended
+    in, so it is the right thing to ask when the question is how many cells
+    you have rather than how concentrated they are.
+
+    The counts are Thermo's HeLa figures. A line that is not HeLa will not
+    match: MUZ361 froze 12 vials of a million cells from a 15 cm dish at 80%,
+    where these numbers predict 16, so LNCaP comes in around three quarters of
+    a HeLa dish once trypsinisation and spin losses are taken off. That is
+    what `recovery` is for.
+
+    Parameters:
+    vessel (str): culture vessel, e.g. '6-well', '15cm', '150mm'
+    confluency (float, optional): percent confluent, 0-100 (Default: 100)
+    recovery (float, optional): fraction of the predicted cells actually
+        recovered, above 0 and at most 1 (Default: 1.0)
+    confluent_cells_ (dict, optional): confluent counts per vessel, overriding
+        CONFLUENT_CELLS for the vessels it names
+
+    Dependencies: edms.work.plates,CONFLUENT_CELLS
+    '''
+    from ..work import plates  # local: edms.work.plates imports edms.bio
+
+    if not 0 < confluency <= 100:
+        raise ValueError(f'confluency must be a percent above 0 and at most '
+                         f'100, got {confluency}')
+    if not 0 < recovery <= 1:
+        raise ValueError(f'recovery is a fraction above 0 and at most 1, got '
+                         f'{recovery}')
+    name = plates.canonical(vessel)
+    table = dict(CONFLUENT_CELLS)
+    for key, value in (confluent_cells_ or {}).items():
+        table[plates.canonical(key)] = value
+    if name not in table:
+        known = ', '.join(sorted(table)) or '(none)'
+        raise KeyError(f"No confluent cell count for '{name}'. Known vessels: "
+                       f'{known}. Pass confluent_cells_ to add it.')
+    return table[name] * confluency / 100 * recovery
+
+def per_mL(vessel: str, confluency: float, harvest_mL: float=None,
+           confluent_per_mL: dict=None) -> float:
     '''
     per_mL(): estimate a harvest's concentration from how confluent it looked.
 
@@ -195,16 +260,24 @@ def per_mL(vessel: str, confluency: float, confluent_per_mL: dict=None) -> float
     Parameters:
     vessel (str): culture vessel the harvest came from, e.g. '6-well', '15cm'
     confluency (float): percent confluent, 0-100
+    harvest_mL (float, optional): volume the harvest is resuspended in. Given
+        this, the concentration is worked out from the vessel's confluent cell
+        count, which covers every vessel rather than only the calibrated ones
+        (Default: None)
     confluent_per_mL (dict, optional): cells/mL at 100% confluency per vessel,
         overriding CONFLUENT_PER_ML for the vessels it names
 
-    Dependencies: edms.work.plates,CONFLUENT_PER_ML
+    Dependencies: edms.work.plates,confluent_cells(),CONFLUENT_PER_ML
     '''
     from ..work import plates  # local: edms.work.plates imports edms.bio
 
     if not 0 < confluency <= 100:
         raise ValueError(f'confluency must be a percent above 0 and at most '
                          f'100, got {confluency}')
+    if harvest_mL is not None:
+        if harvest_mL <= 0:
+            raise ValueError(f'harvest_mL must be greater than 0, got {harvest_mL}')
+        return confluent_cells(vessel=vessel, confluency=confluency) / harvest_mL
     name = plates.canonical(vessel)
     table = dict(CONFLUENT_PER_ML)
     for key, value in (confluent_per_mL or {}).items():
@@ -212,8 +285,10 @@ def per_mL(vessel: str, confluency: float, confluent_per_mL: dict=None) -> float
     if name not in table:
         known = ', '.join(sorted(table)) or '(none)'
         raise KeyError(f"No confluent density for '{name}'. Known vessels: "
-                       f'{known}. Pass confluent_per_mL to add it, or give the '
-                       f'measured concentration per sample instead.')
+                       f'{known}. Pass harvest_mL and it is worked out from '
+                       f'the confluent cell count instead, or pass '
+                       f'confluent_per_mL, or give the measured concentration '
+                       f'per sample.')
     return table[name] * confluency / 100
 
 def seed_plan(df: pd.DataFrame, cells_per_well: float, wells: int,
@@ -461,9 +536,10 @@ def sort_plan(target_clones: int, plating_efficiency: float=0.1,
     return df_sort
 
 def freeze_down(harvest_mL: float, cells_per_mL: float=None, vessel: str=None,
-                confluency: float=None, cells_per_vial: float=1e6,
-                vial_mL: float=1.0, dmso_pct: float=10,
-                confluent_per_mL: dict=None, file: str=None) -> pd.DataFrame:
+                confluency: float=None, recovery: float=1.0,
+                cells_per_vial: float=1e6, vial_mL: float=1.0,
+                dmso_pct: float=10, confluent_cells_: dict=None,
+                file: str=None) -> pd.DataFrame:
     '''
     freeze_down(): vials and freezing medium from a harvest.
 
@@ -471,9 +547,14 @@ def freeze_down(harvest_mL: float, cells_per_mL: float=None, vessel: str=None,
     one. Vials round down, because a part-filled vial is not a vial you would
     thaw.
 
-    As a sanity check rather than a rule: MUZ361 froze 12 vials from a 15 cm
-    dish at 75-80% confluent, twice. A plan that comes out at two vials or at
-    fifty from a similar dish is a sign the concentration is wrong.
+    How many cells a dish holds does not depend on what you resuspend them in,
+    so the estimate goes through confluent_cells() and harvest_mL only sets the
+    concentration you end up working at.
+
+    MUZ361 froze 12 vials from a 15 cm dish at 75-80% confluent, twice, where
+    Thermo's HeLa counts predict 16. That is what recovery is for: 0.75 gets
+    those entries back, and is a reasonable starting point for LNCaP once
+    trypsinisation and spin losses are taken off.
 
     Parameters:
     harvest_mL (float): volume the pellet is resuspended in before counting, mL
@@ -481,13 +562,15 @@ def freeze_down(harvest_mL: float, cells_per_mL: float=None, vessel: str=None,
     vessel (str, optional): vessel the harvest came from, for the estimate
         (Default: None)
     confluency (float, optional): percent confluent, for the estimate (Default: None)
+    recovery (float, optional): fraction of the predicted cells actually
+        recovered (Default: 1.0)
     cells_per_vial (float, optional): cells to put in each vial (Default: 1e6)
     vial_mL (float, optional): freezing medium per vial, mL (Default: 1.0)
     dmso_pct (float, optional): DMSO in the freezing medium, percent (Default: 10)
-    confluent_per_mL (dict, optional): cells/mL at 100% confluency per vessel
+    confluent_cells_ (dict, optional): confluent counts per vessel
     file (str, optional): output file path
 
-    Dependencies: math,pandas,io,per_mL()
+    Dependencies: pandas,io,confluent_cells()
     '''
     if harvest_mL <= 0:
         raise ValueError(f'harvest_mL must be greater than 0, got {harvest_mL}')
@@ -500,16 +583,20 @@ def freeze_down(harvest_mL: float, cells_per_mL: float=None, vessel: str=None,
         if cells_per_mL <= 0:
             raise ValueError(f'cells_per_mL must be greater than 0, got {cells_per_mL}')
         conc, source = float(cells_per_mL), 'measured'
+        total = conc * harvest_mL
     elif vessel is not None and confluency is not None:
-        conc = per_mL(vessel=vessel, confluency=confluency,
-                      confluent_per_mL=confluent_per_mL)
         from ..work import plates  # local: edms.work.plates imports edms.bio
+        total = confluent_cells(vessel=vessel, confluency=confluency,
+                                recovery=recovery,
+                                confluent_cells_=confluent_cells_)
+        conc = total / harvest_mL
         source = f'{confluency:g}% of a {plates.canonical(vessel)}'
+        if recovery != 1.0:
+            source += f' at {recovery:g} recovery'
     else:
         raise ValueError('freeze_down() needs either cells_per_mL, or both '
                          'vessel and confluency to estimate one')
 
-    total = conc * harvest_mL
     vials = int(total // cells_per_vial)
     if vials < 1:
         raise ValueError(

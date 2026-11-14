@@ -6,7 +6,7 @@
 #   edms work init -t ./my_pe3.toml -i run.toml
 
 name = "pe3_transfection"
-version = 1
+version = 2
 title = "PE3 transfection of HEK293T"
 description = """
 Prime editing with an epegRNA + ngRNA pair in HEK293T, from seeding through

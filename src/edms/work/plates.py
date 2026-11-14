@@ -37,41 +37,58 @@ import pandas as pd
 
 from ..bio import transfect
 
-# Growth area (cm^2) and working media volume (mL) per well or dish.
-# Areas are the usual Corning/Falcon figures; media volumes are working
-# volumes for routine culture, not maximum fill.
+# Growth area (cm^2) and working media volume (mL) per well or dish, from
+# Thermo Fisher's 'Useful Numbers for Cell Culture' table. Thermo rather than
+# Corning because that is what the bench uses: MUZ361 names its plates as
+# '(24-well, Thermo)' and '(48-well, Thermo)'. The two differ enough to
+# matter -- a Corning 48-well is 0.95 cm^2 against Thermo's 1.1, and a Corning
+# 150 mm dish is 152 cm^2 against Thermo's 145.
+# Media volumes are the middle of Thermo's stated range, which is a working
+# volume for routine culture rather than maximum fill.
 _VESSELS = {
     '96-well': {'area_cm2': 0.32, 'media_mL': 0.2, 'wells': 96},
-    '48-well': {'area_cm2': 0.95, 'media_mL': 0.5, 'wells': 48},
+    '48-well': {'area_cm2': 1.1, 'media_mL': 0.3, 'wells': 48},
     '24-well': {'area_cm2': 1.9, 'media_mL': 0.5, 'wells': 24},
-    '12-well': {'area_cm2': 3.8, 'media_mL': 1.0, 'wells': 12},
+    '12-well': {'area_cm2': 3.5, 'media_mL': 1.0, 'wells': 12},
     '6-well': {'area_cm2': 9.6, 'media_mL': 2.0, 'wells': 6},
-    '10-cm': {'area_cm2': 56.7, 'media_mL': 10.0, 'wells': 1},
-    '15-cm': {'area_cm2': 152.0, 'media_mL': 25.0, 'wells': 1},
+    '6-cm': {'area_cm2': 21.5, 'media_mL': 5.0, 'wells': 1},
+    '10-cm': {'area_cm2': 56.7, 'media_mL': 12.0, 'wells': 1},
+    '15-cm': {'area_cm2': 145.0, 'media_mL': 30.0, 'wells': 1},
 }
 
 # Spellings people actually type, mapped onto the canonical names above.
+# Thermo's own catalogue calls the dishes 60 mm, 100 mm and 150 mm, so those
+# spellings resolve too. The bare stem is registered first-wins, because
+# '6' means a 6-well plate to everyone who types it, not a 6 cm dish.
 _ALIASES = {}
 for _name in _VESSELS:
     _stem = _name.split('-')[0]
     _ALIASES[_name] = _name
-    _ALIASES[_stem] = _name
+    _ALIASES.setdefault(_stem, _name)
     if _name.endswith('-well'):
         _ALIASES[f'{_stem} well'] = _name
         _ALIASES[f'{_stem}well'] = _name
         _ALIASES[f'{_stem}-wells'] = _name
     else:
-        _ALIASES[f'{_stem}cm'] = _name
-        _ALIASES[f'{_stem} cm'] = _name
-        _ALIASES[f'{_stem}cm dish'] = _name
-        _ALIASES[f'{_stem} cm dish'] = _name
-        _ALIASES[f'{_stem}-cm dish'] = _name
+        _mm = f'{int(_stem) * 10}'
+        for _spelling in (f'{_stem}cm', f'{_stem} cm', f'{_stem}cm dish',
+                          f'{_stem} cm dish', f'{_stem}-cm dish',
+                          f'{_mm}mm', f'{_mm} mm', f'{_mm}-mm',
+                          f'{_mm}mm dish', f'{_mm} mm dish'):
+            _ALIASES[_spelling] = _name
 del _name, _stem
 
 # HEK293T seeded one day before transfection, derived from the 96-well number
 # this lab already uses (15,000 per well into 0.32 cm^2) so that every other
 # format is the same density rather than an independent guess.
 SEED_PER_CM2 = 15000 / 0.32
+
+# Virus production seeds far denser than a transfection does, because the
+# cells have to be 95-99% confluent at transfection rather than 70-90%.
+# Thermo's Lipofectamine 3000 lentiviral protocol seeds 1.2e6 per 6-well
+# (9.6 cm^2), 7.0e6 per 10 cm dish and 22.1e6 per T175, which is the same
+# 125,000 per cm^2 at every scale.
+VIRUS_SEED_PER_CM2 = 125000
 
 # Format each calculator in edms.bio.transfect was written for
 PE3_ANCHOR = '96-well'
@@ -171,7 +188,7 @@ def table(file: str=None) -> pd.DataFrame:
 
 # Planning
 def geometry(plate_format: str, reps: int=1, conditions: int=None,
-             file: str=None) -> pd.DataFrame:
+             seed_per_cm2: float=None, file: str=None) -> pd.DataFrame:
     '''
     geometry(): one-row plan of the chosen format, for a protocol step.
 
@@ -179,15 +196,21 @@ def geometry(plate_format: str, reps: int=1, conditions: int=None,
     plate_format (str): plate format name or alias
     reps (int, optional): replicates per condition (Default: 1)
     conditions (int, optional): conditions, to total up wells and media
+    seed_per_cm2 (float, optional): seeding density; SEED_PER_CM2 is the
+        transfection density and VIRUS_SEED_PER_CM2 the denser one virus
+        production needs (Default: None, meaning SEED_PER_CM2)
     file (str, optional): output file path
 
-    Dependencies: pandas,spec()
+    Dependencies: pandas,spec(),_round_cells(),SEED_PER_CM2
     '''
     s = spec(plate_format)
+    density = SEED_PER_CM2 if seed_per_cm2 is None else float(seed_per_cm2)
+    seed = _round_cells(s['area_cm2'] * density)
     row = {'Format': s['plate_format'],
            'Growth area (cm2)': s['area_cm2'],
            'Media per well (mL)': s['media_mL'],
-           'Seed HEK293T per well': s['seed_HEK293T'],
+           'Seed HEK293T per well': seed,
+           'Seeding density (per cm2)': int(round(density)),
            'Replicates': reps}
     if conditions is not None:
         wells = int(conditions) * int(reps)
@@ -195,7 +218,7 @@ def geometry(plate_format: str, reps: int=1, conditions: int=None,
         row['Wells needed'] = wells
         row['Plates needed'] = round(wells / s['wells'], 2)
         row['Media needed (mL)'] = round(wells * s['media_mL'], 1)
-        row['Cells needed'] = wells * s['seed_HEK293T']
+        row['Cells needed'] = wells * seed
     df = pd.DataFrame([row])
     if file is not None:
         from ..gen import io

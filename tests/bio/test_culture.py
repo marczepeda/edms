@@ -435,11 +435,22 @@ def test_sort_plan_rejects_no_clones():
 
 
 def test_freeze_down_matches_the_muz361_boxes():
-    """Box 7-4: 12 vials from a 15 cm dish at ~80%."""
-    plan = culture.freeze_down(harvest_mL=7.5, vessel="15cm", confluency=80)
+    """Box 7-4: 12 vials from a 15 cm dish at ~80%.
+
+    Thermo's HeLa count for a 150 mm dish predicts 16 vials, so the entry
+    implies about three quarters recovery for LNCaP.
+    """
+    plan = culture.freeze_down(harvest_mL=7.5, vessel="15cm", confluency=80,
+                               recovery=0.75)
     assert _value(plan, "Vials") == 12
     assert _value(plan, "Cells, total") == 12000000.0
-    assert _value(plan, "Cells, source") == "80% of a 15-cm"
+    assert "80% of a 15-cm" in _value(plan, "Cells, source")
+
+
+def test_freeze_down_at_full_recovery_matches_the_thermo_count():
+    plan = culture.freeze_down(harvest_mL=10, vessel="150mm", confluency=100)
+    assert _value(plan, "Cells, total") == 20000000.0
+    assert _value(plan, "Vials") == 20
 
 
 def test_freeze_down_takes_a_measured_count_over_an_estimate():
