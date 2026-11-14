@@ -1,0 +1,275 @@
+# Competitive growth against a reference line, set up alongside a transduction
+#
+# Modelled on MUZ361, where fifteen clones came off the incubator at once and
+# each one was split two ways from a single harvest: a transduction plate and
+# a competitive growth plate seeded 50:50 against a common competitor. The
+# clones were at different confluencies in different vessels, so the volume to
+# spin down is per clone and the cells each plate needs is not.
+#
+# Bundled example template. Copy it and edit the defaults to match your lines:
+#   cp "$(edms work where competitive_growth)" ./my_cg.toml
+#   edms work init -t ./my_cg.toml -i run.toml
+
+name = "competitive_growth"
+version = 1
+title = "Competitive growth with a parallel transduction"
+description = """
+A panel of lines seeded 50:50 against a reference competitor, read out by flow
+at day 0 and at every passage, with the transduction arm of the same
+experiment seeded off the same harvest.
+
+The seeding comes from edms.bio.culture:competitive_growth, which estimates
+each sample's concentration from how confluent it looked rather than counting
+fifteen flasks, and gives one total volume to spin per sample covering both
+arms. A sample that was counted carries its measured cells/mL in the samples
+table and that number is used instead of the estimate.
+
+The transduction arm continues in the transduction template; this run is the
+ledger for the growth arm.
+"""
+
+[params]
+# Lines and vessels
+competitor             = "LCG"
+competitor_vessel      = "15-cm"
+competitor_confluency   = 100
+competitor_mm_x        = 1.2
+extra_samples          = 1
+# Seeding (passed to edms.bio.culture:competitive_growth)
+cg_cells_per_well      = 120000
+cg_wells               = 3
+transduce_cells_per_well = 180000
+transduce_wells        = 3
+cell_media_mL          = 0.25
+mm_x                   = 1.2
+plate_format           = "48-well"
+# Schedule
+passage_interval       = 2
+passages               = 4
+# Flow harvest
+tryple_mL              = 0.2
+facs_mL                = 0.2
+flow_uL                = 50
+gdna_uL                = 200
+gdna_reagent           = "Lucigen QuickExtract"
+gdna_extract_uL        = 50
+
+[[inputs]]
+name = "samples"
+description = "One row per line, with how confluent it looked and what it was growing in"
+required_columns = ["Sample", "Confluency %", "Vessel"]
+
+# --------------------------------------------------------------------------- #
+
+[[steps]]
+id = "confluency"
+title = "Read confluencies"
+day = 0
+duration = "30 min"
+text = """
+Before touching anything, go down the plates and write a confluency against
+every line in the samples table. Photograph them too; a number you wrote at
+the scope is worth more later than a number you reconstruct.
+
+Confluency is doing the job a cell count usually does here, so this is the
+step the whole seeding rests on. Anything below 40% or above 100% is outside
+where the linear estimate holds: count that one and put the measured cells/mL
+in the samples table instead.
+"""
+checks = [
+  "Every line in the samples table has a confluency",
+  "Anything outside 40-100% was counted rather than estimated",
+]
+
+[[steps]]
+id = "seed_plan"
+title = "Calculate the seeding"
+day = 0
+depends_on = ["confluency"]
+duration = "5 min"
+compute = "edms.bio.culture:competitive_growth"
+outputs = ["Seed plan", "Competitor"]
+text = """
+Spin volume per sample for each arm, and the total to take from each.
+
+Every sample needs the same number of cells, so what varies down the table is
+only how much of its harvest to spin: a line at 45% gives up roughly twice the
+volume of the same line at 90%. 'Sum spin, mL' is what to take from each
+sample when both plates are set up off one harvest; take that, spin once, and
+split the pellet by the two arms' resuspension volumes.
+
+The competitor is made up for every sample plus {extra_samples} more, because
+running short of it costs the comparison rather than one well.
+
+Re-run after correcting a confluency:
+  edms work plan <run_dir>
+"""
+
+[steps.args]
+df                       = "@samples"
+cg_cells_per_well        = "$cg_cells_per_well"
+cg_wells                 = "$cg_wells"
+transduce_cells_per_well = "$transduce_cells_per_well"
+transduce_wells          = "$transduce_wells"
+cell_media_mL            = "$cell_media_mL"
+mm_x                     = "$mm_x"
+competitor               = "$competitor"
+competitor_vessel        = "$competitor_vessel"
+competitor_confluency    = "$competitor_confluency"
+competitor_mm_x          = "$competitor_mm_x"
+extra_samples            = "$extra_samples"
+
+[[steps]]
+id = "harvest"
+title = "Harvest the panel"
+day = 0
+depends_on = ["seed_plan"]
+duration = "2 h"
+text = """
+Trypsinise each line and take its 'Sum spin, mL' from the table above.
+
+1. Aspirate, wash with PBS, dislodge with trypsin, resuspend in media.
+2. Transfer the sum volume to a conical and spin.
+3. Resuspend the pellet so that each arm gets its own resuspension volume.
+
+Work down the table in order and keep the tubes in that order. Fifteen
+near-identical conicals is where this protocol goes wrong, not in the
+arithmetic.
+"""
+checks = [
+  "Tubes in table order and labelled",
+  "Each line's sum volume taken before any plating",
+]
+
+[[steps]]
+id = "seed"
+title = "Seed both arms"
+day = 0
+depends_on = ["harvest"]
+duration = "2 h"
+text = """
+Seed the competitive growth plate 50:50 and the transduction plate from the
+same tubes, into {plate_format} at {cell_media_mL} mL per well.
+
+1. Competitive growth: {cg_cells_per_well:,.0f} cells of the sample and the
+   same of {competitor} per well, {cg_wells} wells each.
+2. Transduction: {transduce_cells_per_well:,.0f} cells per well,
+   {transduce_wells} wells each, onto virus media already on the plate.
+3. Keep whatever is left of the 50:50 mix for the day 0 flow.
+
+The transduction arm is a run of its own from here:
+  edms work init -t transduction -i transduction_run.toml
+"""
+checks = [
+  "Competitor mixed 50:50, not layered",
+  "Excess 50:50 mix kept for day 0 flow",
+  "Transduction arm started as its own run",
+]
+
+[[steps]]
+id = "d0_flow"
+title = "Day 0 flow"
+day = 0
+depends_on = ["seed"]
+duration = "1 h"
+text = """
+Run the leftover 50:50 mix on the cytometer.
+
+This is the measurement the whole experiment is relative to. A mix that went
+in at 55:45 is fine; a mix you did not measure is not, because every later
+timepoint is then a ratio to a number you assumed.
+
+Record the measured starting fraction:
+  edms work note <run_dir> -s d0_flow -n "day 0 ... % sample"
+"""
+checks = [
+  "Starting fraction measured, not assumed",
+  "Same cytometer settings saved for the later timepoints",
+]
+
+[[steps]]
+id = "passage"
+title = "Passage"
+day = 2
+depends_on = ["d0_flow"]
+duration = "2 h"
+text = """
+Passage every {passage_interval} days, {passages} times. Use a multichannel.
+
+1. Aspirate, dislodge with trypsin, resuspend, transfer to tubes.
+2. Spin, wash with PBS, spin.
+3. Resuspend and split into the next plate, keeping enough for flow.
+
+Split every line by the same ratio even when the confluencies have drifted
+apart. Normalising them re-seeds the comparison you are trying to measure.
+
+Record each passage:
+  edms work note <run_dir> -s passage -n "passage N, 1:4, confluencies ..."
+"""
+checks = [
+  "Same split ratio across every line",
+  "Passage number and date recorded",
+]
+
+[[steps]]
+id = "flow"
+title = "Flow at each passage"
+day = 2
+depends_on = ["passage"]
+duration = "3 h"
+text = """
+Read the fractions at every passage, off the cells you just dislodged.
+
+1. {tryple_mL} mL TrypLE plus {facs_mL} mL FACS buffer with viability dye.
+2. Through a strainer, then {flow_uL} uL on the cytometer.
+3. Keep {gdna_uL} uL back in a 96-well plate for gDNA.
+
+Use the day 0 settings. A gate redrawn between timepoints turns a growth
+difference into a gating difference, and there is no way to tell them apart
+afterwards.
+"""
+checks = [
+  "Day 0 cytometer settings reused",
+  "Strained before running",
+  "gDNA aliquot kept from every timepoint",
+]
+
+[[steps]]
+id = "extract"
+title = "Extract gDNA"
+depends_on = ["flow"]
+duration = "1 h"
+text = """
+Extract from the kept aliquots.
+
+1. Spin the plate, aspirate the TrypLE and FACS buffer off the pellet.
+2. Resuspend in {gdna_extract_uL} uL of {gdna_reagent}.
+3. Run the extraction program on the thermocycler.
+
+Quantify rather than assuming the yield; the NGS prep sizes its PCR1
+reactions from the concentration.
+"""
+checks = [
+  "Buffer fully aspirated before extraction",
+  "gDNA quantified, not assumed",
+]
+
+[[steps]]
+id = "handoff"
+title = "Hand off"
+depends_on = ["extract"]
+duration = "10 min"
+text = """
+Two things leave this run: the flow fractions, which are the result, and the
+gDNA, which goes to amplicon prep as its own run:
+
+  edms work init -t ngs_prep -i ngs_run.toml
+
+Record both the transduction run and the NGS run here, so the arms of the
+experiment can be found from any one of them:
+  edms work note <run_dir> -s handoff -n "transduction <run_id>, NGS <run_id>"
+"""
+checks = [
+  "Flow fractions exported with the day 0 reference",
+  "Sibling runs noted here",
+]

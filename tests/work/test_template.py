@@ -73,6 +73,14 @@ def test_bundled_transduction_template_loads():
     assert tpl.step("treatment").compute == "edms.bio.culture:drug_mm"
 
 
+def test_bundled_competitive_growth_template_loads():
+    assert "competitive_growth" in template_mod.list_templates()
+    tpl = template_mod.load("competitive_growth")
+    assert tpl.step("seed_plan").compute == "edms.bio.culture:competitive_growth"
+    # Confluency has to be read before anything is calculated from it
+    assert [s.id for s in tpl.steps][:2] == ["confluency", "seed_plan"]
+
+
 @pytest.mark.parametrize("name", template_mod.list_templates())
 def test_every_bundled_template_validates(name):
     """Each shipped template must load and pass every validation rule."""

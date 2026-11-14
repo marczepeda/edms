@@ -70,11 +70,14 @@ edms -h # or edms <TAB>
     Steps that declare a `compute` target call straight into the rest of edms,
     so the transfection volumes and PCR plans in a rendered protocol are
     calculated from your own inputs rather than copied from a previous entry.
-    Four templates ship to start from: `pe3_transfection`, `virus_production`,
-    `transduction` and `ngs_prep`. The last three chain, so a screen runs as
-    three ledgers that hand off to each other: produce virus, transduce and
-    select to a gDNA harvest, then prep the amplicon libraries. Copy one to
-    make your own:
+    Five templates ship to start from: `pe3_transfection`, `virus_production`,
+    `transduction`, `competitive_growth` and `ngs_prep`. `virus_production`,
+    `transduction` and `ngs_prep` chain, so a screen runs as three ledgers
+    that hand off to each other: produce virus, transduce and select to a gDNA
+    harvest, then prep the amplicon libraries. `competitive_growth` is the arm
+    set up alongside a transduction off the same harvest, seeding each line
+    from how confluent it looked rather than from fifteen cell counts. Copy
+    one to make your own:
     ```shell
     cp "$(edms work where virus_production)" ./my_protocol.toml
     ```
