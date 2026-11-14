@@ -22,6 +22,8 @@ Usage:
 ''' 
 # Import Packages
 import math
+import contextlib
+import io as io_std
 from typing import Literal
 import numpy as np
 import pandas as pd
@@ -777,6 +779,58 @@ def umis(genotypes: int, samples: int=1, cell_coverage: int=1000, ug_gDNA_per_ce
     print(f"Per: {ug} ug gDNA; {molecules/10**6:.2f} M molecules; {reads_needed/10**6:.2f} M reads")
     print(f"All: {samples} samples; {reads_needed_samples/10**6:.2f} M reads")
     return ug,molecules,reads_needed,reads_needed_samples
+
+
+def coverage(genotypes: int, samples: int=1, cell_coverage: int=1000, ug_gDNA_per_cell: float=6*10**-6,
+             ploidy_per_cell: int=2, umi_coverage: float=5, ng_per_pcr: float=200,
+             file: str=None) -> pd.DataFrame:
+    """
+    coverage(): gDNA input and sequencing depth needed for genotyping, as a table.
+
+    Wraps umis() so a protocol step can show the numbers instead of printing them,
+    and adds the number of PCR1 reactions needed to carry that much gDNA.
+
+    Parameters:
+    genotypes (int): The number of different genotypes in the sample.
+    samples (int, optional): The number of samples to be processed (Default: 1).
+    cell_coverage (int, optional): The number of cells per genotype (Default: 1000).
+    ug_gDNA_per_cell (float, optional): The amount of genomic DNA per cell in micrograms (Default: 6x10^(-6) ug/cell).
+    ploidy_per_cell (int, optional): The ploidy level of the cells (Default: 2 for diploid).
+    umi_coverage (float, optional): The desired UMI coverage (Default: 5).
+    ng_per_pcr (float, optional): max ng gDNA per PCR1 reaction (Default: 200).
+    file (str, optional): output file path
+
+    Dependencies: pandas,io,umis()
+    """
+    with contextlib.redirect_stdout(io_std.StringIO()):  # umis() prints its result
+        ug, molecules, reads_needed, reads_needed_samples = umis(
+            genotypes=genotypes, samples=samples, cell_coverage=cell_coverage,
+            ug_gDNA_per_cell=ug_gDNA_per_cell, ploidy_per_cell=ploidy_per_cell,
+            umi_coverage=umi_coverage)
+
+    if ng_per_pcr is None or ng_per_pcr <= 0:
+        raise ValueError(f'ng_per_pcr must be greater than 0, got {ng_per_pcr}')
+    reactions = math.ceil(ug * 1000 / ng_per_pcr)
+
+    rows = [
+        {'Quantity': 'Genotypes', 'Value': genotypes, 'Unit': 'genotypes'},
+        {'Quantity': 'Cells per genotype', 'Value': cell_coverage, 'Unit': 'cells'},
+        {'Quantity': 'Samples', 'Value': samples, 'Unit': 'samples'},
+        {'Quantity': 'gDNA per sample', 'Value': round(ug, 3), 'Unit': 'ug'},
+        {'Quantity': 'gDNA per sample', 'Value': round(ug * 1000, 1), 'Unit': 'ng'},
+        {'Quantity': 'PCR1 reactions per sample', 'Value': reactions,
+         'Unit': f'reactions at {ng_per_pcr} ng'},
+        {'Quantity': 'Molecules per sample', 'Value': round(molecules / 10**6, 2), 'Unit': 'M'},
+        {'Quantity': 'Reads per sample', 'Value': round(reads_needed / 10**6, 2), 'Unit': 'M'},
+        {'Quantity': 'Reads for all samples', 'Value': round(reads_needed_samples / 10**6, 2), 'Unit': 'M'},
+    ]
+    df_coverage = pd.DataFrame(rows)
+    # keep counts as counts; a shared float column turns 4 genotypes into 4.000
+    df_coverage['Value'] = pd.Series([r['Value'] for r in rows], dtype=object)
+    if file is not None:
+        io.save(obj=df_coverage, file=file, id=True)
+    return df_coverage
+
 
 # Hamming distance calculation
 def hamming_distance(seq1: str | Seq, seq2: str | Seq) -> int:

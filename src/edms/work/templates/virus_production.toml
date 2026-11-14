@@ -1,0 +1,255 @@
+# Lentivirus production in HEK293T -> clarified, aliquoted stock
+#
+# Bundled example template. Copy it, edit the prose and the defaults to match
+# how your lab actually runs this, and keep your copy under version control:
+#   cp "$(edms work where virus_production)" ./my_virus.toml
+#   edms work init -t ./my_virus.toml -i run.toml
+
+name = "virus_production"
+version = 1
+title = "Lentivirus production in HEK293T"
+description = """
+Third-generation lentivirus packaging in HEK293T, from seeding through a
+clarified, aliquoted stock ready to titer. The transfection arithmetic comes
+from edms.bio.transfect:virus by way of edms.work.plates, so the DNA amounts
+and the Lipofectamine volumes rescale with the plate format instead of staying
+pinned to the 6-well numbers.
+"""
+
+[params]
+# Culture
+plate_format    = "6-well"
+media           = "DMEM + 10% FBS, no antibiotics"
+transfers       = 1
+reps            = 1
+# Packaging plasmids (passed to edms.work.plates:virus)
+VSVG_plasmid    = "pMUZ26.6"
+GagPol_plasmid  = "pMUZ26.7"
+mm_x            = 1.1
+# Per-well amounts at 6-well; rescaled by growth area for any other format
+VSVG_ng         = 750
+GagPol_ng       = 1500
+transfer_ng     = 750
+well_uL         = 500
+# Harvest
+harvest_1_h     = 48
+harvest_2_h     = 72
+filter_um       = 0.45
+# Storage
+aliquot_uL      = 250
+storage         = "-80 C"
+
+[[inputs]]
+name = "plasmids"
+description = "Nanodrop concentrations for VSVG, GagPol and every transfer plasmid"
+required_columns = ["Plasmid", "Description", "Colony", "ng/uL"]
+
+# --------------------------------------------------------------------------- #
+
+[[steps]]
+id = "plate_plan"
+title = "Pick the plate format"
+day = -1
+duration = "2 min"
+compute = "edms.work.plates:geometry"
+outputs = ["plate"]
+text = """
+Geometry for a {plate_format} vessel, and what {transfers} transfer
+plasmid(s) at {reps} replicate(s) will need.
+
+Seeding density is held constant across formats at the 96-well number this
+lab already uses, so switching format changes the cell count and the volumes
+but not the confluency you are aiming for.
+
+To run this in a different vessel:
+  edms work deviate <run_dir> -s plate_plan -p plate_format -v "10-cm" -w "scaling up"
+"""
+
+[steps.args]
+plate_format = "$plate_format"
+reps         = "$reps"
+conditions   = "$transfers"
+
+[[steps]]
+id = "seed"
+title = "Seed HEK293T"
+day = -1
+depends_on = ["plate_plan"]
+duration = "30 min"
+text = """
+Seed HEK293T in {media} at the density in the table above, one well per
+transfer plasmid per replicate.
+
+Use a low-passage, healthy stock. Packaging is the step where tired HEK293T
+show up as a quiet two-fold loss in titer, and nothing downstream will tell
+you that is what happened.
+"""
+checks = [
+  "Cells were below passage 20 and free of mycoplasma",
+  "Enough wells seeded for {transfers} transfer plasmid(s) x {reps} replicate(s)",
+]
+
+[[steps]]
+id = "transfection_plan"
+title = "Calculate the transfection plan"
+day = 0
+depends_on = ["seed"]
+duration = "5 min"
+compute = "edms.work.plates:virus"
+outputs = ["transfection_mix"]
+text = """
+Tube A (packaging mix, shared) and Tube B (Optimem + Lipofectamine 3000),
+calculated from the nanodrop concentrations in the plasmids input.
+
+At 6-well the per-well amounts are {VSVG_ng} ng {VSVG_plasmid},
+{GagPol_ng} ng {GagPol_plasmid} and {transfer_ng} ng transfer plasmid in
+{well_uL} uL of transfection mix, with a {mm_x}x master mix excess. This run
+is in {plate_format}, so each amount is scaled by growth area before the
+master mix is worked out; the table below is already scaled.
+
+Every plasmid in the input that is not {VSVG_plasmid} or {GagPol_plasmid} is
+treated as a transfer plasmid and gets its own tube.
+"""
+
+[steps.args]
+plasmids       = "@plasmids"
+plate_format   = "$plate_format"
+VSVG_plasmid   = "$VSVG_plasmid"
+GagPol_plasmid = "$GagPol_plasmid"
+reps           = "$reps"
+mm_x           = "$mm_x"
+VSVG_ng        = "$VSVG_ng"
+GagPol_ng      = "$GagPol_ng"
+transfer_ng    = "$transfer_ng"
+well_uL        = "$well_uL"
+
+[[steps]]
+id = "transfect"
+title = "Transfect"
+day = 0
+depends_on = ["transfection_plan"]
+duration = "1 h"
+text = """
+Follow the table from the previous step, in Order.
+
+1. Tube A: Optimem + P3000 + VSVG + GagPol, then add each transfer plasmid to
+   its own aliquot of the shared mix.
+2. Tube B: Optimem + Lipofectamine 3000. Incubate 5 min at room temperature.
+3. Combine A and B 1:1, mix gently, incubate 15 min at room temperature.
+4. Add {well_uL} uL dropwise per well.
+
+Record the actual confluency, which is the number most worth having later:
+  edms work note <run_dir> -s transfect -n "confluency ..."
+"""
+checks = [
+  "Confluency was 70-90% at transfection",
+  "Transfer plasmid tubes were kept separate",
+]
+
+[[steps]]
+id = "media_change"
+title = "Media change"
+day = 1
+depends_on = ["transfect"]
+duration = "20 min"
+text = """
+Replace with fresh {media} roughly 24 h after transfection, adding back the
+smallest volume that keeps the monolayer covered. Every mL you leave out is
+titer you do not have to concentrate back later.
+
+Change media gently: by now the monolayer is loosely attached, and cells that
+come off here end up in the harvest as debris.
+"""
+checks = [
+  "Monolayer still intact",
+]
+
+[[steps]]
+id = "harvest_1"
+title = "First harvest"
+day = 2
+depends_on = ["media_change"]
+duration = "30 min"
+text = """
+Collect the supernatant at {harvest_1_h} h post-transfection and hold it at
+4 C. Replace with fresh {media} for the second collection.
+
+Keep each well separate unless you have decided to pool; pooling is easy to
+do later and impossible to undo.
+"""
+
+[[steps]]
+id = "harvest_2"
+title = "Second harvest"
+day = 3
+depends_on = ["harvest_1"]
+duration = "30 min"
+text = """
+Collect again at {harvest_2_h} h and combine with the {harvest_1_h} h
+collection for each well.
+
+If the monolayer is already lifting, take the second harvest early and record
+it as a deviation rather than letting the stock fill with debris:
+  edms work deviate <run_dir> -s harvest_2 -p harvest_2_h -v 60 -w "monolayer lifting"
+"""
+
+[[steps]]
+id = "clarify"
+title = "Clarify"
+day = 3
+depends_on = ["harvest_2"]
+duration = "1 h"
+text = """
+1. Spin 500 x g for 10 min to pellet cells and debris.
+2. Filter the supernatant through a {filter_um} um filter. Do not use 0.22 um
+   for lentivirus; the particles shear.
+
+Work at 4 C and keep it moving. Lentivirus loses roughly half its titer for
+every day it sits at 4 C.
+"""
+checks = [
+  "Filtrate is clear",
+  "{filter_um} um filter used, not 0.22 um",
+]
+
+[[steps]]
+id = "aliquot"
+title = "Aliquot and freeze"
+day = 3
+depends_on = ["clarify"]
+duration = "30 min"
+text = """
+Aliquot into {aliquot_uL} uL single-use tubes, snap freeze, and store at
+{storage}.
+
+Size the aliquots for one transduction each. A freeze-thaw costs much more
+titer than the tube you wasted by aliquoting small.
+
+Record the number of aliquots and the box location:
+  edms work note <run_dir> -s aliquot -n "N aliquots, box ..."
+"""
+checks = [
+  "Aliquots are single-use",
+  "Box and position recorded",
+]
+
+[[steps]]
+id = "titer"
+title = "Titer"
+depends_on = ["aliquot"]
+duration = "3 d"
+text = """
+Titer a thawed aliquot on the target cell line before using the stock, by
+flow cytometry on a marker or by qPCR for integrated copies.
+
+Titer on the cells you will actually transduce. A titer measured on HEK293T
+tells you very little about the same stock on a harder line, and that gap is
+the usual reason a transduction comes back at the wrong MOI.
+
+Record the titer so the stock is usable without re-reading this protocol:
+  edms work note <run_dir> -s titer -n "... TU/mL on ..."
+"""
+checks = [
+  "Titer measured on the intended target line",
+  "Titer recorded with the aliquot location",
+]

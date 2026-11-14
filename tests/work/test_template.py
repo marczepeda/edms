@@ -48,6 +48,41 @@ def test_bundled_pe3_template_loads():
     assert [i for i in tpl.inputs if i.name == "ngs_samples"][0].optional is True
 
 
+def test_bundled_virus_template_loads():
+    assert "virus_production" in template_mod.list_templates()
+    tpl = template_mod.load("virus_production")
+    assert tpl.step("transfection_plan").compute == "edms.work.plates:virus"
+    assert [s.id for s in tpl.steps][:2] == ["plate_plan", "seed"]
+
+
+def test_bundled_ngs_prep_template_loads():
+    assert "ngs_prep" in template_mod.list_templates()
+    tpl = template_mod.load("ngs_prep")
+    assert tpl.step("coverage").compute == "edms.bio.ngs:coverage"
+    assert tpl.step("pcr_plan").compute == "edms.bio.ngs:pcrs"
+    # gDNA concentrations arrive after the samples are quantified
+    assert [i for i in tpl.inputs if i.name == "gdna"][0].optional is True
+
+
+@pytest.mark.parametrize("name", template_mod.list_templates())
+def test_every_bundled_template_validates(name):
+    """Each shipped template must load and pass every validation rule."""
+    tpl = template_mod.load(name)
+    assert tpl.steps
+    assert tpl.title
+
+
+@pytest.mark.parametrize("name", template_mod.list_templates())
+def test_every_bundled_template_resolves_its_compute_targets(name):
+    """A compute target that cannot be imported would only fail at render."""
+    import importlib
+
+    for step in template_mod.load(name).steps:
+        if not step.compute:
+            continue
+        module, _, func = step.compute.partition(":")
+        assert callable(getattr(importlib.import_module(module), func))
+
 
 def test_resolve_path_rejects_unknown_name():
     with pytest.raises(FileNotFoundError, match="Unknown template"):

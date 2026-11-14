@@ -1,0 +1,269 @@
+# gDNA -> amplicon library -> submission
+#
+# Bundled example template. Copy it, edit the prose and the defaults to match
+# how your lab actually runs this, and keep your copy under version control:
+#   cp "$(edms work where ngs_prep)" ./my_ngs.toml
+#   edms work init -t ./my_ngs.toml -i run.toml
+
+name = "ngs_prep"
+version = 1
+title = "NGS amplicon prep from gDNA"
+description = """
+Amplicon library prep for genotyping, from quantified gDNA through a pooled
+submission. The gDNA input needed for the coverage you want comes from
+edms.bio.ngs:coverage, and the plate layouts, master mixes and thermocycler
+programs from edms.bio.ngs:pcrs, so the numbers follow from the library you
+are actually sequencing rather than from the last time you ran this.
+
+This is the prep on its own. The pe3_transfection template already ends with a
+short version of it; use this one when the gDNA came from somewhere else, or
+when the prep is involved enough to deserve its own ledger.
+"""
+
+[params]
+# Library and coverage (passed to edms.bio.ngs:coverage)
+genotypes        = 1000
+samples          = 12
+cell_coverage    = 1000
+umi_coverage     = 5
+ploidy_per_cell  = 2
+ug_gDNA_per_cell = 6e-6
+ng_per_pcr       = 200
+# PCR (passed to edms.bio.ngs:pcrs)
+pcr1_cycles      = 30
+pcr2_cycles      = 8
+pcr1_total_uL    = 20
+pcr2_total_uL    = 20
+mm_x             = 1.1
+ultra            = false
+pcr2             = true
+# Cleanup and submission
+bead_ratio       = 0.8
+pool_nM          = 4
+platform         = "MiSeq"
+
+[[inputs]]
+name = "ngs_samples"
+description = "NGS samples sheet with PCR1/PCR2 primer columns"
+required_columns = ["ID", "PCR1 ID", "PCR1 FWD", "PCR1 REV"]
+
+[[inputs]]
+name = "gdna"
+description = "Measured gDNA concentrations, once the samples are quantified"
+required_columns = ["ID", "ng/uL"]
+optional = true
+
+# --------------------------------------------------------------------------- #
+
+[[steps]]
+id = "quantify_gdna"
+title = "Quantify gDNA"
+day = 0
+duration = "1 h"
+text = """
+Quantify every gDNA sample by a dsDNA-specific method (Qubit, PicoGreen).
+
+Do not use a nanodrop here. It reads RNA and free nucleotides as DNA, and at
+this step an over-read concentration quietly becomes an under-loaded PCR1,
+which looks exactly like poor coverage at the end.
+
+Add the measured concentrations to the run once you have them:
+  edms work input <run_dir> -I gdna=gdna.csv
+"""
+checks = [
+  "Quantified by Qubit or equivalent, not nanodrop",
+  "A260/A280 recorded for any sample that looks off",
+]
+
+[[steps]]
+id = "coverage"
+title = "Work out the gDNA input"
+day = 0
+depends_on = ["quantify_gdna"]
+duration = "5 min"
+compute = "edms.bio.ngs:coverage"
+outputs = ["coverage"]
+text = """
+How much gDNA each PCR1 needs to carry {cell_coverage} cells per genotype
+across {genotypes} genotypes, and how many reads that costs at {umi_coverage}x
+UMI coverage.
+
+The PCR1 reaction count is the one to read first. Every genome you want
+represented has to physically enter a reaction, so if this says more reactions
+than you were planning to set up, the coverage you get will be set by the gDNA
+you loaded and not by how deeply you sequence.
+"""
+
+[steps.args]
+genotypes        = "$genotypes"
+samples          = "$samples"
+cell_coverage    = "$cell_coverage"
+umi_coverage     = "$umi_coverage"
+ploidy_per_cell  = "$ploidy_per_cell"
+ug_gDNA_per_cell = "$ug_gDNA_per_cell"
+ng_per_pcr       = "$ng_per_pcr"
+
+[[steps]]
+id = "pcr_plan"
+title = "Calculate the PCR plan"
+day = 0
+depends_on = ["coverage"]
+duration = "10 min"
+compute = "edms.bio.ngs:pcrs"
+outputs = ["pcr1", "pcr2"]
+text = """
+Plate layouts, per-primer master mixes and thermocycler programs for PCR1
+({pcr1_cycles} cycles, {pcr1_total_uL} uL) and PCR2 ({pcr2_cycles} cycles,
+{pcr2_total_uL} uL), with a {mm_x}x master mix excess.
+
+Reactions are grouped by annealing temperature, so a plate with mixed Tm
+primers comes out as more than one program. Check how many before you book
+the block.
+"""
+
+[steps.args]
+df            = "@ngs_samples"
+pcr1_cycles   = "$pcr1_cycles"
+pcr2_cycles   = "$pcr2_cycles"
+pcr1_total_uL = "$pcr1_total_uL"
+pcr2_total_uL = "$pcr2_total_uL"
+mm_x          = "$mm_x"
+ultra         = "$ultra"
+pcr2          = "$pcr2"
+
+[[steps]]
+id = "pcr1"
+title = "Run PCR1"
+day = 1
+depends_on = ["pcr_plan"]
+duration = "3 h"
+text = """
+Set up PCR1 from the layout above, loading the gDNA amount from the coverage
+step rather than a fixed volume.
+
+Include a no-template control on every plate. Amplicon prep is the place
+contamination is hardest to notice and most expensive to discover later.
+
+If you change the cycle number at the bench, record it as a deviation so the
+thermocycler program in this protocol recalculates:
+  edms work deviate <run_dir> -s pcr1 -p pcr1_cycles -v 35 -w "faint bands"
+"""
+checks = [
+  "No-template control included",
+  "gDNA input matched the coverage step",
+]
+
+[[steps]]
+id = "gel_check"
+title = "Check PCR1 on a gel"
+day = 1
+depends_on = ["pcr1"]
+duration = "1 h"
+text = """
+Run a representative subset on a gel. You are looking for a single band at the
+expected size, a clean no-template control, and no primer dimer.
+
+Stop here if the no-template control has a band. Indexing a contaminated PCR1
+only makes the problem more expensive, and the sequencing will not tell you
+which sample the reads came from.
+"""
+checks = [
+  "Single band at the expected size",
+  "No-template control clean",
+]
+
+[[steps]]
+id = "pcr2_index"
+title = "Index with PCR2"
+day = 2
+depends_on = ["gel_check"]
+duration = "2 h"
+text = """
+Dilute PCR1 product and index with PCR2 at {pcr2_cycles} cycles, following the
+PCR2 layout above.
+
+Confirm against the layout that no index pair is used twice. A duplicated
+index pair is unrecoverable after pooling: those samples cannot be separated
+again, however deeply they are sequenced.
+"""
+checks = [
+  "Every index pair unique across the pool",
+  "PCR1 dilution consistent across samples",
+]
+
+[[steps]]
+id = "cleanup"
+title = "Bead cleanup"
+day = 2
+depends_on = ["pcr2_index"]
+duration = "1 h"
+text = """
+Clean up at {bead_ratio}x beads to remove primers and dimer, then elute.
+
+Keep the ratio the same across every sample. An uneven cleanup shifts the
+size distribution sample by sample and shows up later as uneven
+representation that is easy to misread as a biological effect.
+"""
+
+[[steps]]
+id = "quantify_libraries"
+title = "Quantify the libraries"
+day = 3
+depends_on = ["cleanup"]
+duration = "1 h"
+text = """
+Quantify each indexed library by Qubit and check the size distribution on a
+TapeStation or Bioanalyzer.
+
+Both numbers are needed: the concentration to pool by molarity, and the size
+to convert ng/uL into nM.
+"""
+checks = [
+  "Concentration and mean size recorded per library",
+  "No residual primer dimer peak",
+]
+
+[[steps]]
+id = "pool"
+title = "Pool"
+day = 3
+depends_on = ["quantify_libraries"]
+duration = "1 h"
+text = """
+Pool to equal molarity at {pool_nM} nM, using the measured size to convert
+each library from ng/uL to nM.
+
+Pool by molarity, not by volume. Libraries that differ two-fold in
+concentration pooled by volume give you a two-fold read depth difference that
+no amount of downstream normalisation recovers.
+
+Deliberately over-representing a sample is a legitimate choice; record it:
+  edms work note <run_dir> -s pool -n "sample X pooled at 2x"
+"""
+checks = [
+  "Pooled by molarity using measured sizes",
+  "Final pool concentration confirmed after pooling",
+]
+
+[[steps]]
+id = "submit"
+title = "Submit"
+day = 3
+depends_on = ["pool"]
+duration = "30 min"
+text = """
+Submit the pool for sequencing on {platform}, asking for the read count from
+the coverage step.
+
+Amplicon libraries are low diversity. Tell the facility it is an amplicon run
+so they spike in PhiX, or the first cycles fail to resolve clusters and the
+whole run comes back unusable.
+
+Record the submission ID so the ledger points at the data:
+  edms work note <run_dir> -s submit -n "submission ..."
+"""
+checks = [
+  "Facility told this is a low-diversity amplicon library",
+  "Requested read count matched the coverage step",
+  "Submission ID recorded",
+]

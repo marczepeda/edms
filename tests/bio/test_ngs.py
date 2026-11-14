@@ -468,3 +468,64 @@ def test_hamming_distance_matrix_saves_file(tmp_path):
     out_dir = tmp_path / "out"
     ngs.hamming_distance_matrix(df=df, id="ID", seqs="seq", file=str(out_dir / "dm.csv"))
     assert (out_dir / "dm.csv").is_file()
+
+
+# --------------------------------------------------------------------------- #
+# coverage()
+# --------------------------------------------------------------------------- #
+def _value(df, quantity, unit=None):
+    """Pull one Value out of the coverage table."""
+    rows = df[df["Quantity"] == quantity]
+    if unit is not None:
+        rows = rows[rows["Unit"] == unit]
+    return rows["Value"].iloc[0]
+
+
+def test_coverage_agrees_with_umis():
+    """coverage() is umis() in a table; the numbers must not drift apart."""
+    ug, molecules, reads, reads_all = ngs.umis(genotypes=5000, samples=12,
+                                               cell_coverage=1000)
+    df = ngs.coverage(genotypes=5000, samples=12, cell_coverage=1000)
+    assert _value(df, "gDNA per sample", "ug") == pytest.approx(ug)
+    assert _value(df, "Molecules per sample") == pytest.approx(molecules / 1e6, abs=0.01)
+    assert _value(df, "Reads per sample") == pytest.approx(reads / 1e6, abs=0.01)
+    assert _value(df, "Reads for all samples") == pytest.approx(reads_all / 1e6, abs=0.01)
+
+
+def test_coverage_reports_gdna_in_ug_and_ng():
+    df = ngs.coverage(genotypes=5000, cell_coverage=1000)
+    # 5000 genotypes x 1000 cells x 6e-6 ug/cell = 30 ug
+    assert _value(df, "gDNA per sample", "ug") == pytest.approx(30.0)
+    assert _value(df, "gDNA per sample", "ng") == pytest.approx(30000.0)
+
+
+def test_coverage_rounds_pcr_reactions_up():
+    """A part-loaded reaction still has to be set up, so round up."""
+    df = ngs.coverage(genotypes=5000, cell_coverage=1000, ng_per_pcr=200)
+    assert _value(df, "PCR1 reactions per sample") == 150  # 30000 / 200
+    df = ngs.coverage(genotypes=5000, cell_coverage=1000, ng_per_pcr=7000)
+    assert _value(df, "PCR1 reactions per sample") == 5  # 30000 / 7000 -> 4.3
+
+
+def test_coverage_rejects_a_zero_pcr_input():
+    with pytest.raises(ValueError, match="ng_per_pcr"):
+        ngs.coverage(genotypes=100, ng_per_pcr=0)
+
+
+def test_coverage_keeps_counts_as_integers():
+    """A shared float column would print 4 genotypes as 4.000."""
+    df = ngs.coverage(genotypes=4, samples=12, cell_coverage=1000)
+    assert _value(df, "Genotypes") == 4
+    assert isinstance(_value(df, "Genotypes"), int)
+    assert isinstance(_value(df, "Samples"), int)
+
+
+def test_coverage_does_not_print(capsys):
+    """umis() prints; a protocol step should render the table instead."""
+    ngs.coverage(genotypes=100, samples=2)
+    assert capsys.readouterr().out == ""
+
+
+def test_coverage_does_not_write_a_file_without_a_path(tmp_path):
+    ngs.coverage(genotypes=100)
+    assert list(tmp_path.iterdir()) == []
