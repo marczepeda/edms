@@ -1,0 +1,310 @@
+# Transduce -> select -> treat -> flow + gDNA harvest
+#
+# The cell work between a virus stock and an NGS prep. Modelled on the
+# MUZ378/382/386/387 entries, which all run the same skeleton: transduce with
+# polybrene, select, optionally passage into a treatment, then take flow and
+# gDNA off the same plate on the harvest day.
+#
+# Bundled example template. Copy it and edit the defaults to match your line:
+#   cp "$(edms work where transduction)" ./my_transduction.toml
+#   edms work init -t ./my_transduction.toml -i run.toml
+
+name = "transduction"
+version = 1
+title = "Transduction to gDNA harvest"
+description = """
+Lentiviral transduction of a reporter line through selection, optional drug
+treatment, and a harvest that splits each well between flow and gDNA. The
+master mixes come from edms.bio.culture, which concentrates every compound by
+the ratio of the final well volume to the volume it is made up in, so the
+cells actually see the concentration the protocol claims.
+
+This sits between virus_production and ngs_prep: it starts with a titered
+virus stock and ends with gDNA ready for amplicon prep.
+"""
+
+[params]
+# Line and scale
+cell_line        = "LNCaP"
+wells            = 18
+flow_per_mL      = 250000
+cells_per_well   = 960000
+virus_mL_per_well = 1.0
+cell_media_mL    = 1.0
+# Polybrene (passed to edms.bio.culture:transduction)
+polybrene_stock   = 10000
+polybrene_desired = 8
+polybrene_unit    = "ug/mL"
+mm_x_polybrene    = 1.2
+mm_x_cells        = 1.1
+# Selection (passed to edms.bio.culture:drug_mm)
+select_drug      = "Puromycin"
+select_stock     = 10000
+select_desired   = 2
+select_unit      = "ug/mL"
+select_wells     = 45
+select_drug_mL   = 1.7
+select_cell_mL   = 0.3
+select_mm_x      = 1.1
+# Treatment, if the experiment has one
+treat_drug       = "DHT"
+treat_stock      = 10000
+treat_desired    = 1
+treat_unit       = "nM"
+treat_wells      = 168
+treat_drug_mL    = 0.5
+treat_cell_mL    = 0.5
+treat_mm_x       = 1.1
+# Schedule
+selection_day    = 2
+treatment_day    = 5
+harvest_day      = 8
+# Harvest
+flow_uL          = 100
+gdna_uL          = 100
+gdna_reagent     = "Lucigen QuickExtract"
+gdna_extract_uL  = 50
+
+# --------------------------------------------------------------------------- #
+
+[[steps]]
+id = "thaw"
+title = "Thaw virus"
+day = 0
+duration = "30 min"
+text = """
+Thaw the virus aliquots on ice and keep them there. Plan one aliquot per well
+and do not refreeze what is left; a freeze-thaw costs more titer than the
+volume you would save.
+
+Add {virus_mL_per_well} mL of virus media per well to the plates before the
+cells, so the cells land into virus rather than the other way around.
+"""
+checks = [
+  "Aliquots thawed on ice, not at room temperature",
+  "One aliquot per well, none refrozen",
+]
+
+[[steps]]
+id = "transduce"
+title = "Transduce"
+day = 0
+depends_on = ["thaw"]
+duration = "2 h"
+compute = "edms.bio.culture:transduction"
+outputs = ["Polybrene", "Cells"]
+text = """
+Two mixes for {wells} wells of {cell_line}.
+
+Polybrene is made up in {cell_media_mL} mL per well but has to reach
+{polybrene_desired} {polybrene_unit} across the full
+{virus_mL_per_well} mL of virus plus {cell_media_mL} mL of cells, so the mix is
+concentrated accordingly. The table gives the concentration to make up, not
+the concentration the cells see.
+
+1. Count the culture and check the flow number against
+   {flow_per_mL} cells/mL; if it has moved, record it as a deviation before
+   making anything up:
+     edms work deviate <run_dir> -s transduce -p flow_per_mL -v 310000 -w "counted"
+2. Spin down the volume in the Cells table, wash, and resuspend in the
+   polybrene master mix.
+3. Transfer {cell_media_mL} mL per well onto the virus media with a
+   multichannel.
+"""
+checks = [
+  "Flow count taken the same day, not carried over",
+  "Cells resuspended in polybrene media, not plain media",
+  "Uninfected control wells included",
+]
+
+[steps.args]
+wells             = "$wells"
+flow_per_mL       = "$flow_per_mL"
+cells_per_well    = "$cells_per_well"
+virus_mL_per_well = "$virus_mL_per_well"
+cell_media_mL     = "$cell_media_mL"
+polybrene_stock   = "$polybrene_stock"
+polybrene_desired = "$polybrene_desired"
+polybrene_unit    = "$polybrene_unit"
+mm_x_polybrene    = "$mm_x_polybrene"
+mm_x_cells        = "$mm_x_cells"
+
+[[steps]]
+id = "selection"
+title = "Start selection"
+day = 2
+depends_on = ["transduce"]
+duration = "2 h"
+compute = "edms.bio.culture:drug_mm"
+outputs = ["selection"]
+text = """
+Split into plates with {select_drug} at {select_desired} {select_unit} on day
+{selection_day}.
+
+The cells arrive in {select_cell_mL} mL on top of {select_drug_mL} mL of drug
+media, so the mix below is over-concentrated to land at
+{select_desired} {select_unit} in the well. Making it up at the final
+concentration instead is the usual way a selection ends up incomplete, and an
+incomplete selection looks like a biological result rather than a mistake.
+
+Trypsinise, resuspend, spin, and transfer {select_cell_mL} mL into each well.
+"""
+checks = [
+  "Uninfected control included, so selection can be called",
+  "Drug made up at the master mix concentration, not the final one",
+]
+
+[steps.args]
+stock          = "$select_stock"
+desired        = "$select_desired"
+wells          = "$select_wells"
+drug_media_mL  = "$select_drug_mL"
+cell_media_mL  = "$select_cell_mL"
+mm_x           = "$select_mm_x"
+drug           = "$select_drug"
+unit           = "$select_unit"
+
+[[steps]]
+id = "check_selection"
+title = "Check selection"
+day = 4
+depends_on = ["selection"]
+duration = "15 min"
+text = """
+Confirm the uninfected control wells are dead before going further.
+
+If they are not, the selection has not worked and everything downstream
+measures a mixed population. Stop here and sort that out rather than carrying
+it into the harvest, where it is no longer visible.
+
+Record what the control looked like:
+  edms work note <run_dir> -s check_selection -n "uninfected control ..."
+"""
+checks = [
+  "Uninfected control wells are dead",
+]
+
+[[steps]]
+id = "treatment"
+title = "Passage into treatment"
+day = 5
+depends_on = ["check_selection"]
+duration = "2 h"
+compute = "edms.bio.culture:drug_mm"
+outputs = ["treatment"]
+text = """
+Passage into {treat_drug} at {treat_desired} {treat_unit} on day
+{treatment_day}.
+
+Skip this step if the experiment has no treatment arm; the harvest moves to
+whatever day you set:
+  edms work skip <run_dir> -s treatment -n "no treatment arm"
+  edms work deviate <run_dir> -s harvest -p harvest_day -v 5 -w "no treatment"
+
+Split the uninfected controls across every arm so each has its own baseline.
+"""
+checks = [
+  "Controls split across every treatment arm",
+  "Vehicle-only arm included",
+]
+
+[steps.args]
+stock          = "$treat_stock"
+desired        = "$treat_desired"
+wells          = "$treat_wells"
+drug_media_mL  = "$treat_drug_mL"
+cell_media_mL  = "$treat_cell_mL"
+mm_x           = "$treat_mm_x"
+drug           = "$treat_drug"
+unit           = "$treat_unit"
+
+[[steps]]
+id = "harvest"
+title = "Flow and gDNA harvest"
+day = 8
+depends_on = ["treatment"]
+duration = "6 h"
+text = """
+On day {harvest_day}, take flow and gDNA off the same wells.
+
+Set the tubes and labels up the day before and QC the cytometer first;
+this is a long day and the cells do not wait.
+
+1. Make FACS buffer with viability dye.
+2. Trypsinise in batches, finishing one full replicate before starting the
+   next, so a replicate is never split across a long gap.
+3. Transfer {gdna_uL} uL into the gDNA plate.
+4. Run {flow_uL} uL on the cytometer, then put the samples on ice.
+
+Work one replicate at a time rather than one condition at a time. If the day
+runs long, you lose a replicate cleanly instead of losing a condition from
+every replicate.
+"""
+checks = [
+  "Cytometer QC'd before the first sample",
+  "Viability dye included",
+  "Replicates processed whole, not interleaved",
+]
+
+[[steps]]
+id = "pellet"
+title = "Wash and pellet"
+day = 8
+depends_on = ["harvest"]
+duration = "1 h"
+text = """
+Once flow is done, recover the cells from the FACS tubes and pellet them.
+
+1. Transfer to a deep-well plate and spin.
+2. Wash twice with PBS, spinning between.
+3. Transfer to labelled tubes, spin, aspirate.
+
+Label the tubes with the condition and the date, not the well position. The
+plate map stops being readable the moment the plate is gone, and these pellets
+outlive it.
+"""
+checks = [
+  "Washed twice with PBS",
+  "Tubes labelled with condition and date",
+]
+
+[[steps]]
+id = "extract"
+title = "Extract gDNA"
+day = 8
+depends_on = ["pellet"]
+duration = "1 h"
+text = """
+Extract from the gDNA plate.
+
+1. Spin the plate and aspirate down to the pellet.
+2. Resuspend in {gdna_extract_uL} uL of {gdna_reagent}.
+3. Run the extraction program on the thermocycler.
+
+Quantify before the prep rather than assuming the yield. The NGS prep decides
+how many PCR1 reactions each sample needs from the amount of gDNA, and that
+number is wrong if the concentration is a guess.
+"""
+checks = [
+  "Extraction program run to completion",
+  "gDNA quantified, not assumed",
+]
+
+[[steps]]
+id = "handoff"
+title = "Hand off to NGS prep"
+depends_on = ["extract"]
+duration = "10 min"
+text = """
+The gDNA is now the input to the ngs_prep template. Start that run with these
+concentrations rather than continuing here, so the prep gets its own ledger:
+
+  edms work init -t ngs_prep -i ngs_run.toml
+
+Record which run picks it up, so the two ledgers point at each other:
+  edms work note <run_dir> -s handoff -n "continued in <run_id>"
+"""
+checks = [
+  "gDNA concentrations recorded",
+  "Follow-on NGS run noted here",
+]

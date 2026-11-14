@@ -64,6 +64,15 @@ def test_bundled_ngs_prep_template_loads():
     assert [i for i in tpl.inputs if i.name == "gdna"][0].optional is True
 
 
+def test_bundled_transduction_template_loads():
+    assert "transduction" in template_mod.list_templates()
+    tpl = template_mod.load("transduction")
+    assert tpl.step("transduce").compute == "edms.bio.culture:transduction"
+    # Selection and treatment are the same calculation with different units
+    assert tpl.step("selection").compute == "edms.bio.culture:drug_mm"
+    assert tpl.step("treatment").compute == "edms.bio.culture:drug_mm"
+
+
 @pytest.mark.parametrize("name", template_mod.list_templates())
 def test_every_bundled_template_validates(name):
     """Each shipped template must load and pass every validation rule."""

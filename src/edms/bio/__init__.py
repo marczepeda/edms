@@ -4,6 +4,7 @@ src/edms/bio/                   EDMS Biology module
 ├── models/                     Models module
 ├── cli.py                      Command Line Interface
 ├── clone.py                    Clone module
+├── culture.py                  Cell culture master mixes
 ├── fastq.py                    FASTQ module
 ├── fcs.py                      Flow Cytometry Standard module
 ├── genbank.py                  GenBank module
