@@ -81,6 +81,22 @@ def test_bundled_competitive_growth_template_loads():
     assert [s.id for s in tpl.steps][:2] == ["confluency", "seed_plan"]
 
 
+def test_bundled_golden_gate_template_loads():
+    assert "golden_gate" in template_mod.list_templates()
+    tpl = template_mod.load("golden_gate")
+    assert tpl.step("anneal").compute == "edms.bio.clone:anneal_mm"
+    assert tpl.step("assembly_plan").compute == "edms.bio.clone:golden_gate"
+
+
+def test_bundled_gibson_template_loads():
+    assert "gibson_assembly" in template_mod.list_templates()
+    tpl = template_mod.load("gibson_assembly")
+    assert tpl.step("pcr_plan").compute == "edms.bio.clone:rxn_mm"
+    assert tpl.step("assembly_plan").compute == "edms.bio.clone:gibson"
+    # Fragments cannot be quantified until the gel extraction is done
+    assert [i for i in tpl.inputs if i.name == "fragments"][0].optional is True
+
+
 @pytest.mark.parametrize("name", template_mod.list_templates())
 def test_every_bundled_template_validates(name):
     """Each shipped template must load and pass every validation rule."""

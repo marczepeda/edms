@@ -70,8 +70,10 @@ edms -h # or edms <TAB>
     Steps that declare a `compute` target call straight into the rest of edms,
     so the transfection volumes and PCR plans in a rendered protocol are
     calculated from your own inputs rather than copied from a previous entry.
-    Five templates ship to start from: `pe3_transfection`, `virus_production`,
-    `transduction`, `competitive_growth` and `ngs_prep`. `virus_production`,
+    Seven templates ship to start from: `golden_gate`, `gibson_assembly`,
+    `pe3_transfection`, `virus_production`, `transduction`,
+    `competitive_growth` and `ngs_prep`. The first two are cloning, from a
+    reaction set-up through to a sequenced plasmid. `virus_production`,
     `transduction` and `ngs_prep` chain, so a screen runs as three ledgers
     that hand off to each other: produce virus, transduce and select to a gDNA
     harvest, then prep the amplicon libraries. `competitive_growth` is the arm

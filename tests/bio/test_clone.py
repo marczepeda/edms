@@ -681,3 +681,264 @@ class TestOffTargets:
         df = pd.DataFrame({"other": ["AAAA"]})
         with pytest.raises(ValueError):
             clone.off_targets(df=df, col="seq", dir=None, return_df=True)
+
+
+# --------------------------------------------------------------------------- #
+# rxn_mm(), golden_gate(), gibson(), anneal_mm()
+#
+# The numeric expectations are the reaction sheets from MUZ363 (Gibson of a
+# 3- and a 5-part assembly, Golden Gate of annealed oligo duplexes, and an
+# oligo phospho/anneal) and MUZ377 (Q5 UMI PCR and Golden Gate of a
+# gel-purified insert). All six are the same table with different rows, so one
+# function has to reproduce them.
+# --------------------------------------------------------------------------- #
+def _uL(df, component, column="uL"):
+    return df.loc[df["Component"] == component, column].iloc[0]
+
+
+MUZ363_Q5 = pd.DataFrame([
+    {"Component": "5x Q5 reaction buffer", "Stock": 5, "Desired": 1, "Unit": "x"},
+    {"Component": "dNTPs", "Stock": 10, "Desired": 0.2, "Unit": "mM"},
+    {"Component": "Forward primer", "Stock": 10, "Desired": 0.5, "Unit": "uM"},
+    {"Component": "Reverse primer", "Stock": 10, "Desired": 0.5, "Unit": "uM"},
+    {"Component": "Template", "uL": 1.0},
+    {"Component": "Q5 polymerase", "Stock": 2, "Desired": 0.02, "Unit": "U/uL"},
+])
+
+
+def test_rxn_mm_reproduces_the_muz363_q5_mix():
+    """50 uL Q5 fragment PCR, three reactions at 1.1x."""
+    mm = clone.rxn_mm(MUZ363_Q5, rxn_uL=50, samples=3, mm_x=1.1)
+    assert _uL(mm, "Nuclease-free water") == 32.5
+    assert _uL(mm, "5x Q5 reaction buffer") == 10.0
+    assert _uL(mm, "dNTPs") == 1.0
+    assert _uL(mm, "Forward primer") == 2.5
+    assert _uL(mm, "Q5 polymerase") == 0.5
+    assert _uL(mm, "Total") == 50.0
+    mm_col = "uL, MM (3 x 1.1)"
+    assert _uL(mm, "Nuclease-free water", mm_col) == 107.25
+    assert _uL(mm, "Total", mm_col) == 165.0
+
+
+def test_rxn_mm_reproduces_the_muz377_umi_pcr():
+    """Same components, 20 uL, eleven reactions: only the volumes move."""
+    mm = clone.rxn_mm(MUZ363_Q5, rxn_uL=20, samples=11, mm_x=1.05)
+    assert _uL(mm, "Nuclease-free water") == 12.4
+    assert _uL(mm, "5x Q5 reaction buffer") == 4.0
+    assert _uL(mm, "dNTPs") == 0.4
+    assert _uL(mm, "Forward primer") == 1.0
+    assert _uL(mm, "Q5 polymerase") == 0.2
+    assert _uL(mm, "Total") == 20.0
+
+
+def test_rxn_mm_water_is_the_balance():
+    mm = clone.rxn_mm(MUZ363_Q5, rxn_uL=50)
+    body = mm[~mm["Component"].isin(["Total"])]
+    assert round(body["uL"].sum(), 2) == 50.0
+
+
+def test_rxn_mm_keeps_per_sample_components_out_of_the_mix():
+    df = pd.DataFrame([{"Component": "Insert", "uL": 2.0, "In MM": False},
+                       {"Component": "Buffer", "Stock": 10, "Desired": 1, "Unit": "x"}])
+    mm = clone.rxn_mm(df, rxn_uL=10, samples=5, mm_x=1.0)
+    assert _uL(mm, "Insert", "uL, MM (5 x 1.0)") == "-"
+    assert _uL(mm, "Buffer", "uL, MM (5 x 1.0)") == 5.0
+    # the mix total covers only what is actually premixed
+    assert _uL(mm, "Total", "uL, MM (5 x 1.0)") == 40.0
+
+
+def test_rxn_mm_rejects_components_that_overfill_the_reaction():
+    df = pd.DataFrame([{"Component": "a", "uL": 8.0},
+                       {"Component": "b", "uL": 5.0}])
+    with pytest.raises(ValueError, match="more than the 10 uL reaction"):
+        clone.rxn_mm(df, rxn_uL=10)
+
+
+def test_rxn_mm_rejects_a_desired_above_the_stock():
+    df = pd.DataFrame([{"Component": "a", "Stock": 1, "Desired": 5, "Unit": "x"}])
+    with pytest.raises(ValueError, match="cannot be reached by dilution"):
+        clone.rxn_mm(df, rxn_uL=10)
+
+
+def test_rxn_mm_rejects_a_component_with_nothing_to_go_on():
+    df = pd.DataFrame([{"Component": "mystery"}])
+    with pytest.raises(ValueError, match="needs either a volume"):
+        clone.rxn_mm(df, rxn_uL=10)
+
+
+def test_rxn_mm_drops_an_empty_note_column():
+    assert "Note" not in clone.rxn_mm(MUZ363_Q5, rxn_uL=50).columns
+
+
+def test_rxn_mm_keeps_notes_when_there_are_any():
+    df = MUZ363_Q5.copy()
+    df["Note"] = [""] * (len(df) - 1) + ["add last"]
+    assert "Note" in clone.rxn_mm(df, rxn_uL=50).columns
+
+
+# --------------------------------------------------------------------------- #
+# golden_gate()
+# --------------------------------------------------------------------------- #
+def test_golden_gate_reproduces_the_muz363_assembly():
+    """Three annealed duplexes into a vector, 10 uL, 3.3x of one assembly."""
+    gg = clone.golden_gate(inserts=3, samples=1, mm_x=3.3, rxn_uL=10,
+                           vector_stock=100, vector_ng=10,
+                           shared_inserts=True)["Golden Gate"]
+    assert _uL(gg, "Nuclease-free water") == 3.9
+    assert _uL(gg, "FastDigest buffer") == 1.0
+    assert _uL(gg, "ATP") == 1.0
+    assert _uL(gg, "Fragment 1") == 1.0
+    assert _uL(gg, "Vector") == 0.1
+    assert _uL(gg, "FastDigest Esp3I") == 0.5
+    assert _uL(gg, "T4 DNA ligase") == 0.5
+    assert _uL(gg, "Total", "uL, MM (1 x 3.3)") == 33.0
+
+
+def test_golden_gate_reproduces_the_muz377_assembly():
+    """One gel-purified insert, 20 uL, eleven assemblies, a fifth the enzyme."""
+    gg = clone.golden_gate(inserts=1, samples=11, mm_x=1.05, rxn_uL=20,
+                           insert_uL=10.0, atp_desired=0.5, enzyme_desired=0.2,
+                           ligase_desired=0.2, vector="pMUZ358.3",
+                           vector_stock=1063.8, vector_ng=100)["Golden Gate"]
+    mm_col = "uL, MM (11 x 1.05)"
+    assert _uL(gg, "FastDigest buffer") == 2.0
+    assert _uL(gg, "ATP") == 1.0
+    assert _uL(gg, "Fragment 1") == 10.0
+    assert _uL(gg, "FastDigest Esp3I") == 0.2
+    assert _uL(gg, "FastDigest buffer", mm_col) == 23.1
+    assert _uL(gg, "ATP", mm_col) == 11.55
+    assert _uL(gg, "FastDigest Esp3I", mm_col) == 2.31
+    assert _uL(gg, "Total", mm_col) == 115.5
+
+
+def test_golden_gate_insert_stays_per_tube_when_each_assembly_differs():
+    gg = clone.golden_gate(inserts=1, samples=11, rxn_uL=20,
+                           insert_uL=10.0)["Golden Gate"]
+    assert _uL(gg, "Fragment 1", "uL, MM (11 x 1.1)") == "-"
+
+
+def test_golden_gate_vector_volume_follows_the_miniprep():
+    """The backbone is decided in nanograms, so a better prep means less of it."""
+    weak = clone.golden_gate(vector_stock=50, vector_ng=100)["Golden Gate"]
+    strong = clone.golden_gate(vector_stock=1000, vector_ng=100)["Golden Gate"]
+    assert _uL(weak, "Vector") == 2.0
+    assert _uL(strong, "Vector") == 0.1
+
+
+def test_golden_gate_program_cycles_are_named():
+    program = clone.golden_gate(cycles=25)["Golden Gate program"]
+    assert "25 cycles" in program["Note"].iloc[1]
+    assert list(program["Temperature"]) == ["37 C", "16 C", "4 C"]
+
+
+def test_golden_gate_rejects_no_inserts():
+    with pytest.raises(ValueError, match="inserts must be at least 1"):
+        clone.golden_gate(inserts=0)
+
+
+# --------------------------------------------------------------------------- #
+# gibson()
+# --------------------------------------------------------------------------- #
+# MUZ363 fragment lengths and the nanograms the sheet asked for
+MUZ363_FRAGMENTS = [
+    ("fMUZ363.1", 4.544, 0.02, 59.07),
+    ("fMUZ363.2", 2.341, 0.02, 30.43),
+    ("fMUZ363.3", 4.247, 0.02, 55.21),
+    ("fMUZ363.4", 0.317, 0.05, 10.30),
+    ("fMUZ363.5", 0.745, 0.05, 24.21),
+    ("fMUZ363.6", 1.332, 0.02, 17.32),
+    ("fMUZ363.7", 4.800, 0.02, 62.40),
+    ("fMUZ363.8", 5.500, 0.02, 71.50),
+]
+
+
+def test_gibson_reproduces_the_muz363_nanograms():
+    """650 ng per pmol per kb, and small fragments at the higher pmol target."""
+    df = pd.DataFrame([{"Fragment": f, "kb": kb, "ng/uL": 50}
+                       for f, kb, _, _ in MUZ363_FRAGMENTS])
+    plan = clone.gibson(df, rxn_uL=100)
+    for name, _, pmol, ng in MUZ363_FRAGMENTS:
+        row = plan[plan["Fragment"] == name].iloc[0]
+        assert row["pmol"] == pmol, name
+        assert row["ng"] == ng, name
+
+
+def test_gibson_fills_in_the_volumes_the_sheet_could_not():
+    """The recorded sheet reads #DIV/0! because the fragments were not yet read."""
+    df = pd.DataFrame([{"Fragment": "fMUZ363.1", "kb": 4.544, "ng/uL": 50}])
+    plan = clone.gibson(df)
+    assert plan.loc[0, "uL"] == round(59.07 / 50, 2)
+
+
+def test_gibson_master_mix_is_half_the_reaction_by_default():
+    df = pd.DataFrame([{"Fragment": "a", "kb": 1.0, "ng/uL": 100}])
+    plan = clone.gibson(df, rxn_uL=15)
+    assert plan.loc[plan["Fragment"] == "2x NEBuilder HiFi MM", "uL"].iloc[0] == 7.5
+    assert plan["uL"].iloc[-1] == 15.0
+
+
+def test_gibson_water_is_the_balance():
+    df = pd.DataFrame([{"Fragment": "a", "kb": 1.0, "ng/uL": 100},
+                       {"Fragment": "b", "kb": 2.0, "ng/uL": 100}])
+    plan = clone.gibson(df, rxn_uL=15)
+    body = plan[plan["Fragment"] != "Total"]
+    assert round(body["uL"].sum(), 2) == 15.0
+
+
+def test_gibson_is_equimolar_not_equal_mass():
+    """A fragment twice as long needs twice the nanograms for the same pmol."""
+    df = pd.DataFrame([{"Fragment": "short", "kb": 2.0, "ng/uL": 100},
+                       {"Fragment": "long", "kb": 4.0, "ng/uL": 100}])
+    plan = clone.gibson(df, rxn_uL=50)
+    assert plan.loc[1, "ng"] == 2 * plan.loc[0, "ng"]
+
+
+def test_gibson_per_fragment_pmol_overrides_the_default():
+    df = pd.DataFrame([{"Fragment": "a", "kb": 4.0, "ng/uL": 100, "pmol": 0.1}])
+    assert clone.gibson(df, rxn_uL=50).loc[0, "ng"] == 0.1 * 4.0 * 650
+
+
+def test_gibson_dilution_raises_the_volume():
+    df = pd.DataFrame([{"Fragment": "a", "kb": 1.0, "ng/uL": 100, "Dilution": 10}])
+    plan = clone.gibson(df, rxn_uL=50)
+    assert plan.loc[0, "ng/uL"] == 10.0
+    assert plan.loc[0, "uL"] == round(0.02 * 1.0 * 650 / 10, 2)
+
+
+def test_gibson_refuses_to_guess_a_concentration():
+    df = pd.DataFrame([{"Fragment": "a", "kb": 1.0, "ng/uL": None}])
+    with pytest.raises(ValueError, match="no measured concentration"):
+        clone.gibson(df)
+
+
+def test_gibson_refuses_an_assembly_that_does_not_fit():
+    df = pd.DataFrame([{"Fragment": "a", "kb": 5.0, "ng/uL": 1.0}])
+    with pytest.raises(ValueError, match="leaves no room"):
+        clone.gibson(df, rxn_uL=15)
+
+
+def test_gibson_requires_its_columns():
+    with pytest.raises(KeyError, match="kb"):
+        clone.gibson(pd.DataFrame([{"Fragment": "a", "ng/uL": 50}]))
+
+
+# --------------------------------------------------------------------------- #
+# anneal_mm()
+# --------------------------------------------------------------------------- #
+def test_anneal_mm_reproduces_the_muz363_sheet():
+    """Seven duplexes at 1.05x; the oligos themselves stay per tube."""
+    tables = clone.anneal_mm(oligos=7)
+    mm = tables["Anneal"]
+    mm_col = "uL, MM (7 x 1.05)"
+    assert _uL(mm, "Nuclease-free water") == 6.5
+    assert _uL(mm, "T4 DNA ligase buffer") == 1.0
+    assert _uL(mm, "T4 PNK") == 0.5
+    assert _uL(mm, "Total") == 10.0
+    assert _uL(mm, "Top oligo (100 uM)", mm_col) == "-"
+    assert _uL(mm, "Total", mm_col) == 58.8
+
+
+def test_anneal_mm_program_ramps_down_slowly():
+    program = clone.anneal_mm()["Anneal program"]
+    assert list(program["Temperature"]) == ["37 C", "95 C", "4 C"]
+    assert "0.2 C/sec" in program["Note"].iloc[2]

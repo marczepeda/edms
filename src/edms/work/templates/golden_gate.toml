@@ -1,0 +1,244 @@
+# Golden Gate assembly -> transform -> inoculate -> miniprep -> sequence
+#
+# Modelled on MUZ363 and MUZ377, which run the same assembly from two
+# different inserts: annealed oligo duplexes in one, a gel-purified PCR
+# product in the other. Everything downstream of the assembly is identical.
+#
+# Bundled example template. Copy it and edit the defaults to match your bench:
+#   cp "$(edms work where golden_gate)" ./my_gg.toml
+#   edms work init -t ./my_gg.toml -i run.toml
+
+name = "golden_gate"
+version = 1
+title = "Golden Gate assembly to sequenced plasmid"
+description = """
+Type IIS assembly of one or more inserts into a backbone, through
+transformation, inoculation, miniprep and sequencing.
+
+The reaction comes from edms.bio.clone:golden_gate, which works every
+component's volume out from its stock and desired concentration and makes
+water the balance, so a changed concentration cannot quietly push the reaction
+over volume.
+
+Inserts arrive by one of two routes. Annealed oligo duplexes are phosphorylated
+and annealed first and go in at a dilution; a gel-purified PCR product goes in
+at a fixed volume. Set insert_uL for the second and leave it at zero for the
+first.
+"""
+
+[params]
+# Assembly
+inserts          = 3
+samples          = 1
+rxn_uL           = 10
+mm_x             = 1.1
+shared_inserts   = true
+cycles           = 15
+# Insert, when it is an annealed duplex
+insert_stock     = 10
+insert_desired   = 1
+insert_unit      = "x"
+# Insert, when it is a gel-purified PCR product: set this and it wins.
+# Zero means the insert is an annealed duplex going in at a dilution instead.
+insert_uL        = 0.0
+# Backbone
+vector           = "Vector"
+vector_stock     = 100
+vector_ng        = 10
+# Enzymes and buffer
+enzyme           = "FastDigest Esp3I"
+enzyme_stock     = 20
+enzyme_desired   = 1
+ligase_stock     = 20
+ligase_desired   = 1
+buffer_stock     = 10
+buffer_desired   = 1
+atp_stock        = 10
+atp_desired      = 1
+# Oligo anneal, when the inserts are duplexes
+anneal_oligos    = 7
+anneal_rxn_uL    = 10
+anneal_mm_x      = 1.05
+# Transformation and growth
+cells            = "NEB Stable"
+cells_uL         = 8
+assembly_uL      = 2
+outgrowth_min    = 20
+plate_segments   = 4
+colony_temp      = 37
+culture_mL       = 3
+culture_temp     = 37
+culture_hours    = 20
+
+[[inputs]]
+name = "assemblies"
+description = "One row per assembly: what goes into which backbone"
+required_columns = ["Plasmid ID", "Vector ID"]
+
+# --------------------------------------------------------------------------- #
+
+[[steps]]
+id = "anneal"
+title = "Phosphorylate and anneal the oligos"
+day = 0
+duration = "1 h"
+compute = "edms.bio.clone:anneal_mm"
+outputs = ["Anneal", "Anneal program"]
+text = """
+Skip this step if the inserts are PCR products rather than oligo duplexes:
+  edms work skip <run_dir> -s anneal -w "inserts are gel-purified PCR"
+
+Top and bottom oligos go in per tube, so they are not in the master mix.
+
+Let the cooling ramp run at 0.2 C/sec. Snapping to 4 C gives hairpins instead
+of duplexes, and the assembly then fails for a reason the gel will not show.
+"""
+checks = [
+  "PNK added last",
+  "Ramp set to 0.2 C/sec, not a straight hold",
+]
+
+[steps.args]
+oligos  = "$anneal_oligos"
+rxn_uL  = "$anneal_rxn_uL"
+mm_x    = "$anneal_mm_x"
+
+[[steps]]
+id = "assembly_plan"
+title = "Calculate the assembly"
+day = 0
+depends_on = ["anneal"]
+duration = "5 min"
+compute = "edms.bio.clone:golden_gate"
+outputs = ["Golden Gate", "Golden Gate program"]
+text = """
+{inserts} insert(s) into {vector} at {vector_ng} ng, in {rxn_uL} uL.
+
+The backbone volume is worked out from the concentration it actually came back
+at, so re-run this after a re-miniprep rather than reusing the old volume:
+  edms work deviate <run_dir> -s assembly_plan -p vector_stock -v 1063.8 -w "re-minipreped"
+"""
+
+[steps.args]
+inserts        = "$inserts"
+samples        = "$samples"
+rxn_uL         = "$rxn_uL"
+mm_x           = "$mm_x"
+insert_stock   = "$insert_stock"
+insert_desired = "$insert_desired"
+insert_unit    = "$insert_unit"
+insert_uL      = "$insert_uL"
+vector         = "$vector"
+vector_stock   = "$vector_stock"
+vector_ng      = "$vector_ng"
+buffer_stock   = "$buffer_stock"
+buffer_desired = "$buffer_desired"
+atp_stock      = "$atp_stock"
+atp_desired    = "$atp_desired"
+enzyme         = "$enzyme"
+enzyme_stock   = "$enzyme_stock"
+enzyme_desired = "$enzyme_desired"
+ligase_stock   = "$ligase_stock"
+ligase_desired = "$ligase_desired"
+shared_inserts = "$shared_inserts"
+cycles         = "$cycles"
+
+[[steps]]
+id = "assemble"
+title = "Set up the assembly"
+day = 0
+depends_on = ["assembly_plan"]
+duration = "1 h"
+text = """
+Set the reactions up in 8-strip tubes and run the program from the table
+above: 37 C and 16 C for 5 min each, {cycles} cycles, then hold at 4 C.
+
+Thaw the competent cells on ice five minutes before the program finishes.
+They are the step with no slack in it; everything else here can wait.
+"""
+checks = [
+  "Enzymes added last and kept cold",
+  "Competent cells thawing before the program ends",
+]
+
+[[steps]]
+id = "transform"
+title = "Transform"
+day = 0
+depends_on = ["assemble"]
+duration = "2 h"
+text = """
+{cells_uL} uL of {cells} plus {assembly_uL} uL of assembly, per tube.
+
+1. Mix on ice and leave 20-30 min.
+2. Heat shock 30 s at 42 C, straight back on ice.
+3. Outgrow {outgrowth_min} min.
+4. Plate, splitting each plate into {plate_segments} segments.
+5. Grow at {colony_temp} C for 18-20 h.
+
+Aliquoting an 8-strip takes longer than the heat shock does, so set the tubes
+out before thawing the cells rather than after.
+
+Record the times; a plate that comes out thin is usually an outgrowth that ran
+short, and without the times you cannot tell:
+  edms work note <run_dir> -s transform -n "heat shock ..., plated ..."
+"""
+checks = [
+  "Heat shock 30 s, not longer",
+  "Times recorded",
+]
+
+[[steps]]
+id = "inoculate"
+title = "Inoculate"
+day = 1
+depends_on = ["transform"]
+duration = "1 h"
+text = """
+Pick colonies into {culture_mL} mL TB with antibiotic and grow at
+{culture_temp} C for {culture_hours} h.
+
+Write the picking order down as you go. Renaming samples afterwards because
+the order was lost is the most common way this entry goes wrong, and it is
+invisible until the sequencing comes back assigned to the wrong plasmid.
+"""
+checks = [
+  "Colonies on every segment",
+  "Picking order written down at the bench",
+]
+
+[[steps]]
+id = "miniprep"
+title = "Miniprep and quantify"
+day = 2
+depends_on = ["inoculate"]
+duration = "3 h"
+text = """
+Miniprep, then nanodrop every sample.
+
+Record the concentrations here rather than only in a sheet; the next assembly
+calculates its backbone volume from them:
+  edms work note <run_dir> -s miniprep -n "concentrations ..."
+"""
+checks = [
+  "Every sample nanodropped",
+  "Low-yield samples flagged rather than carried forward",
+]
+
+[[steps]]
+id = "sequence"
+title = "Sequence"
+depends_on = ["miniprep"]
+duration = "1 day"
+text = """
+Sequence to get a full plasmid map, not just a read across the junction. The
+assembly can be right at the insert and wrong somewhere else, and a whole-
+plasmid map is the only thing that rules that out.
+
+Record which plasmids passed:
+  edms work note <run_dir> -s sequence -n "confirmed ..."
+"""
+checks = [
+  "Full plasmid map obtained",
+  "Confirmed plasmids recorded against their IDs",
+]

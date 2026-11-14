@@ -36,6 +36,10 @@ Usage:
 
 [Master Mix]
 - pcr_mm(): NEB Q5 PCR master mix calculations
+- rxn_mm(): master mix for any reaction given stock and desired concentrations
+- anneal_mm(): phosphorylate and anneal oligo duplexes
+- golden_gate(): Esp3I/T4 ligase assembly from a vector and fragments
+- gibson(): fragment volumes for an equimolar NEBuilder assembly
 
 [Simulation]
 - pcr_sim(): returns dataframe with simulated pcr product
@@ -1457,6 +1461,128 @@ def pcr_mm(primers: pd.Series, template_uL: int, template: str='1-2 ng/uL templa
                                                      },index=pd.Index(list(np.arange(1,9)), name=f"{pcr1_fwd}_{pcr1_rev}"))
     return pcr_mm_dc
 
+def rxn_mm(df: pd.DataFrame, rxn_uL: float, samples: int=1, mm_x: float=1.1,
+           water: str='Nuclease-free water', component_col: str='Component',
+           stock_col: str='Stock', desired_col: str='Desired',
+           unit_col: str='Unit', uL_col: str='uL', mm_col: str='In MM',
+           note_col: str='Note', file: str=None) -> pd.DataFrame:
+    '''
+    rxn_mm(): master mix for any reaction given stock and desired concentrations.
+
+    Every reaction set up at the bench is the same table: components with a
+    stock and a desired concentration, whose volume is rxn_uL * desired/stock,
+    a few components added at a fixed volume, and water making up the rest. A
+    PCR, a Golden Gate assembly and an oligo anneal differ only in the rows.
+
+    Water is the balance rather than an input, so a component that changes
+    cannot quietly push the reaction over volume; it comes back as an error
+    instead.
+
+    Parameters:
+    df (dataframe): one row per component. A row with both a stock and a
+        desired concentration is calculated; a row with a volume in uL_col is
+        taken as given. A row with neither is an error.
+    rxn_uL (float): total volume of one reaction
+    samples (int, optional): reactions the master mix has to cover (Default: 1)
+    mm_x (float, optional): master mix multiplier (Default: 1.1)
+    water (str, optional): name of the balance row (Default: 'Nuclease-free water')
+    component_col (str, optional): component name column (Default: 'Component')
+    stock_col (str, optional): stock concentration column (Default: 'Stock')
+    desired_col (str, optional): desired concentration column (Default: 'Desired')
+    unit_col (str, optional): unit column (Default: 'Unit')
+    uL_col (str, optional): fixed per-reaction volume column (Default: 'uL')
+    mm_col (str, optional): optional boolean column; False keeps a component
+        out of the master mix, for anything added per sample (Default: 'In MM')
+    note_col (str, optional): optional note column carried through (Default: 'Note')
+    file (str, optional): output file path
+
+    Dependencies: pandas,io
+    '''
+    if component_col not in df.columns:
+        raise KeyError(f"rxn_mm() needs a '{component_col}' column; df has "
+                       f"{', '.join(map(str, df.columns))}")
+    if rxn_uL <= 0:
+        raise ValueError(f'rxn_uL must be greater than 0, got {rxn_uL}')
+    if samples < 1:
+        raise ValueError(f'samples must be at least 1, got {samples}')
+
+    def _num(row, col):
+        if col not in df.columns:
+            return None
+        value = row.get(col)
+        if value is None or value == '' or pd.isna(value):
+            return None
+        return float(value)
+
+    names, stocks, desireds, units, volumes, in_mm, notes = [], [], [], [], [], [], []
+    for _, row in df.iterrows():
+        name = row[component_col]
+        stock, desired, fixed = (_num(row, stock_col), _num(row, desired_col),
+                                 _num(row, uL_col))
+        if fixed is not None:
+            uL = fixed
+        elif stock is not None and desired is not None:
+            if stock <= 0:
+                raise ValueError(f"'{name}' has a stock of {stock}; it must be "
+                                 f'greater than 0')
+            if desired > stock:
+                raise ValueError(f"'{name}' wants {desired} from a stock of "
+                                 f'{stock}; it cannot be reached by dilution')
+            uL = rxn_uL * desired / stock
+        else:
+            raise ValueError(f"'{name}' needs either a volume in '{uL_col}' or "
+                             f"both '{stock_col}' and '{desired_col}'")
+        names.append(name)
+        stocks.append(row.get(stock_col, ''))
+        desireds.append(row.get(desired_col, ''))
+        units.append(row.get(unit_col, '') if unit_col in df.columns else '')
+        volumes.append(round(uL, 2))
+        keep = row.get(mm_col) if mm_col in df.columns else True
+        in_mm.append(True if keep is None or pd.isna(keep) else bool(keep))
+        notes.append(row.get(note_col, '') if note_col in df.columns else '')
+
+    water_uL = round(rxn_uL - sum(volumes), 2)
+    if water_uL < 0:
+        raise ValueError(f'The components come to {sum(volumes):.2f} uL, which '
+                         f'is more than the {rxn_uL} uL reaction. Raise rxn_uL '
+                         f'or lower a desired concentration.')
+
+    # Water first, the way it goes into the tube; total last
+    names = [water] + names + ['Total']
+    stocks = [''] + stocks + ['']
+    desireds = [''] + desireds + ['']
+    units = [''] + units + ['']
+    volumes = [water_uL] + volumes + [round(rxn_uL, 2)]
+    in_mm = [True] + in_mm + [True]
+    notes = [''] + notes + ['']
+
+    scale = samples * mm_x
+    mm_uL = [round(v * scale, 2) if keep else '-'
+             for v, keep in zip(volumes, in_mm)]
+    # The total is only what goes in the master mix tube, and is scaled from
+    # the unrounded sum so it is the volume to expect rather than the sum of
+    # nine rounded cells
+    mm_uL[-1] = round(sum(v for v, keep in zip(volumes[:-1], in_mm[:-1]) if keep)
+                      * scale, 2)
+    mm_uL = pd.Series(mm_uL, dtype=object)
+
+    def _blank(values):
+        return pd.Series(['' if v is None or (not isinstance(v, str) and pd.isna(v))
+                          else v for v in values], dtype=object)
+
+    df_mm = pd.DataFrame({'Component': names,
+                          'Stock': _blank(stocks),
+                          'Desired': _blank(desireds),
+                          'Unit': _blank(units),
+                          'uL': volumes,
+                          f'uL, MM ({samples} x {mm_x})': mm_uL,
+                          'Note': _blank(notes)})
+    if not any(n for n in notes if isinstance(n, str) and n):
+        df_mm = df_mm.drop(columns='Note')
+    if file is not None:
+        io.save(obj=df_mm, file=file, id=True)
+    return df_mm
+
 # Simulation
 def pcr_sim(df: pd.DataFrame | str,template_col: str, fwd_bind_col: str, rev_bind_col: str,
             fwd_ext_col: str=None, rev_ext_col: str=None, product_col: str='PCR Product',
@@ -1610,3 +1736,240 @@ def off_targets(df: pd.DataFrame | str, col: str, match_score: float = 2, mismat
                              'Off Target Sequence': off_target_seqs,
                              'Best Alignment Score': off_target_seqs_scores,
                              'Best Alignment Formatted': off_target_seqs_alignments})
+
+def anneal_mm(oligos: int=1, rxn_uL: float=10, mm_x: float=1.05,
+              top_uL: float=1.0, bottom_uL: float=1.0, buffer_stock: float=10,
+              buffer_desired: float=1, pnk_uL: float=0.5,
+              file: str=None) -> dict[str, pd.DataFrame]:
+    '''
+    anneal_mm(): phosphorylate and anneal oligo duplexes.
+
+    Top and bottom oligos go in per tube, so they are listed at their
+    per-reaction volume and left out of the master mix; everything else is
+    shared. Returns the mix and the thermocycler program.
+
+    Parameters:
+    oligos (int, optional): duplexes to anneal (Default: 1)
+    rxn_uL (float, optional): volume of one reaction (Default: 10)
+    mm_x (float, optional): master mix multiplier (Default: 1.05)
+    top_uL (float, optional): top oligo per reaction, uL (Default: 1.0)
+    bottom_uL (float, optional): bottom oligo per reaction, uL (Default: 1.0)
+    buffer_stock (float, optional): T4 ligase buffer stock, x (Default: 10)
+    buffer_desired (float, optional): T4 ligase buffer in the reaction, x (Default: 1)
+    pnk_uL (float, optional): T4 PNK per reaction, uL (Default: 0.5)
+    file (str, optional): output file path
+
+    Dependencies: pandas,io,rxn_mm()
+    '''
+    components = pd.DataFrame([
+        {'Component': 'Top oligo (100 uM)', 'uL': top_uL, 'In MM': False},
+        {'Component': 'Bottom oligo (100 uM)', 'uL': bottom_uL, 'In MM': False},
+        {'Component': 'T4 DNA ligase buffer', 'Stock': buffer_stock,
+         'Desired': buffer_desired, 'Unit': 'x'},
+        {'Component': 'T4 PNK', 'uL': pnk_uL, 'Note': 'add last'},
+    ])
+    program = pd.DataFrame([
+        {'Step': 1, 'Temperature': '37 C', 'Time': '30 min', 'Note': 'phosphorylate'},
+        {'Step': 2, 'Temperature': '95 C', 'Time': '5 min', 'Note': 'denature'},
+        {'Step': 3, 'Temperature': '4 C', 'Time': 'hold',
+         'Note': 'ramp at 0.2 C/sec so the duplexes anneal rather than snap back'},
+    ])
+    tables = {'Anneal': rxn_mm(components, rxn_uL=rxn_uL, samples=oligos, mm_x=mm_x),
+              'Anneal program': program}
+    if file is not None:
+        io.save(obj=tables, file=file, id=True)
+    return tables
+
+def golden_gate(inserts: int=3, samples: int=1, rxn_uL: float=10,
+                mm_x: float=1.1, insert_uL: float=None, insert_stock: float=10,
+                insert_desired: float=1, insert_unit: str='x',
+                vector: str='Vector', vector_stock: float=100,
+                vector_ng: float=100, buffer_stock: float=10,
+                buffer_desired: float=1, atp_stock: float=10,
+                atp_desired: float=1, enzyme: str='FastDigest Esp3I',
+                enzyme_stock: float=20, enzyme_desired: float=1,
+                ligase_stock: float=20, ligase_desired: float=1,
+                shared_inserts: bool=False, cycles: int=15,
+                file: str=None) -> dict[str, pd.DataFrame]:
+    '''
+    golden_gate(): Esp3I/T4 ligase assembly from a vector and fragments.
+
+    Covers both routes into the same assembly: inserts that are annealed oligo
+    duplexes, which go in at a dilution (insert_stock/insert_desired), and an
+    insert that is a gel-purified PCR product, which goes in at a fixed volume
+    (insert_uL). Returns the mix and the thermocycler program.
+
+    The vector is the one component specified as an amount rather than a
+    concentration, because that is how it is decided at the bench: so many
+    nanograms of backbone, whatever the miniprep came back at.
+
+    Parameters:
+    inserts (int, optional): fragments going into the vector (Default: 3)
+    samples (int, optional): assemblies the master mix has to cover (Default: 1)
+    rxn_uL (float, optional): volume of one reaction (Default: 10)
+    mm_x (float, optional): master mix multiplier (Default: 1.1)
+    insert_uL (float, optional): fixed insert volume per reaction; set this for
+        a gel-purified PCR product and the stock/desired pair is ignored. Zero
+        or None means the insert is a dilution instead, so a template can carry
+        the choice as a number (Default: None)
+    insert_stock (float, optional): insert stock, in insert_unit (Default: 10)
+    insert_desired (float, optional): insert in the reaction (Default: 1)
+    insert_unit (str, optional): insert concentration unit (Default: 'x')
+    vector (str, optional): backbone name (Default: 'Vector')
+    vector_stock (float, optional): backbone concentration, ng/uL (Default: 100)
+    vector_ng (float, optional): backbone per reaction, ng (Default: 100)
+    buffer_stock (float, optional): FastDigest buffer stock, x (Default: 10)
+    buffer_desired (float, optional): FastDigest buffer in the reaction (Default: 1)
+    atp_stock (float, optional): ATP stock, mM (Default: 10)
+    atp_desired (float, optional): ATP in the reaction, mM (Default: 1)
+    enzyme (str, optional): type IIS enzyme (Default: 'FastDigest Esp3I')
+    enzyme_stock (float, optional): enzyme stock, x (Default: 20)
+    enzyme_desired (float, optional): enzyme in the reaction, x (Default: 1)
+    ligase_stock (float, optional): T4 DNA ligase stock, x (Default: 20)
+    ligase_desired (float, optional): T4 DNA ligase in the reaction, x (Default: 1)
+    shared_inserts (bool, optional): True when every assembly takes the same
+        fragments, which puts them in the master mix; False when each assembly
+        has its own, which keeps them per tube (Default: False)
+    cycles (int, optional): digest/ligate cycles (Default: 15)
+    file (str, optional): output file path
+
+    Dependencies: pandas,io,rxn_mm()
+    '''
+    if inserts < 1:
+        raise ValueError(f'inserts must be at least 1, got {inserts}')
+    if vector_stock <= 0:
+        raise ValueError(f'vector_stock must be greater than 0, got {vector_stock}')
+
+    rows = [{'Component': 'FastDigest buffer', 'Stock': buffer_stock,
+             'Desired': buffer_desired, 'Unit': 'x'},
+            {'Component': 'ATP', 'Stock': atp_stock, 'Desired': atp_desired,
+             'Unit': 'mM'}]
+    for i in range(1, inserts + 1):
+        row = {'Component': f'Fragment {i}', 'In MM': shared_inserts}
+        if insert_uL:
+            row['uL'] = insert_uL
+        else:
+            row.update({'Stock': insert_stock, 'Desired': insert_desired,
+                        'Unit': insert_unit})
+        rows.append(row)
+    rows.append({'Component': vector, 'uL': round(vector_ng / vector_stock, 2),
+                 'Note': f'{vector_ng:g} ng at {vector_stock:g} ng/uL'})
+    rows.append({'Component': enzyme, 'Stock': enzyme_stock,
+                 'Desired': enzyme_desired, 'Unit': 'x'})
+    rows.append({'Component': 'T4 DNA ligase', 'Stock': ligase_stock,
+                 'Desired': ligase_desired, 'Unit': 'x'})
+
+    program = pd.DataFrame([
+        {'Step': 1, 'Temperature': '37 C', 'Time': '5 min', 'Note': 'digest'},
+        {'Step': 2, 'Temperature': '16 C', 'Time': '5 min',
+         'Note': f'ligate; repeat steps 1-2 for {cycles} cycles'},
+        {'Step': 3, 'Temperature': '4 C', 'Time': 'hold', 'Note': ''},
+    ])
+    tables = {'Golden Gate': rxn_mm(pd.DataFrame(rows), rxn_uL=rxn_uL,
+                                    samples=samples, mm_x=mm_x),
+              'Golden Gate program': program}
+    if file is not None:
+        io.save(obj=tables, file=file, id=True)
+    return tables
+
+# Grams per mole per base pair of double-stranded DNA, the usual round number
+NG_PER_PMOL_KB = 650
+
+def gibson(df: pd.DataFrame, rxn_uL: float=15, mm_uL: float=None,
+           pmol: float=0.02, pmol_small: float=0.05, small_kb: float=1.0,
+           fragment_col: str='Fragment', kb_col: str='kb',
+           conc_col: str='ng/uL', pmol_col: str='pmol',
+           dilution_col: str='Dilution', mm: str='2x NEBuilder HiFi MM',
+           file: str=None) -> pd.DataFrame:
+    '''
+    gibson(): fragment volumes for an equimolar NEBuilder assembly.
+
+    An assembly is equimolar in fragments, not in mass, so a 5 kb backbone and
+    a 0.3 kb insert at the same number of picomoles are fifteen-fold apart in
+    nanograms. This converts each fragment's target picomoles to nanograms at
+    650 ng per pmol per kb, then to a volume at its measured concentration,
+    and gives the water that fills the reaction.
+
+    Short fragments default to a higher pmol target than long ones, which is
+    the usual way of giving a small insert its excess over the backbone.
+
+    Parameters:
+    df (dataframe): one row per fragment, with a length in kb and a measured
+        concentration. A per-fragment pmol or dilution column overrides the
+        defaults for that row.
+    rxn_uL (float, optional): volume of one assembly (Default: 15)
+    mm_uL (float, optional): 2x master mix volume; half the reaction when left
+        unset, which is what a 2x mix means (Default: None)
+    pmol (float, optional): target picomoles for a fragment at or above
+        small_kb (Default: 0.02)
+    pmol_small (float, optional): target picomoles below small_kb (Default: 0.05)
+    small_kb (float, optional): length below which pmol_small applies (Default: 1.0)
+    fragment_col (str, optional): fragment name column (Default: 'Fragment')
+    kb_col (str, optional): fragment length column, kb (Default: 'kb')
+    conc_col (str, optional): measured concentration column, ng/uL (Default: 'ng/uL')
+    pmol_col (str, optional): optional per-fragment pmol column (Default: 'pmol')
+    dilution_col (str, optional): optional per-fragment dilution factor, where 10
+        means a 1-in-10 dilution of the stock (Default: 'Dilution')
+    mm (str, optional): master mix name (Default: '2x NEBuilder HiFi MM')
+    file (str, optional): output file path
+
+    Dependencies: pandas,io,NG_PER_PMOL_KB
+    '''
+    for col in (fragment_col, kb_col, conc_col):
+        if col not in df.columns:
+            raise KeyError(f"gibson() needs a '{col}' column; df has "
+                           f"{', '.join(map(str, df.columns))}")
+    if len(df) == 0:
+        raise ValueError('gibson() needs at least one fragment')
+    if mm_uL is None:
+        mm_uL = rxn_uL / 2
+    if mm_uL >= rxn_uL:
+        raise ValueError(f'mm_uL ({mm_uL}) must be less than rxn_uL ({rxn_uL})')
+
+    names, kbs, pmols, ngs, concs, uLs = [], [], [], [], [], []
+    for _, row in df.iterrows():
+        name, kb = row[fragment_col], float(row[kb_col])
+        if kb <= 0:
+            raise ValueError(f"'{name}' has a length of {kb} kb; it must be "
+                             f'greater than 0')
+        conc = row[conc_col]
+        if conc is None or pd.isna(conc) or float(conc) <= 0:
+            raise ValueError(f"'{name}' has no measured concentration. Nanodrop "
+                             f'the fragments before planning the assembly; the '
+                             f'volumes cannot be guessed from the lengths alone.')
+        conc = float(conc)
+        want = row.get(pmol_col) if pmol_col in df.columns else None
+        if want is None or pd.isna(want):
+            want = pmol_small if kb < small_kb else pmol
+        want = float(want)
+        dilution = row.get(dilution_col) if dilution_col in df.columns else None
+        dilution = 1.0 if dilution is None or pd.isna(dilution) else float(dilution)
+        if dilution <= 0:
+            raise ValueError(f"'{name}' has a dilution of {dilution}; it must "
+                             f'be greater than 0')
+        ng = want * kb * NG_PER_PMOL_KB
+        names.append(name)
+        kbs.append(round(kb, 3))
+        pmols.append(round(want, 4))
+        ngs.append(round(ng, 2))
+        concs.append(round(conc / dilution, 2))
+        uLs.append(round(ng / (conc / dilution), 2))
+
+    water_uL = round(rxn_uL - mm_uL - sum(uLs), 2)
+    if water_uL < 0:
+        raise ValueError(
+            f'The fragments come to {sum(uLs):.2f} uL, which leaves no room '
+            f'beside {mm_uL} uL of master mix in a {rxn_uL} uL reaction. '
+            f'Concentrate the fragments, lower the pmol target, or scale the '
+            f'reaction up.')
+
+    df_gibson = pd.DataFrame({
+        'Fragment': names + [mm, 'Nuclease-free water', 'Total'],
+        'kb': pd.Series(kbs + ['', '', ''], dtype=object),
+        'pmol': pd.Series(pmols + ['', '', ''], dtype=object),
+        'ng': pd.Series(ngs + ['', '', ''], dtype=object),
+        'ng/uL': pd.Series(concs + ['', '', ''], dtype=object),
+        'uL': uLs + [round(mm_uL, 2), water_uL, round(rxn_uL, 2)]})
+    if file is not None:
+        io.save(obj=df_gibson, file=file, id=True)
+    return df_gibson

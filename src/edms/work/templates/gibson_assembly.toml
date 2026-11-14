@@ -1,0 +1,233 @@
+# Fragment PCR -> Gibson assembly -> transform -> inoculate -> miniprep
+#
+# Modelled on MUZ363, which builds a lentiviral vector from three and then
+# five overlapping PCR fragments. The assembly is equimolar in fragments
+# rather than equal in mass, which is the part that is easy to get wrong by
+# eye: a 0.3 kb insert and a 5 kb backbone are fifteen-fold apart in
+# nanograms at the same number of picomoles.
+#
+# Bundled example template. Copy it and edit the defaults to match your bench:
+#   cp "$(edms work where gibson_assembly)" ./my_gibson.toml
+#   edms work init -t ./my_gibson.toml -i run.toml
+
+name = "gibson_assembly"
+version = 1
+title = "Gibson assembly from fragment PCR to sequenced plasmid"
+description = """
+Overlapping fragments amplified with Q5, assembled with NEBuilder HiFi, then
+transformed, miniprepped and sequenced.
+
+The fragment volumes come from edms.bio.clone:gibson, which converts each
+fragment's target picomoles to nanograms at 650 ng per pmol per kb and then to
+a volume at its measured concentration. Fragments below small_kb get the
+higher picomole target, which is how a small insert gets its excess over the
+backbone.
+
+The fragments have to be quantified before the assembly can be planned. The
+plan is an error rather than a guess until they are.
+"""
+
+[params]
+# Fragment PCR (passed to edms.bio.clone:rxn_mm)
+pcr_rxn_uL       = 50
+pcr_samples      = 3
+pcr_mm_x         = 1.1
+pcr_cycles       = 30
+pcr_anneal_C     = 66
+template_uL      = 1.0
+# Assembly (passed to edms.bio.clone:gibson)
+rxn_uL           = 15
+mm_uL            = 7.5
+pmol             = 0.02
+pmol_small       = 0.05
+small_kb         = 1.0
+mm               = "2x NEBuilder HiFi MM"
+assembly_C       = 50
+assembly_min     = 60
+# Transformation and growth
+cells            = "NEB Stable"
+outgrowth_min    = 20
+colony_temp      = 37
+culture_mL       = 4
+culture_temp     = 30
+culture_hours    = 22
+
+[[inputs]]
+name = "pcr_components"
+description = "Q5 reaction components, with a stock and desired concentration each"
+required_columns = ["Component"]
+
+[[inputs]]
+name = "fragments"
+description = "One row per fragment, with its length in kb and its nanodrop concentration"
+required_columns = ["Fragment", "kb", "ng/uL"]
+optional = true
+
+# --------------------------------------------------------------------------- #
+
+[[steps]]
+id = "pcr_plan"
+title = "Calculate the fragment PCR"
+day = 0
+duration = "5 min"
+compute = "edms.bio.clone:rxn_mm"
+outputs = ["Q5"]
+text = """
+Q5 master mix for {pcr_samples} fragment(s) at {pcr_rxn_uL} uL and {pcr_mm_x}x.
+
+Water is the balance, so changing a component's concentration moves the water
+rather than overfilling the tube.
+"""
+
+[steps.args]
+df      = "@pcr_components"
+rxn_uL  = "$pcr_rxn_uL"
+samples = "$pcr_samples"
+mm_x    = "$pcr_mm_x"
+
+[[steps]]
+id = "pcr"
+title = "Amplify the fragments"
+day = 0
+depends_on = ["pcr_plan"]
+duration = "4 h"
+text = """
+{pcr_cycles} cycles at {pcr_anneal_C} C, grouping reactions by annealing
+temperature so one block runs one program.
+
+Dilute the primers 1 in 10 and the template to 1-2 ng/uL first. Carrying over
+too much template is the usual reason a Gibson comes back as the parent
+plasmid: the colonies are real, they are just not the assembly.
+
+A fragment that will not amplify is a gradient and a GC-enhancer comparison,
+not more cycles. Record which one you ran:
+  edms work deviate <run_dir> -s pcr -p pcr_anneal_C -v 62 -w "gradient, fragment 2"
+"""
+checks = [
+  "Primers diluted 1 in 10",
+  "Template diluted to 1-2 ng/uL",
+  "Reactions grouped by annealing temperature",
+]
+
+[[steps]]
+id = "gel"
+title = "Gel and extract"
+day = 0
+depends_on = ["pcr"]
+duration = "3 h"
+text = """
+Run the fragments on an agarose gel, leaving a lane between samples so the
+cuts cannot cross-contaminate. Cut and purify with a column kit.
+
+Nanodrop after elution and put the concentrations in the fragments table.
+This is the number the assembly is calculated from, and it is the one step
+that cannot be skipped and made up later.
+"""
+checks = [
+  "A lane left between samples",
+  "Every fragment nanodropped after elution",
+  "Single band at the expected size for each fragment",
+]
+
+[[steps]]
+id = "assembly_plan"
+title = "Calculate the assembly"
+depends_on = ["gel"]
+duration = "5 min"
+compute = "edms.bio.clone:gibson"
+outputs = ["Gibson"]
+text = """
+Fragment volumes for a {rxn_uL} uL assembly with {mm_uL} uL of {mm}.
+
+Fragments at or above {small_kb} kb go in at {pmol} pmol and shorter ones at
+{pmol_small} pmol, so a small insert arrives in excess of the backbone without
+anyone working out the mass by hand.
+
+This step needs the fragments input with concentrations in it. Add it once the
+gel extraction is quantified and the protocol re-renders with the plan:
+  edms work input <run_dir> -I fragments=fragments.csv
+"""
+
+[steps.args]
+df         = "@fragments"
+rxn_uL     = "$rxn_uL"
+mm_uL      = "$mm_uL"
+pmol       = "$pmol"
+pmol_small = "$pmol_small"
+small_kb   = "$small_kb"
+mm         = "$mm"
+
+[[steps]]
+id = "assemble"
+title = "Assemble"
+depends_on = ["assembly_plan"]
+duration = "1.5 h"
+text = """
+Set up on ice from the table above, then {assembly_C} C for {assembly_min} min
+and hold at 4 C.
+
+Thaw the competent cells on ice five minutes before it finishes.
+
+Include a backbone-only control. Without it, a plate of colonies tells you
+nothing about whether the assembly worked or the parent plasmid carried
+through.
+"""
+checks = [
+  "Backbone-only control included",
+  "Competent cells thawing before the program ends",
+]
+
+[[steps]]
+id = "transform"
+title = "Transform"
+depends_on = ["assemble"]
+duration = "2 h"
+text = """
+Transform {cells}, outgrow {outgrowth_min} min, plate, and grow at
+{colony_temp} C for 18-20 h.
+
+Record the times:
+  edms work note <run_dir> -s transform -n "outgrowth ..., plated ..."
+"""
+checks = [
+  "Control plate counted alongside the assemblies",
+  "Times recorded",
+]
+
+[[steps]]
+id = "inoculate"
+title = "Inoculate"
+depends_on = ["transform"]
+duration = "1 h"
+text = """
+Pick two colonies per assembly into {culture_mL} mL TB with antibiotic, and
+grow at {culture_temp} C for {culture_hours} h.
+
+Lentiviral backbones recombine, so the lower temperature and the second colony
+are both worth the bench space.
+"""
+checks = [
+  "Two colonies picked per assembly",
+  "Picking order written down at the bench",
+]
+
+[[steps]]
+id = "miniprep"
+title = "Miniprep and sequence"
+depends_on = ["inoculate"]
+duration = "1 day"
+text = """
+Miniprep, nanodrop, and sequence for a full plasmid map.
+
+A junction read is not enough here: an assembly of five fragments has four
+junctions and a long stretch of PCR product between them, any of which can
+carry a change.
+
+Record what passed:
+  edms work note <run_dir> -s miniprep -n "confirmed ..."
+"""
+checks = [
+  "Full plasmid map obtained",
+  "Every junction covered",
+  "Confirmed plasmids recorded against their IDs",
+]
