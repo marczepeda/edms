@@ -33,6 +33,10 @@ Usage:
 - autoscale_limits(): Compute axis limits from data with proportional padding.
 - autoscale_xy(): Compute x and y axis limits with proportional padding.
 - _offset_density(): Compute a kernel density estimate on a shared grid for offset graphs
+- _offset_stats(): Compute 1 summary statistic per offset graph baseline
+- _offset_stats_relative(): Express every offset graph baseline's statistic as a % difference from a reference
+- _offset_swarm_offsets(): Spread overlapping swarm points off their baseline
+- _offset_cat_marks(): Draw 1 cat() style mark for 1 offset graph baseline
 - log_ticks(): put a log axis' major ticks on powers of 10 & its minor ticks on the decade in between
 - _Log10SubsLocator: minor tick positions for a linear axis that holds log10 values
 - log10_ticks(): put a log10 valued axis' major ticks on powers of 10 & its minor ticks on the decade in between
@@ -996,6 +1000,310 @@ def _offset_density(values, grid: np.ndarray, bw_adjust: float = 1) -> np.ndarra
     kde = gaussian_kde(values)
     kde.set_bandwidth(kde.factor * bw_adjust)
     return kde(grid)
+
+def _offset_stats(df: pd.DataFrame, x: str, cols: str = None, cats: list = None, stat: str = 'mean',
+                  reps: str = None, errorbar: str = 'sd') -> dict:
+    """
+    _offset_stats(): Compute 1 summary statistic per offset graph baseline
+
+    Parameters:
+    df (pd.DataFrame): dataframe holding 1 offset graph panel
+    x (str): x-axis column name
+    cols (str, optional): color column name (Default: None; every row is 1 group keyed by None)
+    cats (list, optional): cols values in offset graph order (Default: None; every cols value)
+    stat (str, optional): 'mean' or 'gmean' (Default: 'mean')
+    reps (str, optional): replicate column name (Default: None; the baseline's values are pooled)
+    errorbar (str, optional): spread across replicates, 'sd' or 'sem' (Default: 'sd'; None leaves it out)
+
+    Returns a {cols value: {'center', 'lower', 'upper', 'n', 'reps'}} dictionary, where a baseline
+    with nothing to summarize is None. Without reps the statistic pools the baseline's values, there
+    are no bounds & 'reps' holds the 1 pooled statistic. With reps the statistic is computed per
+    replicate, 'reps' holds them keyed by replicate, 'center' summarizes them & the bounds come from
+    their spread, so 'n' counts replicates instead of values. 'reps' is what a graph that draws every
+    replicate (swarm, strip, box, violin) is drawn from. The geometric mean only uses the positive
+    values, since log(0) & log(negative) are undefined, & its spread is taken in log space, which
+    makes its bounds multiplicative (asymmetric on a linear axis).
+
+    Dependencies: numpy & pandas
+    """
+    if stat not in ('mean', 'gmean'):
+        raise ValueError("Invalid stat! mean, gmean")
+    if errorbar not in ('sd', 'sem', None):
+        raise ValueError("Invalid errorbar! sd, sem, None")
+
+    if cats is None:
+        cats = [None] if cols is None else df[cols].dropna().drop_duplicates().tolist()
+
+    def _center(values) -> float:
+        """Statistic over 1 set of values, or None when nothing is left to summarize."""
+        values = pd.to_numeric(pd.Series(list(values)), errors='coerce').to_numpy(dtype=float)
+        values = values[np.isfinite(values)]
+        if stat == 'gmean':
+            values = values[values > 0]
+        if len(values) == 0:
+            return None
+        return float(np.exp(np.log(values).mean())) if stat == 'gmean' else float(values.mean())
+
+    stats = {}
+    for cat in cats:
+        df_cat = df if (cols is None or cat is None) else df.loc[df[cols] == cat]
+
+        if reps is None: # Pooled values, so there is no replicate spread to show
+            center = _center(df_cat[x])
+            stats[cat] = None if center is None else {'center': center, 'lower': None, 'upper': None,
+                                                      'n': int(len(df_cat)), 'reps': {None: center}}
+            continue
+
+        rep_values = {rep: _center(df_rep[x]) for rep, df_rep in df_cat.groupby(reps, sort=False)}
+        rep_values = {rep: value for rep, value in rep_values.items()
+                      if value is not None and np.isfinite(value)}
+        rep_centers = np.array(list(rep_values.values()))
+        if len(rep_centers) == 0:
+            stats[cat] = None
+            continue
+
+        scale = np.log(rep_centers) if stat == 'gmean' else rep_centers # Spread in the axis' own space
+        center = float(scale.mean())
+        if errorbar is None or len(scale) < 2:
+            spread = 0.0 # 1 replicate has no spread to show
+        else:
+            spread = float(scale.std(ddof=1))
+            if errorbar == 'sem':
+                spread /= math.sqrt(len(scale))
+        bounds = [center - spread, center + spread]
+        if stat == 'gmean':
+            center, bounds = float(np.exp(center)), [float(np.exp(bound)) for bound in bounds]
+
+        stats[cat] = {'center': center,
+                      'lower': None if errorbar is None else bounds[0],
+                      'upper': None if errorbar is None else bounds[1],
+                      'n': int(len(rep_centers)),
+                      'reps': rep_values}
+    return stats
+
+def _offset_stats_relative(stats: dict, ref: list, stat: str = 'mean', errorbar: str = 'sd') -> dict:
+    """
+    _offset_stats_relative(): Express every offset graph baseline's statistic as a % difference from a reference
+
+    Parameters:
+    stats (dict): 1 panel of _offset_stats() output
+    ref (list): cols values whose statistic is the reference (several are combined into 1 reference)
+    stat (str, optional): the statistic _offset_stats() computed, 'mean' or 'gmean' (Default: 'mean')
+    errorbar (str, optional): spread across replicates, 'sd' or 'sem' (Default: 'sd'; None leaves it out)
+
+    Returns a stats dictionary in the same shape, holding 100 * (value / reference - 1) instead of the
+    statistic itself, so the reference sits at 0%. Several reference values are combined in the
+    statistic's own space, arithmetically for 'mean' & geometrically for 'gmean'. With replicates each
+    replicate is divided by that same replicate's reference, which pairs them & leaves the spread as
+    the replicate to replicate spread of the % difference rather than of the statistic. A baseline is
+    None when its reference is missing or non-positive, since the ratio is undefined there.
+
+    Dependencies: numpy & math
+    """
+    if errorbar not in ('sd', 'sem', None):
+        raise ValueError("Invalid errorbar! sd, sem, None")
+
+    def _combine(values) -> float:
+        """1 reference value out of the reference baselines, in the statistic's own space."""
+        values = np.array([value for value in values if value is not None and np.isfinite(value)], dtype=float)
+        if stat == 'gmean':
+            values = values[values > 0]
+        if len(values) == 0:
+            return None
+        return float(np.exp(np.log(values).mean())) if stat == 'gmean' else float(values.mean())
+
+    # 1 reference per replicate, so that a baseline is divided by its own replicate's reference
+    summaries = [stats.get(cat) for cat in ref]
+    summaries = [summary for summary in summaries if summary is not None]
+    if not summaries:
+        return {cat: None for cat in stats}
+
+    rep_labels = list(dict.fromkeys(label for summary in summaries for label in summary['reps']))
+    references = {label: _combine([summary['reps'].get(label) for summary in summaries])
+                  for label in rep_labels}
+    pooled = _combine([summary['center'] for summary in summaries]) # Fallback for an unpaired baseline
+
+    relative = {}
+    for cat, summary in stats.items():
+        if summary is None:
+            relative[cat] = None
+            continue
+
+        percents = []
+        for label, value in summary['reps'].items():
+            reference = references.get(label)
+            if reference is None or not np.isfinite(reference) or reference == 0:
+                reference = pooled # This baseline's replicate has no reference of its own
+            if reference is None or not np.isfinite(reference) or reference == 0:
+                continue
+            percents.append(100 * (value / reference - 1))
+
+        percents = np.array([percent for percent in percents if np.isfinite(percent)], dtype=float)
+        if len(percents) == 0:
+            relative[cat] = None
+            continue
+
+        center = float(percents.mean())
+        if errorbar is None or len(percents) < 2:
+            spread = 0.0 # 1 replicate has no spread to show
+        else:
+            spread = float(percents.std(ddof=1))
+            if errorbar == 'sem':
+                spread /= math.sqrt(len(percents))
+
+        relative[cat] = {'center': center,
+                         'lower': None if errorbar is None else center - spread,
+                         'upper': None if errorbar is None else center + spread,
+                         'n': int(len(percents)),
+                         'reps': dict(zip(summary['reps'], percents))}
+    return relative
+
+def _offset_swarm_offsets(values, dims: tuple, scale: str, height: float, size: float) -> np.ndarray:
+    """
+    _offset_swarm_offsets(): Spread overlapping swarm points off their baseline
+
+    Parameters:
+    values: the x values being drawn on 1 baseline
+    dims (tuple): the panel's x-axis limits, which set how close 2 points look
+    scale (str): 'linear' or 'log', so the gap is measured the way the axis draws it
+    height (float): the band the points may spread over, in the same units as the baselines
+    size (float): marker size, which sets how far apart 2 points have to be to not overlap
+
+    Returns 1 y offset per value, smallest first, so that points that would sit on top of each
+    other step off the baseline symmetrically instead & a lone point stays on it.
+
+    Dependencies: numpy
+    """
+    values = np.asarray(values, dtype=float)
+    if len(values) == 0:
+        return np.array([])
+
+    low, high = dims
+    if scale == 'log': # Measure the gap where the eye sees it, which is in decades
+        low, high, values = np.log10(low), np.log10(high), np.log10(np.clip(values, 1e-300, None))
+    span = float(high - low) or 1.0
+    fractions = (values - low) / span
+
+    gap = max(float(size), 1.0) / 100 # Marker width as a fraction of the axis
+    step = height / 3 if height else 0.1
+
+    offsets = np.zeros(len(values))
+    placed = [] # (fraction, offset) of every point already drawn on this baseline
+    for index in np.argsort(fractions, kind='stable'):
+        taken = [offset for fraction, offset in placed if abs(fraction - fractions[index]) < gap]
+        offset = 0.0
+        for rung in range(len(values) + 1): # 0, +step, -step, +2 step, ... until the slot is free
+            for candidate in ([0.0] if rung == 0 else [rung * step, -rung * step]):
+                if all(abs(candidate - other) >= step * 0.9 for other in taken):
+                    offset = candidate
+                    break
+            else:
+                continue
+            break
+        offsets[index] = offset
+        placed.append((fractions[index], offset))
+    return offsets
+
+def _offset_cat_marks(ax, graph: str, position: float, summary: dict, *, scale: str = 'linear',
+                      dims: tuple = (0, 1), base: float = 0, height: float = 0.5, color='grey',
+                      edgecol: str = 'black', lw: float = 1, alpha: float = 1, size: float = 5,
+                      errwid: float = 1, errcap: float = 3, seed: int = 0) -> None:
+    """
+    _offset_cat_marks(): Draw 1 cat() style mark for 1 offset graph baseline
+
+    Parameters:
+    ax: the panel the mark is drawn on, whose x-axis limits are already set
+    graph (str): cat() graph type (bar, box, violin, swarm, strip, point & the _strip/_swarm pairs)
+    position (float): the baseline's y position
+    summary (dict): 1 baseline of _offset_stats() output
+    scale (str, optional): the panel's x-axis scale, 'linear' or 'log' (Default: 'linear')
+    dims (tuple, optional): the panel's x-axis limits (Default: (0, 1))
+    base (float, optional): where a bar starts (Default: 0)
+    height (float, optional): the mark's thickness, in the same units as the baselines (Default: 0.5)
+    color (optional): the baseline's trace color (Default: 'grey')
+    edgecol (str, optional): mark edge color (Default: 'black')
+    lw (float, optional): mark edge line width (Default: 1)
+    alpha (float, optional): mark transparency (Default: 1)
+    size (float, optional): marker size for the point, swarm & strip marks (Default: 5)
+    errwid (float, optional): error bar line width (Default: 1)
+    errcap (float, optional): error bar cap size in points (Default: 3)
+    seed (int, optional): jitter seed, so that a strip redraws the same way (Default: 0)
+
+    Note: a composite type such as bar_swarm draws its layers in the order they are named. box &
+          violin need at least 2 replicates to say anything, so with fewer they fall back to a
+          point. Error bars belong to the bar & point marks, since the other marks already show
+          the spread themselves.
+
+    Dependencies: numpy, matplotlib, _offset_density(), & _offset_swarm_offsets()
+    """
+    center = summary.get('center')
+    lower, upper = summary.get('lower'), summary.get('upper')
+    values = np.array([value for value in summary.get('reps', {}).values()
+                       if value is not None and np.isfinite(value)], dtype=float)
+    if scale == 'log':
+        values = values[values > 0]
+
+    xerr = None
+    if (lower is not None and upper is not None and np.isfinite(lower) and np.isfinite(upper)
+            and upper > lower):
+        xerr = [[center - lower], [upper - center]]
+
+    def _point():
+        ax.errorbar(center, position, xerr=xerr, fmt='o', markersize=size, markerfacecolor=color,
+                    markeredgecolor=edgecol, markeredgewidth=lw, alpha=alpha, ecolor=edgecol,
+                    elinewidth=errwid, capsize=errcap, capthick=errwid, zorder=3)
+
+    for kind in str(graph).split('_'):
+        if kind == 'bar':
+            ax.barh(position, center - base, left=base, height=height, color=color, alpha=alpha,
+                    edgecolor=edgecol, linewidth=lw, zorder=2)
+            if xerr is not None:
+                ax.errorbar(center, position, xerr=xerr, fmt='none', ecolor=edgecol,
+                            elinewidth=errwid, capsize=errcap, capthick=errwid, zorder=3)
+
+        elif kind == 'point':
+            _point()
+
+        elif kind == 'box':
+            if len(values) < 2:
+                _point()
+                continue
+            artists = ax.boxplot([values], positions=[position], orientation='horizontal',
+                                 widths=height, patch_artist=True, manage_ticks=False, zorder=2)
+            for patch in artists['boxes']:
+                patch.set(facecolor=color, alpha=alpha, edgecolor=edgecol, linewidth=lw)
+            for part in ('whiskers', 'caps', 'medians'):
+                for artist in artists[part]:
+                    artist.set(color=edgecol, linewidth=lw)
+            for flier in artists['fliers']:
+                flier.set(markeredgecolor=edgecol, markersize=size)
+
+        elif kind == 'violin':
+            if len(values) < 2:
+                _point()
+                continue
+            low, high = (np.log10(dims[0]), np.log10(dims[1])) if scale == 'log' else dims
+            grid = np.linspace(low, high, 200) # The density lives in the space the axis draws in
+            density = _offset_density(np.log10(values) if scale == 'log' else values, grid)
+            if density is None or not np.isfinite(density).any() or density.max() <= 0:
+                _point()
+                continue
+            half = density / density.max() * (height / 2)
+            ax.fill_between(10 ** grid if scale == 'log' else grid, position - half, position + half,
+                            facecolor=color, alpha=alpha, edgecolor=edgecol, linewidth=lw, zorder=2)
+
+        elif kind in ('swarm', 'strip'):
+            if len(values) == 0:
+                continue
+            if kind == 'swarm':
+                shifts = _offset_swarm_offsets(values, dims, scale, height, size)
+            else:
+                shifts = np.random.default_rng(seed).uniform(-height / 2, height / 2, len(values))
+            ax.scatter(values, position + shifts, s=size ** 2, facecolors=color, edgecolors=edgecol,
+                       linewidths=lw, alpha=alpha, zorder=4)
+
+        else:
+            raise ValueError(f"Invalid offset_stat_graph layer! {kind}")
 
 def log_ticks(ax, axis: str = 'both', subs=None, numticks: int = 100) -> None:
     '''
@@ -2627,8 +2935,13 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
 
 def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_order: list = None, cols_exclude: list | str = None, bins: int = 40, log10_low: int = 0,
         offset_spacing: float = None, offset_norm: str = 'max', offset_fill: bool = True, offset_alpha: float = 1, offset_bw_adjust: float = 1, offset_grid: int = 200, offset_ticks: bool = True,
+        offset_stat: str | bool = None, offset_stat_graph: str = 'swarm', offset_stat_width: float = 0.5,
+        offset_stat_height: float = 0.5, offset_stat_shift: float = 0.25, offset_stat_size: float = 5,
+        offset_stat_axis: str = '', offset_stat_dims: str | tuple = (0, 0),
+        offset_stat_reps: str = None, offset_stat_errorbar: str = 'sd', offset_stat_errwid: int = 1, offset_stat_errcap: float = 3,
+        offset_stat_ref: str | list = None, offset_stat_ref_axis: str = '', offset_stat_ref_dims: str | tuple = (0, 0),
         file: str = None, palette_or_cmap: str | list | dict | mcolors.Colormap = 'colorblind', palette_shift: int = 0, edgecol: str = 'black', lw: int = 1,
-        facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
+        line: float | list[float] = None, facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
         figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
         x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_scale: str = 'linear', x_axis_dims: tuple | list[tuple] = (0, 0), x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
         y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple | list[tuple] = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
@@ -2655,6 +2968,46 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
     offset_bw_adjust (float, optional): multiplier for the offset graph kernel bandwidth (Default: 1; < 1 is less smooth)
     offset_grid (int, optional): # of points that offset graph densities are evaluated on (Default: 200)
     offset_ticks (bool, optional): label offset graph baselines with cols values instead of making a legend (Default: True)
+    offset_stat (str | bool, optional): add a cat() style panel to the right of each offset graph panel holding 1 summary
+                                       statistic per baseline (Default: None; 'mean', 'gmean', or 'auto'/True, which is
+                                       'gmean' when x_axis_scale is 'log' & 'mean' otherwise)
+    offset_stat_graph (str, optional): the cat() graph type the statistic is drawn as (Default: 'swarm'; bar, box, violin,
+                                      swarm, strip, point & the pairs bar_swarm, box_swarm, violin_swarm, bar_strip,
+                                      box_strip, violin_strip, whose layers are drawn in the order they are named).
+                                      swarm, strip, box & violin draw every offset_stat_reps replicate, so they say more
+                                      than a bar does but need replicates; box & violin fall back to a point below 2 of
+                                      them. Error bars belong to the bar & point layers, since the rest show the spread.
+    offset_stat_width (float, optional): width of each offset_stat panel relative to its offset graph panel
+                                        (Default: 0.5, which gives the offset graph 2/3 of the pair & the statistic 1/3;
+                                        1 splits them evenly & 0.4 makes the statistic panel a narrow sidebar)
+    offset_stat_height (float, optional): offset_stat mark thickness in offset_spacing units (Default: 0.5)
+    offset_stat_shift (float, optional): raise each offset_stat mark off its baseline by this many offset_spacing units
+                                        (Default: 0.25, half of offset_stat_height, which rests a bar on its baseline
+                                        the way its trace does; 0 centers the mark on the baseline instead)
+    offset_stat_size (float, optional): marker size for the point, swarm & strip marks (Default: 5)
+    offset_stat_axis (str, optional): offset_stat panel axis name (Default: ''; the statistic's name)
+    offset_stat_dims (str | tuple, optional): offset_stat panel axis dimensions (Default: (0,0), which autoscales over the
+                                             statistics & replicates of every panel, closing in on them so that small
+                                             differences are readable, or out to whole decades / 0 when offset_stat_graph
+                                             holds a bar, which has to start at the axis & still have length to read;
+                                             'match' takes the same window as the offset graph beside it, so both panels
+                                             carry the same ticks, & (start, end) sets them outright)
+    offset_stat_reps (str, optional): replicate column name (Default: None; a baseline's values are pooled into 1 statistic).
+                                     Given one, offset_stat is computed per replicate & the mark is drawn from those, so it
+                                     summarizes replicates rather than pooled values.
+    offset_stat_errorbar (str, optional): offset_stat_reps spread, 'sd' or 'sem' (Default: 'sd'; None leaves the error bars out).
+                                         A geometric mean takes its spread in log space, so its error bar is multiplicative.
+    offset_stat_errwid (int, optional): offset_stat error bar line width (Default: 1)
+    offset_stat_errcap (float, optional): offset_stat error bar cap size in points (Default: 3)
+    offset_stat_ref (str | list, optional): cols value(s) whose statistic is the reference for a further panel holding every
+                                           baseline's % difference from it, 100 * (value / reference - 1), so the reference
+                                           sits at 0 (Default: None; several values are combined into 1 reference, & given
+                                           offset_stat_reps each replicate is divided by its own replicate's reference).
+                                           Setting it turns offset_stat on as 'auto' when it is not set already.
+    offset_stat_ref_axis (str, optional): offset_stat_ref panel axis name (Default: ''; '% difference')
+    offset_stat_ref_dims (tuple, optional): offset_stat_ref panel axis dimensions (Default: (0,0), which autoscales over every
+                                           panel's % differences; (start, end) sets them outright. 'match' is not available,
+                                           since a % difference is not in x units.)
     file (str, optional): output plot file path
     palette_or_cmap (str | list | dict | Colormap, optional): seaborn color palette name,
                                                             matplotlib color map (name or object),
@@ -2663,6 +3016,8 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
     palette_shift (int, optional): shift palette_or_cmap colors by n (Default: 0; i.e., 1 starts at the 2nd color & -1 shifts the other direction)
     edgecol (str, optional): point edge color
     lw (int, optional): line width
+    line (float | list[float], optional): add vertical line(s) at x value(s), which are given in x units even when the
+                                         graph is drawn on a log scale & are also drawn on the offset_stat bar panels
     facetx (str, optional): column name for facet columns (creates one subplot per category in this column, arranged in separate columns)
     facety (str, optional): column name for facet rows (creates one subplot per category in this column, arranged in seperate rows)
     facetx_order (list, optional): order of facet columns
@@ -2711,7 +3066,8 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
     fig (Figure | SubFigure, optional): draw into this figure instead of making one, which ignores figsize
                                        & leaves the layout, saving & showing to the caller (Default: None; see grid())
 
-    Dependencies: os, matplotlib, seaborn, io, formatter(), _offset_density(), re_un_cap(), & round_up_pow_10()
+    Dependencies: os, matplotlib, seaborn, io, formatter(), _offset_density(), _offset_stats(),
+                  _offset_stats_relative(), _offset_cat_marks(), re_un_cap(), & round_up_pow_10()
     '''
     # Get dataframe from file path if needed
     if type(df) == str:
@@ -2750,6 +3106,36 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
             offset_colors = {None: palette_colors(palette_or_cmap, n_colors=1, shift=palette_shift)[0]}
         else:
             offset_colors = palette
+
+    # Summary statistic panel(s) beside every offset graph panel
+    if offset_stat_ref is not None and offset_stat is None:
+        offset_stat = 'auto' # The % difference panel is of a statistic, so turn the statistic on
+    if offset_stat_ref is not None and not isinstance(offset_stat_ref, (list, tuple)):
+        offset_stat_ref = [offset_stat_ref]
+
+    def _check_stat_dims(dims, name):
+        if dims != 'match' and not (isinstance(dims, (tuple, list)) and len(dims) == 2):
+            raise ValueError(f"Invalid {name}! 'match', (0,0), or (start, end)")
+
+    if offset_stat is not None and offset_stat is not False:
+        if graph not in offsets:
+            raise ValueError("offset_stat only applies to offset & half_offset graphs!")
+        if offset_stat is True or offset_stat == 'auto':
+            offset_stat = 'gmean' if x_axis_scale == 'log' else 'mean' # A log scale asks for the geometric mean
+        if offset_stat not in ('mean', 'gmean'):
+            raise ValueError("Invalid offset_stat! mean, gmean, auto")
+        if offset_stat_errorbar not in ('sd', 'sem', None):
+            raise ValueError("Invalid offset_stat_errorbar! sd, sem, None")
+        for layer in str(offset_stat_graph).split('_'):
+            if layer not in ('bar', 'box', 'violin', 'swarm', 'strip', 'point'):
+                raise ValueError("Invalid offset_stat_graph! bar, box, violin, swarm, strip, point & their _ pairs")
+        _check_stat_dims(offset_stat_dims, 'offset_stat_dims')
+        _check_stat_dims(offset_stat_ref_dims, 'offset_stat_ref_dims')
+        if offset_stat_ref is not None and offset_stat_ref_dims == 'match':
+            raise ValueError("offset_stat_ref_dims cannot match the offset graph! % difference is not in x units")
+    else:
+        offset_stat, offset_stat_ref = None, None
+
     legend_cols = None if (graph in offsets and offset_ticks) else cols # Offset graphs label baselines instead of making a legend
 
     # Set global autoscale limits if not provided (lists hold 1 entry per facet column/row/panel)
@@ -2767,14 +3153,83 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
     ncols = len(col_vals)
     nrows = len(row_vals)
 
+    # 1 statistic per baseline per panel, computed up front so every stat panel shares 1 set of limits
+    stat_values, ref_values = {}, {}
+    stat_dims_auto, ref_dims_auto = (0, 1), (0, 1) # Fallback when there is nothing to summarize
+
+    # A bar runs from the axis, so it needs 0 or a whole decade to start at & still have length
+    # to read. Every other mark sits where its value is, so its window can close in on the values
+    # instead, which is what makes small differences between baselines visible.
+    anchored = offset_stat is not None and 'bar' in str(offset_stat_graph).split('_')
+
+    def _stat_autoscale(panels, scale, zero=False):
+        """1 window wide enough for every panel's marks, replicates & error bars alike."""
+        finite = [value for panel in panels.values() for summary in panel.values()
+                  if summary is not None
+                  for value in list(summary['reps'].values()) + [summary['center'], summary['lower'],
+                                                                 summary['upper']]
+                  if value is not None and np.isfinite(value)]
+        if not finite:
+            return None
+        if scale == 'log':
+            positive = [value for value in finite if value > 0]
+            if not positive:
+                return None
+            low, high = np.log10(min(positive)), np.log10(max(positive))
+            if anchored:
+                return (float(10 ** np.floor(low)), float(10 ** np.ceil(high)))
+            pad = max((high - low) * 0.1, 0.05) # A tenth of the span, & never a hairline window
+            return (float(10 ** (low - pad)), float(10 ** (high + pad)))
+        lower, upper = autoscale_limits(finite + ([0] if (anchored or zero) else []))
+        if not (anchored or zero):
+            return (lower, upper)
+        return (0 if min(finite) >= 0 else lower, 0 if max(finite) <= 0 else upper)
+
+    if offset_stat is not None:
+        for i, r in enumerate(row_vals):
+            for j, c in enumerate(col_vals):
+                df_stat = _subset_for_facet(df, facetx=facetx, facety=facety, c=c, r=r)
+                if len(df_stat) > 0:
+                    stat_values[(i, j)] = _offset_stats(df_stat, x, cols=cols, cats=offset_cats, stat=offset_stat,
+                                                        reps=offset_stat_reps, errorbar=offset_stat_errorbar)
+        stat_dims_auto = _stat_autoscale(stat_values, x_axis_scale) or stat_dims_auto
+
+        if offset_stat_ref is not None: # Every panel against its own reference baseline(s)
+            missing = [cat for cat in offset_stat_ref if cat not in offset_cats]
+            if missing:
+                raise ValueError(f"offset_stat_ref is not among the traces! {missing}")
+            ref_values = {key: _offset_stats_relative(panel, offset_stat_ref, stat=offset_stat,
+                                                      errorbar=offset_stat_errorbar)
+                          for key, panel in stat_values.items()}
+            # 0 is the reference itself, so it belongs in view whatever the marks are
+            ref_dims_auto = _stat_autoscale(ref_values, 'linear', zero=True) or ref_dims_auto
+
     fig, owns_fig = _resolve_fig(fig, figsize)
+    sharex = _axis_dims_share(x_axis_dims, 'x', nrows, ncols, facety is not None)
+    sharey = _axis_dims_share(y_axis_dims, 'y', nrows, ncols, facetx is not None)
+    subplots_kwargs = {}
+    # Each facet column holds a distribution panel plus its statistic panel(s)
+    stat_panels = 0 if offset_stat is None else (2 if offset_stat_ref is not None else 1)
+    span = 1 + stat_panels
+    if stat_panels:
+        if sharex is True:
+            sharex = 'col' # The panel types alternate across a row, so only share down each column
+        subplots_kwargs['gridspec_kw'] = {'width_ratios': [1] + [offset_stat_width] * stat_panels}
+        subplots_kwargs['gridspec_kw']['width_ratios'] *= ncols
     axes = fig.subplots(
         nrows=nrows,
-        ncols=ncols,
-        sharex=_axis_dims_share(x_axis_dims, 'x', nrows, ncols, facety is not None),
-        sharey=_axis_dims_share(y_axis_dims, 'y', nrows, ncols, facetx is not None)
+        ncols=ncols * span,
+        sharex=sharex,
+        sharey=sharey,
+        **subplots_kwargs
     )
-    axes = np.array(axes).reshape(nrows, ncols)
+    axes = np.array(axes).reshape(nrows, -1)
+    if stat_panels: # 1 distribution panel then its statistic panel(s), repeated per facet column
+        grid = axes
+        axes, stat_axes = grid[:, 0::span], grid[:, 1::span]
+        ref_axes = grid[:, 2::span] if stat_panels == 2 else None
+    else:
+        stat_axes, ref_axes = None, None
 
     # Helper to determine bins for histogram-based graphs
     def _make_bins(df_sub):
@@ -2912,6 +3367,15 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
         else:
             raise ValueError("Invalid graph! hist, kde, hist_kde, offset, half_offset")
 
+        # Optional: add line
+        if line is not None:
+            for value in ([line] if np.isscalar(line) else list(line)):
+                if x_plot != x: # The panel holds log10 values, so move the line there too
+                    if value <= 0:
+                        continue # log10 of 0 or a negative value is undefined
+                    value = max(np.log10(value), log10_low)
+                ax.axvline(x=value, color='black', linestyle='--', linewidth=lw, zorder=0)
+
         x_axis_panel, y_axis_panel = _facet_axis_labels(
             x_axis,
             y_axis,
@@ -2987,6 +3451,85 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
         if x_plot != x: # The values were log10 transformed, so the axis is linear in decades
             log10_ticks(ax, 'x')
 
+    def _draw_stat_panel(ax, dist_ax, stats, *, c=None, r=None, i=0, j=0, relative=False):
+        """
+        _draw_stat_panel(): Draw 1 cat() style mark per offset graph baseline on the panel beside it
+
+        Parameters:
+        ax (plt.Axes): statistic panel axis
+        dist_ax (plt.Axes): the offset graph panel that the marks line up with
+        stats (dict): {cols value: statistic} for this panel
+        c, r: facet column & row values (Default: None)
+        i, j (int, optional): facet row & column indices (Default: 0)
+        relative (bool, optional): the panel holds % difference from offset_stat_ref rather than the
+                                   statistic itself, which is a linear quantity whatever the x-axis
+                                   scale is & which reads against 0 (Default: False)
+        """
+        scale = 'linear' if relative else x_axis_scale
+        dims_spec = offset_stat_ref_dims if relative else offset_stat_dims
+        dims_auto = ref_dims_auto if relative else stat_dims_auto
+
+        if dims_spec == 'match': # The same window as the offset graph, in x units
+            dims, _ = _facet_panel_dims(
+                df, x_axis_dims, y_axis_dims, i=i, j=j, c=c, r=r, nrows=nrows, ncols=ncols,
+                facetx=facetx, facety=facety, autoscale=_autoscale
+            )
+            dims = dims_auto if tuple(dims) == (0, 0) else tuple(dims)
+        elif tuple(dims_spec) == (0, 0):
+            dims = dims_auto
+        else:
+            dims = tuple(dims_spec)
+
+        ax.set_xscale(scale) # Set before the marks, so a swarm spreads against the window it is drawn in
+        ax.set_xlim(dims[0], dims[1])
+
+        n = len(offset_cats)
+        if relative: # Every mark reads against the reference at 0
+            base = 0
+        else: # A log axis cannot start a bar at 0, & neither can an axis that opens above it
+            base = dims[0] if (scale == 'log' or dims[0] > 0) else 0
+
+        for k, cat in enumerate(offset_cats): # Same baselines as the offset graph, so the rows line up
+            summary = stats.get(cat)
+            if summary is None:
+                continue
+            value = summary['center']
+            if value is None or not np.isfinite(value) or (scale == 'log' and value <= 0):
+                continue
+
+            _offset_cat_marks(
+                ax, offset_stat_graph,
+                (n - 1 - k) * offset_spacing + offset_spacing * offset_stat_shift, summary,
+                scale=scale, dims=dims, base=base, height=offset_spacing * offset_stat_height,
+                color=offset_colors.get(cat, offset_colors.get(str(cat), 'grey')),
+                edgecol=edgecol, lw=lw, alpha=offset_alpha, size=offset_stat_size,
+                errwid=offset_stat_errwid, errcap=offset_stat_errcap, seed=k
+            )
+
+        ax.set_xlim(dims[0], dims[1]) # A box or violin autoscales as it is drawn, so pin it again
+        ax.set_ylim(*dist_ax.get_ylim())
+        if scale == 'log':
+            log_ticks(ax, 'x') # 10^n majors with the decade in between as minors
+
+        if relative: # The reference itself, which every other baseline is read against
+            ax.axvline(x=0, color='black', linestyle='--', linewidth=lw, zorder=0)
+        elif line is not None: # The marks are in x units too, so the same reference applies
+            for value in ([line] if np.isscalar(line) else list(line)):
+                if scale == 'log' and value <= 0:
+                    continue
+                ax.axvline(x=value, color='black', linestyle='--', linewidth=lw, zorder=0)
+
+        stat_axis = offset_stat_ref_axis if relative else offset_stat_axis
+        if stat_axis == '':
+            stat_axis = '% difference' if relative else ('Geometric mean' if offset_stat == 'gmean' else 'Mean')
+        ax.set_xlabel(stat_axis if i == nrows - 1 else '', fontsize=x_axis_size, fontweight=x_axis_weight,
+                      fontfamily=x_axis_font, labelpad=x_axis_pad)
+        ax.set_ylabel('')
+        ax.tick_params(axis='y', left=False, labelleft=False) # The baselines are labeled on the offset graph panel
+        ax.tick_params(axis='x', labelsize=x_ticks_size, labelrotation=x_ticks_rot)
+        plt.setp(ax.get_xticklabels(), fontfamily=x_ticks_font,
+                 ha='center' if x_ticks_rot == 0 else 'right')
+
     for i, r in enumerate(row_vals):
         for j, c in enumerate(col_vals):
             ax = axes[i, j]
@@ -2994,9 +3537,19 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
 
             if len(df_sub) == 0:
                 ax.set_visible(False)
+                if stat_axes is not None:
+                    stat_axes[i, j].set_visible(False)
+                if ref_axes is not None:
+                    ref_axes[i, j].set_visible(False)
                 continue
 
             _draw_panel(df_sub, ax, c=c, r=r, i=i, j=j)
+
+            if stat_axes is not None:
+                _draw_stat_panel(stat_axes[i, j], ax, stat_values.get((i, j), {}), c=c, r=r, i=i, j=j)
+            if ref_axes is not None:
+                _draw_stat_panel(ref_axes[i, j], ax, ref_values.get((i, j), {}), c=c, r=r, i=i, j=j,
+                                 relative=True)
 
             panel_title = _subplot_title(idx=i * ncols + j, c=c, r=r, 
                                         facetx=facetx, facety=facety, 

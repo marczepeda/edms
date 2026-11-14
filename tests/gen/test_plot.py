@@ -719,11 +719,479 @@ def test_dist_offset_ticks_false_makes_a_legend(dist_df):
     plt.close(fig)
 
 
+def _vlines(ax):
+    """x positions of the dashed reference lines, which are the only dashed lines dist() draws."""
+    return sorted(line.get_xdata()[0] for line in ax.lines if line.get_linestyle() == "--")
+
+
+def test_dist_line_draws_a_vertical_line(dist_df):
+    fig, axes = p.dist("hist", dist_df, x="val", line=0.5, show=False)
+    assert _vlines(axes[0, 0]) == pytest.approx([0.5])
+    plt.close(fig)
+
+
+def test_dist_line_accepts_a_list(dist_df):
+    fig, axes = p.dist("hist", dist_df, x="val", line=[-1.0, 0.0, 1.0], show=False)
+    assert _vlines(axes[0, 0]) == pytest.approx([-1.0, 0.0, 1.0])
+    plt.close(fig)
+
+
+def test_dist_line_none_draws_nothing(dist_df):
+    fig, axes = p.dist("hist", dist_df, x="val", show=False)
+    assert _vlines(axes[0, 0]) == []
+    plt.close(fig)
+
+
+def test_dist_line_is_drawn_on_every_facet_panel(dist_df):
+    fig, axes = p.dist("hist", dist_df, x="val", facetx="grp", line=0.5, show=False)
+    assert all(_vlines(ax) == pytest.approx([0.5]) for ax in axes.ravel())
+    plt.close(fig)
+
+
+def test_dist_line_moves_into_log10_space_on_a_log_scale():
+    # kde & offset graphs on a log scale are drawn as log10 values on a linear axis.
+    df = pd.DataFrame({"val": [10.0, 100.0, 1000.0, 5000.0] * 5, "grp": ["a", "b"] * 10})
+    fig, axes = p.dist("half_offset", df, x="val", cols="grp", x_axis_scale="log",
+                       line=1000, show=False)
+    assert _vlines(axes[0, 0]) == pytest.approx([3.0]) # log10(1000), where the data sits
+    plt.close(fig)
+
+
+def test_dist_line_stays_in_x_units_on_a_real_log_axis():
+    # hist keeps a genuine log axis, so the line needs no transform.
+    df = pd.DataFrame({"val": [10.0, 100.0, 1000.0, 5000.0] * 5})
+    fig, axes = p.dist("hist", df, x="val", x_axis_scale="log", line=1000, show=False)
+    assert axes[0, 0].get_xscale() == "log"
+    assert _vlines(axes[0, 0]) == pytest.approx([1000.0])
+    plt.close(fig)
+
+
+def test_dist_line_skips_non_positive_values_on_a_log_scale():
+    df = pd.DataFrame({"val": [10.0, 100.0, 1000.0, 5000.0] * 5, "grp": ["a", "b"] * 10})
+    fig, axes = p.dist("half_offset", df, x="val", cols="grp", x_axis_scale="log",
+                       line=[0, -5, 100], show=False)
+    assert _vlines(axes[0, 0]) == pytest.approx([2.0]) # Only log10(100) survives
+    plt.close(fig)
+
+
+def test_dist_line_also_marks_the_stat_panel(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp", x_axis_scale="log",
+                       offset_stat="gmean", line=500, show=False)
+    dist_ax, stat_ax = fig.axes
+    assert _vlines(dist_ax) == pytest.approx([math.log10(500)])
+    assert _vlines(stat_ax) == pytest.approx([500.0]) # The bar panel keeps a real log axis
+    plt.close(fig)
+
+
+def test_dist_line_does_not_stretch_the_stat_panel(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp", x_axis_scale="log",
+                       offset_stat="gmean", offset_stat_dims=(100, 10000), line=10 ** 9, show=False)
+    assert fig.axes[1].get_xlim() == (100, 10000)
+    plt.close(fig)
+
+
 def test_dist_offset_single_value_category_does_not_raise():
     # gaussian_kde needs spread; a lone value falls back to a narrow spike.
     df = pd.DataFrame({"val": [1.0, 2.0, 3.0, 5.0], "grp": ["a", "a", "a", "b"]})
     fig, axes = p.dist("offset", df, x="val", cols="grp", show=False)
     assert isinstance(fig, plt.Figure)
+    plt.close(fig)
+
+
+# --------------------------------------------------------------------------- #
+# Offset distribution summary statistic bar panels
+# --------------------------------------------------------------------------- #
+
+@pytest.fixture
+def offset_stat_df():
+    rng = np.random.default_rng(7)
+    rows = []
+    for line in ["L1", "L2"]:
+        for block in ["top", "bottom"]:
+            for grp, center in [("a", 100.0), ("b", 1000.0)]:
+                for rep in ["r1", "r2", "r3"]:
+                    for value in rng.lognormal(mean=math.log(center), sigma=0.3, size=40):
+                        rows.append({"val": value, "grp": grp, "line": line, "block": block,
+                                     "rep": f"{line}-{block}-{grp}-{rep}"})
+    return pd.DataFrame(rows)
+
+
+def _bars(ax):
+    """(center, right edge) of each horizontal bar, in drawing order."""
+    return [(rect.get_y() + rect.get_height() / 2, rect.get_x() + rect.get_width())
+            for rect in ax.patches]
+
+
+def test_offset_stats_mean_matches_a_groupby(offset_stat_df):
+    stats = p._offset_stats(offset_stat_df, "val", cols="grp", cats=["a", "b"], stat="mean")
+    expected = offset_stat_df.groupby("grp")["val"].mean()
+    assert stats["a"]["center"] == pytest.approx(expected["a"])
+    assert stats["b"]["center"] == pytest.approx(expected["b"])
+    # Without replicates there is no spread to show.
+    assert stats["a"]["lower"] is None and stats["a"]["upper"] is None
+
+
+def test_offset_stats_gmean_is_the_exponentiated_log_mean(offset_stat_df):
+    stats = p._offset_stats(offset_stat_df, "val", cols="grp", cats=["a"], stat="gmean")
+    values = offset_stat_df.loc[offset_stat_df["grp"] == "a", "val"]
+    assert stats["a"]["center"] == pytest.approx(float(np.exp(np.log(values).mean())))
+    # The geometric mean sits below the arithmetic mean for a spread distribution.
+    assert stats["a"]["center"] < values.mean()
+
+
+def test_offset_stats_gmean_drops_non_positive_values():
+    df = pd.DataFrame({"val": [0.0, -5.0, 1.0, 100.0], "grp": ["a"] * 4})
+    stats = p._offset_stats(df, "val", cols="grp", cats=["a"], stat="gmean")
+    assert stats["a"]["center"] == pytest.approx(10.0) # sqrt(1 * 100), with 0 & -5 left out
+
+
+def test_offset_stats_without_cols_summarizes_every_row(offset_stat_df):
+    stats = p._offset_stats(offset_stat_df, "val", stat="mean")
+    assert list(stats) == [None]
+    assert stats[None]["center"] == pytest.approx(offset_stat_df["val"].mean())
+
+
+def test_offset_stats_empty_group_is_none():
+    df = pd.DataFrame({"val": [1.0, 2.0], "grp": ["a", "a"]})
+    stats = p._offset_stats(df, "val", cols="grp", cats=["a", "b"], stat="mean")
+    assert stats["b"] is None
+
+
+def test_offset_stats_invalid_stat_raises(offset_stat_df):
+    with pytest.raises(ValueError, match="Invalid stat"):
+        p._offset_stats(offset_stat_df, "val", cols="grp", stat="median")
+
+
+def test_offset_stats_invalid_errorbar_raises(offset_stat_df):
+    with pytest.raises(ValueError, match="Invalid errorbar"):
+        p._offset_stats(offset_stat_df, "val", cols="grp", errorbar="ci")
+
+
+def test_offset_stats_reps_center_and_sd_come_from_the_replicates(offset_stat_df):
+    stats = p._offset_stats(offset_stat_df, "val", cols="grp", cats=["a"], stat="mean",
+                            reps="rep", errorbar="sd")
+    rep_means = offset_stat_df[offset_stat_df["grp"] == "a"].groupby("rep")["val"].mean()
+    assert stats["a"]["n"] == len(rep_means) # n counts replicates, not values
+    assert stats["a"]["center"] == pytest.approx(rep_means.mean())
+    spread = rep_means.std(ddof=1)
+    assert stats["a"]["lower"] == pytest.approx(rep_means.mean() - spread)
+    assert stats["a"]["upper"] == pytest.approx(rep_means.mean() + spread)
+
+
+def test_offset_stats_reps_sem_divides_the_sd_by_root_n(offset_stat_df):
+    sd = p._offset_stats(offset_stat_df, "val", cols="grp", cats=["a"], stat="mean",
+                         reps="rep", errorbar="sd")["a"]
+    sem = p._offset_stats(offset_stat_df, "val", cols="grp", cats=["a"], stat="mean",
+                          reps="rep", errorbar="sem")["a"]
+    assert sem["center"] == pytest.approx(sd["center"])
+    assert (sem["upper"] - sem["center"]) == pytest.approx((sd["upper"] - sd["center"]) / math.sqrt(sd["n"]))
+
+
+def test_offset_stats_reps_gmean_spread_is_multiplicative(offset_stat_df):
+    stats = p._offset_stats(offset_stat_df, "val", cols="grp", cats=["a"], stat="gmean",
+                            reps="rep", errorbar="sd")["a"]
+    rep_gmeans = (offset_stat_df[offset_stat_df["grp"] == "a"]
+                  .groupby("rep")["val"].apply(lambda s: float(np.exp(np.log(s).mean()))))
+    logs = np.log(rep_gmeans)
+    assert stats["center"] == pytest.approx(float(np.exp(logs.mean())))
+    assert stats["lower"] == pytest.approx(float(np.exp(logs.mean() - logs.std(ddof=1))))
+    # Asymmetric in linear space, equal factors either way.
+    assert (stats["center"] / stats["lower"]) == pytest.approx(stats["upper"] / stats["center"])
+
+
+def test_offset_stats_reps_errorbar_none_leaves_out_the_bounds(offset_stat_df):
+    stats = p._offset_stats(offset_stat_df, "val", cols="grp", cats=["a"], stat="mean",
+                            reps="rep", errorbar=None)["a"]
+    assert stats["lower"] is None and stats["upper"] is None
+    rep_means = offset_stat_df[offset_stat_df["grp"] == "a"].groupby("rep")["val"].mean()
+    assert stats["center"] == pytest.approx(rep_means.mean())
+
+
+def test_offset_stats_single_replicate_has_no_spread():
+    df = pd.DataFrame({"val": [1.0, 3.0, 5.0], "grp": ["a"] * 3, "rep": ["r1"] * 3})
+    stats = p._offset_stats(df, "val", cols="grp", cats=["a"], stat="mean", reps="rep")["a"]
+    assert stats["n"] == 1
+    assert stats["lower"] == stats["upper"] == pytest.approx(3.0)
+
+
+def test_dist_offset_stat_adds_one_bar_panel_per_facet_column(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp",
+                       facetx="line", facety="block", offset_stat="mean", show=False)
+    # The returned axes stay the facet grid; the bar panels are the odd figure axes.
+    assert axes.shape == (2, 2)
+    assert len(fig.axes) == 8
+    assert all(ax not in list(axes.ravel()) for ax in fig.axes[1::2])
+    plt.close(fig)
+
+
+def test_dist_without_offset_stat_has_no_extra_panels(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp",
+                       facetx="line", facety="block", show=False)
+    assert axes.shape == (2, 2)
+    assert len(fig.axes) == 4
+    plt.close(fig)
+
+
+def test_dist_offset_stat_bars_rest_on_the_baselines(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp",
+                       cols_order=["a", "b"], offset_stat="mean", offset_stat_graph="bar", show=False)
+    dist_ax, stat_ax = fig.axes
+    # First cols value on top, half a trace height apart, matching the offset graph's ticks.
+    assert list(dist_ax.get_yticks()) == [0.5, 0.0]
+    # The default shift is half the bar height, so a bar starts on its baseline the way its trace does.
+    assert [rect.get_y() for rect in stat_ax.patches] == pytest.approx([0.5, 0.0])
+    values = [value for _, value in _bars(stat_ax)]
+    expected = offset_stat_df.groupby("grp")["val"].mean()
+    assert values[0] == pytest.approx(expected["a"])
+    assert values[1] == pytest.approx(expected["b"])
+    assert len(stat_ax.collections) == 0 # No replicates, so no error bars
+    plt.close(fig)
+
+
+def test_dist_offset_stat_shift_zero_centers_bars_on_the_baselines(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp", cols_order=["a", "b"],
+                       offset_stat="mean", offset_stat_graph="bar", offset_stat_shift=0, show=False)
+    centers = [center for center, _ in _bars(fig.axes[1])]
+    assert centers == pytest.approx(list(fig.axes[0].get_yticks()))
+    plt.close(fig)
+
+
+def test_dist_offset_stat_shift_is_in_offset_spacing_units(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp", cols_order=["a", "b"],
+                       offset_stat="mean", offset_stat_graph="bar", offset_stat_shift=1, show=False)
+    # 1 whole spacing of lift puts each bar on the next baseline up.
+    assert [center for center, _ in _bars(fig.axes[1])] == pytest.approx([1.0, 0.5])
+    plt.close(fig)
+
+
+def test_dist_offset_stat_bars_share_the_trace_colors(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp",
+                       cols_order=["a", "b"], offset_stat="mean", offset_stat_graph="bar",
+                       palette_or_cmap=["#4EC569", "#FF0000"], show=False)
+    bars = fig.axes[1].patches
+    assert [matplotlib.colors.to_hex(rect.get_facecolor()) for rect in bars] == ["#4ec569", "#ff0000"]
+    plt.close(fig)
+
+
+def test_dist_offset_stat_auto_picks_gmean_on_a_log_scale(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp", cols_order=["a", "b"],
+                       x_axis_scale="log", offset_stat="auto", offset_stat_graph="bar", show=False)
+    values = [value for _, value in _bars(fig.axes[1])]
+    group = offset_stat_df.loc[offset_stat_df["grp"] == "a", "val"]
+    assert values[0] == pytest.approx(float(np.exp(np.log(group).mean())))
+    assert fig.axes[1].get_xlabel() == "Geometric mean"
+    plt.close(fig)
+
+
+def test_dist_offset_stat_auto_picks_mean_on_a_linear_scale(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp", cols_order=["a", "b"],
+                       offset_stat=True, offset_stat_graph="bar", show=False)
+    values = [value for _, value in _bars(fig.axes[1])]
+    assert values[0] == pytest.approx(offset_stat_df.loc[offset_stat_df["grp"] == "a", "val"].mean())
+    assert fig.axes[1].get_xlabel() == "Mean"
+    plt.close(fig)
+
+
+def test_dist_offset_stat_log_panel_gets_whole_decade_ticks(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp", x_axis_scale="log",
+                       offset_stat="gmean", offset_stat_graph="bar", offset_stat_dims=(0, 0),
+                       show=False)
+    stat_ax = fig.axes[1]
+    assert stat_ax.get_xscale() == "log"
+    # Limits land on powers of 10 so a bar starting at the axis still has length to read.
+    lower, upper = stat_ax.get_xlim()
+    assert math.log10(lower) == pytest.approx(round(math.log10(lower)))
+    assert math.log10(upper) == pytest.approx(round(math.log10(upper)))
+    assert all(rect.get_x() == pytest.approx(lower) for rect in stat_ax.patches)
+    assert all(rect.get_width() > 0 for rect in stat_ax.patches)
+    assert _visible_ticks(stat_ax, "x") == [10 ** n for n in range(round(math.log10(lower)),
+                                                                  round(math.log10(upper)) + 1)]
+    plt.close(fig)
+
+
+def test_dist_offset_stat_linear_panel_starts_its_bars_at_zero(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp",
+                       offset_stat="mean", offset_stat_graph="bar", offset_stat_dims=(0, 0),
+                       show=False)
+    stat_ax = fig.axes[1]
+    assert stat_ax.get_xscale() == "linear"
+    assert stat_ax.get_xlim()[0] == 0
+    assert all(rect.get_x() == 0 for rect in stat_ax.patches)
+    plt.close(fig)
+
+
+def test_dist_offset_stat_panels_share_one_set_of_limits(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp", facetx="line",
+                       facety="block", offset_stat="mean", offset_stat_dims=(0, 0), show=False)
+    limits = {ax.get_xlim() for ax in fig.axes[1::2]}
+    assert len(limits) == 1
+    plt.close(fig)
+
+
+def test_dist_offset_stat_dims_match_the_offset_graph_on_a_linear_scale(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp",
+                       offset_stat="mean", offset_stat_graph="bar",
+                       offset_stat_dims="match", show=False)
+    dist_ax, stat_ax = fig.axes
+    assert stat_ax.get_xlim() == pytest.approx(dist_ax.get_xlim())
+
+
+def test_dist_offset_stat_dims_match_in_x_units_on_a_log_scale(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp",
+                       x_axis_scale="log", offset_stat="gmean", offset_stat_graph="bar",
+                       offset_stat_dims="match", show=False)
+    dist_ax, stat_ax = fig.axes
+    # The offset graph holds log10 values on a linear axis; the bar panel is a real log axis.
+    assert stat_ax.get_xscale() == "log"
+    assert list(stat_ax.get_xlim()) == pytest.approx([10 ** limit for limit in dist_ax.get_xlim()])
+    plt.close(fig)
+
+
+def test_dist_offset_stat_dims_match_follows_per_panel_limits(offset_stat_df):
+    # 1 set of x limits per facetx column turns panel sharing off, so each pair stands alone.
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp", facetx="line",
+                       x_axis_dims=[(0, 500), (0, 5000)], offset_stat="mean",
+                       offset_stat_graph="bar", offset_stat_dims="match", show=False)
+    assert fig.axes[1].get_xlim() == pytest.approx((0, 500))
+    assert fig.axes[3].get_xlim() == pytest.approx((0, 5000))
+    plt.close(fig)
+
+
+def test_dist_offset_stat_width_defaults_to_two_thirds_one_third(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp",
+                       offset_stat="mean", show=False)
+    dist_width = axes[0, 0].get_position().width
+    stat_width = fig.axes[1].get_position().width
+    assert stat_width == pytest.approx(dist_width / 2, rel=0.05)
+    assert dist_width / (dist_width + stat_width) == pytest.approx(2 / 3, rel=0.05)
+    plt.close(fig)
+
+
+def test_dist_offset_stat_invalid_dims_raise(offset_stat_df):
+    with pytest.raises(ValueError, match="Invalid offset_stat_dims"):
+        p.dist("half_offset", offset_stat_df, x="val", cols="grp", offset_stat="mean",
+               offset_stat_dims="auto", show=False)
+
+
+def test_dist_offset_stat_dims_are_respected(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp",
+                       offset_stat="mean", offset_stat_dims=(0, 5000), show=False)
+    assert fig.axes[1].get_xlim() == (0, 5000)
+    plt.close(fig)
+
+
+def test_dist_offset_stat_width_sets_the_panel_ratio(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp",
+                       offset_stat="mean", offset_stat_width=0.25, show=False)
+    dist_width = axes[0, 0].get_position().width
+    assert fig.axes[1].get_position().width == pytest.approx(dist_width * 0.25, rel=0.05)
+    plt.close(fig)
+
+
+def test_dist_offset_stat_height_sets_the_bar_thickness(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp",
+                       offset_stat="mean", offset_stat_height=0.5, show=False)
+    assert all(rect.get_height() == pytest.approx(0.25) for rect in fig.axes[1].patches) # 0.5 spacing
+    plt.close(fig)
+
+
+def test_dist_offset_stat_axis_overrides_the_label(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp",
+                       offset_stat="gmean", offset_stat_axis="gMFI", show=False)
+    assert fig.axes[1].get_xlabel() == "gMFI"
+    plt.close(fig)
+
+
+def test_dist_offset_stat_hides_the_bar_panel_of_an_empty_facet(offset_stat_df):
+    df = offset_stat_df[~((offset_stat_df["line"] == "L2") & (offset_stat_df["block"] == "bottom"))]
+    fig, axes = p.dist("half_offset", df, x="val", cols="grp",
+                       facetx="line", facety="block", offset_stat="mean", show=False)
+    blank = [ax for ax in fig.axes if not ax.get_visible()]
+    assert len(blank) == 2 # The distribution panel & its bar panel both go
+    plt.close(fig)
+
+
+def test_dist_offset_stat_without_cols_draws_one_bar(offset_stat_df):
+    fig, axes = p.dist("offset", offset_stat_df, x="val", offset_stat="mean",
+                       offset_stat_graph="bar", show=False)
+    bars = _bars(fig.axes[1])
+    assert len(bars) == 1
+    assert bars[0][1] == pytest.approx(offset_stat_df["val"].mean())
+    plt.close(fig)
+
+
+def test_dist_offset_stat_on_a_non_offset_graph_raises(offset_stat_df):
+    with pytest.raises(ValueError, match="offset_stat only applies"):
+        p.dist("hist", offset_stat_df, x="val", cols="grp", offset_stat="mean", show=False)
+
+
+def test_dist_offset_stat_invalid_value_raises(offset_stat_df):
+    with pytest.raises(ValueError, match="Invalid offset_stat"):
+        p.dist("half_offset", offset_stat_df, x="val", cols="grp", offset_stat="median", show=False)
+
+
+def test_dist_offset_stat_invalid_errorbar_raises(offset_stat_df):
+    with pytest.raises(ValueError, match="Invalid offset_stat_errorbar"):
+        p.dist("half_offset", offset_stat_df, x="val", cols="grp", offset_stat="mean",
+               offset_stat_reps="rep", offset_stat_errorbar="ci", show=False)
+
+
+def test_dist_offset_stat_reps_draws_an_error_bar_per_bar(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp", cols_order=["a", "b"],
+                       offset_stat="mean", offset_stat_graph="bar", offset_stat_reps="rep",
+                       show=False)
+    stat_ax = fig.axes[1]
+    assert len(stat_ax.patches) == 2
+    # barh is called per baseline, so each bar brings its own container plus an error bar container.
+    kinds = [type(container).__name__ for container in stat_ax.containers]
+    assert kinds.count("BarContainer") == 2
+    assert kinds.count("ErrorbarContainer") == 2
+    plt.close(fig)
+
+
+def test_dist_offset_stat_reps_error_bar_spans_the_replicate_sd(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp", cols_order=["a", "b"],
+                       offset_stat="mean", offset_stat_graph="bar", offset_stat_reps="rep",
+                       show=False)
+    rep_means = offset_stat_df[offset_stat_df["grp"] == "a"].groupby("rep")["val"].mean()
+    # The first cols value is the top baseline; its error bar segment runs mean +/- sd.
+    segments = [line.get_segments()[0] for line in fig.axes[1].collections]
+    top = max(segments, key=lambda seg: seg[0][1])
+    assert top[0][0] == pytest.approx(rep_means.mean() - rep_means.std(ddof=1))
+    assert top[1][0] == pytest.approx(rep_means.mean() + rep_means.std(ddof=1))
+    assert top[0][1] == pytest.approx(0.625) # Rides with its bar, 0.25 spacing above the baseline
+    plt.close(fig)
+
+
+def test_dist_offset_stat_reps_bar_summarizes_replicates_not_pooled_values(offset_stat_df):
+    # Unequal replicate sizes make the mean of the replicate means differ from the pooled mean.
+    df = offset_stat_df[~((offset_stat_df["grp"] == "a") & (offset_stat_df["rep"].str.endswith("r3"))
+                          & (offset_stat_df.index % 2 == 0))]
+    fig, axes = p.dist("half_offset", df, x="val", cols="grp", cols_order=["a", "b"],
+                       offset_stat="mean", offset_stat_graph="bar", offset_stat_reps="rep",
+                       show=False)
+    values = [value for _, value in _bars(fig.axes[1])]
+    rep_means = df[df["grp"] == "a"].groupby("rep")["val"].mean()
+    assert values[0] == pytest.approx(rep_means.mean())
+    assert values[0] != pytest.approx(df.loc[df["grp"] == "a", "val"].mean())
+    plt.close(fig)
+
+
+def test_dist_offset_stat_reps_errorbar_none_draws_no_error_bars(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp",
+                       offset_stat="mean", offset_stat_graph="bar", offset_stat_reps="rep",
+                       offset_stat_errorbar=None, show=False)
+    assert len(fig.axes[1].collections) == 0
+    plt.close(fig)
+
+
+def test_dist_offset_stat_axis_leaves_room_for_the_error_bars(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp", offset_stat="mean",
+                       offset_stat_graph="bar", offset_stat_reps="rep", offset_stat_dims=(0, 0),
+                       show=False)
+    stat_ax = fig.axes[1]
+    upper = max(seg[0][1][0] for seg in (line.get_segments() for line in stat_ax.collections))
+    assert stat_ax.get_xlim()[1] >= upper
     plt.close(fig)
 
 
@@ -801,3 +1269,380 @@ def test_grid_rejects_bad_panels_and_interactive_files(dist_df):
     with pytest.raises(ValueError):
         p.grid(panels=[panel], legend_mode="nope", show=False)
     plt.close("all")
+
+
+# Offset distribution statistic panels: cat() graph types & the % difference panel
+
+
+@pytest.fixture
+def offset_ref_df():
+    """2 groups sharing the same 3 replicate labels, so a baseline can be paired with a reference."""
+    rng = np.random.default_rng(11)
+    rows = []
+    for grp, center in [("a", 100.0), ("ref", 50.0)]:
+        for rep in ["r1", "r2", "r3"]:
+            for value in rng.lognormal(mean=math.log(center), sigma=0.2, size=30):
+                rows.append({"val": value, "grp": grp, "rep": rep})
+    return pd.DataFrame(rows)
+
+
+@pytest.fixture
+def offset_tied_df():
+    """3 replicates holding identical values, so their statistics land on top of each other."""
+    rows = []
+    for grp in ["a", "b"]:
+        for rep in ["r1", "r2", "r3"]:
+            for value in [10.0, 20.0, 30.0]:
+                rows.append({"val": value, "grp": grp, "rep": rep})
+    return pd.DataFrame(rows)
+
+
+def _points(ax):
+    """(x, y) of every scatter point, in drawing order."""
+    return [tuple(point) for coll in ax.collections
+            if type(coll).__name__ == "PathCollection"
+            for point in coll.get_offsets()]
+
+
+def _hand_stats(**reps):
+    """A _offset_stats() style dictionary built by hand, so the arithmetic is exact."""
+    return {cat: {"center": float(np.mean(list(values.values()))), "lower": None, "upper": None,
+                  "n": len(values), "reps": values}
+            for cat, values in reps.items()}
+
+
+def test_offset_stats_hands_back_the_replicate_statistics(offset_stat_df):
+    stats = p._offset_stats(offset_stat_df, x="val", cols="grp", stat="mean", reps="rep")
+    expected = offset_stat_df[offset_stat_df["grp"] == "a"].groupby("rep", sort=False)["val"].mean()
+    assert stats["a"]["reps"] == pytest.approx(expected.to_dict())
+    assert stats["a"]["n"] == len(expected)
+
+
+def test_offset_stats_without_reps_holds_the_pooled_statistic(offset_stat_df):
+    stats = p._offset_stats(offset_stat_df, x="val", cols="grp", stat="mean")
+    assert list(stats["a"]["reps"]) == [None]
+    assert stats["a"]["reps"][None] == pytest.approx(stats["a"]["center"])
+
+
+def test_offset_stats_relative_puts_the_reference_at_zero():
+    stats = _hand_stats(a={"r1": 120.0, "r2": 150.0, "r3": 180.0},
+                        ref={"r1": 100.0, "r2": 100.0, "r3": 100.0})
+    relative = p._offset_stats_relative(stats, ["ref"], stat="mean")
+    assert relative["ref"]["center"] == pytest.approx(0)
+    assert relative["a"]["reps"] == pytest.approx({"r1": 20.0, "r2": 50.0, "r3": 80.0})
+    assert relative["a"]["center"] == pytest.approx(50.0)
+
+
+def test_offset_stats_relative_pairs_each_replicate_with_its_own_reference():
+    # A reference that moves replicate to replicate cancels out, so every % difference is the same.
+    stats = _hand_stats(a={"r1": 200.0, "r2": 400.0}, ref={"r1": 100.0, "r2": 200.0})
+    relative = p._offset_stats_relative(stats, ["ref"], stat="mean")
+    assert relative["a"]["reps"] == pytest.approx({"r1": 100.0, "r2": 100.0})
+    assert relative["a"]["lower"] == pytest.approx(relative["a"]["upper"]) # No spread left
+
+
+def test_offset_stats_relative_spread_is_the_sd_of_the_percent_differences():
+    stats = _hand_stats(a={"r1": 120.0, "r2": 150.0, "r3": 180.0},
+                        ref={"r1": 100.0, "r2": 100.0, "r3": 100.0})
+    relative = p._offset_stats_relative(stats, ["ref"], stat="mean", errorbar="sd")
+    spread = float(np.std([20.0, 50.0, 80.0], ddof=1))
+    assert relative["a"]["lower"] == pytest.approx(50.0 - spread)
+    assert relative["a"]["upper"] == pytest.approx(50.0 + spread)
+
+
+def test_offset_stats_relative_sem_divides_the_sd_by_root_n():
+    stats = _hand_stats(a={"r1": 120.0, "r2": 150.0, "r3": 180.0},
+                        ref={"r1": 100.0, "r2": 100.0, "r3": 100.0})
+    sd = p._offset_stats_relative(stats, ["ref"], stat="mean", errorbar="sd")["a"]
+    sem = p._offset_stats_relative(stats, ["ref"], stat="mean", errorbar="sem")["a"]
+    assert (sem["upper"] - sem["center"]) == pytest.approx((sd["upper"] - sd["center"]) / math.sqrt(3))
+
+
+def test_offset_stats_relative_combines_several_references_geometrically():
+    stats = _hand_stats(a={"r1": 400.0}, lo={"r1": 100.0}, hi={"r1": 400.0})
+    relative = p._offset_stats_relative(stats, ["lo", "hi"], stat="gmean")
+    assert relative["a"]["center"] == pytest.approx(100.0) # 400 against the gmean of 100 & 400, which is 200
+
+
+def test_offset_stats_relative_combines_several_references_arithmetically():
+    stats = _hand_stats(a={"r1": 400.0}, lo={"r1": 100.0}, hi={"r1": 300.0})
+    relative = p._offset_stats_relative(stats, ["lo", "hi"], stat="mean")
+    assert relative["a"]["center"] == pytest.approx(100.0) # 400 against the mean of 100 & 300, which is 200
+
+
+def test_offset_stats_relative_falls_back_to_the_pooled_reference():
+    # 'a' has a replicate the reference never saw, so that replicate reads against the whole reference.
+    stats = _hand_stats(a={"r1": 200.0, "r2": 300.0}, ref={"r1": 100.0})
+    relative = p._offset_stats_relative(stats, ["ref"], stat="mean")
+    assert relative["a"]["reps"] == pytest.approx({"r1": 100.0, "r2": 200.0})
+
+
+def test_offset_stats_relative_errorbar_none_leaves_out_the_bounds():
+    stats = _hand_stats(a={"r1": 120.0, "r2": 180.0}, ref={"r1": 100.0, "r2": 100.0})
+    relative = p._offset_stats_relative(stats, ["ref"], stat="mean", errorbar=None)
+    assert relative["a"]["lower"] is None and relative["a"]["upper"] is None
+
+
+def test_offset_stats_relative_missing_reference_is_all_none():
+    stats = _hand_stats(a={"r1": 120.0})
+    assert p._offset_stats_relative(stats, ["ref"], stat="mean") == {"a": None}
+
+
+def test_offset_stats_relative_invalid_errorbar_raises():
+    with pytest.raises(ValueError, match="Invalid errorbar"):
+        p._offset_stats_relative(_hand_stats(a={"r1": 1.0}), ["a"], errorbar="ci")
+
+
+def test_dist_offset_stat_defaults_to_a_swarm(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp", cols_order=["a", "b"],
+                       offset_stat="mean", offset_stat_reps="rep", show=False)
+    stat_ax = fig.axes[1]
+    assert len(stat_ax.patches) == 0 # Points, not bars
+    reps = offset_stat_df.groupby(["grp", "rep"]).ngroups
+    assert len(_points(stat_ax)) == reps # 1 point per replicate per baseline
+    plt.close(fig)
+
+
+def test_dist_offset_stat_swarm_draws_the_replicate_statistics(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp", cols_order=["a", "b"],
+                       offset_stat="mean", offset_stat_reps="rep", show=False)
+    drawn = sorted(x for x, _ in _points(fig.axes[1]))
+    expected = sorted(offset_stat_df.groupby(["grp", "rep"], sort=False)["val"].mean())
+    assert drawn == pytest.approx(expected)
+    plt.close(fig)
+
+
+def test_dist_offset_stat_swarm_spreads_overlapping_points_off_the_baseline(offset_tied_df):
+    fig, axes = p.dist("half_offset", offset_tied_df, x="val", cols="grp", cols_order=["a", "b"],
+                       offset_stat="mean", offset_stat_reps="rep", show=False)
+    top = sorted(point for point in _points(fig.axes[1]) if point[1] > 0.375)
+    assert len({round(y, 6) for _, y in top}) == 3 # The 3 identical values step apart
+    assert len({round(x, 6) for x, _ in top}) == 1 # & keep their value
+    plt.close(fig)
+
+
+def test_dist_offset_stat_swarm_leaves_a_lone_point_on_its_baseline(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp", cols_order=["a", "b"],
+                       offset_stat="mean", show=False) # No replicates, so 1 point per baseline
+    ys = sorted(y for _, y in _points(fig.axes[1]))
+    # half_offset spaces baselines 0.5 apart, & the default shift is a quarter of that spacing.
+    assert ys == pytest.approx([0.125, 0.625])
+    plt.close(fig)
+
+
+def test_dist_offset_stat_strip_jitters_within_the_band(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp", cols_order=["a", "b"],
+                       offset_stat="mean", offset_stat_graph="strip", offset_stat_reps="rep",
+                       offset_stat_height=0.5, show=False)
+    top = [y for _, y in _points(fig.axes[1]) if y > 0.25]
+    assert len(top) == offset_stat_df[offset_stat_df["grp"] == "a"]["rep"].nunique()
+    # The band is offset_spacing (0.5) x offset_stat_height (0.5), centered on the shifted baseline.
+    assert all(abs(y - 0.625) <= 0.25 / 2 for y in top)
+    plt.close(fig)
+
+
+def test_dist_offset_stat_point_draws_one_marker_with_an_error_bar(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp", cols_order=["a", "b"],
+                       offset_stat="mean", offset_stat_graph="point", offset_stat_reps="rep",
+                       show=False)
+    stat_ax = fig.axes[1]
+    kinds = [type(container).__name__ for container in stat_ax.containers]
+    assert kinds.count("ErrorbarContainer") == 2
+    assert len(stat_ax.patches) == 0
+    plt.close(fig)
+
+
+def test_dist_offset_stat_box_draws_a_box_per_baseline(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp", cols_order=["a", "b"],
+                       offset_stat="mean", offset_stat_graph="box", offset_stat_reps="rep",
+                       show=False)
+    assert len(fig.axes[1].patches) == 2
+    plt.close(fig)
+
+
+def test_dist_offset_stat_violin_draws_a_filled_shape_per_baseline(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp", cols_order=["a", "b"],
+                       offset_stat="mean", offset_stat_graph="violin", offset_stat_reps="rep",
+                       show=False)
+    polys = [coll for coll in fig.axes[1].collections if "Poly" in type(coll).__name__]
+    assert len(polys) == 2
+    plt.close(fig)
+
+
+def test_dist_offset_stat_composite_graph_draws_both_layers(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp", cols_order=["a", "b"],
+                       offset_stat="mean", offset_stat_graph="bar_swarm", offset_stat_reps="rep",
+                       show=False)
+    stat_ax = fig.axes[1]
+    assert len(stat_ax.patches) == 2 # The bars
+    assert len(_points(stat_ax)) == offset_stat_df.groupby(["grp", "rep"]).ngroups # & every replicate
+    plt.close(fig)
+
+
+def test_dist_offset_stat_box_falls_back_to_a_point_without_replicates(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp", cols_order=["a", "b"],
+                       offset_stat="mean", offset_stat_graph="box", show=False)
+    stat_ax = fig.axes[1]
+    assert len(stat_ax.patches) == 0 # 1 replicate has no quartiles to draw
+    kinds = [type(container).__name__ for container in stat_ax.containers]
+    assert kinds.count("ErrorbarContainer") == 2
+    plt.close(fig)
+
+
+def test_dist_offset_stat_invalid_graph_raises(offset_stat_df):
+    with pytest.raises(ValueError, match="Invalid offset_stat_graph"):
+        p.dist("half_offset", offset_stat_df, x="val", cols="grp", offset_stat="mean",
+               offset_stat_graph="pie", show=False)
+
+
+def test_dist_offset_stat_size_sets_the_marker_size(offset_stat_df):
+    sizes = []
+    for size in (4, 9):
+        fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp", offset_stat="mean",
+                           offset_stat_reps="rep", offset_stat_size=size, show=False)
+        sizes.append(fig.axes[1].collections[0].get_sizes()[0])
+        plt.close(fig)
+    assert sizes == pytest.approx([16, 81]) # s is the marker area, so size squared
+
+
+def test_dist_offset_stat_dims_default_to_autoscale(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp", offset_stat="mean",
+                       offset_stat_reps="rep", show=False)
+    dist_ax, stat_ax = fig.axes
+    # Autoscaled over the statistics, which span far less than the events the traces are drawn from.
+    assert stat_ax.get_xlim()[1] < dist_ax.get_xlim()[1]
+    assert stat_ax.get_xlim()[1] >= max(x for x, _ in _points(stat_ax))
+    plt.close(fig)
+
+
+def test_dist_offset_stat_ref_adds_a_third_panel(offset_ref_df):
+    fig, axes = p.dist("half_offset", offset_ref_df, x="val", cols="grp", cols_order=["a", "ref"],
+                       offset_stat="mean", offset_stat_reps="rep", offset_stat_ref="ref",
+                       show=False)
+    assert len(fig.axes) == 3
+    plt.close(fig)
+
+
+def test_dist_offset_stat_ref_puts_the_reference_at_zero(offset_ref_df):
+    fig, axes = p.dist("half_offset", offset_ref_df, x="val", cols="grp", cols_order=["a", "ref"],
+                       offset_stat="mean", offset_stat_reps="rep", offset_stat_ref="ref",
+                       show=False)
+    ref_ax = fig.axes[2]
+    bottom = [x for x, y in _points(ref_ax) if y < 0.375] # 'ref' is the lower baseline
+    assert bottom == pytest.approx([0, 0, 0])
+    expected = (offset_ref_df[offset_ref_df["grp"] == "a"].groupby("rep")["val"].mean()
+                / offset_ref_df[offset_ref_df["grp"] == "ref"].groupby("rep")["val"].mean() - 1) * 100
+    assert sorted(x for x, y in _points(ref_ax) if y > 0.375) == pytest.approx(sorted(expected))
+    plt.close(fig)
+
+
+def test_dist_offset_stat_ref_panel_marks_zero(offset_ref_df):
+    fig, axes = p.dist("half_offset", offset_ref_df, x="val", cols="grp", offset_stat="mean",
+                       offset_stat_reps="rep", offset_stat_ref="ref", show=False)
+    assert _vlines(fig.axes[2]) == pytest.approx([0])
+    plt.close(fig)
+
+
+def test_dist_offset_stat_ref_panel_is_linear_on_a_log_scale(offset_ref_df):
+    fig, axes = p.dist("half_offset", offset_ref_df, x="val", cols="grp", x_axis_scale="log",
+                       offset_stat="auto", offset_stat_reps="rep", offset_stat_ref="ref", show=False)
+    assert fig.axes[1].get_xscale() == "log" # The statistic keeps the x-axis scale
+    assert fig.axes[2].get_xscale() == "linear" # A % difference does not
+    plt.close(fig)
+
+
+def test_dist_offset_stat_ref_axis_defaults_to_percent_difference(offset_ref_df):
+    fig, axes = p.dist("half_offset", offset_ref_df, x="val", cols="grp", offset_stat="mean",
+                       offset_stat_reps="rep", offset_stat_ref="ref", show=False)
+    assert fig.axes[2].get_xlabel() == "% difference"
+    plt.close(fig)
+    fig, axes = p.dist("half_offset", offset_ref_df, x="val", cols="grp", offset_stat="mean",
+                       offset_stat_reps="rep", offset_stat_ref="ref",
+                       offset_stat_ref_axis="% vs NIC", show=False)
+    assert fig.axes[2].get_xlabel() == "% vs NIC"
+    plt.close(fig)
+
+
+def test_dist_offset_stat_ref_turns_the_statistic_on(offset_ref_df):
+    fig, axes = p.dist("half_offset", offset_ref_df, x="val", cols="grp", offset_stat_ref="ref",
+                       offset_stat_reps="rep", show=False)
+    assert len(fig.axes) == 3
+    assert fig.axes[1].get_xlabel() == "Mean" # 'auto' on a linear x-axis
+    plt.close(fig)
+
+
+def test_dist_offset_stat_ref_accepts_several_values(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp", offset_stat="mean",
+                       offset_stat_ref=["a", "b"], show=False)
+    assert len(fig.axes) == 3
+    plt.close(fig)
+
+
+def test_dist_offset_stat_ref_unknown_value_raises(offset_stat_df):
+    with pytest.raises(ValueError, match="offset_stat_ref is not among the traces"):
+        p.dist("half_offset", offset_stat_df, x="val", cols="grp", offset_stat="mean",
+               offset_stat_ref="nope", show=False)
+
+
+def test_dist_offset_stat_ref_dims_match_raises(offset_stat_df):
+    with pytest.raises(ValueError, match="offset_stat_ref_dims cannot match"):
+        p.dist("half_offset", offset_stat_df, x="val", cols="grp", offset_stat="mean",
+               offset_stat_ref="a", offset_stat_ref_dims="match", show=False)
+
+
+def test_dist_offset_stat_ref_hides_every_panel_of_an_empty_facet(offset_stat_df):
+    df = offset_stat_df[~((offset_stat_df["line"] == "L2") & (offset_stat_df["block"] == "top"))]
+    fig, axes = p.dist("half_offset", df, x="val", cols="grp", facetx="line", facety="block",
+                       offset_stat="mean", offset_stat_reps="rep", offset_stat_ref="a", show=False)
+    hidden = [ax for ax in fig.axes if not ax.get_visible()]
+    assert len(hidden) == 3 # The distribution panel & both statistic panels
+    plt.close(fig)
+
+
+def test_dist_offset_stat_ref_width_applies_to_both_panels(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp", offset_stat="mean",
+                       offset_stat_ref="a", offset_stat_width=0.5, show=False)
+    widths = [ax.get_position().width for ax in fig.axes]
+    assert widths[1] == pytest.approx(widths[0] / 2, rel=0.05)
+    assert widths[2] == pytest.approx(widths[0] / 2, rel=0.05)
+    plt.close(fig)
+
+
+def test_dist_offset_stat_swarm_closes_in_on_the_values(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp", x_axis_scale="log",
+                       offset_stat="gmean", offset_stat_reps="rep", show=False)
+    stat_ax = fig.axes[1]
+    values = [x for x, _ in _points(stat_ax)]
+    lower, upper = stat_ax.get_xlim()
+    assert lower < min(values) and upper > max(values) # Every point is in view
+    # & the window hugs them rather than running out to the whole decades around them.
+    assert lower > 10 ** math.floor(math.log10(min(values)))
+    assert upper < 10 ** math.ceil(math.log10(max(values)))
+    plt.close(fig)
+
+
+def test_dist_offset_stat_swarm_does_not_pin_a_linear_panel_to_zero(offset_tied_df):
+    # Every statistic is 20, so a window that closed in on them cannot reach 0 on its own.
+    fig, axes = p.dist("half_offset", offset_tied_df, x="val", cols="grp",
+                       offset_stat="mean", offset_stat_reps="rep", show=False)
+    assert fig.axes[1].get_xlim()[0] > 0 # No bar to run from the axis, so 0 is not held in view
+    plt.close(fig)
+    fig, axes = p.dist("half_offset", offset_tied_df, x="val", cols="grp", offset_stat="mean",
+                       offset_stat_graph="bar", offset_stat_reps="rep", show=False)
+    assert fig.axes[1].get_xlim()[0] == 0 # A bar has to run from somewhere
+    plt.close(fig)
+
+
+def test_dist_offset_stat_bar_keeps_zero_in_view(offset_stat_df):
+    fig, axes = p.dist("half_offset", offset_stat_df, x="val", cols="grp", offset_stat="mean",
+                       offset_stat_graph="bar_swarm", offset_stat_reps="rep", show=False)
+    assert fig.axes[1].get_xlim()[0] == 0 # A bar layer anchors the window again
+    plt.close(fig)
+
+
+def test_dist_offset_stat_ref_panel_keeps_zero_in_view(offset_ref_df):
+    fig, axes = p.dist("half_offset", offset_ref_df, x="val", cols="grp", offset_stat="mean",
+                       offset_stat_reps="rep", offset_stat_ref="ref", show=False)
+    lower, upper = fig.axes[2].get_xlim()
+    assert lower <= 0 <= upper # The reference it is read against
+    plt.close(fig)
