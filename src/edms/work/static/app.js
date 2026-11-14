@@ -24,14 +24,24 @@
   // ------------------------------------------------------------------ //
   // Argument resolution, mirroring plan._resolve_arg
   // ------------------------------------------------------------------ //
-  function resolveArgs(spec) {
-    var out = {};
-    Object.keys(spec || {}).forEach(function (k) {
+  function resolveArgs(step) {
+    var spec = step.args || {};
+    var out = {}, floats = [];
+    Object.keys(spec).forEach(function (k) {
       var v = spec[k];
-      if (typeof v === 'string' && v.charAt(0) === '@') out[k] = inputs[v.slice(1)];
-      else if (typeof v === 'string' && v.charAt(0) === '$') out[k] = params[v.slice(1)];
-      else out[k] = v;
+      if (typeof v === 'string' && v.charAt(0) === '@') {
+        out[k] = inputs[v.slice(1)];
+      } else if (typeof v === 'string' && v.charAt(0) === '$') {
+        out[k] = params[v.slice(1)];
+        if ((D.floats || []).indexOf(v.slice(1)) !== -1) floats.push(k);
+      } else {
+        out[k] = v;
+        if ((step.float_args || []).indexOf(k) !== -1) floats.push(k);
+      }
     });
+    /* Which of these Python would print with a trailing .0. A master mix
+       column is headed 'uL, MM (3 x 1.1)', and JSON cannot tell 1.0 from 1. */
+    out.__floats__ = floats;
     return out;
   }
 
@@ -137,7 +147,7 @@
       if (!hosts.length) return;
       var result;
       try {
-        result = EDMS.calc[s.compute](resolveArgs(s.args));
+        result = EDMS.calc[s.compute](resolveArgs(s));
       } catch (e) {
         errs.push(s.id + ': ' + e.message);
         Array.prototype.forEach.call(hosts, function (h) {
@@ -147,12 +157,37 @@
         return;
       }
       var tables = result.__tables__ || null;
-      Array.prototype.forEach.call(hosts, function (h, i) {
-        paint(h, tables ? tables[h.getAttribute('data-table')] : result);
+      Array.prototype.forEach.call(hosts, function (h) {
+        var name = h.getAttribute('data-table');
+        var table = tables ? tables[name] : result;
+        if (!table) {
+          /* A parameter can change which tables a calculator returns at all
+             -- turning PCR2 off drops its plates, its master mix and its
+             program. The page was rendered around the tables the run had, so
+             say the table is gone rather than leave the old numbers sitting
+             there looking current. */
+          h.innerHTML = '<div class="err">Not produced with these settings: ' +
+            EDMS.plate.esc(name) + '</div>';
+          return;
+        }
+        paint(h, table);
       });
+      if (tables) {
+        var shown = Array.prototype.map.call(hosts, function (h) {
+          return h.getAttribute('data-table');
+        });
+        var extra = Object.keys(tables).filter(function (k) {
+          return shown.indexOf(k) === -1;
+        });
+        // The page has nowhere to put a table the run never had
+        if (extra.length)
+          errs.push(s.id + ': these settings also produce ' +
+                    extra.join(', ') + ', which this protocol has no place ' +
+                    'for. Re-run edms work plan to see them.');
+      }
       if (s.compute === 'edms.work.plates:geometry') {
         var map = document.querySelector('[data-plate="' + s.id + '"]');
-        if (map) drawPlate(map, result.rows[0], resolveArgs(s.args).plate_format);
+        if (map) drawPlate(map, result.rows[0], resolveArgs(s).plate_format);
       }
     });
     if (errorsBox)
@@ -196,8 +231,12 @@
       var why = (document.getElementById('edms-why') || {}).value || '';
       var cmds = diff.map(function (k) {
         var step = stepsUsing(k)[0] || (D.steps[0] || {}).id || '<step>';
+        /* edms work deviate parses the value with ast.literal_eval, which
+           knows True and False and not true and false. */
+        var v = typeof params[k] === 'boolean'
+          ? (params[k] ? 'True' : 'False') : params[k];
         return 'edms work deviate ' + D.run_id + ' -s ' + step + ' -p ' + k +
-          ' -v "' + params[k] + '"' + (why ? ' -w "' + why + '"' : '');
+          ' -v "' + v + '"' + (why ? ' -w "' + why + '"' : '');
       }).join('\n');
       navigator.clipboard.writeText(cmds).then(function () {
         var b = document.getElementById('edms-copy');
@@ -220,6 +259,14 @@
       return sel;
     }
     var inp = document.createElement('input');
+    if (typeof value === 'boolean') {
+      /* As a text box this read 'false', and typing 'False' into it set the
+         string 'False', which is truthy here and False to Python. The two
+         would then disagree about whether PCR2 happens at all. */
+      inp.type = 'checkbox';
+      inp.checked = value;
+      return inp;
+    }
     if (typeof value === 'number') {
       inp.type = 'number';
       inp.step = Number.isInteger(value) ? '1' : 'any';
@@ -243,9 +290,13 @@
       if (!used.length) lab.title = 'Used in the step text only, not in a calculation';
       var c = control(k, params[k]);
       c.addEventListener('change', function () {
-        var v = c.value;
-        params[k] = (typeof base[k] === 'number' && v !== '' && isFinite(+v))
-          ? +v : v;
+        if (c.type === 'checkbox') {
+          params[k] = c.checked;
+        } else {
+          var v = c.value;
+          params[k] = (typeof base[k] === 'number' && v !== '' && isFinite(+v))
+            ? +v : v;
+        }
         recompute();
       });
       wrap.appendChild(lab);

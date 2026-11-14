@@ -74,16 +74,19 @@ def constants() -> dict:
     '''
     constants(): the numbers calc.js needs, taken from the Python objects.
 
-    Dependencies: edms.work.plates,edms.bio.clone
+    Dependencies: edms.work.plates,edms.bio.clone,edms.bio.culture
     '''
     from . import plates
-    from ..bio import clone
+    from ..bio import clone, culture
 
     return {
+        'CONFLUENT_CELLS': dict(culture.CONFLUENT_CELLS),
+        'CONFLUENT_PER_ML': dict(culture.CONFLUENT_PER_ML),
         'vessels': {name: dict(v) for name, v in plates._VESSELS.items()},
         'aliases': dict(plates._ALIASES),
         'SEED_PER_CM2': plates.SEED_PER_CM2,
         'VIRUS_SEED_PER_CM2': plates.VIRUS_SEED_PER_CM2,
+        'LAYOUT_NOTE': plates.LAYOUT_NOTE,
         'PE3_ANCHOR': plates.PE3_ANCHOR,
         'VIRUS_ANCHOR': plates.VIRUS_ANCHOR,
         'MIN_PIPETTE_UL': plates.MIN_PIPETTE_UL,
@@ -157,9 +160,14 @@ def payload(protocol, inputs: dict=None) -> dict:
     for s in protocol.steps:
         if not s.compute or not s.tables:
             continue
+        args = getattr(s, 'args', {}) or {}
         steps.append({'id': s.id,
                       'compute': s.compute,
-                      'args': _jsonable(getattr(s, 'args', {}) or {}),
+                      'args': _jsonable(args),
+                      # A float literal in the step's own args, for the same
+                      # reason as 'floats' below
+                      'float_args': sorted(k for k, v in args.items()
+                                           if isinstance(v, float)),
                       'tables': [str(n) for n in s.tables],
                       'live': s.compute in live})
 
@@ -167,6 +175,13 @@ def payload(protocol, inputs: dict=None) -> dict:
             'consts': constants(),
             'formats': plates.names(),
             'params': {k: _jsonable(v) for k, v in protocol.params.items()},
+            # Which parameters are Python floats. JSON cannot tell 1.0 from 1
+            # and JavaScript has one number type, so a master mix headed
+            # 'uL, MM (3 x 1.1)' would come back as '... x 1)' if the template
+            # happened to write 1.0. The page needs the distinction only for
+            # the handful of values that get printed into a label.
+            'floats': sorted(k for k, v in protocol.params.items()
+                             if isinstance(v, float)),
             'inputs': {name: table_data(df)
                        for name, df in (inputs or {}).items()},
             'steps': steps}

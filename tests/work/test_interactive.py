@@ -74,11 +74,17 @@ def test_constants_are_json_serialisable():
 # live_targets
 # --------------------------------------------------------------------------- #
 def test_live_targets_is_read_from_the_file():
+    """The set is parsed out of calc.js rather than listed anywhere, so it
+    cannot claim a target the file does not define. Every bundled calculator
+    is ported now, which makes the absent case the one worth pinning: a name
+    nothing implements must not appear."""
     live = interactive.live_targets()
     assert "edms.work.plates:virus" in live
     assert "edms.work.plates:geometry" in live
-    # not ported, and must not claim to be
-    assert "edms.bio.ngs:pcrs" not in live
+    assert "edms.bio.ngs:pcrs" in live
+    assert "edms.bio.clone:invented" not in live
+    for target in live:
+        assert "C['%s']" % target in interactive.asset("calc.js")
 
 
 def test_every_live_target_is_a_real_python_function():
