@@ -6,7 +6,7 @@
 #   edms work init -t ./my_virus.toml -i run.toml
 
 name = "virus_production"
-version = 2
+version = 3
 title = "Lentivirus production in HEK293T"
 description = """
 Third-generation lentivirus packaging in HEK293T, from seeding through a
@@ -20,6 +20,10 @@ The 6-well amounts are Thermo's own Lipofectamine 3000 lentiviral protocol:
 Lipofectamine 3000 and 500 uL of complex. Thermo's scale-up to 60 mm, 10 cm
 and T175 is growth-area proportional off that 6-well anchor to within 2%,
 which is what edms.work.plates:virus does for any format.
+
+Scaling down works as well as scaling up, with one limit the arithmetic does
+not know about: below a 12-well the per-well volumes stop being pipettable.
+The working dilutions step covers that, and is empty at 6-well and above.
 """
 
 [params]
@@ -38,6 +42,10 @@ VSVG_ng         = 750
 GagPol_ng       = 1500
 transfer_ng     = 750
 well_uL         = 500
+# Pipetting floor for the small formats
+min_uL          = 1.0
+make_uL         = 20.0
+diluent         = "TE"
 # Harvest. Thermo's protocol for this reagent changes media at 6 h and
 # harvests at 24 h and 52 h; 48/72 is the slower schedule this lab runs.
 complex_h       = 24
@@ -141,6 +149,52 @@ transfer_ng    = "$transfer_ng"
 well_uL        = "$well_uL"
 
 [[steps]]
+id = "dilutions"
+title = "Working dilutions"
+day = 0
+depends_on = ["transfection_plan"]
+duration = "10 min"
+compute = "edms.work.plates:virus_dilutions"
+outputs = ["working_stocks"]
+text = """
+Any line of the transfection plan that falls below {min_uL} uL, with the
+dilution that makes it pipettable.
+
+Scaling by growth area keeps the DNA per cm2 right but says nothing about
+whether the volume exists. A 96-well is a thirtieth of a 6-well, so a
+{transfer_ng} ng aliquot of transfer plasmid becomes 25 ng, and out of a
+normal miniprep that is a twentieth of a microlitre. The arithmetic is fine
+and the pipette is not.
+
+If the table below is empty, nothing in this run falls under {min_uL} uL and
+you can work straight from the plan above; that is the case at 6-well and
+anything larger. Otherwise make each working stock listed and pipette the
+volume in the last column instead of the one in the plan.
+
+A line with no stock concentration is a reagent rather than a plasmid, and
+the fix for those is a bigger master mix: plan more wells, or raise mm_x past
+{mm_x}. Do not dilute the Lipofectamine to make it pipettable.
+
+Make the dilutions fresh and in {diluent}; a plasmid left sitting at 10 ng/uL
+is not the same stock next week.
+"""
+
+[steps.args]
+plasmids       = "@plasmids"
+plate_format   = "$plate_format"
+min_uL         = "$min_uL"
+make_uL        = "$make_uL"
+diluent        = "$diluent"
+VSVG_plasmid   = "$VSVG_plasmid"
+GagPol_plasmid = "$GagPol_plasmid"
+reps           = "$reps"
+mm_x           = "$mm_x"
+VSVG_ng        = "$VSVG_ng"
+GagPol_ng      = "$GagPol_ng"
+transfer_ng    = "$transfer_ng"
+well_uL        = "$well_uL"
+
+[[steps]]
 id = "transfect"
 title = "Transfect"
 day = 0
@@ -150,7 +204,8 @@ text = """
 Follow the table from the previous step, in Order.
 
 1. Tube A: Optimem + P3000 + VSVG + GagPol, then add each transfer plasmid to
-   its own aliquot of the shared mix.
+   its own aliquot of the shared mix. Where the previous step gave a working
+   dilution, pipette from that and not from the stock.
 2. Tube B: Optimem + Lipofectamine 3000. Incubate 5 min at room temperature.
 3. Combine A and B 1:1, mix gently, incubate 15 min at room temperature.
 4. Add {well_uL} uL dropwise per well.

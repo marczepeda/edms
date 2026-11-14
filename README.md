@@ -100,6 +100,17 @@ edms -h # or edms <TAB>
     proportional off the 6-well to within 2%, which is an outside check on
     the approach.
 
+    Scaling down works the same way and has one limit the arithmetic does not
+    know about. A 96-well is a thirtieth of a 6-well, so a 750 ng aliquot of
+    transfer plasmid becomes 25 ng, which out of a normal miniprep is a
+    twentieth of a microlitre: correct, and unpipettable.
+    `edms.work.plates:dilutions` takes a plan and reports only the lines that
+    fall below a microlitre, each with a round-number working stock and the
+    volume to pipette from it; `virus_production` runs it as a step, which is
+    empty at 6-well and above. The DNA amounts the small formats land on are
+    Thermo's too: scaled by area, the 6-well lentiviral recipe gives exactly
+    the 100 ng and 0.2 uL of P3000 their 96-well protocol specifies.
+
 ## PyPI Instructions
 ### Install
 1. Install edms from PyPI

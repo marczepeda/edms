@@ -381,3 +381,191 @@ def test_expansion_writes_a_file(tmp_path):
     out = tmp_path / "ladder.csv"
     plates.expansion("96-well", "6-well", file=str(out))
     assert out.exists()
+
+
+# --------------------------------------------------------------------------- #
+# Scaling down: the small formats
+# --------------------------------------------------------------------------- #
+# Thermo Fisher's standard Lipofectamine 3000 protocol (MAN0009872), adherent
+# cells: DNA per well, P3000 uL per well, DNA-lipid complex uL per well. It
+# only covers three formats, and those three are the outside check on scaling
+# the 6-well lentiviral recipe down rather than up.
+THERMO_L3000 = [
+    # vessel, DNA ng, P3000 uL, complex uL
+    ("96-well", 100, 0.2, 10),
+    ("24-well", 500, 1.0, 50),
+    ("6-well", 2500, 5.0, 250),
+]
+
+SMALL_FORMATS = ["96-well", "48-well", "24-well", "12-well"]
+
+
+def test_virus_defaults_hold_thermos_96_well_dna_density():
+    """3 ug over 9.6 cm2 is 312.5 ng/cm2, which is Thermo's 96-well density."""
+    per_cm2 = 3000 / plates.spec("6-well")["area_cm2"]
+    assert per_cm2 == pytest.approx(100 / plates.spec("96-well")["area_cm2"])
+
+
+def test_virus_scaled_to_96_well_lands_on_thermos_row():
+    """Area scaling from the 6-well gives Thermo's 100 ng and 0.2 uL exactly."""
+    factor = plates.scale("96-well", "6-well")
+    assert 3000 * factor == pytest.approx(100)
+    assert 6 * factor == pytest.approx(0.2)
+
+
+@pytest.mark.parametrize("vessel,dna_ng,p3000_uL,complex_uL", THERMO_L3000)
+def test_thermos_p3000_is_two_uL_per_ug_at_every_format(vessel, dna_ng,
+                                                        p3000_uL, complex_uL):
+    """P3000 is a ratio to DNA, not an independent number, in their table
+    and in ours."""
+    assert p3000_uL == pytest.approx(2 * dna_ng / 1000)
+    factor = plates.scale(vessel, "6-well")
+    assert (6 * factor) == pytest.approx(2 * (3000 * factor) / 1000)
+
+
+def test_thermos_own_table_steps_in_fives_not_by_area():
+    """Their 24-well and 6-well are a fifth lighter than their 96-well per cm2,
+    because the table rounds 1:5.9:30 to 1:5:25. Ours keeps the density."""
+    ninety_six, twenty_four, six = (row[1] for row in THERMO_L3000)
+    assert twenty_four / ninety_six == 5
+    assert six / ninety_six == 25
+    assert plates.scale("24-well", "96-well") == pytest.approx(5.94, abs=0.01)
+    assert plates.scale("6-well", "96-well") == pytest.approx(30.0)
+    # which is where the 1.2x between our 24-well and theirs comes from
+    assert 3000 * plates.scale("24-well", "6-well") / 500 == pytest.approx(
+        1.19, abs=0.01)
+
+
+@pytest.mark.parametrize("vessel", SMALL_FORMATS)
+def test_small_format_plans_keep_the_dna_density(vessel, packaging):
+    """Every small format is the same ng per cm2 as the 6-well anchor."""
+    plan = plates.virus(packaging.copy(), plate_format=vessel)
+    vsvg = plan[plan["Description"] == "VSVG"]["ng"].iloc[0]
+    six = plates.virus(packaging.copy(), plate_format="6-well")
+    vsvg_six = six[six["Description"] == "VSVG"]["ng"].iloc[0]
+    area_ratio = plates.scale(vessel, "6-well")
+    assert vsvg / vsvg_six == pytest.approx(area_ratio, rel=0.01)
+
+
+@pytest.mark.parametrize("vessel", SMALL_FORMATS)
+def test_small_format_seeding_is_the_lentiviral_density(vessel):
+    plan = plates.geometry(vessel, seed_per_cm2=plates.VIRUS_SEED_PER_CM2)
+    seeded = plan["Seed HEK293T per well"].iloc[0]
+    area = plates.spec(vessel)["area_cm2"]
+    assert seeded == pytest.approx(area * plates.VIRUS_SEED_PER_CM2, rel=0.05)
+
+
+def test_96_well_virus_seeding_tops_thermos_transfection_range():
+    """Packaging wants 95-99% confluent, so it sits at the top of the 1-4e4
+    Thermo gives for a 96-well transfection rather than in the middle."""
+    seeded = plates.geometry(
+        "96-well", seed_per_cm2=plates.VIRUS_SEED_PER_CM2
+    )["Seed HEK293T per well"].iloc[0]
+    assert seeded == 40000
+
+
+# --------------------------------------------------------------------------- #
+# dilutions()
+# --------------------------------------------------------------------------- #
+def test_dilutions_finds_nothing_in_the_anchor_format(packaging):
+    """A 6-well plan is pipettable as written; that is why it is the anchor."""
+    plan = plates.virus(packaging.copy(), plate_format="6-well")
+    assert plates.dilutions(plan).empty
+
+
+def test_dilutions_keeps_its_columns_when_empty(packaging):
+    plan = plates.virus(packaging.copy(), plate_format="6-well")
+    assert list(plates.dilutions(plan).columns) == [
+        "Component", "Planned uL", "Stock ng/uL", "Fold", "Working ng/uL",
+        "uL at working", "Make"]
+
+
+@pytest.mark.parametrize("vessel", SMALL_FORMATS)
+def test_dilutions_lifts_every_flagged_line_above_the_minimum(vessel,
+                                                              packaging):
+    """The point of the table is that nothing is left under a microlitre."""
+    plan = plates.virus(packaging.copy(), plate_format=vessel)
+    out = plates.dilutions(plan)
+    for value in out["uL at working"]:
+        if value != "-":
+            assert value >= plates.MIN_PIPETTE_UL
+
+
+def test_dilutions_flags_the_transfer_plasmids_at_96_well(packaging):
+    plan = plates.virus(packaging.copy(), plate_format="96-well")
+    flagged = set(plates.dilutions(plan)["Component"])
+    assert {"pMUZ310", "pMUZ311"} <= flagged
+
+
+def test_dilutions_only_uses_round_factors(packaging):
+    plan = plates.virus(packaging.copy(), plate_format="96-well")
+    for fold in plates.dilutions(plan)["Fold"]:
+        if fold != "-":
+            assert fold in plates.DILUTION_STEPS
+
+
+def test_dilutions_tells_reagents_to_scale_the_mix_instead(packaging):
+    """L3000 has no ng/uL, so a working stock is not the answer for it."""
+    plan = plates.virus(packaging.copy(), plate_format="96-well")
+    out = plates.dilutions(plan)
+    l3000 = out[out["Component"] == "L3000"]
+    assert len(l3000) == 1
+    assert "scale the mix" in l3000["Make"].iloc[0]
+    assert l3000["Fold"].iloc[0] == "-"
+
+
+def test_dilutions_never_asks_for_an_unpipettable_aliquot_of_stock(packaging):
+    """A 50-fold dilution in 20 uL would need 0.4 uL of stock, so the volume
+    made grows with the factor instead."""
+    plan = plates.virus(packaging.copy(), plate_format="96-well")
+    for _, row in plates.dilutions(plan).iterrows():
+        if row["Fold"] == "-":
+            continue
+        stock_uL = float(row["Make"].split(" uL stock")[0])
+        assert stock_uL >= plates.MIN_PIPETTE_UL
+
+
+def test_dilutions_honours_a_different_minimum(packaging):
+    plan = plates.virus(packaging.copy(), plate_format="12-well")
+    assert len(plates.dilutions(plan, min_uL=2.0)) > len(
+        plates.dilutions(plan, min_uL=1.0))
+
+
+def test_dilutions_ignores_the_rounding_in_the_planned_volume():
+    """A line printed as 0.05 uL is really 0.048, and needs more than 20x."""
+    plan = pd.DataFrame({"Plasmid": ["pMUZ312"], "Description": ["transfer"],
+                         "ng/uL": [520.4], "ng": [25.0], "uL": [0.05]})
+    row = plates.dilutions(plan).iloc[0]
+    assert row["Fold"] > 20
+    assert row["uL at working"] >= plates.MIN_PIPETTE_UL
+
+
+def test_dilutions_names_a_reagent_row_by_its_description():
+    plan = pd.DataFrame({"Plasmid": ["N/A"], "Description": ["P3000 Enhancer"],
+                         "ng/uL": ["N/A"], "ng": ["N/A"], "uL": [0.66]})
+    assert plates.dilutions(plan)["Component"].iloc[0] == "P3000 Enhancer"
+
+
+def test_dilutions_rejects_a_frame_without_volumes():
+    with pytest.raises(KeyError, match="needs a 'uL' column"):
+        plates.dilutions(pd.DataFrame({"Plasmid": ["x"]}))
+
+
+def test_dilutions_rejects_a_minimum_of_zero(packaging):
+    plan = plates.virus(packaging.copy(), plate_format="96-well")
+    with pytest.raises(ValueError, match="min_uL must be greater than 0"):
+        plates.dilutions(plan, min_uL=0)
+
+
+def test_dilutions_uses_the_named_diluent(packaging):
+    plan = plates.virus(packaging.copy(), plate_format="96-well")
+    out = plates.dilutions(plan, diluent="nuclease-free water")
+    assert any("nuclease-free water" in m for m in out["Make"]
+               if "stock" in m)
+
+
+def test_dilutions_writes_a_file(tmp_path, packaging):
+    plan = plates.virus(packaging.copy(), plate_format="96-well")
+    out = tmp_path / "dilutions.csv"
+    plates.dilutions(plan, file=str(out))
+    assert out.exists()

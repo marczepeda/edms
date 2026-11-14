@@ -30,6 +30,14 @@ Usage:
 - geometry(): one-row plan of the chosen format, for a protocol step
 - PE3(): edms.bio.transfect:PE3 rescaled to a plate format
 - virus(): edms.bio.transfect:virus rescaled to a plate format
+- dilutions(): working dilutions for plan lines too small to pipette
+- virus_dilutions(): virus() and dilutions() in one call
+
+Scaling down has a floor the arithmetic does not know about. Area scaling
+keeps the DNA per cm2 right at every format, but a 96-well plate is a
+thirtieth of a 6-well, and a thirtieth of a normal plasmid aliquot is a
+twentieth of a microlitre. Run a small-format plan through dilutions() to see
+which lines need a working stock before they can be pipetted at all.
 '''
 from __future__ import annotations
 
@@ -103,6 +111,14 @@ EXPANSION_SKIP_DEFAULT = ('12-well',)
 # A split this far apart is a long time at low density, which is where a
 # slow-growing clone stalls
 WIDE_SPLIT = 5.0
+
+# Smallest volume worth trusting out of a P2. Below it the pipetting error is
+# a larger share of the transfer than the differences the experiment is
+# trying to measure, and a plan that asks for 0.05 uL is not a plan.
+MIN_PIPETTE_UL = 1.0
+
+# Dilutions people actually make, rather than 7.3-fold
+DILUTION_STEPS = (2, 5, 10, 20, 50, 100, 200, 500, 1000)
 
 def _round_cells(cells: float) -> int:
     '''
@@ -283,6 +299,15 @@ def virus(plasmids, plate_format: str=VIRUS_ANCHOR, VSVG_ng: float=750,
     virus() was written for; each is multiplied by the growth-area ratio of the
     chosen format. In a 6-well plate the amounts pass through unchanged.
 
+    The defaults hold 312.5 ng of DNA per cm2, which is Thermo's own density
+    for a 96-well: scaling them down by area lands exactly on the 100 ng and
+    0.2 uL of P3000 their Lipofectamine 3000 protocol specifies there. Their
+    24-well and 6-well rows are a fifth lighter than that, because their table
+    steps 1:5:25 where the growth areas step 1:5.9:30.
+
+    Below a 12-well the per-well volumes stop being pipettable; pass the plan
+    to dilutions() for the working stocks that make it a real protocol.
+
     Parameters:
     plasmids (DataFrame): nanodrop concentrations for every plasmid
     plate_format (str, optional): plate format name or alias (Default: 6-well)
@@ -307,6 +332,145 @@ def virus(plasmids, plate_format: str=VIRUS_ANCHOR, VSVG_ng: float=750,
                            P3000_uL_per_well=round(P3000_uL_per_well * f, 2),
                            L3000_uL_per_well=round(L3000_uL_per_well * f, 2),
                            **kwargs)
+
+def _as_float(value):
+    '''
+    _as_float(): a cell's numeric value, or None if it has none.
+
+    Parameters:
+    value: any cell from a plan
+    '''
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        return None
+    return None if out != out else out  # NaN
+
+def dilutions(plan: pd.DataFrame, min_uL: float=MIN_PIPETTE_UL,
+              make_uL: float=20.0, diluent: str='TE',
+              plasmid_col: str='Plasmid', description_col: str='Description',
+              conc_col: str='ng/uL', ng_col: str='ng', uL_col: str='uL',
+              file: str=None) -> pd.DataFrame:
+    '''
+    dilutions(): working dilutions for the lines of a plan too small to pipette.
+
+    Scaling a transfection down by growth area keeps the DNA per cm2 right,
+    but it does not keep the volumes pipettable. A 96-well plate is a
+    thirtieth of a 6-well, so 750 ng of transfer plasmid becomes 25 ng, and at
+    a normal miniprep concentration that is a twentieth of a microlitre. The
+    arithmetic is correct and the plan is unusable.
+
+    This takes a plan and reports only the lines that fall below min_uL. A
+    plasmid gets a round-number dilution and the volume to pipette from it; a
+    reagent with no measured concentration cannot be diluted that way, so it
+    gets the factor its master mix would have to grow by instead -- more
+    wells, or a larger mm_x.
+
+    Parameters:
+    plan (dataframe): a transfection plan, e.g. from virus()
+    min_uL (float, optional): smallest volume worth pipetting
+        (Default: MIN_PIPETTE_UL, which is 1.0)
+    make_uL (float, optional): volume of working dilution to make; raised
+        where that would put the stock aliquot below min_uL (Default: 20.0)
+    diluent (str, optional): what the stock is diluted into (Default: 'TE')
+    plasmid_col (str, optional): plasmid name column (Default: 'Plasmid')
+    description_col (str, optional): description column, used to name a row
+        whose plasmid is 'N/A' (Default: 'Description')
+    conc_col (str, optional): stock concentration column (Default: 'ng/uL')
+    ng_col (str, optional): mass column (Default: 'ng')
+    uL_col (str, optional): planned volume column (Default: 'uL')
+    file (str, optional): output file path
+
+    Dependencies: pandas,math,_as_float(),MIN_PIPETTE_UL,DILUTION_STEPS
+    '''
+    from math import ceil
+
+    if uL_col not in plan.columns:
+        raise KeyError(f"dilutions() needs a '{uL_col}' column; plan has "
+                       f"{', '.join(map(str, plan.columns))}")
+    if min_uL <= 0:
+        raise ValueError(f'min_uL must be greater than 0, got {min_uL}')
+
+    rows = []
+    for _, row in plan.iterrows():
+        uL = _as_float(row[uL_col])
+        if uL is None or uL >= min_uL:
+            continue
+        name = row.get(plasmid_col)
+        if name is None or str(name) == 'N/A':
+            name = row.get(description_col, '')
+        conc = _as_float(row.get(conc_col))
+        ng = _as_float(row.get(ng_col))
+
+        if uL <= 0:
+            continue
+        # The plan's uL is rounded to two decimals, which at these volumes is
+        # a few percent. Recompute from the mass where there is one, so a line
+        # printed as 0.05 uL does not get the dilution for 0.05 uL exactly.
+        exact = ng / conc if (conc and ng is not None and conc > 0) else uL
+        needed = min_uL / exact
+        if conc is None or conc <= 0 or ng is None:
+            # A lipid or an enhancer: no stock concentration to dilute, so the
+            # mix itself has to be bigger.
+            rows.append({'Component': name,
+                         'Planned uL': round(uL, 3),
+                         'Stock ng/uL': '-',
+                         'Fold': '-',
+                         'Working ng/uL': '-',
+                         'uL at working': '-',
+                         'Make': f'scale the mix {needed:.1f}x: plan more '
+                                 f'wells, or raise mm_x'})
+            continue
+
+        fold = next((s for s in DILUTION_STEPS if s >= needed),
+                    int(ceil(needed / 1000) * 1000))
+        working = conc / fold
+        total = max(make_uL, min_uL * fold)
+        stock_uL = total / fold
+        rows.append({'Component': name,
+                     'Planned uL': round(uL, 3),
+                     'Stock ng/uL': round(conc, 2),
+                     'Fold': fold,
+                     'Working ng/uL': round(working, 2),
+                     'uL at working': round(ng / working, 2),
+                     'Make': f'{round(stock_uL, 2)} uL stock + '
+                             f'{round(total - stock_uL, 2)} uL {diluent}'})
+
+    df = pd.DataFrame(rows, columns=['Component', 'Planned uL', 'Stock ng/uL',
+                                     'Fold', 'Working ng/uL', 'uL at working',
+                                     'Make'])
+    if file is not None:
+        from ..gen import io
+        io.save(obj=df, file=file, id=True)
+    return df
+
+def virus_dilutions(plasmids, plate_format: str=VIRUS_ANCHOR,
+                    min_uL: float=MIN_PIPETTE_UL, make_uL: float=20.0,
+                    diluent: str='TE', file: str=None, **kwargs) -> pd.DataFrame:
+    '''
+    virus_dilutions(): the working dilutions a virus plan needs at this format.
+
+    virus() followed by dilutions(), so a protocol step can ask the question
+    without holding the plan in between. Empty in a 6-well plate and in
+    anything larger, which is the answer that step wants to be able to print.
+
+    Parameters:
+    plasmids (DataFrame): nanodrop concentrations for every plasmid
+    plate_format (str, optional): plate format name or alias (Default: 6-well)
+    min_uL (float, optional): smallest volume worth pipetting
+        (Default: MIN_PIPETTE_UL)
+    make_uL (float, optional): volume of working dilution to make (Default: 20.0)
+    diluent (str, optional): what the stock is diluted into (Default: 'TE')
+    file (str, optional): output file path
+    **kwargs: passed through to virus()
+
+    Dependencies: pandas,virus(),dilutions()
+    '''
+    plan = virus(plasmids, plate_format=plate_format, **kwargs)
+    return dilutions(plan, min_uL=min_uL, make_uL=make_uL, diluent=diluent,
+                     file=file)
 
 def expansion(start: str, end: str, skip=EXPANSION_SKIP_DEFAULT,
               file: str=None) -> pd.DataFrame:

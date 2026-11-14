@@ -230,3 +230,13 @@ def test_arg_referencing_undeclared_param_is_rejected(tmp_path):
             [steps.args]
             data = "$ghost"
         """))
+
+
+def test_virus_template_plans_the_small_format_dilutions():
+    """Scaling below a 12-well needs working stocks, so the template has a
+    step for them rather than leaving sub-microlitre volumes in the plan."""
+    tpl = template_mod.load("virus_production")
+    step = tpl.step("dilutions")
+    assert step.compute == "edms.work.plates:virus_dilutions"
+    assert "transfection_plan" in step.depends_on
+    assert tpl.params["min_uL"] == 1.0
