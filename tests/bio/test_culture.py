@@ -386,3 +386,98 @@ def test_competitive_growth_writes_a_file(muz361_samples, tmp_path):
     out = tmp_path / "cg.xlsx"
     culture.competitive_growth(muz361_samples, file=str(out))
     assert out.exists()
+
+
+# --------------------------------------------------------------------------- #
+# sort_plan() and freeze_down(): the clone isolation half of MUZ361
+# --------------------------------------------------------------------------- #
+def test_sort_plan_matches_the_four_plates_muz361_sorted():
+    plan = culture.sort_plan(target_clones=30, plating_efficiency=0.1)
+    assert _value(plan, "Plates to sort") == 4
+    assert _value(plan, "Wells sorted") == 384
+
+
+def test_sort_plan_rounds_plates_up():
+    """Three and a bit plates is four plates."""
+    plan = culture.sort_plan(target_clones=30, plating_efficiency=0.1)
+    assert _value(plan, "Wells needed") == 300
+    assert _value(plan, "Plates to sort") == 4
+
+
+def test_sort_plan_needs_more_plates_at_a_worse_efficiency():
+    better = culture.sort_plan(target_clones=30, plating_efficiency=0.2)
+    worse = culture.sort_plan(target_clones=30, plating_efficiency=0.05)
+    assert _value(worse, "Plates to sort") > _value(better, "Plates to sort")
+
+
+def test_sort_plan_splits_the_media_by_the_conditioned_fraction():
+    plan = culture.sort_plan(target_clones=30, plating_efficiency=0.1,
+                             conditioned_fraction=0.5)
+    assert _value(plan, "Media total") == 76.8
+    assert _value(plan, "Conditioned media") == 38.4
+    assert _value(plan, "Fresh media") == 38.4
+
+
+def test_sort_plan_can_want_no_conditioned_media():
+    plan = culture.sort_plan(target_clones=10, conditioned_fraction=0)
+    assert _value(plan, "Conditioned media") == 0
+
+
+@pytest.mark.parametrize("efficiency", [0, -0.1, 1.5])
+def test_sort_plan_rejects_an_impossible_efficiency(efficiency):
+    with pytest.raises(ValueError, match="plating_efficiency"):
+        culture.sort_plan(target_clones=10, plating_efficiency=efficiency)
+
+
+def test_sort_plan_rejects_no_clones():
+    with pytest.raises(ValueError, match="target_clones"):
+        culture.sort_plan(target_clones=0)
+
+
+def test_freeze_down_matches_the_muz361_boxes():
+    """Box 7-4: 12 vials from a 15 cm dish at ~80%."""
+    plan = culture.freeze_down(harvest_mL=7.5, vessel="15cm", confluency=80)
+    assert _value(plan, "Vials") == 12
+    assert _value(plan, "Cells, total") == 12000000.0
+    assert _value(plan, "Cells, source") == "80% of a 15-cm"
+
+
+def test_freeze_down_takes_a_measured_count_over_an_estimate():
+    plan = culture.freeze_down(harvest_mL=10, cells_per_mL=1.2e6)
+    assert _value(plan, "Vials") == 12
+    assert _value(plan, "Cells, source") == "measured"
+
+
+def test_freeze_down_rounds_vials_down():
+    """A part-filled vial is not a vial you would thaw."""
+    plan = culture.freeze_down(harvest_mL=1, cells_per_mL=2.7e6)
+    assert _value(plan, "Vials") == 2
+    assert _value(plan, "Cells left over") == 700000.0
+
+
+def test_freeze_down_splits_the_freezing_medium():
+    plan = culture.freeze_down(harvest_mL=10, cells_per_mL=1.2e6, dmso_pct=10)
+    assert _value(plan, "Freezing medium") == 12.0
+    assert _value(plan, "DMSO") == 1.2
+    assert _value(plan, "Media / FBS") == 10.8
+
+
+def test_freeze_down_refuses_a_harvest_too_small_for_one_vial():
+    with pytest.raises(ValueError, match="less than the"):
+        culture.freeze_down(harvest_mL=0.1, cells_per_mL=1e5)
+
+
+def test_freeze_down_needs_something_to_go_on():
+    with pytest.raises(ValueError, match="either cells_per_mL"):
+        culture.freeze_down(harvest_mL=10)
+
+
+def test_freeze_down_needs_both_halves_of_the_estimate():
+    with pytest.raises(ValueError, match="either cells_per_mL"):
+        culture.freeze_down(harvest_mL=10, vessel="15cm")
+
+
+def test_freeze_down_writes_a_file(tmp_path):
+    out = tmp_path / "freeze.csv"
+    culture.freeze_down(harvest_mL=10, cells_per_mL=1e6, file=str(out))
+    assert out.exists()

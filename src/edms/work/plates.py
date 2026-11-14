@@ -26,6 +26,7 @@ Usage:
 - scale(): growth-area ratio between two formats
 
 [Planning]
+- expansion(): the ladder of vessels from one format up to another
 - geometry(): one-row plan of the chosen format, for a protocol step
 - PE3(): edms.bio.transfect:PE3 rescaled to a plate format
 - virus(): edms.bio.transfect:virus rescaled to a plate format
@@ -77,6 +78,14 @@ PE3_ANCHOR = '96-well'
 # Key used in place of a plate map that would not match the chosen format
 LAYOUT_NOTE = 'Plate layout'
 VIRUS_ANCHOR = '6-well'
+
+# Formats worth stepping through when expanding a clone. 12-well is in the
+# list but is the usual one to skip: MUZ361 lost clones there twice, to cells
+# clumping in the middle of the well, and went 24-well straight to 6-well.
+EXPANSION_SKIP_DEFAULT = ('12-well',)
+# A split this far apart is a long time at low density, which is where a
+# slow-growing clone stalls
+WIDE_SPLIT = 5.0
 
 def _round_cells(cells: float) -> int:
     '''
@@ -275,3 +284,66 @@ def virus(plasmids, plate_format: str=VIRUS_ANCHOR, VSVG_ng: float=750,
                            P3000_uL_per_well=round(P3000_uL_per_well * f, 2),
                            L3000_uL_per_well=round(L3000_uL_per_well * f, 2),
                            **kwargs)
+
+def expansion(start: str, end: str, skip=EXPANSION_SKIP_DEFAULT,
+              file: str=None) -> pd.DataFrame:
+    '''
+    expansion(): the ladder of vessels from one format up to another.
+
+    A clone coming off a sort has to climb from a single well to something
+    worth freezing, and the only real choice is which rungs to use. Each step
+    is a split, and its growth-area ratio is how thin that split spreads the
+    cells.
+
+    Skipping a format widens the step either side of it. That is sometimes the
+    right trade: MUZ361 lost clones in 12-well plates to cells clumping in the
+    middle of the well and went from 24-well straight to 6-well instead,
+    accepting a 1:5 split to avoid a rung that was killing them.
+
+    Parameters:
+    start (str): format the clones are in now
+    end (str): format to reach
+    skip (iterable, optional): formats to leave out of the ladder
+        (Default: EXPANSION_SKIP_DEFAULT, which is 12-well)
+    file (str, optional): output file path
+
+    Dependencies: pandas,canonical(),names(),spec(),WIDE_SPLIT
+    '''
+    first, last = canonical(start), canonical(end)
+    order = names()
+    if order.index(last) <= order.index(first):
+        raise ValueError(f"'{last}' is not larger than '{first}'; expansion() "
+                         f'goes up through the formats, smallest first')
+
+    skipped = {canonical(s) for s in (skip or ())}
+    for fixed, label in ((first, 'start'), (last, 'end')):
+        if fixed in skipped:
+            raise ValueError(f"'{fixed}' is both the {label} and in skip; it "
+                             f'cannot be left out of its own ladder')
+
+    rungs = [n for n in order[order.index(first):order.index(last) + 1]
+             if n not in skipped]
+    rows = []
+    for frm, to in zip(rungs, rungs[1:]):
+        ratio = scale(to=to, frm=frm)
+        between = [n for n in order[order.index(frm) + 1:order.index(to)]
+                   if n in skipped]
+        note = ''
+        if between:
+            note = f"skipping {', '.join(between)}"
+        if ratio >= WIDE_SPLIT:
+            wide = (f'1:{ratio:.0f} is a wide split; expect to sit at low '
+                    f'density for a few days')
+            note = f'{note}, {wide}' if note else wide
+        rows.append({'From': frm,
+                     'To': to,
+                     'Split': f'1:{ratio:.1f}',
+                     'Area ratio': round(ratio, 2),
+                     'Media per well (mL)': spec(to)['media_mL'],
+                     'Note': note})
+
+    df = pd.DataFrame(rows)
+    if file is not None:
+        from ..gen import io
+        io.save(obj=df, file=file, id=True)
+    return df

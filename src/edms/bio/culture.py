@@ -25,7 +25,12 @@ Usage:
 - per_mL(): estimate a harvest's concentration from how confluent it looked
 - seed_plan(): spin volume per sample for one arm of an experiment
 - competitive_growth(): both arms of a transduction + competitive growth setup
+
+[Clone isolation]
+- sort_plan(): plates to sort and conditioned media to prepare for a clone hunt
+- freeze_down(): vials and freezing medium from a harvest
 '''
+import math
 import pandas as pd
 
 from ..gen import io
@@ -384,3 +389,149 @@ def competitive_growth(df: pd.DataFrame, cg_cells_per_well: float=1.2e5,
     if file is not None:
         io.save(obj=tables, file=file, id=True)
     return tables
+
+# Clone isolation
+def sort_plan(target_clones: int, plating_efficiency: float=0.1,
+              plate_format: str='96-well', conditioned_fraction: float=0.5,
+              media_mL: float=None, file: str=None) -> pd.DataFrame:
+    '''
+    sort_plan(): plates to sort and conditioned media to prepare for a clone hunt.
+
+    Single cells sorted one per well do not all become colonies, so the number
+    of plates to sort is the number of clones wanted divided by the fraction
+    that survive. That fraction is the whole calculation and it is
+    line-specific: LNCaP is at the unforgiving end of it.
+
+    No entry here records a measured plating efficiency, so the default is a
+    placeholder rather than a figure to trust. Sort one plate, count the wells
+    that grew, and put your own number in before planning the real sort.
+
+    The conditioned media is the part that has to be ready in advance. A sort
+    that happens before it is made either waits or goes out into plain media,
+    and clones that will not start in plain media are lost at that point
+    rather than later.
+
+    Parameters:
+    target_clones (int): clones wanted at the end
+    plating_efficiency (float, optional): fraction of sorted wells that become
+        a colony, between 0 and 1 (Default: 0.1)
+    plate_format (str, optional): format sorted into (Default: '96-well')
+    conditioned_fraction (float, optional): fraction of the well volume that is
+        conditioned media (Default: 0.5)
+    media_mL (float, optional): media per well, mL; taken from the format when
+        left unset (Default: None)
+    file (str, optional): output file path
+
+    Dependencies: math,pandas,io,edms.work.plates
+    '''
+    from ..work import plates  # local: edms.work.plates imports edms.bio
+
+    if target_clones < 1:
+        raise ValueError(f'target_clones must be at least 1, got {target_clones}')
+    if not 0 < plating_efficiency <= 1:
+        raise ValueError(f'plating_efficiency is a fraction above 0 and at '
+                         f'most 1, got {plating_efficiency}')
+    if not 0 <= conditioned_fraction <= 1:
+        raise ValueError(f'conditioned_fraction is a fraction between 0 and 1, '
+                         f'got {conditioned_fraction}')
+
+    s = plates.spec(plate_format)
+    per_well_mL = s['media_mL'] if media_mL is None else media_mL
+    wells_needed = math.ceil(target_clones / plating_efficiency)
+    plate_count = math.ceil(wells_needed / s['wells'])
+    wells_sorted = plate_count * s['wells']
+    total_mL = wells_sorted * per_well_mL
+
+    rows = [('Clones wanted', target_clones, 'clones'),
+            ('Plating efficiency', plating_efficiency, 'fraction'),
+            ('Format', s['plate_format'], '-'),
+            ('Wells needed', wells_needed, 'wells'),
+            ('Plates to sort', plate_count, 'plates'),
+            ('Wells sorted', wells_sorted, 'wells'),
+            ('Clones expected', round(wells_sorted * plating_efficiency, 1), 'clones'),
+            ('Media per well', per_well_mL, 'mL'),
+            ('Media total', round(total_mL, 1), 'mL'),
+            ('Conditioned media', round(total_mL * conditioned_fraction, 1), 'mL'),
+            ('Fresh media', round(total_mL * (1 - conditioned_fraction), 1), 'mL')]
+    df_sort = pd.DataFrame({'Component': [r[0] for r in rows],
+                            'Value': pd.Series([r[1] for r in rows], dtype=object),
+                            'Unit': [r[2] for r in rows]})
+    if file is not None:
+        io.save(obj=df_sort, file=file, id=True)
+    return df_sort
+
+def freeze_down(harvest_mL: float, cells_per_mL: float=None, vessel: str=None,
+                confluency: float=None, cells_per_vial: float=1e6,
+                vial_mL: float=1.0, dmso_pct: float=10,
+                confluent_per_mL: dict=None, file: str=None) -> pd.DataFrame:
+    '''
+    freeze_down(): vials and freezing medium from a harvest.
+
+    Give it a measured concentration, or a vessel and a confluency to estimate
+    one. Vials round down, because a part-filled vial is not a vial you would
+    thaw.
+
+    As a sanity check rather than a rule: MUZ361 froze 12 vials from a 15 cm
+    dish at 75-80% confluent, twice. A plan that comes out at two vials or at
+    fifty from a similar dish is a sign the concentration is wrong.
+
+    Parameters:
+    harvest_mL (float): volume the pellet is resuspended in before counting, mL
+    cells_per_mL (float, optional): measured concentration (Default: None)
+    vessel (str, optional): vessel the harvest came from, for the estimate
+        (Default: None)
+    confluency (float, optional): percent confluent, for the estimate (Default: None)
+    cells_per_vial (float, optional): cells to put in each vial (Default: 1e6)
+    vial_mL (float, optional): freezing medium per vial, mL (Default: 1.0)
+    dmso_pct (float, optional): DMSO in the freezing medium, percent (Default: 10)
+    confluent_per_mL (dict, optional): cells/mL at 100% confluency per vessel
+    file (str, optional): output file path
+
+    Dependencies: math,pandas,io,per_mL()
+    '''
+    if harvest_mL <= 0:
+        raise ValueError(f'harvest_mL must be greater than 0, got {harvest_mL}')
+    if cells_per_vial <= 0:
+        raise ValueError(f'cells_per_vial must be greater than 0, got {cells_per_vial}')
+    if not 0 <= dmso_pct < 100:
+        raise ValueError(f'dmso_pct must be at least 0 and below 100, got {dmso_pct}')
+
+    if cells_per_mL is not None:
+        if cells_per_mL <= 0:
+            raise ValueError(f'cells_per_mL must be greater than 0, got {cells_per_mL}')
+        conc, source = float(cells_per_mL), 'measured'
+    elif vessel is not None and confluency is not None:
+        conc = per_mL(vessel=vessel, confluency=confluency,
+                      confluent_per_mL=confluent_per_mL)
+        from ..work import plates  # local: edms.work.plates imports edms.bio
+        source = f'{confluency:g}% of a {plates.canonical(vessel)}'
+    else:
+        raise ValueError('freeze_down() needs either cells_per_mL, or both '
+                         'vessel and confluency to estimate one')
+
+    total = conc * harvest_mL
+    vials = int(total // cells_per_vial)
+    if vials < 1:
+        raise ValueError(
+            f'{total:,.0f} cells is less than the {cells_per_vial:,.0f} wanted '
+            f'in one vial. Grow the clone further, or lower cells_per_vial.')
+    medium_mL = vials * vial_mL
+    leftover = total - vials * cells_per_vial
+
+    rows = [('Cells, source', source, '-'),
+            ('Cells', round(conc, 1), 'cells/mL'),
+            ('Harvest', harvest_mL, 'mL'),
+            ('Cells, total', round(total, 1), 'cells'),
+            ('Cells / vial', cells_per_vial, 'cells'),
+            ('Vials', vials, 'vials'),
+            ('Cells left over', round(leftover, 1), 'cells'),
+            ('Freezing medium', round(medium_mL, 2), 'mL'),
+            ('DMSO', round(medium_mL * dmso_pct / 100, 2), 'mL'),
+            ('Media / FBS', round(medium_mL * (1 - dmso_pct / 100), 2), 'mL')]
+    df_freeze = pd.DataFrame({'Component': [r[0] for r in rows],
+                              'Value': pd.Series([r[1] for r in rows], dtype=object),
+                              'Unit': [r[2] for r in rows]})
+    if file is not None:
+        io.save(obj=df_freeze, file=file, id=True)
+    return df_freeze
+

@@ -1,0 +1,336 @@
+# Selection -> recovery -> single-cell sort -> expansion -> freeze -> validate
+#
+# Modelled on the first half of MUZ361, which took a transduced LNCaP pool
+# through blasticidin selection, a week of recovery, a sort into 96-well
+# plates, and roughly two months of expansion to a frozen, validated clone.
+#
+# The hard-won parts of that entry are the ones with no arithmetic in them:
+# conditioned media has to exist before the sort, 12-well plates killed clones
+# twice, and the plates need attention on a fixed schedule for weeks.
+#
+# Bundled example template. Copy it and edit the defaults to match your line:
+#   cp "$(edms work where clone_isolation)" ./my_clones.toml
+#   edms work init -t ./my_clones.toml -i run.toml
+
+name = "clone_isolation"
+version = 1
+title = "Single-cell clone isolation from a transduced pool"
+description = """
+A transduced pool taken to a panel of frozen, validated single-cell clones:
+select, recover, sort, expand, freeze, and check that what grew up is what you
+were sorting for.
+
+This is the longest template here and the least computational. Two things are
+calculated -- how many plates to sort for the number of clones you want, from
+edms.bio.culture:sort_plan, and how many vials a dish will give, from
+edms.bio.culture:freeze_down -- and the rest is a schedule and a set of
+decisions that are easy to get wrong once and expensive to get wrong twice.
+
+The expansion ladder comes from edms.work.plates:expansion. It skips 12-well
+by default, because MUZ361 lost clones there to cells clumping in the middle
+of the well and went from 24-well straight to 6-well instead.
+
+Budget two to three months. A clone that grows slowly is not a failed clone,
+and the schedule should not force a decision before the plates have had time
+to declare themselves.
+"""
+
+[params]
+# Line
+cell_line           = "LNCaP"
+pool                = "transduced pool"
+# Selection
+select_drug         = "Blasticidin"
+select_stock        = 10000
+select_desired      = 2
+select_unit         = "ug/mL"
+select_wells        = 6
+select_drug_mL      = 1.0
+select_cell_mL      = 1.0
+select_mm_x         = 1.1
+select_days         = 7
+recover_days        = 7
+# Sort
+target_clones       = 30
+plating_efficiency  = 0.1
+sort_format         = "96-well"
+conditioned_fraction = 0.5
+sort_wait_weeks     = 6
+# Expansion
+expand_from         = "96-well"
+expand_to           = "15-cm"
+feed_days           = "Mon/Wed/Fri"
+# Freeze
+harvest_mL          = 7.5
+freeze_vessel       = "15-cm"
+freeze_confluency   = 80
+cells_per_vial      = 1000000
+vial_mL             = 1.0
+dmso_pct            = 10
+
+[[inputs]]
+name = "clones"
+description = "One row per clone that survives the sort; fill it in as they come up"
+required_columns = ["Clone"]
+optional = true
+
+# --------------------------------------------------------------------------- #
+
+[[steps]]
+id = "conditioned_media"
+title = "Make conditioned media"
+day = 0
+duration = "1 week"
+text = """
+Start this first. Everything else waits on it.
+
+Collect media off healthy {cell_line} at 50-70% confluency, spin it down,
+filter it, and keep it at 4 C. You need enough for the whole sort, and the
+sort cannot be moved once it is booked.
+
+A clone that will not start in plain media is lost at the sort, not later.
+There is no step downstream that recovers it, which is why this is the step
+with a week of lead time in front of it.
+"""
+checks = [
+  "Collected from cells below 70% confluent, not from a spent flask",
+  "Filtered, not just spun",
+  "Enough made for every plate in the sort plan",
+]
+
+[[steps]]
+id = "selection"
+title = "Select the pool"
+day = 0
+duration = "1 h"
+compute = "edms.bio.culture:drug_mm"
+outputs = ["Selection"]
+text = """
+{select_drug} at {select_desired} {select_unit} for {select_days} days.
+
+Keep an untransduced well alongside. It is the only thing that tells you the
+selection finished rather than the drug being dead, and it costs one well.
+"""
+checks = [
+  "Untransduced control well included",
+  "Drug made up fresh",
+]
+
+[steps.args]
+stock         = "$select_stock"
+desired       = "$select_desired"
+wells         = "$select_wells"
+drug_media_mL = "$select_drug_mL"
+cell_media_mL = "$select_cell_mL"
+mm_x          = "$select_mm_x"
+drug          = "$select_drug"
+unit          = "$select_unit"
+
+[[steps]]
+id = "recover"
+title = "Recover"
+day = 7
+depends_on = ["selection"]
+duration = "1 week"
+text = """
+Off drug for {recover_days} days before sorting.
+
+Cells coming straight off selection sort badly and plate worse. The week is
+not optional and it is not a week you get back later by sorting early.
+
+Note how the pool looks before the sort:
+  edms work note <run_dir> -s recover -n "confluency, morphology ..."
+"""
+checks = [
+  "Fully off drug for the whole recovery",
+  "Pool looks healthy before booking the sorter",
+]
+
+[[steps]]
+id = "sort_plan"
+title = "Plan the sort"
+day = 13
+depends_on = ["recover"]
+duration = "10 min"
+compute = "edms.bio.culture:sort_plan"
+outputs = ["Sort"]
+text = """
+{target_clones} clones wanted at a {plating_efficiency} plating efficiency.
+
+That efficiency is the whole calculation and the default is a placeholder, not
+a measurement. Sort one plate first, count what grows, and put your own number
+in before the real sort:
+  edms work deviate <run_dir> -s sort_plan -p plating_efficiency -v 0.05 -w "measured on a pilot plate"
+
+The conditioned media figure is what has to be in the fridge on the day.
+"""
+
+[steps.args]
+target_clones        = "$target_clones"
+plating_efficiency   = "$plating_efficiency"
+plate_format         = "$sort_format"
+conditioned_fraction = "$conditioned_fraction"
+
+[[steps]]
+id = "sort"
+title = "Sort single cells"
+day = 14
+depends_on = ["sort_plan", "conditioned_media"]
+duration = "4 h"
+text = """
+One cell per well into {sort_format} plates, into the conditioned/fresh mix
+from the plan above.
+
+Sort a few wells at ten cells each on one plate as a control. If those do not
+grow either, the problem is the media or the sorter, not the cloning, and you
+find that out in a week instead of in six.
+
+Record the date; everything downstream is counted from it:
+  edms work note <run_dir> -s sort -n "sorted <n> plates, ..."
+"""
+checks = [
+  "Plates pre-filled with conditioned media before sorting",
+  "Ten-cell control wells included",
+  "Sort date recorded",
+]
+
+[[steps]]
+id = "wait"
+title = "Wait"
+day = 15
+depends_on = ["sort"]
+duration = "4-8 weeks"
+text = """
+Leave them alone for {sort_wait_weeks} weeks, topping up media rather than
+changing it.
+
+Mark the wells that have a colony as you spot them, but do not start picking
+until the plates have stopped producing new ones. The slow clones are often
+the ones worth having, and a schedule that picks at four weeks selects for
+fast growers whether or not that is what you want.
+
+Score the plates as they come up:
+  edms work note <run_dir> -s wait -n "week 3: <n> wells with colonies"
+"""
+checks = [
+  "Topped up rather than fully changed",
+  "Wells marked as colonies appear",
+  "Ten-cell control wells grew",
+]
+
+[[steps]]
+id = "expansion_plan"
+title = "Plan the expansion"
+depends_on = ["wait"]
+duration = "5 min"
+compute = "edms.work.plates:expansion"
+outputs = ["Expansion"]
+text = """
+The ladder from {expand_from} up to {expand_to}.
+
+12-well is skipped by default. MUZ361 lost clones there twice to cells
+clumping in the middle of the well, and went 24-well straight to 6-well
+instead, taking the wider split to avoid the rung.
+
+To put it back, or to skip something else:
+  edms work deviate <run_dir> -s expansion_plan -p skip -v "" -w "trying 12-well again"
+"""
+
+[steps.args]
+start = "$expand_from"
+end   = "$expand_to"
+
+[[steps]]
+id = "expand"
+title = "Expand the clones"
+depends_on = ["expansion_plan"]
+duration = "4-6 weeks"
+text = """
+Work up the ladder, on {feed_days}.
+
+Split a clone when it is confluent, not when the others are. Clones come off a
+sort at wildly different rates and a plate handled as one unit loses the slow
+ones. Keep a written list of which clone is in which vessel; after three
+splits the plate layout is no longer the map.
+
+A well that clumps into the middle rather than spreading is usually lost. Re-
+seeding it onto a spun-down plate sometimes recovers it, which is cheaper than
+starting over.
+
+Record what each clone is in as you go:
+  edms work note <run_dir> -s expand -n "L1 into 6-well, L102 still in 24-well"
+"""
+checks = [
+  "Each clone split on its own schedule, not the plate's",
+  "Clone-to-vessel list kept current",
+  "Slow clones still carried rather than dropped",
+]
+
+[[steps]]
+id = "freeze_plan"
+title = "Plan the freeze"
+depends_on = ["expand"]
+duration = "5 min"
+compute = "edms.bio.culture:freeze_down"
+outputs = ["Freeze"]
+text = """
+Vials and freezing medium from a {freeze_vessel} at {freeze_confluency}%,
+resuspended in {harvest_mL} mL.
+
+MUZ361 got 12 vials per clone from a 15 cm dish at 75-80%, twice. A plan that
+comes out far from that for a similar dish means the concentration is wrong,
+not that the clone is unusual.
+"""
+
+[steps.args]
+harvest_mL     = "$harvest_mL"
+vessel         = "$freeze_vessel"
+confluency     = "$freeze_confluency"
+cells_per_vial = "$cells_per_vial"
+vial_mL        = "$vial_mL"
+dmso_pct       = "$dmso_pct"
+
+[[steps]]
+id = "freeze"
+title = "Freeze"
+depends_on = ["freeze_plan"]
+duration = "2 h"
+text = """
+Freeze each clone down, slowly, and move to liquid nitrogen the next day.
+
+Record for every clone: box and position, vial count, which vessel and
+confluency it came from, the freeze date, the date it went to nitrogen, and a
+one-line verdict on how it grows. MUZ361's entries read 'Good' and 'Best,
+grows slowly' -- that second half is the part you will want in a year and the
+part nobody writes down.
+
+Thaw one vial per clone a week later. A freeze nobody has thawed is not a
+backup, and finding that out when the working stock dies is the expensive way.
+"""
+checks = [
+  "Box, position, vial count and source vessel recorded per clone",
+  "Moved to liquid nitrogen the following day",
+  "One vial per clone thawed as a test",
+]
+
+[[steps]]
+id = "validate"
+title = "Validate the clones"
+depends_on = ["freeze"]
+duration = "2 weeks"
+text = """
+Confirm that each frozen clone is what the sort was for: genotype it, check
+the reporter, and note how fast it grows.
+
+Keep the slow ones. MUZ361's best clone was the slow one, and a panel chosen
+on growth rate is a panel chosen on the thing you were not studying.
+
+Record the verdicts against the clone IDs and the box positions, so a clone
+can be found from either:
+  edms work note <run_dir> -s validate -n "L102 confirmed, Box 7-5 position 36"
+"""
+checks = [
+  "Genotype confirmed per clone, not per pool",
+  "Growth rate noted alongside the verdict",
+  "Verdicts tied to box and position",
+]

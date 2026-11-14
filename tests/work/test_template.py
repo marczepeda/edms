@@ -97,6 +97,21 @@ def test_bundled_gibson_template_loads():
     assert [i for i in tpl.inputs if i.name == "fragments"][0].optional is True
 
 
+def test_bundled_clone_isolation_template_loads():
+    assert "clone_isolation" in template_mod.list_templates()
+    tpl = template_mod.load("clone_isolation")
+    assert tpl.step("sort_plan").compute == "edms.bio.culture:sort_plan"
+    assert tpl.step("expansion_plan").compute == "edms.work.plates:expansion"
+    assert tpl.step("freeze_plan").compute == "edms.bio.culture:freeze_down"
+
+
+def test_clone_isolation_sort_waits_on_the_conditioned_media():
+    """The media takes a week to make and the sort cannot run without it."""
+    tpl = template_mod.load("clone_isolation")
+    assert "conditioned_media" in tpl.step("sort").depends_on
+    assert [s.id for s in tpl.steps][0] == "conditioned_media"
+
+
 @pytest.mark.parametrize("name", template_mod.list_templates())
 def test_every_bundled_template_validates(name):
     """Each shipped template must load and pass every validation rule."""

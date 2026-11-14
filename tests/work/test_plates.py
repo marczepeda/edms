@@ -228,3 +228,72 @@ def test_virus_does_not_mutate_the_input_frame(packaging):
 def test_virus_rejects_an_unknown_format(packaging):
     with pytest.raises(KeyError, match="Unknown plate format"):
         plates.virus(packaging, plate_format="384-well")
+
+
+# --------------------------------------------------------------------------- #
+# expansion()
+#
+# MUZ361 expanded sorted clones from 96-well up to a 15 cm dish, and recorded
+# why it skipped 12-well: cells clumped into the middle of the well and died
+# there twice, so it went 24-well straight to 6-well.
+# --------------------------------------------------------------------------- #
+def test_expansion_skips_12_well_by_default():
+    ladder = plates.expansion("96-well", "15-cm")
+    assert "12-well" not in set(ladder["From"]) | set(ladder["To"])
+    step = ladder[ladder["From"] == "24-well"].iloc[0]
+    assert step["To"] == "6-well"
+    assert "skipping 12-well" in step["Note"]
+
+
+def test_expansion_can_put_12_well_back():
+    ladder = plates.expansion("96-well", "15-cm", skip=())
+    assert "12-well" in set(ladder["To"])
+    assert list(ladder[ladder["From"] == "24-well"]["To"]) == ["12-well"]
+
+
+def test_expansion_split_is_the_growth_area_ratio():
+    ladder = plates.expansion("96-well", "24-well")
+    for _, row in ladder.iterrows():
+        assert row["Area ratio"] == round(
+            plates.scale(to=row["To"], frm=row["From"]), 2)
+
+
+def test_expansion_flags_a_wide_split():
+    """Skipping a rung widens the step either side of it."""
+    narrow = plates.expansion("96-well", "6-well", skip=())
+    wide = plates.expansion("96-well", "6-well")
+    assert all(not n for n in narrow["Note"])
+    assert any("wide split" in n for n in wide["Note"])
+
+
+def test_expansion_covers_every_rung_between_the_ends():
+    ladder = plates.expansion("96-well", "15-cm", skip=())
+    assert list(ladder["From"]) == ["96-well", "48-well", "24-well",
+                                    "12-well", "6-well", "10-cm"]
+    assert ladder["To"].iloc[-1] == "15-cm"
+
+
+def test_expansion_accepts_aliases():
+    assert plates.expansion("96", "15cm").equals(
+        plates.expansion("96-well", "15-cm"))
+
+
+def test_expansion_refuses_to_go_down():
+    with pytest.raises(ValueError, match="not larger than"):
+        plates.expansion("15-cm", "96-well")
+
+
+def test_expansion_refuses_a_zero_length_ladder():
+    with pytest.raises(ValueError, match="not larger than"):
+        plates.expansion("6-well", "6-well")
+
+
+def test_expansion_refuses_to_skip_its_own_endpoint():
+    with pytest.raises(ValueError, match="cannot be left out of its own ladder"):
+        plates.expansion("12-well", "15-cm")
+
+
+def test_expansion_writes_a_file(tmp_path):
+    out = tmp_path / "ladder.csv"
+    plates.expansion("96-well", "6-well", file=str(out))
+    assert out.exists()
