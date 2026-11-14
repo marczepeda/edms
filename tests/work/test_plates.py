@@ -134,7 +134,7 @@ def test_geometry_with_conditions_totals_wells_media_and_cells():
     df = plates.geometry("12-well", reps=2, conditions=2)
     row = df.iloc[0]
     assert row["Wells needed"] == 4
-    assert row["Plates needed"] == pytest.approx(4 / 12, abs=0.01)
+    assert row["Plates needed"] == 1  # 4 wells still needs a whole plate
     assert row["Media needed (mL)"] == pytest.approx(4 * 1.0)
     assert row["Cells needed"] == 4 * plates.spec("12-well")["seed_HEK293T"]
 
@@ -568,4 +568,70 @@ def test_dilutions_writes_a_file(tmp_path, packaging):
     plan = plates.virus(packaging.copy(), plate_format="96-well")
     out = tmp_path / "dilutions.csv"
     plates.dilutions(plan, file=str(out))
+    assert out.exists()
+
+
+def test_geometry_rounds_plates_up_not_down():
+    """Six wells of a 96-well plate is one plate off the shelf, and 100 is two."""
+    assert plates.geometry("96-well", reps=2,
+                           conditions=3)["Plates needed"].iloc[0] == 1
+    assert plates.geometry("96-well", reps=1,
+                           conditions=100)["Plates needed"].iloc[0] == 2
+    assert plates.geometry("96-well", reps=1,
+                           conditions=96)["Plates needed"].iloc[0] == 1
+
+
+def test_geometry_counts_dishes_one_for_one():
+    """A dish is its own vessel, so six conditions is six dishes."""
+    assert plates.geometry("10-cm", reps=1,
+                           conditions=6)["Plates needed"].iloc[0] == 6
+
+
+def test_virus_does_not_lose_precision_scaling_down(packaging):
+    """7 uL of L3000 is 0.2333 at 96-well, not 0.23: two decimals would take
+    1.4% off the lipid at the format that can least afford it."""
+    plan = plates.virus(packaging.copy(), plate_format="96-well", reps=2)
+    l3000 = plan[plan["Description"] == "L3000"]["uL"].iloc[0]
+    transfers, mm_x, reps = 2, 1.1, 2
+    exact = transfers * mm_x * reps * 7 * plates.scale("96-well", "6-well")
+    # abs=0.005 is half the final 2-decimal rounding transfect.virus does on
+    # the volume it asks for, which is the only rounding that should be left.
+    # Rounding the per-well amount to two decimals first gives 1.01, not 1.03.
+    assert l3000 == pytest.approx(exact, abs=0.005)
+
+
+# --------------------------------------------------------------------------- #
+# virus_per_well()
+# --------------------------------------------------------------------------- #
+def test_virus_per_well_is_the_anchor_amount_at_6_well():
+    row = plates.virus_per_well("6-well").iloc[0]
+    assert row["Complex per well (uL)"] == 500
+    assert row["DNA per well (ng)"] == 3000
+    assert row["P3000 per well (uL)"] == 6
+    assert row["L3000 per well (uL)"] == 7
+
+
+@pytest.mark.parametrize("vessel", SMALL_FORMATS + ["6-well", "10-cm"])
+def test_virus_per_well_holds_the_dna_density(vessel):
+    """The column exists to make a format change visibly a change of scale."""
+    assert plates.virus_per_well(vessel).iloc[0]["DNA per cm2 (ng)"] == 312.5
+
+
+def test_virus_per_well_complex_never_floods_the_well():
+    """500 uL into a 96-well is the mistake this table is for."""
+    for vessel in SMALL_FORMATS:
+        row = plates.virus_per_well(vessel).iloc[0]
+        assert row["Complex per well (uL)"] < row["Media per well (mL)"] * 1000
+        assert row["Complex as % of media"] < 30
+
+
+def test_virus_per_well_at_96_well_is_a_thirtieth_of_the_anchor():
+    small = plates.virus_per_well("96-well").iloc[0]
+    assert small["Complex per well (uL)"] == pytest.approx(500 / 30, abs=0.01)
+    assert small["DNA per well (ng)"] == pytest.approx(100)
+
+
+def test_virus_per_well_writes_a_file(tmp_path):
+    out = tmp_path / "per_well.csv"
+    plates.virus_per_well("24-well", file=str(out))
     assert out.exists()

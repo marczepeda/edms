@@ -240,3 +240,12 @@ def test_virus_template_plans_the_small_format_dilutions():
     assert step.compute == "edms.work.plates:virus_dilutions"
     assert "transfection_plan" in step.depends_on
     assert tpl.params["min_uL"] == 1.0
+
+
+def test_virus_template_tells_you_the_per_well_complex_volume():
+    """The master mix table never says what one well takes, and at 96-well
+    the 6-well number would overflow it."""
+    tpl = template_mod.load("virus_production")
+    step = tpl.step("transfect")
+    assert step.compute == "edms.work.plates:virus_per_well"
+    assert any("95-99%" in c for c in step.checks)

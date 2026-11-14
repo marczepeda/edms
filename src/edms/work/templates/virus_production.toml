@@ -6,7 +6,7 @@
 #   edms work init -t ./my_virus.toml -i run.toml
 
 name = "virus_production"
-version = 3
+version = 4
 title = "Lentivirus production in HEK293T"
 description = """
 Third-generation lentivirus packaging in HEK293T, from seeding through a
@@ -212,25 +212,45 @@ well_uL        = "$well_uL"
 id = "transfect"
 title = "Transfect"
 day = 0
-depends_on = ["transfection_plan"]
+depends_on = ["transfection_plan", "dilutions"]
 duration = "1 h"
+compute = "edms.work.plates:virus_per_well"
+outputs = ["per_well"]
 text = """
-Follow the table from the previous step, in Order.
+Follow the transfection plan two steps up, in Order.
 
 1. Tube A: Optimem + P3000 + VSVG + GagPol, then add each transfer plasmid to
    its own aliquot of the shared mix. Where the previous step gave a working
    dilution, pipette from that and not from the stock.
 2. Tube B: Optimem + Lipofectamine 3000. Incubate 5 min at room temperature.
 3. Combine A and B 1:1, mix gently, incubate 15 min at room temperature.
-4. Add {well_uL} uL dropwise per well.
+4. Add the complex dropwise per well, at the volume in the table below. The
+   master mix table says how much to make; this one says how much one well
+   takes, and the two are only the same number at 6-well.
+
+{well_uL} uL is the 6-well amount, scaled by growth area for {plate_format}.
+The share of the media it comes to is in the table and is not constant across
+formats: media volumes are not proportional to growth area, and a 96-well
+holds about three times as much media per cm2 as a 6-well, so 8% there is the
+same protocol as 25% at 6-well. What should never happen is a complex volume
+near or above the media already in the well; that is the format having been
+changed in one place and not the other.
 
 Record the actual confluency, which is the number most worth having later:
   edms work note <run_dir> -s transfect -n "confluency ..."
 """
 checks = [
-  "Confluency was 70-90% at transfection",
+  "Confluency was 95-99% at transfection",
   "Transfer plasmid tubes were kept separate",
+  "Complex volume taken from the per-well table, not the 6-well number",
 ]
+
+[steps.args]
+plate_format      = "$plate_format"
+VSVG_ng           = "$VSVG_ng"
+GagPol_ng         = "$GagPol_ng"
+transfer_ng       = "$transfer_ng"
+well_uL           = "$well_uL"
 
 [[steps]]
 id = "media_change"

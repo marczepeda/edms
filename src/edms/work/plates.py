@@ -31,6 +31,7 @@ Usage:
 - PE3(): edms.bio.transfect:PE3 rescaled to a plate format
 - virus(): edms.bio.transfect:virus rescaled to a plate format
 - dilutions(): working dilutions for plan lines too small to pipette
+- virus_per_well(): what one well gets, at this format
 - virus_dilutions(): virus() and dilutions() in one call
 
 Scaling down has a floor the arithmetic does not know about. Area scaling
@@ -232,7 +233,8 @@ def geometry(plate_format: str, reps: int=1, conditions: int=None,
         wells = int(conditions) * int(reps)
         row['Conditions'] = int(conditions)
         row['Wells needed'] = wells
-        row['Plates needed'] = round(wells / s['wells'], 2)
+        # Plates come whole: 6 wells of a 96-well plate is one plate, not 0.06
+        row['Plates needed'] = -(-wells // s['wells'])
         row['Media needed (mL)'] = round(wells * s['media_mL'], 1)
         row['Cells needed'] = wells * seed
     df = pd.DataFrame([row])
@@ -324,13 +326,17 @@ def virus(plasmids, plate_format: str=VIRUS_ANCHOR, VSVG_ng: float=750,
     f = scale(plate_format, VIRUS_ANCHOR)
     if hasattr(plasmids, 'copy'):  # virus() writes columns onto the frame
         plasmids = plasmids.copy()
+    # Four decimals, not two: these are intermediate per-well amounts, and
+    # transfect.virus rounds the volumes it actually asks for. Rounding here
+    # costs nothing at 6-well, where f is 1, but at 96-well 7 uL of L3000
+    # scales to 0.2333 and two decimals would quietly take 1.4% off it.
     return transfect.virus(plasmids=plasmids,
-                           VSVG_ng=round(VSVG_ng * f, 2),
-                           GagPol_ng=round(GagPol_ng * f, 2),
-                           transfer_ng=round(transfer_ng * f, 2),
-                           well_uL=round(well_uL * f, 2),
-                           P3000_uL_per_well=round(P3000_uL_per_well * f, 2),
-                           L3000_uL_per_well=round(L3000_uL_per_well * f, 2),
+                           VSVG_ng=round(VSVG_ng * f, 4),
+                           GagPol_ng=round(GagPol_ng * f, 4),
+                           transfer_ng=round(transfer_ng * f, 4),
+                           well_uL=round(well_uL * f, 4),
+                           P3000_uL_per_well=round(P3000_uL_per_well * f, 4),
+                           L3000_uL_per_well=round(L3000_uL_per_well * f, 4),
                            **kwargs)
 
 def _as_float(value):
@@ -441,6 +447,52 @@ def dilutions(plan: pd.DataFrame, min_uL: float=MIN_PIPETTE_UL,
     df = pd.DataFrame(rows, columns=['Component', 'Planned uL', 'Stock ng/uL',
                                      'Fold', 'Working ng/uL', 'uL at working',
                                      'Make'])
+    if file is not None:
+        from ..gen import io
+        io.save(obj=df, file=file, id=True)
+    return df
+
+def virus_per_well(plate_format: str=VIRUS_ANCHOR, VSVG_ng: float=750,
+                   GagPol_ng: float=1500, transfer_ng: float=750,
+                   well_uL: float=500, P3000_uL_per_well: float=6,
+                   L3000_uL_per_well: float=7, file: str=None) -> pd.DataFrame:
+    '''
+    virus_per_well(): what one well gets, at this format.
+
+    virus() returns the master mix, which is the right table for making the
+    tubes up and the wrong one for standing at the plate: it never says how
+    much complex a single well takes. At the 6-well anchor that is the
+    well_uL you typed, so the question does not come up; at a 96-well it is a
+    thirtieth of it, and 500 uL into a well that holds 200 is the mistake
+    this table exists to stop.
+
+    Parameters:
+    plate_format (str, optional): plate format name or alias (Default: 6-well)
+    VSVG_ng (float, optional): VSVG ng per well at 6-well (Default: 750)
+    GagPol_ng (float, optional): GagPol ng per well at 6-well (Default: 1500)
+    transfer_ng (float, optional): transfer ng per well at 6-well (Default: 750)
+    well_uL (float, optional): complex uL per well at 6-well (Default: 500)
+    P3000_uL_per_well (float, optional): P3000 uL per well at 6-well (Default: 6)
+    L3000_uL_per_well (float, optional): L3000 uL per well at 6-well (Default: 7)
+    file (str, optional): output file path
+
+    Dependencies: pandas,scale(),spec(),VIRUS_ANCHOR
+    '''
+    f = scale(plate_format, VIRUS_ANCHOR)
+    s = spec(plate_format)
+    complex_uL = well_uL * f
+    media_uL = s['media_mL'] * 1000
+    row = {'Format': s['plate_format'],
+           'Growth area (cm2)': s['area_cm2'],
+           'Complex per well (uL)': round(complex_uL, 2),
+           'Media per well (mL)': s['media_mL'],
+           'Complex as % of media': round(100 * complex_uL / media_uL, 1),
+           'DNA per well (ng)': round((VSVG_ng + GagPol_ng + transfer_ng) * f, 1),
+           'DNA per cm2 (ng)': round((VSVG_ng + GagPol_ng + transfer_ng) * f
+                                     / s['area_cm2'], 1),
+           'P3000 per well (uL)': round(P3000_uL_per_well * f, 3),
+           'L3000 per well (uL)': round(L3000_uL_per_well * f, 3)}
+    df = pd.DataFrame([row])
     if file is not None:
         from ..gen import io
         io.save(obj=df, file=file, id=True)
