@@ -1,0 +1,93 @@
+# Pick a vessel and seed it, the day before a transfection
+#
+# A reusable component. Include it from a template's step list:
+#
+#   [[steps]]
+#   include = "transfection_head"
+#   [steps.params]
+#   confluency      = "95-99%"
+#   seed_per_cm2    = 125000
+#
+# Everything that transfects adherent cells starts here: choose a format,
+# scale the geometry to it, seed a day ahead at a density that lands on the
+# confluency the chemistry wants. What differs between protocols is the
+# density and the confluency, so those are parameters -- and the reason the
+# protocol cares, which is the part most worth keeping and the first thing a
+# shared step would otherwise flatten into nothing. seed_note is where that
+# goes.
+#
+# What comes after this -- the transfection plan itself -- is not shared.
+# edms.work.plates:PE3 and edms.work.plates:virus are different calculations
+# over different inputs, and pretending otherwise would buy nothing.
+
+name = "transfection_head"
+title = "Pick the plate format and seed"
+description = """
+Vessel geometry and the seeding the day before. The density and the
+confluency it is aiming at are parameters, because that is the whole of what
+differs between a plain transfection and a packaging run.
+"""
+
+[params]
+plate_format = "6-well"
+reps         = 1
+# 0 means the count is not known until an input is read; the per-well half of
+# the table is still right, and the totals are simply left out
+conditions   = 0
+seed_per_cm2 = 46875
+cell_line    = "HEK293T"
+media        = "DMEM + 10% FBS, no antibiotics"
+confluency   = "70-90%"
+seed_note    = ""
+
+# --------------------------------------------------------------------------- #
+
+[[steps]]
+id = "plate_plan"
+title = "Pick the plate format"
+day = -1
+duration = "2 min"
+compute = "edms.work.plates:geometry"
+outputs = ["plate"]
+text = """
+Geometry for a {plate_format} vessel at {reps} replicate(s), seeded at
+{seed_per_cm2} cells per cm2.
+
+Density is held constant across formats, so switching format changes the cell
+count and the volumes but not the confluency you are aiming for. The amounts
+in the transfection plan rescale by growth area from the same choice, so the
+format is chosen once, here.
+
+To run this in a different vessel:
+  edms work deviate <run_dir> -s plate_plan -p plate_format -v "24-well" -w "scaling up"
+"""
+
+[steps.args]
+plate_format = "$plate_format"
+reps         = "$reps"
+conditions   = "$conditions"
+seed_per_cm2 = "$seed_per_cm2"
+
+[[steps]]
+id = "seed"
+title = "Seed {cell_line}"
+day = -1
+depends_on = ["plate_plan"]
+duration = "30 min"
+text = """
+Seed {cell_line} in {media} at the density in the table above, one well per
+condition per replicate ({reps} replicate(s)), plus an untransfected control
+well.
+
+They should be {confluency} confluent tomorrow. Seed from a low-passage,
+healthy stock: the cells you seed today are the whole of what the chemistry
+has to work with tomorrow, and there is no step after this that can tell you
+they were tired.
+
+{seed_note}
+"""
+checks = [
+  "Cells were below passage 20 and free of mycoplasma",
+  "Enough wells seeded for {reps} replicate(s) plus controls",
+  "Seeded a day ahead, not the same day",
+]

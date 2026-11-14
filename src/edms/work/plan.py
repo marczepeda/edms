@@ -319,7 +319,7 @@ def resolve(run_dir: str | Path, tpl=None, strict: bool = False,
         entry = by_id.get(s.id, {})
         resolved = ResolvedStep(
             id=s.id,
-            title=s.title,
+            title=fmt(s.title, params),
             day=s.day,
             text=fmt(s.text, params),
             duration=s.duration,

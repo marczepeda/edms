@@ -6,7 +6,7 @@
 #   edms work init -t ./my_pe3.toml -i run.toml
 
 name = "pe3_transfection"
-version = 2
+version = 3
 title = "PE3 transfection of HEK293T"
 description = """
 Prime editing with an epegRNA + ngRNA pair in HEK293T, from seeding through
@@ -60,44 +60,12 @@ optional = true
 # --------------------------------------------------------------------------- #
 
 [[steps]]
-id = "plate_plan"
-title = "Pick the plate format"
-day = -1
-duration = "2 min"
-compute = "edms.work.plates:geometry"
-outputs = ["plate"]
-text = """
-Geometry for a {plate_format} vessel at {reps} replicate(s).
+include = "transfection_head"
 
-Seeding density is held constant across formats, so switching format changes
-the cell count and the volumes but not the confluency you are aiming for. The
-DNA amounts and transfection volume in the next step rescale with it.
-
-To run this in a different vessel:
-  edms work deviate <run_dir> -s plate_plan -p plate_format -v "24-well" -w "scaling up"
-"""
-
-[steps.args]
-plate_format = "$plate_format"
-reps         = "$reps"
-
-[[steps]]
-id = "seed"
-title = "Seed HEK293T"
-day = -1
-depends_on = ["plate_plan"]
-duration = "30 min"
-text = """
-Seed HEK293T in {media} at the density in the table above, one well per
-condition per replicate ({reps} replicates), plus an untransfected control
-well.
-
-Cells should be 70-90% confluent at the time of transfection tomorrow.
-"""
-checks = [
-  "Cells were below passage 20 and free of mycoplasma",
-  "Enough wells seeded for {reps} replicates plus controls",
-]
+[steps.params]
+seed_note = """Lipofection toxicity shows up a day after this step, not
+during it, so a plate seeded unevenly today reads as a treatment effect
+tomorrow."""
 
 [[steps]]
 id = "transfection_plan"

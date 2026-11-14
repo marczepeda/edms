@@ -1,0 +1,76 @@
+# From washed pellets to gDNA, and out to the amplicon prep
+#
+# A reusable component. Include it from a template's step list:
+#
+#   [[steps]]
+#   include = "gdna_handoff"
+#   depends_on = ["pellet"]
+#
+# Both arms of a screen end this way: the gDNA is extracted, quantified, and
+# then becomes the input to a separate NGS run rather than being carried on
+# in the same ledger. Keeping that boundary in one place is the point -- the
+# handoff is where two entries have to agree about what happened, and it
+# should not be written twice and drift.
+
+name = "gdna_handoff"
+title = "Extract gDNA and hand off to the amplicon prep"
+description = """
+Extraction, quantification, and the handoff note that makes two run ledgers
+point at each other. Say what it follows with the include's depends_on.
+"""
+
+[params]
+gdna_extract_uL = 50
+gdna_reagent    = "Lucigen QuickExtract"
+extract_from    = "the gDNA plate"
+ngs_template    = "ngs_prep"
+
+# --------------------------------------------------------------------------- #
+
+[[steps]]
+id = "extract"
+title = "Extract gDNA"
+duration = "1 h"
+text = """
+Extract from {extract_from}.
+
+1. Spin the plate and aspirate down to the pellet. All of it: TrypLE or FACS
+   buffer carried over is the usual reason an extraction under-yields, and it
+   is carried over invisibly.
+2. Resuspend in {gdna_extract_uL} uL of {gdna_reagent}.
+3. Run the extraction program on the thermocycler.
+
+Quantify before the prep rather than assuming the yield. The amplicon prep
+decides how many PCR1 reactions each sample needs from the amount of gDNA,
+and that number is wrong if the concentration is a guess.
+"""
+checks = [
+  "Buffer fully aspirated before extraction",
+  "Extraction program run to completion",
+  "gDNA quantified, not assumed",
+]
+
+[[steps]]
+id = "handoff"
+title = "Hand off to the amplicon prep"
+depends_on = ["extract"]
+duration = "10 min"
+text = """
+The gDNA is now the input to the {ngs_template} template. Start that as its
+own run rather than continuing here, so the prep gets its own ledger:
+
+  edms work init -t {ngs_template} -i ngs_run.toml
+
+If this run also produced flow data, that is the other thing that leaves, and
+it is a result rather than an input to anything: export it with its own
+reference sample.
+
+Record every run this one is tied to, in both directions. A screen is several
+ledgers, and each needs to be findable from any of the others:
+  edms work note <run_dir> -s handoff -n "continued in <run_id>"
+"""
+checks = [
+  "gDNA concentrations recorded",
+  "Follow-on NGS run noted here",
+  "Sibling runs noted here",
+]

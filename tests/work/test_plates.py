@@ -635,3 +635,12 @@ def test_virus_per_well_writes_a_file(tmp_path):
     out = tmp_path / "per_well.csv"
     plates.virus_per_well("24-well", file=str(out))
     assert out.exists()
+
+
+def test_geometry_treats_zero_conditions_as_not_known():
+    """A template that cannot count its conditions until an input is read
+    passes 0, because TOML has no null."""
+    bare = plates.geometry("96-well", reps=2)
+    zero = plates.geometry("96-well", reps=2, conditions=0)
+    assert list(zero.columns) == list(bare.columns)
+    assert "Wells needed" not in zero.columns

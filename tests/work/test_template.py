@@ -563,3 +563,125 @@ def test_every_bundled_component_loads_on_its_own(name, tmp_path):
     """))
     assert tpl.steps
     assert all(s.component == name for s in tpl.steps)
+
+
+def test_an_include_param_can_alias_a_template_param(tmp_path):
+    """Copying the value in would go stale the first time somebody deviated
+    the original, so '$name' repoints instead."""
+    comp = _component(tmp_path, """
+        name = "mid"
+        [params]
+        n = 1
+        [[steps]]
+        id = "b"
+        text = "{n} of them"
+        compute = "pandas:DataFrame"
+        [steps.args]
+        data = "$n"
+    """)
+    tpl = template_mod.load(_write(tmp_path, f"""
+        name = "x"
+        [params]
+        outer = 7
+        [[steps]]
+        include = "{comp}"
+        [steps.params]
+        n = "$outer"
+    """))
+    assert tpl.step("b").args == {"data": "$outer"}
+    assert tpl.step("b").text == "{outer} of them"
+    assert "n" not in tpl.params          # the template's own supplies it
+    assert tpl.params["outer"] == 7
+
+
+def test_an_alias_survives_a_prefix(tmp_path):
+    """An alias points out of the component, so it is never prefixed."""
+    comp = _component(tmp_path, """
+        name = "mid"
+        [params]
+        n = 1
+        keep = 2
+        [[steps]]
+        id = "b"
+        text = "{n} and {keep}"
+    """)
+    tpl = template_mod.load(_write(tmp_path, f"""
+        name = "x"
+        [params]
+        outer = 7
+        [[steps]]
+        include = "{comp}"
+        prefix = "p_"
+        [steps.params]
+        n = "$outer"
+    """))
+    assert tpl.step("p_b").text == "{outer} and {p_keep}"
+    assert tpl.params["p_keep"] == 2
+    assert "p_n" not in tpl.params
+
+
+# --------------------------------------------------------------------------- #
+# The other bundled components
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("name,follows,source", [
+    ("transduction", "pellet", "the gDNA plate"),
+    ("competitive_growth", "flow", "the kept aliquots"),
+])
+def test_both_screen_arms_share_the_gdna_handoff(name, follows, source):
+    tpl = template_mod.load(name)
+    assert "gdna_handoff" in tpl.components
+    assert tpl.step("extract").depends_on == [follows]
+    assert tpl.params["extract_from"] == source
+    # both were already running these, and sharing did not change them
+    assert tpl.params["gdna_reagent"] == "Lucigen QuickExtract"
+    assert tpl.params["gdna_extract_uL"] == 50
+
+
+def test_competitive_growth_kept_its_flow_export_check():
+    """The handoff component drops it, so it moved to the step it is about."""
+    tpl = template_mod.load("competitive_growth")
+    assert any("day 0 reference" in c for c in tpl.step("flow").checks)
+
+
+@pytest.mark.parametrize("name", ["pe3_transfection", "virus_production"])
+def test_both_transfections_share_the_head(name):
+    tpl = template_mod.load(name)
+    assert "transfection_head" in tpl.components
+    assert [s.id for s in tpl.steps][:2] == ["plate_plan", "seed"]
+    assert tpl.step("seed").depends_on == ["plate_plan"]
+
+
+def test_the_shared_head_keeps_each_confluency_target():
+    """70-90% for a transfection and 95-99% for packaging is the whole of
+    what differs, so it had better survive being shared."""
+    assert template_mod.load("pe3_transfection").params["confluency"] == "70-90%"
+    assert template_mod.load("virus_production").params["confluency"] == "95-99%"
+
+
+def test_the_shared_head_keeps_each_seeding_density():
+    tpl = template_mod.load("virus_production")
+    assert tpl.params["seed_per_cm2"] == 125000
+    pe3 = template_mod.load("pe3_transfection")
+    assert pe3.params["seed_per_cm2"] != tpl.params["seed_per_cm2"]
+
+
+def test_the_shared_head_keeps_the_protocol_specific_warning():
+    """A shared step flattens the reasoning first; seed_note is where it
+    survives."""
+    virus = template_mod.load("virus_production")
+    assert "{seed_note}" in virus.step("seed").text   # substituted at resolve
+    assert "two-fold loss in titer" in virus.params["seed_note"]
+    pe3 = template_mod.load("pe3_transfection")
+    assert "Lipofection toxicity" in pe3.params["seed_note"]
+
+
+def test_virus_counts_its_wells_from_the_transfer_plasmids():
+    """conditions aliases transfers, so a run that changes one changes both."""
+    tpl = template_mod.load("virus_production")
+    assert tpl.step("plate_plan").args["conditions"] == "$transfers"
+
+
+def test_pe3_leaves_its_condition_count_unknown():
+    """It cannot be known until the epegRNA sheet is read, and 0 says so."""
+    tpl = template_mod.load("pe3_transfection")
+    assert tpl.params["conditions"] == 0

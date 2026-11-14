@@ -10,7 +10,7 @@
 #   edms work init -t ./my_transduction.toml -i run.toml
 
 name = "transduction"
-version = 1
+version = 2
 title = "Transduction to gDNA harvest"
 description = """
 Lentiviral transduction of a reporter line through selection, optional drug
@@ -269,42 +269,5 @@ checks = [
 ]
 
 [[steps]]
-id = "extract"
-title = "Extract gDNA"
-day = 8
+include = "gdna_handoff"
 depends_on = ["pellet"]
-duration = "1 h"
-text = """
-Extract from the gDNA plate.
-
-1. Spin the plate and aspirate down to the pellet.
-2. Resuspend in {gdna_extract_uL} uL of {gdna_reagent}.
-3. Run the extraction program on the thermocycler.
-
-Quantify before the prep rather than assuming the yield. The NGS prep decides
-how many PCR1 reactions each sample needs from the amount of gDNA, and that
-number is wrong if the concentration is a guess.
-"""
-checks = [
-  "Extraction program run to completion",
-  "gDNA quantified, not assumed",
-]
-
-[[steps]]
-id = "handoff"
-title = "Hand off to NGS prep"
-depends_on = ["extract"]
-duration = "10 min"
-text = """
-The gDNA is now the input to the ngs_prep template. Start that run with these
-concentrations rather than continuing here, so the prep gets its own ledger:
-
-  edms work init -t ngs_prep -i ngs_run.toml
-
-Record which run picks it up, so the two ledgers point at each other:
-  edms work note <run_dir> -s handoff -n "continued in <run_id>"
-"""
-checks = [
-  "gDNA concentrations recorded",
-  "Follow-on NGS run noted here",
-]

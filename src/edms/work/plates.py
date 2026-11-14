@@ -212,7 +212,8 @@ def geometry(plate_format: str, reps: int=1, conditions: int=None,
     Parameters:
     plate_format (str): plate format name or alias
     reps (int, optional): replicates per condition (Default: 1)
-    conditions (int, optional): conditions, to total up wells and media
+    conditions (int, optional): conditions, to total up wells and media; 0
+        and None both mean the count is not known here
     seed_per_cm2 (float, optional): seeding density; SEED_PER_CM2 is the
         transfection density and VIRUS_SEED_PER_CM2 the denser one virus
         production needs (Default: None, meaning SEED_PER_CM2)
@@ -229,7 +230,9 @@ def geometry(plate_format: str, reps: int=1, conditions: int=None,
            'Seed HEK293T per well': seed,
            'Seeding density (per cm2)': int(round(density)),
            'Replicates': reps}
-    if conditions is not None:
+    # TOML has no null, so a template that cannot know its condition count
+    # until an input is read says 0 and gets the per-well half of the table.
+    if conditions:
         wells = int(conditions) * int(reps)
         row['Conditions'] = int(conditions)
         row['Wells needed'] = wells

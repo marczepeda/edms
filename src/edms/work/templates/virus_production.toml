@@ -6,7 +6,7 @@
 #   edms work init -t ./my_virus.toml -i run.toml
 
 name = "virus_production"
-version = 4
+version = 5
 title = "Lentivirus production in HEK293T"
 description = """
 Third-generation lentivirus packaging in HEK293T, from seeding through a
@@ -64,55 +64,15 @@ required_columns = ["Plasmid", "Description", "Colony", "ng/uL"]
 # --------------------------------------------------------------------------- #
 
 [[steps]]
-id = "plate_plan"
-title = "Pick the plate format"
-day = -1
-duration = "2 min"
-compute = "edms.work.plates:geometry"
-outputs = ["plate"]
-text = """
-Geometry for a {plate_format} vessel, and what {transfers} transfer
-plasmid(s) at {reps} replicate(s) will need.
+include = "transfection_head"
 
-Seeding is at {seed_per_cm2} cells per cm2, which is Thermo's lentiviral
-number rather than the lighter density a plain transfection uses. Packaging
-wants the cells at 95-99% confluent on the day, not the 70-90% a PE3
-transfection is seeded for, and that is a different plate the day before.
-
-Density is held constant across formats, so switching format changes the cell
-count and the volumes but not what you are aiming for.
-
-To run this in a different vessel:
-  edms work deviate <run_dir> -s plate_plan -p plate_format -v "10-cm" -w "scaling up"
-"""
-
-[steps.args]
-plate_format = "$plate_format"
-reps         = "$reps"
+[steps.params]
 conditions   = "$transfers"
-seed_per_cm2 = "$seed_per_cm2"
-
-[[steps]]
-id = "seed"
-title = "Seed HEK293T"
-day = -1
-depends_on = ["plate_plan"]
-duration = "30 min"
-text = """
-Seed HEK293T in {media} at the density in the table above, one well per
-transfer plasmid per replicate.
-
-They should be 95-99% confluent tomorrow. Virus production is the one step
-here that wants a denser plate than it feels right to seed.
-
-Use a low-passage, healthy stock. Packaging is the step where tired HEK293T
-show up as a quiet two-fold loss in titer, and nothing downstream will tell
-you that is what happened.
-"""
-checks = [
-  "Cells were below passage 20 and free of mycoplasma",
-  "Enough wells seeded for {transfers} transfer plasmid(s) x {reps} replicate(s)",
-]
+confluency   = "95-99%"
+seed_note    = """Packaging wants the cells denser than it feels right to
+seed, and denser than a plain transfection: 95-99% rather than 70-90%.
+Tired HEK293T show up here as a quiet two-fold loss in titer, and nothing
+downstream will tell you that is what happened."""
 
 [[steps]]
 id = "transfection_plan"

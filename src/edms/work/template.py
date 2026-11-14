@@ -268,6 +268,10 @@ def _expand(entry: dict, where: str, index: int, source: Path) -> tuple:
     wait for. A component cannot name the step it follows, because it does
     not know which protocol it is in; this is where that is said.
 
+    A params override whose value is '$name' is an alias rather than a value:
+    the component's references to that parameter are repointed at the
+    template's own, so the two stay the same number when a run overrides it.
+
     Parameters:
     entry (dict): the [[steps]] table carrying "include"
     where (str): including file, for error messages
@@ -303,10 +307,19 @@ def _expand(entry: dict, where: str, index: int, source: Path) -> tuple:
             f'"{raw["name"]}", which does not declare '
             f'{"them" if len(unknown) > 1 else "it"}. Its parameters are: '
             f'{", ".join(sorted(params)) or "(none)"}')
-    params.update(overrides)
+    aliases = {k: v[1:] for k, v in overrides.items()
+               if isinstance(v, str) and v.startswith('$')}
+    params.update({k: v for k, v in overrides.items() if k not in aliases})
+    for k in aliases:
+        params.pop(k, None)  # supplied by the template's own parameter
 
     renames = {k: prefix + k for k in params} if prefix else {}
     params = {renames.get(k, k): v for k, v in params.items()}
+    # an alias points outward at the template's parameter, so it is never
+    # prefixed; without it a template could only copy the value in, and the
+    # copy would go stale the first time somebody deviated the original
+    repoint = dict(renames)
+    repoint.update(aliases)
 
     attach = list(entry.get('depends_on', []))
     for st in own:
@@ -316,13 +329,13 @@ def _expand(entry: dict, where: str, index: int, source: Path) -> tuple:
         st.id = prefix + st.id
         st.depends_on = [prefix + d if d in inside else d
                          for d in st.depends_on]
-        if prefix:
-            st.text = _rename(st.text, renames)
-            st.title = _rename(st.title, renames)
-            st.checks = [_rename(c, renames) for c in st.checks]
-            st.args = {k: ('$' + renames[v[1:]]
+        if repoint:
+            st.text = _rename(st.text, repoint)
+            st.title = _rename(st.title, repoint)
+            st.checks = [_rename(c, repoint) for c in st.checks]
+            st.args = {k: ('$' + repoint[v[1:]]
                            if isinstance(v, str) and v.startswith('$')
-                           and v[1:] in renames else v)
+                           and v[1:] in repoint else v)
                        for k, v in st.args.items()}
 
     inputs = []

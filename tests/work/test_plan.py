@@ -302,3 +302,13 @@ def test_pe3_template_params_reach_the_bio_function(tmp_path):
     step = [s for s in protocol.steps if s.id == "transfection_plan"][0]
     # reps=6: 1.1 * 6 * 66 / 100 = 4.356 -> 4.36
     assert step.tables["Transfection"].iloc[0]["epegRNA uL"] == pytest.approx(4.36)
+
+
+def test_step_titles_take_parameters_too(virus_run):
+    """A shared component names the cell line in its heading, and a heading
+    that reads 'Seed {cell_line}' is not a heading."""
+    protocol, _ = virus_run
+    title = protocol.step("seed").title if hasattr(protocol, "step") else [
+        s for s in protocol.steps if s.id == "seed"][0].title
+    assert "{" not in title
+    assert "HEK293T" in title

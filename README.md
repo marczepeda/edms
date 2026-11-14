@@ -94,8 +94,9 @@ edms -h # or edms <TAB>
     include = "cloning_tail"
     depends_on = ["assemble"]
     ```
-    `cloning_tail` is transform, inoculate, miniprep and sequence, which is
-    how Golden Gate and Gibson both end. They used to end that way twice, in
+    Three components ship: `cloning_tail`, `gdna_handoff` and
+    `transfection_head`. `cloning_tail` is transform, inoculate, miniprep and
+    sequence, which is how Golden Gate and Gibson both end. They used to end that way twice, in
     prose that had drifted: one carried the heat-shock timing and the other
     did not, and Gibson stopped at the miniprep without ever sequencing what
     it had assembled. A component's parameter defaults are the values those
@@ -103,6 +104,16 @@ edms -h # or edms <TAB>
     so sharing the steps changed nobody's numbers. Give an include a `prefix`
     to use the same component twice in one protocol; it renames the steps and
     their parameters together.
+
+    A component is parameterised where protocols genuinely differ, not
+    flattened to their intersection. `transfection_head` is shared by the PE3
+    and the virus templates, which seed at different densities for different
+    confluency targets and care for different reasons, so the density, the
+    target and the reason are all parameters. The reason matters most: a
+    shared step loses the specific knowledge first, and `seed_note` is where
+    each protocol keeps its own. An include parameter written `"$other"` is
+    an alias rather than a value, so the component's references repoint at
+    the template's own parameter and the two cannot drift.
 
     Protocols are written against a plate format rather than a fixed vessel.
     Choosing a different one rescales the DNA amounts, the Lipofectamine and

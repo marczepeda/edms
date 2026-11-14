@@ -11,7 +11,7 @@
 #   edms work init -t ./my_cg.toml -i run.toml
 
 name = "competitive_growth"
-version = 1
+version = 2
 title = "Competitive growth with a parallel transduction"
 description = """
 A panel of lines seeded 50:50 against a reference competitor, read out by flow
@@ -232,44 +232,12 @@ checks = [
   "Day 0 cytometer settings reused",
   "Strained before running",
   "gDNA aliquot kept from every timepoint",
+  "Fractions exported against the day 0 reference",
 ]
 
 [[steps]]
-id = "extract"
-title = "Extract gDNA"
+include = "gdna_handoff"
 depends_on = ["flow"]
-duration = "1 h"
-text = """
-Extract from the kept aliquots.
 
-1. Spin the plate, aspirate the TrypLE and FACS buffer off the pellet.
-2. Resuspend in {gdna_extract_uL} uL of {gdna_reagent}.
-3. Run the extraction program on the thermocycler.
-
-Quantify rather than assuming the yield; the NGS prep sizes its PCR1
-reactions from the concentration.
-"""
-checks = [
-  "Buffer fully aspirated before extraction",
-  "gDNA quantified, not assumed",
-]
-
-[[steps]]
-id = "handoff"
-title = "Hand off"
-depends_on = ["extract"]
-duration = "10 min"
-text = """
-Two things leave this run: the flow fractions, which are the result, and the
-gDNA, which goes to amplicon prep as its own run:
-
-  edms work init -t ngs_prep -i ngs_run.toml
-
-Record both the transduction run and the NGS run here, so the arms of the
-experiment can be found from any one of them:
-  edms work note <run_dir> -s handoff -n "transduction <run_id>, NGS <run_id>"
-"""
-checks = [
-  "Flow fractions exported with the day 0 reference",
-  "Sibling runs noted here",
-]
+[steps.params]
+extract_from = "the kept aliquots"
