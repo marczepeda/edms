@@ -19,7 +19,6 @@ than copied from a previous entry.
 [params]
 # Culture
 plate_format    = "96-well"
-cells_per_well  = 15000
 media           = "DMEM + 10% FBS, no antibiotics"
 # Transfection (passed to edms.bio.transfect:PE3)
 PE_plasmid      = "pMUZ86.7"
@@ -61,14 +60,37 @@ optional = true
 # --------------------------------------------------------------------------- #
 
 [[steps]]
+id = "plate_plan"
+title = "Pick the plate format"
+day = -1
+duration = "2 min"
+compute = "edms.work.plates:geometry"
+outputs = ["plate"]
+text = """
+Geometry for a {plate_format} vessel at {reps} replicate(s).
+
+Seeding density is held constant across formats, so switching format changes
+the cell count and the volumes but not the confluency you are aiming for. The
+DNA amounts and transfection volume in the next step rescale with it.
+
+To run this in a different vessel:
+  edms work deviate <run_dir> -s plate_plan -p plate_format -v "24-well" -w "scaling up"
+"""
+
+[steps.args]
+plate_format = "$plate_format"
+reps         = "$reps"
+
+[[steps]]
 id = "seed"
 title = "Seed HEK293T"
 day = -1
+depends_on = ["plate_plan"]
 duration = "30 min"
 text = """
-Seed {cells_per_well} HEK293T per well of a {plate_format} plate in {media}.
-Seed one well per condition per replicate ({reps} replicates), plus an
-untransfected control well.
+Seed HEK293T in {media} at the density in the table above, one well per
+condition per replicate ({reps} replicates), plus an untransfected control
+well.
 
 Cells should be 70-90% confluent at the time of transfection tomorrow.
 """
@@ -83,13 +105,17 @@ title = "Calculate the transfection plan"
 day = 0
 depends_on = ["seed"]
 duration = "5 min"
-compute = "edms.bio.transfect:PE3"
-outputs = ["tube_A", "tube_B"]
+compute = "edms.work.plates:PE3"
+outputs = ["Transfection", "plates"]
 text = """
 Tube A and Tube B volumes below are calculated from the nanodrop
-concentrations in the plasmids input, at {epegRNA_ng} ng epegRNA,
-{ngRNA_ng} ng ngRNA and {PE_ng} ng {PE_plasmid} per well, {well_uL} uL of
-transfection mix per well, {reps} replicates, with a {mm_x}x master mix excess.
+concentrations in the plasmids input, with {reps} replicates and a {mm_x}x
+master mix excess.
+
+At 96-well the per-well amounts are {epegRNA_ng} ng epegRNA, {ngRNA_ng} ng
+ngRNA and {PE_ng} ng {PE_plasmid} in {well_uL} uL of transfection mix. This
+run is in {plate_format}, so each is scaled by growth area before the master
+mix is worked out; the table below is already scaled.
 
 Re-run this step after any nanodrop re-reading:
   edms work plan <run_dir>
@@ -97,6 +123,7 @@ Re-run this step after any nanodrop re-reading:
 
 [steps.args]
 plasmids   = "@plasmids"
+plate_format = "$plate_format"
 epegRNAs   = "@epegRNAs"
 ngRNAs     = "@ngRNAs"
 PE_plasmid = "$PE_plasmid"

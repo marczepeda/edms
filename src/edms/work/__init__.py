@@ -13,7 +13,8 @@ Usage:
 - plan: template + spec -> resolved protocol (calls into edms.bio)
 - run: persistent run state (status, notes, deviations)
 - render: resolved protocol + run state -> Markdown / HTML
+- plates: culture vessel formats and plate-aware transfection planning
 '''
-from . import template, spec, plan, run, render
+from . import template, spec, plan, run, render, plates
 
-__all__ = ['template', 'spec', 'plan', 'run', 'render']
+__all__ = ['template', 'spec', 'plan', 'run', 'render', 'plates']

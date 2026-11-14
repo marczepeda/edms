@@ -151,6 +151,7 @@ def PE3(plasmids: pd.DataFrame | str, epegRNAs: pd.DataFrame | str, ngRNAs: pd.D
 def virus(plasmids: pd.DataFrame | str, plasmid_col: str='Plasmid', description_col: str='Description', colony_col: str='Colony',
           ng_uL_col: str='ng/uL', VSVG_plasmid: str='pMUZ26.6',GagPol_plasmid: str='pMUZ26.7',
           reps: int=1, mm_x: float=1.1, VSVG_ng: int=750, GagPol_ng: int=1500, transfer_ng: int=750, well_uL: int=500,
+          P3000_uL_per_well: float=6, L3000_uL_per_well: float=7,
           file:str=None) -> pd.DataFrame:
     '''
     virus(): generates transfection plan for virus production from HEK293T cells (Default: 6-well plate using L3000)
@@ -169,14 +170,16 @@ def virus(plasmids: pd.DataFrame | str, plasmid_col: str='Plasmid', description_
     GagPol_ng (int, optional): ngRNA ngs per well (Default: 1500)
     transfer_ng (int, optional): PE ngs per well (Default: 750)
     well_uL (int, optional): uL transfection mix per well (Default: 500)
+    P3000_uL_per_well (float, optional): uL P3000 enhancer per well (Default: 6)
+    L3000_uL_per_well (float, optional): uL Lipofectamine 3000 per well (Default: 7)
     file (str, optional): output file path
 
     Dependencies: pandas,re
     '''
     transfers_num = plasmids[(plasmids[plasmid_col]!=VSVG_plasmid)&(plasmids[plasmid_col]!=GagPol_plasmid)].shape[0]
     optimem_uL = round(transfers_num*mm_x*reps*well_uL/2,2)
-    P3000_uL = round(transfers_num*mm_x*reps*6,2)
-    L3000_uL = round(transfers_num*mm_x*reps*7,2)
+    P3000_uL = round(transfers_num*mm_x*reps*P3000_uL_per_well,2)
+    L3000_uL = round(transfers_num*mm_x*reps*L3000_uL_per_well,2)
 
     tube_ls = []
     order_ls = []

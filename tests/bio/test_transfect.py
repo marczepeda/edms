@@ -153,3 +153,26 @@ def test_virus_multiple_transfer_plasmids_scale_transfers_num():
     optimem_row = df_virus[(df_virus["Description"] == "Optimem") & (df_virus["Tube"] == "A")].iloc[0]
     # transfers_num = 2 now.
     assert optimem_row["uL"] == pytest.approx(2 * 1.1 * 1 * 500 / 2)
+
+
+def test_virus_lipofectamine_volumes_are_configurable(virus_plasmids_df):
+    """P3000/L3000 were fixed per-well constants, so they could not be scaled."""
+    df = transfect.virus(virus_plasmids_df.copy(),
+                         P3000_uL_per_well=12, L3000_uL_per_well=14)
+    p3000 = df[df["Description"] == "P3000 Enhancer"]["uL"].iloc[0]
+    l3000 = df[df["Description"] == "L3000"]["uL"].iloc[0]
+    default = transfect.virus(virus_plasmids_df.copy())
+    assert p3000 == pytest.approx(
+        default[default["Description"] == "P3000 Enhancer"]["uL"].iloc[0] * 2)
+    assert l3000 == pytest.approx(
+        default[default["Description"] == "L3000"]["uL"].iloc[0] * 2)
+
+
+def test_virus_lipofectamine_defaults_are_unchanged(virus_plasmids_df):
+    """The new parameters must not move any existing run's numbers."""
+    df = transfect.virus(virus_plasmids_df.copy())
+    transfers = virus_plasmids_df.shape[0] - 2  # minus VSVG and GagPol
+    assert df[df["Description"] == "P3000 Enhancer"]["uL"].iloc[0] == pytest.approx(
+        round(transfers * 1.1 * 1 * 6, 2))
+    assert df[df["Description"] == "L3000"]["uL"].iloc[0] == pytest.approx(
+        round(transfers * 1.1 * 1 * 7, 2))

@@ -70,10 +70,20 @@ edms -h # or edms <TAB>
     Steps that declare a `compute` target call straight into the rest of edms,
     so the transfection volumes and PCR plans in a rendered protocol are
     calculated from your own inputs rather than copied from a previous entry.
-    Copy a bundled template to start your own:
+    Three templates ship to start from: `pe3_transfection`, `virus_production`
+    and `ngs_prep`. Copy one to make your own:
     ```shell
-    cp "$(edms work where pe3_transfection)" ./my_protocol.toml
+    cp "$(edms work where virus_production)" ./my_protocol.toml
     ```
+
+    Protocols are written against a plate format rather than a fixed vessel.
+    Choosing a different one rescales the DNA amounts, the Lipofectamine and
+    the transfection volume by growth area, anchored on the format each
+    calculator was written for, so a run in the anchor format is unchanged:
+    ```shell
+    edms work deviate <run_dir> -s plate_plan -p plate_format -v "10-cm" -w "scaling up"
+    ```
+    96-well, 48-well, 24-well, 12-well, 6-well, 10-cm and 15-cm are supported.
 
 ## PyPI Instructions
 ### Install

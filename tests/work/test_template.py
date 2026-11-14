@@ -42,10 +42,11 @@ def test_step_lookup_raises_for_unknown_id(tpl):
 def test_bundled_pe3_template_loads():
     assert "pe3_transfection" in template_mod.list_templates()
     tpl = template_mod.load("pe3_transfection")
-    assert tpl.step("transfection_plan").compute == "edms.bio.transfect:PE3"
+    assert tpl.step("transfection_plan").compute == "edms.work.plates:PE3"
     assert tpl.step("ngs_plan").compute == "edms.bio.ngs:pcrs"
     # The NGS sheet is not known at the start of a run, so it must be optional
     assert [i for i in tpl.inputs if i.name == "ngs_samples"][0].optional is True
+
 
 
 def test_resolve_path_rejects_unknown_name():
