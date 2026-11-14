@@ -134,6 +134,20 @@ master mix is worked out; the table below is already scaled.
 
 Every plasmid in the input that is not {VSVG_plasmid} or {GagPol_plasmid} is
 treated as a transfer plasmid and gets its own tube.
+
+One deliberate divergence from Thermo, for anyone reading this later and
+reaching for the catalogue: their standard Lipofectamine 3000 table steps
+1:5:25 from 96-well to 24-well to 6-well, where the growth areas step
+1:5.9:30. Scaling by area therefore puts a 24-well about 19% above the 500 ng
+their table gives, and the 96-well exactly on their 100 ng. Holding the
+density constant is the choice here, because it is what makes a format change
+a change of scale and not of experiment. Their lighter 24-well, if you want
+it, is a deviation rather than a correction, and it is all three amounts
+rather than one -- divide {VSVG_ng}, {GagPol_ng} and {transfer_ng} by 1.19 to
+land on their 500 ng total:
+  edms work deviate <run_dir> -s transfection_plan -p VSVG_ng -v 631 -w "Thermo 24-well"
+  edms work deviate <run_dir> -s transfection_plan -p GagPol_ng -v 1262 -w "Thermo 24-well"
+  edms work deviate <run_dir> -s transfection_plan -p transfer_ng -v 631 -w "Thermo 24-well"
 """
 
 [steps.args]
