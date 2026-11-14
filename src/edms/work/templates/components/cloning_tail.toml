@@ -1,0 +1,135 @@
+# From an assembled reaction to a sequence-verified plasmid
+#
+# A reusable component, not a protocol on its own. Include it from a
+# template's step list, where it stands in the order it is written:
+#
+#   [[steps]]
+#   include = "cloning_tail"
+#
+# Golden Gate and Gibson both end this way, and before this was a component
+# they ended this way twice, in prose that had drifted apart: one carried the
+# heat-shock timing and the other did not, one sequenced and the other stopped
+# at the miniprep. Those four steps do not care which assembly chemistry put
+# the DNA there, so they live here once.
+#
+# Give it a prefix to use it twice in one protocol:
+#
+#   [[steps]]
+#   include = "cloning_tail"
+#   prefix = "round2_"
+
+name = "cloning_tail"
+title = "Transform, pick, miniprep and verify"
+description = """
+Transformation through to a whole-plasmid read. Attach it to whatever
+produced the assembly by naming that step in the first step's depends_on from
+the including template, or leave it to follow in order.
+"""
+
+# Defaults are the values the templates that already ran this were using,
+# not new recommendations. A template's own [params] wins over these, so
+# including the component never changes a number a protocol had set.
+[params]
+cells            = "NEB Stable"
+cells_uL         = 8
+assembly_uL      = 2
+outgrowth_min    = 20
+plate_segments   = 4
+colony_temp      = 37
+colonies_per_rxn = 2
+culture_mL       = 3
+culture_temp     = 37
+culture_hours    = 20
+sequencing       = "Whole-plasmid Nanopore sequencing"
+
+# --------------------------------------------------------------------------- #
+
+[[steps]]
+id = "transform"
+title = "Transform"
+duration = "2 h"
+text = """
+{cells_uL} uL of {cells} plus {assembly_uL} uL of assembly, per tube.
+
+1. Mix on ice and leave 20-30 min.
+2. Heat shock 30 s at 42 C, straight back on ice.
+3. Outgrow {outgrowth_min} min.
+4. Plate, splitting each plate into {plate_segments} segments.
+5. Grow at {colony_temp} C for 18-20 h.
+
+Aliquoting an 8-strip takes longer than the heat shock does, so set the tubes
+out before thawing the cells rather than after.
+
+Record the times; a plate that comes out thin is usually an outgrowth that ran
+short, and without the times you cannot tell:
+  edms work note <run_dir> -s transform -n "heat shock ..., plated ..."
+"""
+checks = [
+  "Heat shock 30 s, not longer",
+  "Control plate counted alongside the assemblies",
+  "Times recorded",
+]
+
+[[steps]]
+id = "inoculate"
+title = "Inoculate"
+depends_on = ["transform"]
+duration = "1 h"
+text = """
+Pick {colonies_per_rxn} colonies per reaction into {culture_mL} mL TB with
+antibiotic, and grow at {culture_temp} C for {culture_hours} h.
+
+Write the picking order down as you go. Renaming samples afterwards because
+the order was lost is the most common way an entry like this goes wrong, and
+it stays invisible until the sequencing comes back assigned to the wrong
+plasmid.
+
+If the backbone is lentiviral, run this at 30 C rather than {culture_temp} C.
+The long terminal repeats recombine, and a fast-growing colony is the one
+that has already lost them:
+  edms work deviate <run_dir> -s inoculate -p culture_temp -v 30 -w "lentiviral backbone"
+"""
+checks = [
+  "{colonies_per_rxn} colonies picked per reaction",
+  "Colonies on every segment",
+  "Picking order written down at the bench",
+]
+
+[[steps]]
+id = "miniprep"
+title = "Miniprep and quantify"
+depends_on = ["inoculate"]
+duration = "3 h"
+text = """
+Miniprep, then nanodrop every sample.
+
+Record the concentrations here rather than only in a sheet; the next assembly
+calculates its backbone volume from them:
+  edms work note <run_dir> -s miniprep -n "concentrations ..."
+"""
+checks = [
+  "Every sample nanodropped",
+  "Low-yield samples flagged rather than carried forward",
+]
+
+[[steps]]
+id = "sequence"
+title = "Sequence"
+depends_on = ["miniprep"]
+duration = "1 day"
+text = """
+{sequencing}, for a full plasmid map rather than a read across the junction.
+
+A junction read only says the ends met. An assembly of several fragments has
+a junction between each pair and a long stretch of polymerase product between
+those, any of which can carry a change that a junction read will never see.
+The assembly can be right where you looked and wrong where you did not.
+
+Record which plasmids passed, against their IDs:
+  edms work note <run_dir> -s sequence -n "confirmed ..."
+"""
+checks = [
+  "Full plasmid map obtained, not a junction read",
+  "Every junction covered",
+  "Confirmed plasmids recorded against their IDs",
+]

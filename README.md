@@ -86,6 +86,24 @@ edms -h # or edms <TAB>
     cp "$(edms work where virus_production)" ./my_protocol.toml
     ```
 
+    Steps that several protocols share live in components, which a template
+    includes in place of writing them again. An include stands where it is
+    written, so one ordered step list still describes the protocol:
+    ```toml
+    [[steps]]
+    include = "cloning_tail"
+    depends_on = ["assemble"]
+    ```
+    `cloning_tail` is transform, inoculate, miniprep and sequence, which is
+    how Golden Gate and Gibson both end. They used to end that way twice, in
+    prose that had drifted: one carried the heat-shock timing and the other
+    did not, and Gibson stopped at the miniprep without ever sequencing what
+    it had assembled. A component's parameter defaults are the values those
+    protocols were already using and a template's own `[params]` still win,
+    so sharing the steps changed nobody's numbers. Give an include a `prefix`
+    to use the same component twice in one protocol; it renames the steps and
+    their parameters together.
+
     Protocols are written against a plate format rather than a fixed vessel.
     Choosing a different one rescales the DNA amounts, the Lipofectamine and
     the transfection volume by growth area, anchored on the format each

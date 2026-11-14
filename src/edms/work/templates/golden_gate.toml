@@ -9,7 +9,7 @@
 #   edms work init -t ./my_gg.toml -i run.toml
 
 name = "golden_gate"
-version = 1
+version = 2
 title = "Golden Gate assembly to sequenced plasmid"
 description = """
 Type IIS assembly of one or more inserts into a backbone, through
@@ -162,83 +162,5 @@ checks = [
 ]
 
 [[steps]]
-id = "transform"
-title = "Transform"
-day = 0
+include = "cloning_tail"
 depends_on = ["assemble"]
-duration = "2 h"
-text = """
-{cells_uL} uL of {cells} plus {assembly_uL} uL of assembly, per tube.
-
-1. Mix on ice and leave 20-30 min.
-2. Heat shock 30 s at 42 C, straight back on ice.
-3. Outgrow {outgrowth_min} min.
-4. Plate, splitting each plate into {plate_segments} segments.
-5. Grow at {colony_temp} C for 18-20 h.
-
-Aliquoting an 8-strip takes longer than the heat shock does, so set the tubes
-out before thawing the cells rather than after.
-
-Record the times; a plate that comes out thin is usually an outgrowth that ran
-short, and without the times you cannot tell:
-  edms work note <run_dir> -s transform -n "heat shock ..., plated ..."
-"""
-checks = [
-  "Heat shock 30 s, not longer",
-  "Times recorded",
-]
-
-[[steps]]
-id = "inoculate"
-title = "Inoculate"
-day = 1
-depends_on = ["transform"]
-duration = "1 h"
-text = """
-Pick colonies into {culture_mL} mL TB with antibiotic and grow at
-{culture_temp} C for {culture_hours} h.
-
-Write the picking order down as you go. Renaming samples afterwards because
-the order was lost is the most common way this entry goes wrong, and it is
-invisible until the sequencing comes back assigned to the wrong plasmid.
-"""
-checks = [
-  "Colonies on every segment",
-  "Picking order written down at the bench",
-]
-
-[[steps]]
-id = "miniprep"
-title = "Miniprep and quantify"
-day = 2
-depends_on = ["inoculate"]
-duration = "3 h"
-text = """
-Miniprep, then nanodrop every sample.
-
-Record the concentrations here rather than only in a sheet; the next assembly
-calculates its backbone volume from them:
-  edms work note <run_dir> -s miniprep -n "concentrations ..."
-"""
-checks = [
-  "Every sample nanodropped",
-  "Low-yield samples flagged rather than carried forward",
-]
-
-[[steps]]
-id = "sequence"
-title = "Sequence"
-depends_on = ["miniprep"]
-duration = "1 day"
-text = """
-Sequence to get a full plasmid map, not just a read across the junction. The
-assembly can be right at the insert and wrong somewhere else, and a whole-
-plasmid map is the only thing that rules that out.
-
-Record which plasmids passed:
-  edms work note <run_dir> -s sequence -n "confirmed ..."
-"""
-checks = [
-  "Full plasmid map obtained",
-  "Confirmed plasmids recorded against their IDs",
-]

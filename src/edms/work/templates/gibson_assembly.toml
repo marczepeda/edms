@@ -11,7 +11,7 @@
 #   edms work init -t ./my_gibson.toml -i run.toml
 
 name = "gibson_assembly"
-version = 1
+version = 2
 title = "Gibson assembly from fragment PCR to sequenced plasmid"
 description = """
 Overlapping fragments amplified with Q5, assembled with NEBuilder HiFi, then
@@ -178,56 +178,5 @@ checks = [
 ]
 
 [[steps]]
-id = "transform"
-title = "Transform"
+include = "cloning_tail"
 depends_on = ["assemble"]
-duration = "2 h"
-text = """
-Transform {cells}, outgrow {outgrowth_min} min, plate, and grow at
-{colony_temp} C for 18-20 h.
-
-Record the times:
-  edms work note <run_dir> -s transform -n "outgrowth ..., plated ..."
-"""
-checks = [
-  "Control plate counted alongside the assemblies",
-  "Times recorded",
-]
-
-[[steps]]
-id = "inoculate"
-title = "Inoculate"
-depends_on = ["transform"]
-duration = "1 h"
-text = """
-Pick two colonies per assembly into {culture_mL} mL TB with antibiotic, and
-grow at {culture_temp} C for {culture_hours} h.
-
-Lentiviral backbones recombine, so the lower temperature and the second colony
-are both worth the bench space.
-"""
-checks = [
-  "Two colonies picked per assembly",
-  "Picking order written down at the bench",
-]
-
-[[steps]]
-id = "miniprep"
-title = "Miniprep and sequence"
-depends_on = ["inoculate"]
-duration = "1 day"
-text = """
-Miniprep, nanodrop, and sequence for a full plasmid map.
-
-A junction read is not enough here: an assembly of five fragments has four
-junctions and a long stretch of PCR product between them, any of which can
-carry a change.
-
-Record what passed:
-  edms work note <run_dir> -s miniprep -n "confirmed ..."
-"""
-checks = [
-  "Full plasmid map obtained",
-  "Every junction covered",
-  "Confirmed plasmids recorded against their IDs",
-]

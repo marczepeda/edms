@@ -249,3 +249,317 @@ def test_virus_template_tells_you_the_per_well_complex_volume():
     step = tpl.step("transfect")
     assert step.compute == "edms.work.plates:virus_per_well"
     assert any("95-99%" in c for c in step.checks)
+
+
+# --------------------------------------------------------------------------- #
+# Components
+# --------------------------------------------------------------------------- #
+def _component(tmp_path, body, name="c.toml"):
+    p = tmp_path / name
+    p.write_text(textwrap.dedent(body), encoding="utf-8")
+    return p
+
+
+def test_bundled_components_are_listed():
+    assert "cloning_tail" in template_mod.list_components()
+
+
+def test_resolve_component_rejects_an_unknown_name():
+    with pytest.raises(FileNotFoundError, match="Unknown component"):
+        template_mod.resolve_component("not_a_component")
+
+
+def test_include_expands_in_the_order_it_is_written(tmp_path):
+    comp = _component(tmp_path, """
+        name = "mid"
+        [[steps]]
+        id = "b"
+        [[steps]]
+        id = "c"
+    """)
+    tpl = template_mod.load(_write(tmp_path, f"""
+        name = "x"
+        [[steps]]
+        id = "a"
+        [[steps]]
+        include = "{comp}"
+        [[steps]]
+        id = "d"
+        depends_on = ["c"]
+    """))
+    assert [s.id for s in tpl.steps] == ["a", "b", "c", "d"]
+
+
+def test_included_steps_remember_where_they_came_from(tmp_path):
+    comp = _component(tmp_path, """
+        name = "mid"
+        [[steps]]
+        id = "b"
+    """)
+    tpl = template_mod.load(_write(tmp_path, f"""
+        name = "x"
+        [[steps]]
+        id = "a"
+        [[steps]]
+        include = "{comp}"
+    """))
+    assert tpl.step("a").component is None
+    assert tpl.step("b").component == "mid"
+    assert tpl.components == ["mid"]
+
+
+def test_include_can_say_what_it_follows(tmp_path):
+    """A component cannot name the step it comes after, because it does not
+    know which protocol it is in."""
+    comp = _component(tmp_path, """
+        name = "tail"
+        [[steps]]
+        id = "b"
+        [[steps]]
+        id = "c"
+        depends_on = ["b"]
+    """)
+    tpl = template_mod.load(_write(tmp_path, f"""
+        name = "x"
+        [[steps]]
+        id = "a"
+        [[steps]]
+        include = "{comp}"
+        depends_on = ["a"]
+    """))
+    assert tpl.step("b").depends_on == ["a"]      # entry step attaches
+    assert tpl.step("c").depends_on == ["b"]      # internal one is untouched
+
+
+def test_template_params_win_over_a_components_defaults(tmp_path):
+    """Including a component must never change a number the protocol set."""
+    comp = _component(tmp_path, """
+        name = "mid"
+        [params]
+        temp = 30
+        other = 1
+        [[steps]]
+        id = "b"
+    """)
+    tpl = template_mod.load(_write(tmp_path, f"""
+        name = "x"
+        [params]
+        temp = 37
+        [[steps]]
+        include = "{comp}"
+    """))
+    assert tpl.params["temp"] == 37
+    assert tpl.params["other"] == 1
+
+
+def test_an_include_can_override_a_component_param(tmp_path):
+    comp = _component(tmp_path, """
+        name = "mid"
+        [params]
+        temp = 30
+        [[steps]]
+        id = "b"
+    """)
+    tpl = template_mod.load(_write(tmp_path, f"""
+        name = "x"
+        [[steps]]
+        include = "{comp}"
+        [steps.params]
+        temp = 25
+    """))
+    assert tpl.params["temp"] == 25
+
+
+def test_an_include_cannot_set_a_param_the_component_does_not_have(tmp_path):
+    """Otherwise a typo is a parameter that silently does nothing."""
+    comp = _component(tmp_path, """
+        name = "mid"
+        [params]
+        temp = 30
+        [[steps]]
+        id = "b"
+    """)
+    with pytest.raises(ValueError, match="does not declare it"):
+        template_mod.load(_write(tmp_path, f"""
+            name = "x"
+            [[steps]]
+            include = "{comp}"
+            [steps.params]
+            tempe = 25
+        """))
+
+
+def test_a_prefix_renames_steps_params_and_their_references(tmp_path):
+    """The same component twice in one protocol has to stay two things."""
+    comp = _component(tmp_path, """
+        name = "round"
+        [params]
+        temp = 30
+        [[steps]]
+        id = "grow"
+        title = "Grow at {temp}"
+        text = "Hold at {temp} C."
+        checks = ["Was {temp} C"]
+        [[steps]]
+        id = "check"
+        depends_on = ["grow"]
+    """)
+    tpl = template_mod.load(_write(tmp_path, f"""
+        name = "x"
+        [[steps]]
+        include = "{comp}"
+        prefix = "one_"
+        [[steps]]
+        include = "{comp}"
+        prefix = "two_"
+        [steps.params]
+        temp = 37
+    """))
+    assert [s.id for s in tpl.steps] == ["one_grow", "one_check",
+                                         "two_grow", "two_check"]
+    assert tpl.params["one_temp"] == 30
+    assert tpl.params["two_temp"] == 37
+    assert tpl.step("one_grow").text == "Hold at {one_temp} C."
+    assert tpl.step("two_grow").text == "Hold at {two_temp} C."
+    assert tpl.step("two_grow").title == "Grow at {two_temp}"
+    assert tpl.step("two_grow").checks == ["Was {two_temp} C"]
+    assert tpl.step("two_check").depends_on == ["two_grow"]
+
+
+def test_a_prefix_repoints_compute_args(tmp_path):
+    comp = _component(tmp_path, """
+        name = "r"
+        [params]
+        n = 3
+        [[steps]]
+        id = "calc"
+        compute = "pandas:DataFrame"
+        [steps.args]
+        data = "$n"
+    """)
+    tpl = template_mod.load(_write(tmp_path, f"""
+        name = "x"
+        [[steps]]
+        include = "{comp}"
+        prefix = "a_"
+    """))
+    assert tpl.step("a_calc").args == {"data": "$a_n"}
+
+
+def test_an_unprefixed_include_leaves_everything_alone(tmp_path):
+    comp = _component(tmp_path, """
+        name = "r"
+        [params]
+        n = 3
+        [[steps]]
+        id = "calc"
+        text = "{n} of them"
+    """)
+    tpl = template_mod.load(_write(tmp_path, f"""
+        name = "x"
+        [[steps]]
+        include = "{comp}"
+    """))
+    assert tpl.step("calc").text == "{n} of them"
+    assert tpl.params["n"] == 3
+
+
+def test_a_step_cannot_be_both_an_include_and_a_step(tmp_path):
+    with pytest.raises(ValueError, match='both "include" and "id"'):
+        template_mod.load(_write(tmp_path, """
+            name = "x"
+            [[steps]]
+            include = "cloning_tail"
+            id = "a"
+        """))
+
+
+def test_a_component_with_no_steps_is_rejected(tmp_path):
+    comp = _component(tmp_path, 'name = "empty"\n')
+    with pytest.raises(ValueError, match="has no steps"):
+        template_mod.load(_write(tmp_path, f"""
+            name = "x"
+            [[steps]]
+            include = "{comp}"
+        """))
+
+
+def test_a_component_colliding_with_a_template_step_is_rejected(tmp_path):
+    """Validation runs after expansion, so the usual rules still apply."""
+    comp = _component(tmp_path, """
+        name = "mid"
+        [[steps]]
+        id = "a"
+    """)
+    with pytest.raises(ValueError, match="duplicate step id 'a'"):
+        template_mod.load(_write(tmp_path, f"""
+            name = "x"
+            [[steps]]
+            id = "a"
+            [[steps]]
+            include = "{comp}"
+        """))
+
+
+def test_a_component_brings_its_inputs(tmp_path):
+    comp = _component(tmp_path, """
+        name = "mid"
+        [[inputs]]
+        name = "sheet"
+        optional = true
+        [[steps]]
+        id = "b"
+    """)
+    tpl = template_mod.load(_write(tmp_path, f"""
+        name = "x"
+        [[steps]]
+        include = "{comp}"
+    """))
+    assert [i.name for i in tpl.inputs] == ["sheet"]
+    assert tpl.inputs[0].optional is True
+
+
+# --------------------------------------------------------------------------- #
+# The bundled cloning component
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("name", ["golden_gate", "gibson_assembly"])
+def test_both_cloning_templates_share_the_tail(name):
+    tpl = template_mod.load(name)
+    assert tpl.components == ["cloning_tail"]
+    assert [s.id for s in tpl.steps][-4:] == ["transform", "inoculate",
+                                              "miniprep", "sequence"]
+    assert tpl.step("transform").depends_on == ["assemble"]
+
+
+def test_gibson_now_sequences_what_it_assembled():
+    """It ended at the miniprep before the tail was shared, so an assembly
+    was never verified."""
+    tpl = template_mod.load("gibson_assembly")
+    assert tpl.step("sequence").component == "cloning_tail"
+    assert "junction" in tpl.step("sequence").text
+
+
+@pytest.mark.parametrize("name,mL,temp,hours", [
+    ("golden_gate", 3, 37, 20),
+    ("gibson_assembly", 4, 30, 22),
+])
+def test_sharing_the_tail_kept_each_protocols_own_numbers(name, mL, temp, hours):
+    """The component's defaults are the old values, and each template's own
+    params still win: nobody's protocol changed by being refactored."""
+    tpl = template_mod.load(name)
+    assert tpl.params["culture_mL"] == mL
+    assert tpl.params["culture_temp"] == temp
+    assert tpl.params["culture_hours"] == hours
+
+
+@pytest.mark.parametrize("name", template_mod.list_components())
+def test_every_bundled_component_loads_on_its_own(name, tmp_path):
+    """A component is not a protocol, but it still has to parse and validate
+    when something includes it."""
+    tpl = template_mod.load(_write(tmp_path, f"""
+        name = "probe"
+        [[steps]]
+        include = "{name}"
+    """))
+    assert tpl.steps
+    assert all(s.component == name for s in tpl.steps)
