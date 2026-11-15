@@ -107,6 +107,14 @@ td.edit:focus { outline: 2px solid var(--accent); background: var(--hi); }
 #edms-why { font: inherit; font-size: .78rem; padding: 4px 6px; margin-top: 8px;
   border: 1px solid var(--line); border-radius: 6px; background: var(--bg);
   color: var(--fg); width: 100%; }
+/* The fallback when the clipboard API is not there to be called, which is
+   every way of opening this file other than on the machine that made it.
+   16px because Safari zooms the page when it focuses anything smaller, and
+   this field is focused for you. */
+.edms-copy-text { font: 16px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  display: block; width: 100%; margin-top: 8px; padding: 6px 8px;
+  border: 1px solid var(--accent); border-radius: 6px; background: var(--bg);
+  color: var(--fg); resize: vertical; }
 
 /* Plate maps */
 .pv-wrap { display: flex; flex-wrap: wrap; gap: 14px; margin: 10px 0 2px; }

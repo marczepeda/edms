@@ -33,6 +33,26 @@ def test_asset_cannot_be_used_to_read_outside_the_package():
         interactive.asset("../plates.py")
 
 
+def test_copying_a_deviate_command_does_not_assume_a_secure_context():
+    """A protocol is read on a phone, where the clipboard API is not there.
+
+    navigator.clipboard is undefined rather than failing outside a secure
+    context, so reaching straight for .writeText throws on the property read
+    and takes any rejection handler with it. localhost counts as secure, which
+    is why this was invisible on the machine that rendered the file and broken
+    on every route to a phone: file:// and plain http from the laptop both.
+    """
+    src = interactive.asset("app.js")
+    guard = "navigator.clipboard && navigator.clipboard.writeText"
+    # The API is called once, and only after something checked it is there
+    assert src.count("navigator.clipboard.writeText(") == 1
+    assert 0 <= src.index(guard) < src.index("navigator.clipboard.writeText(")
+    # ...and there is a way through that needs no API at all, because on a
+    # phone there will not be one
+    assert "document.execCommand('copy')" in src
+    assert "edms-copy-text" in src
+
+
 # --------------------------------------------------------------------------- #
 # Constants
 # --------------------------------------------------------------------------- #

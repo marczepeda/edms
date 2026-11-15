@@ -205,6 +205,79 @@
     });
   }
 
+  /* Copying off a phone.
+
+     A rendered protocol is read at the bench as often as at a desk, and on a
+     phone it arrives over file:// or over plain http from a laptop on the lab
+     network. navigator.clipboard exists only in a secure context, and in an
+     insecure one it is absent rather than failing, so reaching straight for
+     .writeText threw on the property read and the rejection handler never ran.
+     localhost is a secure context and the laptop's own browser is not, which
+     is why this looked fine everywhere it was tried.
+
+     So: the modern API where there is one, the legacy execCommand where there
+     is not, and failing both the text on the page where it can be selected by
+     hand. The last of those also replaces window.prompt, which showed only the
+     first line and so could never carry more than one deviate command. */
+  function copyText(text, button) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        var p = navigator.clipboard.writeText(text);
+        if (p && typeof p.then === 'function') {
+          p.then(function () { copied(button); },
+                 function () { showText(text, button); });
+          return;
+        }
+      } catch (e) { /* insecure context or a refused permission: carry on */ }
+    }
+    if (legacyCopy(text)) copied(button);
+    else showText(text, button);
+  }
+
+  function copied(button) {
+    if (button) button.textContent = 'Copied — paste in the terminal';
+  }
+
+  function legacyCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    /* Off the side of the screen rather than hidden: a field that is
+       display:none or visibility:hidden cannot be selected, and a selection is
+       what execCommand copies. */
+    ta.style.position = 'fixed';
+    ta.style.top = '0';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    var ok = false;
+    try {
+      ta.select();
+      ta.setSelectionRange(0, text.length);
+      ok = document.execCommand('copy');
+    } catch (e) {
+      ok = false;
+    }
+    document.body.removeChild(ta);
+    return ok;
+  }
+
+  function showText(text, button) {
+    var bar = document.getElementById('edms-dirty');
+    if (!bar) return;
+    var old = document.getElementById('edms-copy-text');
+    if (old) old.parentNode.removeChild(old);
+    var box = document.createElement('textarea');
+    box.id = 'edms-copy-text';
+    box.className = 'edms-copy-text';
+    box.readOnly = true;
+    box.rows = Math.min(6, text.split('\n').length);
+    box.value = text;
+    bar.appendChild(box);
+    box.focus();
+    try { box.setSelectionRange(0, text.length); } catch (e) { /* no matter */ }
+    if (button) button.textContent = 'Copy the text below';
+  }
+
   function markDirty() {
     var diff = changed();
     var bar = document.getElementById('edms-dirty');
@@ -238,12 +311,7 @@
         return 'edms work deviate ' + D.run_id + ' -s ' + step + ' -p ' + k +
           ' -v "' + v + '"' + (why ? ' -w "' + why + '"' : '');
       }).join('\n');
-      navigator.clipboard.writeText(cmds).then(function () {
-        var b = document.getElementById('edms-copy');
-        b.textContent = 'Copied — paste in the terminal';
-      }, function () {
-        window.prompt('Copy this:', cmds);
-      });
+      copyText(cmds, document.getElementById('edms-copy'));
     };
   }
 
