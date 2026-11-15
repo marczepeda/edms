@@ -1,0 +1,417 @@
+# Annealed oligo duplexes -> Golden Gate -> plates of sequenced plasmid
+#
+# Written for MUZ380: 352 ngRNA duplexes into pMUZ358.10, every step in
+# plates rather than tubes. The arrayed cousin of golden_gate.toml, which
+# runs the same chemistry at a scale you can hold in an 8-strip.
+#
+# It does NOT include the cloning_tail component, on purpose. That tail picks
+# colonies into 3 mL tube cultures off segmented plates, which is the right
+# shape for a handful of assemblies and the wrong one for 352. The steps here
+# do the same four things in plates, and the plate arithmetic at each stage
+# comes from edms.work.plates:layout rather than being counted by hand.
+#
+# Bundled example template. Copy it and edit the defaults to match your bench:
+#   cp "$(edms work where ngRNA_cloning)" ./my_ngRNA.toml
+#   edms work init -t ./my_ngRNA.toml -i run.toml
+
+name = "ngRNA_cloning"
+version = 1
+title = "ngRNA duplex cloning in plates"
+description = """
+Phosphorylated, annealed oligo duplexes assembled into a backbone by Golden
+Gate, carried through transformation, outgrowth and miniprep in plates.
+
+The protocol is sized from the duplex table you give it, so the plate counts
+in every step follow from one input rather than from a number typed into
+nine places. Change the duplex list, or the format of any single stage, and
+the plate maps below recalculate.
+
+Two things are worth setting before you start. colonies_per_rxn multiplies
+straight into the inoculation plate count, which is the most expensive
+number here: at one colony each, 352 reactions is 8 plates of 48-well, and
+at two it is 15. And vector_stock is the backbone concentration the miniprep
+actually came back at, which decides the volume of backbone in the assembly.
+
+Every stage's format is a parameter. A stage that does not fit the plate you
+have is a format change, not a redesign: set inoculate_format to 96-well and
+the inoculation collapses from eight plates to four, with the map to match.
+The formats are the ones edms.work.plates knows, 96-well down to 6-well.
+"""
+
+[params]
+# Duplex anneal
+anneal_rxn_uL     = 10
+anneal_mm_x       = 1.05
+top_uL            = 1.0
+bottom_uL         = 1.0
+pnk_uL            = 0.5
+anneal_format     = "96-well"
+# Dilution of the annealed duplexes before assembly
+dilution_fold     = 10
+duplex_uL         = 2.0
+dilute_format     = "96-well"
+# Assembly
+vector            = "pMUZ358.10"
+vector_stock      = 100
+vector_ng         = 10
+inserts           = 1
+rxn_uL            = 10
+mm_x              = 1.1
+shared_inserts    = false
+cycles            = 15
+insert_stock      = 10
+insert_desired    = 1
+insert_unit       = "x"
+insert_uL         = 0.0
+enzyme            = "FastDigest Esp3I"
+enzyme_stock      = 20
+enzyme_desired    = 1
+ligase_stock      = 20
+ligase_desired    = 1
+buffer_stock      = 10
+buffer_desired    = 1
+atp_stock         = 10
+atp_desired       = 1
+assembly_format   = "96-well"
+# Transformation
+cells             = "NEB Stable"
+cells_uL          = 8
+assembly_uL       = 2
+outgrowth_min     = 20
+transform_format  = "96-well"
+colony_temp       = 37
+# Inoculation
+colonies_per_rxn  = 1
+inoculate_format  = "48-well"
+culture_mL        = 0.5
+culture_temp      = 37
+culture_hours     = 20
+# Miniprep
+miniprep_format   = "96-well"
+sequencing        = "Whole-plasmid Nanopore sequencing"
+
+[[inputs]]
+name = "duplexes"
+description = "One row per oligo duplex: the insert and the oligo pair it comes from"
+required_columns = ["Insert", "Oligo_ID"]
+
+# --------------------------------------------------------------------------- #
+
+[[steps]]
+id = "anneal_plates"
+title = "Lay the duplexes out"
+day = 0
+duration = "15 min"
+compute = "edms.work.plates:layout"
+outputs = ["Plate map", "Plates"]
+text = """
+Where every duplex sits, for the whole run. The anneal, the dilution, the
+assembly and the miniprep all keep this arrangement, so a well that is
+B7 on plate 2 here is B7 on plate 2 at every stage; only the inoculation
+breaks the pattern, because it is in a different format.
+
+Fill order is across a row and then down, which is the order a multichannel
+moves. Keep the plates in this order and the only thing you ever have to
+track is the plate number.
+
+Print this one and keep it with the plates. It is the map everything
+downstream is read against, and reconstructing it afterwards from the tube
+labels is the failure this step exists to prevent.
+"""
+checks = [
+  "Plates numbered on the side, not only the lid",
+  "Map printed and kept with the plates",
+]
+
+[steps.args]
+items        = "@duplexes"
+plate_format = "$anneal_format"
+
+[[steps]]
+id = "anneal"
+title = "Phosphorylate and anneal"
+day = 0
+depends_on = ["anneal_plates"]
+duration = "1 h"
+compute = "edms.bio.clone:anneal_mm"
+outputs = ["Anneal", "Anneal program"]
+text = """
+Top and bottom oligos go in per well, so they are not in the master mix.
+Everything else is, and the master mix column is already multiplied up for
+every duplex in the run at {anneal_mm_x}x.
+
+Make the master mix in a trough and go in with a multichannel. The oligos
+are the slow part: they are the only two things that differ well to well,
+and at this scale they are worth a second person rather than a long
+afternoon.
+
+Let the cooling ramp run at 0.2 C/sec. Snapping to 4 C gives hairpins
+instead of duplexes, and the assembly then fails for a reason the gel will
+not show.
+
+Seal the plates properly. A 95 C step in a plate with a loose seal costs the
+outer wells first, which is exactly where the map says the low-numbered
+duplexes are.
+"""
+checks = [
+  "PNK added last",
+  "Plates sealed before the 95 C step",
+  "Ramp set to 0.2 C/sec, not a straight hold",
+]
+
+[steps.args]
+oligos    = "#duplexes"
+rxn_uL    = "$anneal_rxn_uL"
+mm_x      = "$anneal_mm_x"
+top_uL    = "$top_uL"
+bottom_uL = "$bottom_uL"
+pnk_uL    = "$pnk_uL"
+
+[[steps]]
+id = "dilute"
+title = "Dilute the duplexes 1:{dilution_fold}"
+day = 0
+depends_on = ["anneal"]
+duration = "45 min"
+compute = "edms.work.plates:layout"
+outputs = ["Plate map", "Plates"]
+text = """
+{duplex_uL} uL of annealed duplex into {dilution_fold}x its volume, in the
+same arrangement as the anneal.
+
+Annealed duplexes go into the assembly at a dilution rather than neat
+because the reaction wants them in molar excess over the backbone and
+nowhere near their stock concentration; a neat duplex crowds out the
+ligation and gives you empty backbone. The assembly table takes care of the
+ratio from insert_stock and insert_desired, but it assumes the dilution in
+this step has actually happened.
+
+Keep the undiluted plates. They are the cheapest thing to go back to when a
+well fails, and remaking the oligos is the most expensive.
+"""
+checks = [
+  "Diluted into the same well positions as the anneal",
+  "Undiluted plates kept and labelled",
+]
+
+[steps.args]
+items        = "@duplexes"
+plate_format = "$dilute_format"
+
+[[steps]]
+id = "assembly_plan"
+title = "Calculate the assembly"
+day = 0
+depends_on = ["dilute"]
+duration = "5 min"
+compute = "edms.bio.clone:golden_gate"
+outputs = ["Golden Gate", "Golden Gate program"]
+text = """
+{inserts} duplex into {vector} at {vector_ng} ng, in {rxn_uL} uL, with the
+master mix multiplied up for every reaction in the run.
+
+The backbone volume is worked out from the concentration {vector} actually
+came back at, so re-run this after a re-miniprep rather than reusing the old
+volume:
+  edms work deviate <run_dir> -s assembly_plan -p vector_stock -v 1063.8 -w "re-minipreped"
+
+At this scale the backbone is the reagent to check twice. One pipetting
+error into a trough is 96 reactions, and a backbone that is half what the
+table assumed will still give colonies -- just mostly empty ones.
+"""
+checks = [
+  "{vector} concentration is the current nanodrop, not last month's",
+  "Enzymes kept cold and added last",
+]
+
+[steps.args]
+inserts        = "$inserts"
+samples        = "#duplexes"
+rxn_uL         = "$rxn_uL"
+mm_x           = "$mm_x"
+insert_stock   = "$insert_stock"
+insert_desired = "$insert_desired"
+insert_unit    = "$insert_unit"
+insert_uL      = "$insert_uL"
+vector         = "$vector"
+vector_stock   = "$vector_stock"
+vector_ng      = "$vector_ng"
+buffer_stock   = "$buffer_stock"
+buffer_desired = "$buffer_desired"
+atp_stock      = "$atp_stock"
+atp_desired    = "$atp_desired"
+enzyme         = "$enzyme"
+enzyme_stock   = "$enzyme_stock"
+enzyme_desired = "$enzyme_desired"
+ligase_stock   = "$ligase_stock"
+ligase_desired = "$ligase_desired"
+shared_inserts = "$shared_inserts"
+cycles         = "$cycles"
+
+[[steps]]
+id = "assembly_plates"
+title = "Set up the assembly plates"
+day = 0
+depends_on = ["assembly_plan"]
+duration = "1 h"
+compute = "edms.work.plates:layout"
+outputs = ["Plate map", "Plates"]
+text = """
+Same arrangement again, in {assembly_format}. Master mix from the table two
+steps up with a multichannel, then the diluted duplex from the matching well
+of the dilution plate.
+
+Run the program from the assembly table: 37 C and 16 C for 5 min each,
+{cycles} cycles, then hold at 4 C.
+
+Thaw the competent cells on ice five minutes before the program finishes.
+They are the step with no slack in it; everything else here can wait.
+"""
+checks = [
+  "Duplex taken from the diluted plate, not the annealed one",
+  "Competent cells thawing before the program ends",
+]
+
+[steps.args]
+items        = "@duplexes"
+plate_format = "$assembly_format"
+
+[[steps]]
+id = "transform"
+title = "Transform"
+day = 0
+depends_on = ["assembly_plates"]
+duration = "2 h"
+compute = "edms.work.plates:layout"
+outputs = ["Plate map", "Plates"]
+text = """
+{cells_uL} uL of {cells} plus {assembly_uL} uL of assembly, per well, in
+{transform_format}.
+
+1. Mix on ice and leave 20-30 min.
+2. Heat shock 30 s at 42 C, straight back on ice.
+3. Outgrow {outgrowth_min} min.
+4. Plate or spot onto selection, keeping the well order.
+5. Grow at {colony_temp} C for 18-20 h.
+
+A plate heat-shocks differently from a tube: the wells at the edge reach
+42 C sooner and leave it sooner than the middle ones. Use a thermocycler
+block with a heated lid rather than a water bath, and do not stack plates.
+
+Run at least one well of backbone-only on every plate. At 352 reactions you
+will not notice a background problem from the colony counts alone, and it is
+the one control that tells you whether an empty-looking result is the
+assembly or the backbone.
+
+Record the times; a plate that comes out thin is usually an outgrowth that
+ran short, and without the times you cannot tell:
+  edms work note <run_dir> -s transform -n "heat shock ..., plated ..."
+"""
+checks = [
+  "Heat shock 30 s, not longer",
+  "Backbone-only control on every plate",
+  "Plates not stacked during heat shock",
+  "Times recorded",
+]
+
+[steps.args]
+items        = "@duplexes"
+plate_format = "$transform_format"
+
+[[steps]]
+id = "inoculate"
+title = "Inoculate"
+day = 1
+depends_on = ["transform"]
+duration = "2 h"
+compute = "edms.work.plates:layout"
+outputs = ["Plate map", "Plates"]
+text = """
+{colonies_per_rxn} colony per reaction into {culture_mL} mL TB with
+antibiotic, in {inoculate_format}, at {culture_temp} C for {culture_hours} h.
+
+This is the step where the arrangement changes, and the only one. A
+{inoculate_format} plate holds fewer wells than the stages above it, so the
+map below is the one to work from here rather than the assembly map -- the
+well a reaction lands in is not the well it came from.
+
+Picking two colonies instead of one roughly doubles the plate count and the
+miniprep that follows. One is enough when the assembly is a single duplex
+into a cut backbone and the control plate is clean; two is worth it when it
+is not:
+  edms work deviate <run_dir> -s inoculate -p colonies_per_rxn -v 2 -w "background on the control"
+
+Seal with a breathable membrane, not a lid. A 48-well of TB at 37 C without
+gas exchange grows to a fraction of the density and the miniprep yields
+follow it down.
+
+If the backbone is lentiviral, run this at 30 C rather than {culture_temp} C.
+The long terminal repeats recombine, and a fast-growing colony is the one
+that has already lost them:
+  edms work deviate <run_dir> -s inoculate -p culture_temp -v 30 -w "lentiviral backbone"
+"""
+checks = [
+  "Picking order follows the map, well by well",
+  "Breathable seal, not a lid",
+  "Wells with no colony recorded rather than left ambiguous",
+]
+
+[steps.args]
+items        = "@duplexes"
+plate_format = "$inoculate_format"
+per_item     = "$colonies_per_rxn"
+
+[[steps]]
+id = "miniprep"
+title = "Miniprep and quantify"
+day = 2
+depends_on = ["inoculate"]
+duration = "4 h"
+compute = "edms.work.plates:layout"
+outputs = ["Plate map", "Plates"]
+text = """
+Miniprep in {miniprep_format} and quantify every well.
+
+Back in the original arrangement, so the eluted plate matches the assembly
+plate it came from. The inoculation plates are the odd ones out; carry the
+cultures back into this order as you harvest them rather than afterwards.
+
+Quantify by plate reader rather than nanodrop at this scale. Nanodropping
+352 samples takes longer than the miniprep did, and the number it gives is
+not better for what it is used for here.
+
+Record the concentrations here rather than only in a sheet:
+  edms work note <run_dir> -s miniprep -n "concentrations ..."
+"""
+checks = [
+  "Eluted plate follows the assembly map, not the inoculation map",
+  "Every well quantified",
+  "Low-yield wells flagged rather than carried forward",
+]
+
+[steps.args]
+items        = "@duplexes"
+plate_format = "$miniprep_format"
+
+[[steps]]
+id = "sequence"
+title = "Sequence"
+day = 3
+depends_on = ["miniprep"]
+duration = "1 day"
+text = """
+{sequencing}, for a full plasmid map rather than a read across the junction.
+
+A junction read only says the ends met. It cannot tell one duplex from
+another when they differ by three bases in the middle, which is exactly what
+these differ by, so a junction read across this library would pass a plate
+that is uniformly the wrong insert.
+
+Record which plasmids passed, against their IDs:
+  edms work note <run_dir> -s sequence -n "confirmed ..."
+"""
+checks = [
+  "Full plasmid map obtained, not a junction read",
+  "Every well assigned back to its duplex through the plate maps",
+  "Confirmed plasmids recorded against their IDs",
+]

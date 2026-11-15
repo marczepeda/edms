@@ -31,6 +31,13 @@
       var v = spec[k];
       if (typeof v === 'string' && v.charAt(0) === '@') {
         out[k] = inputs[v.slice(1)];
+      } else if (typeof v === 'string' && v.charAt(0) === '#' &&
+                 v.charAt(1) !== '#') {
+        /* '#name' is the row count of an input, the same as in plan.py. An
+           edited input table changes it, which is the point: adding a row
+           here resizes the master mix below. */
+        var t = inputs[v.slice(1)];
+        out[k] = t ? t.rows.length : 0;
       } else if (typeof v === 'string' && v.charAt(0) === '$') {
         out[k] = params[v.slice(1)];
         if ((D.floats || []).indexOf(v.slice(1)) !== -1) floats.push(k);
@@ -68,13 +75,19 @@
   }
 
   function paint(host, table) {
+    /* The same cap the static render uses, and for the same reason: a plate
+       map of 352 wells is a scroll, not a table. Repainting without it made
+       the page disagree with itself the moment you changed a parameter --
+       60 rows and a note before, every row and no note after. */
+    var cap = D.max_rows || table.rows.length;
+    var shown = table.rows.slice(0, cap);
     var h = ['<table><thead><tr>'];
     table.columns.forEach(function (c) { h.push('<th>' + EDMS.plate.esc(c) + '</th>'); });
     h.push('</tr></thead><tbody>');
     if (!table.rows.length)
       h.push('<tr><td class="pv-empty" colspan="' + table.columns.length +
              '">nothing here &mdash; which is the good case</td></tr>');
-    table.rows.forEach(function (r) {
+    shown.forEach(function (r) {
       h.push('<tr>');
       table.columns.forEach(function (c) {
         h.push('<td>' + EDMS.plate.esc(fmtCell(r[c])) + '</td>');
@@ -82,6 +95,10 @@
       h.push('</tr>');
     });
     h.push('</tbody></table>');
+    if (table.rows.length > cap)
+      h.push('<div class="more">' + (table.rows.length - cap) +
+             ' more row(s) - see the .xlsx in outputs/, or re-run edms work ' +
+             'plan to write these numbers there</div>');
     host.innerHTML = h.join('');
   }
 

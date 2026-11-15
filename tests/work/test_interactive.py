@@ -156,6 +156,18 @@ def test_payload_includes_the_inputs_so_they_can_be_edited(virus_run):
     assert "ng/uL" in data["inputs"]["plasmids"]["columns"]
 
 
+def test_payload_carries_the_row_cap_the_static_render_uses(virus_run):
+    """Otherwise the page agrees with itself only until you touch something.
+
+    A 352-well plate map is written out cut to MAX_ROWS with a note pointing
+    at the .xlsx; before this, the first recompute replaced it with every row
+    and dropped the note, so one table said two different things about how
+    much of it you were looking at.
+    """
+    assert interactive.payload(*virus_run)["max_rows"] == render.MAX_ROWS
+    assert "D.max_rows" in interactive.asset("app.js")
+
+
 def test_payload_offers_every_format(virus_run):
     assert interactive.payload(*virus_run)["formats"] == plates.names()
 

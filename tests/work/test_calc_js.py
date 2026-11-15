@@ -595,6 +595,68 @@ def test_pe3_wraps_onto_a_second_plate_the_same_way(driver, consts):
 # --------------------------------------------------------------------------- #
 # Nothing is left behind
 # --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
+# plates:layout
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("items,fmt,per_item,skip_outer", [
+    (352, "96-well", 1, False),      # the ngRNA oligo set, four plates
+    (352, "48-well", 2, False),      # two colonies each, fifteen plates
+    (96, "96-well", 1, False),       # exactly full: four plates must not be five
+    (97, "96-well", 1, False),       # one over, so the off-by-one shows
+    (0, "96-well", 1, False),        # nothing to place
+    (1, "6-well", 1, False),
+    (60, "96-well", 1, True),        # exactly fills the inner wells
+    (61, "96-well", 1, True),
+    (10, "24-well", 3, False),
+])
+def test_layout_matches_python(driver, consts, items, fmt, per_item, skip_outer):
+    args = {"items": items, "plate_format": fmt, "per_item": per_item,
+            "skip_outer": skip_outer}
+    js = run_js(driver, consts, "edms.work.plates:layout", args)
+    same_tables(js, plates.layout(**args), where=f"{items} in {fmt}")
+
+
+def test_layout_of_a_real_table_matches_python(driver, consts):
+    """The oligos arrive as an input table, not a count, and the page has to
+    carry their own columns through into the map."""
+    items = pd.DataFrame({
+        "Oligo_ID": [f"nMUZ380_{i}" for i in range(1, 15)],
+        "Edit": ["F266L"] * 7 + ["R233H"] * 7,
+    })
+    args = {"plate_format": "6-well", "per_item": 1}
+    js = run_js(driver, consts,
+                "edms.work.plates:layout",
+                dict(args, items=interactive.table_data(items)))
+    same_tables(js, plates.layout(items, **args), where="oligo table")
+
+
+def test_layout_breaks_plates_on_a_group_the_same_way(driver, consts):
+    items = pd.DataFrame({"Pool": ["p1"] * 5 + ["p2"] * 5 + ["p3"] * 2})
+    args = {"plate_format": "6-well", "by": "Pool"}
+    js = run_js(driver, consts, "edms.work.plates:layout",
+                dict(args, items=interactive.table_data(items)))
+    same_tables(js, plates.layout(items, **args), where="grouped")
+
+
+@pytest.mark.parametrize("args", [
+    {"items": 4, "plate_format": "10-cm"},          # a dish has no grid
+    {"items": 4, "plate_format": "6-well", "skip_outer": True},
+    {"items": 4, "plate_format": "96-well", "per_item": 0},
+])
+def test_layout_fails_on_both_sides(driver, consts, args):
+    """An impossible layout is an error in the page too, not a blank table."""
+    with pytest.raises((KeyError, ValueError)):
+        plates.layout(**args)
+    calc = str(interactive.STATIC / "calc.js")
+    sent = dict(args)
+    sent["__floats__"] = []
+    proc = subprocess.run(
+        [NODE, driver, calc, consts, "edms.work.plates:layout", json.dumps(sent)],
+        capture_output=True, text=True, timeout=60)
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["ok"] is False
+
+
 def test_every_template_compute_target_is_live():
     """The point of the exercise: no bundled protocol has a table that falls
     back to static. A new template with a new calculator fails here until it

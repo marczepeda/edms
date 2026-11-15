@@ -127,8 +127,15 @@ def _resolve_arg(value, inputs: dict, params: dict, step_id: str, key: str):
     '''
     _resolve_arg(): turn one template arg into a real Python value.
 
-    '@name' is an input table, '$name' a parameter, '@@'/'$$' an escaped
-    literal, and anything else passes through untouched.
+    '@name' is an input table, '#name' its row count, '$name' a parameter,
+    '@@'/'##'/'$$' an escaped literal, and anything else passes through
+    untouched.
+
+    The row count is there because an arrayed protocol is sized by its input:
+    a calculator that wants 'how many reactions' and a plate map that wants
+    the reactions themselves are reading the same table, and a template that
+    had to write the number down as well would have somewhere for the two to
+    disagree.
 
     Parameters:
     value: the raw arg from the template
@@ -138,6 +145,16 @@ def _resolve_arg(value, inputs: dict, params: dict, step_id: str, key: str):
     key (str): arg name, for error messages
     '''
     if isinstance(value, str):
+        if value.startswith('##'):
+            return value[1:]
+        if value.startswith('#'):
+            name = value[1:]
+            if name not in inputs:
+                raise KeyError(
+                    f"Step '{step_id}' arg '{key}' wants the row count of input "
+                    f"'{name}', which this run does not have. Available: "
+                    f"{', '.join(sorted(inputs)) or '(none)'}")
+            return len(inputs[name])
         for sigil, source, label in (('@', inputs, 'input'), ('$', params, 'parameter')):
             if value.startswith(sigil * 2):
                 return value[1:]
@@ -158,15 +175,19 @@ def _resolve_arg(value, inputs: dict, params: dict, step_id: str, key: str):
 
 def input_refs(args) -> set:
     '''
-    input_refs(): the input names a step's args reference with '@'.
+    input_refs(): the input names a step's args reference, by '@' or by '#'.
+
+    Both sigils read the same table, so a step that only wants the row count
+    still needs the input to be there.
 
     Parameters:
     args: a step's args dict, or any value nested inside it
     '''
     found = set()
     if isinstance(args, str):
-        if args.startswith('@') and not args.startswith('@@'):
-            found.add(args[1:])
+        for sigil in ('@', '#'):
+            if args.startswith(sigil) and not args.startswith(sigil * 2):
+                found.add(args[1:])
     elif isinstance(args, dict):
         for v in args.values():
             found |= input_refs(v)

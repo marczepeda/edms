@@ -119,6 +119,114 @@ EDMS.calc = {};
   };
 
   // ----------------------------------------------------------------- //
+  // plates:grid, plates:wells, plates:layout
+  // ----------------------------------------------------------------- //
+  /* The grid comes out of the Python objects with the vessels, so calc.js
+     still has no plate table of its own. */
+  C.grid = function (fmt) {
+    var name = C.canonical(fmt);
+    var g = EDMS.consts.grid[name];
+    if (!g) {
+      var ok = Object.keys(EDMS.consts.grid).sort(function (a, b) {
+        return EDMS.consts.vessels[a].wells - EDMS.consts.vessels[b].wells;
+      });
+      throw new Error("'" + name + "' has no well grid, so samples cannot be " +
+                      'laid out in it. Griddable formats: ' + ok.join(', '));
+    }
+    return g;
+  };
+
+  C.wells = function (fmt, skipOuter) {
+    var g = C.grid(fmt), nRows = g[0], nCols = g[1];
+    var r0 = 0, r1 = nRows, c0 = 0, c1 = nCols;
+    if (skipOuter) {
+      if (nRows < 3 || nCols < 3)
+        throw new Error('skip_outer leaves nothing of a ' + C.canonical(fmt) +
+                        ': it is ' + nRows + ' by ' + nCols +
+                        ' and every well is an edge well.');
+      r0 = 1; r1 = nRows - 1; c0 = 1; c1 = nCols - 1;
+    }
+    var out = [];
+    for (var r = r0; r < r1; r++)
+      for (var c = c0; c < c1; c++)
+        out.push(EDMS.consts.ROW_LETTERS.charAt(r) + (c + 1));
+    return out;
+  };
+
+  C['edms.work.plates:layout'] = function (a) {
+    var name = C.canonical(a.plate_format || '96-well');
+    var perItem = parseInt(a.per_item === undefined ? 1 : a.per_item, 10);
+    if (!(perItem >= 1))
+      throw new Error('per_item must be at least 1, got ' + a.per_item);
+
+    /* items is either a table from an input or a plain count, the same two
+       things plates.layout() takes. */
+    var frame, label = a.label || 'Sample';
+    if (a.items !== null && typeof a.items === 'object') {
+      frame = C.frame(a.items);
+    } else {
+      var n = parseInt(a.items, 10);
+      if (!(n >= 0)) throw new Error('items must not be negative, got ' + a.items);
+      var made = [];
+      for (var i = 1; i <= n; i++) {
+        var one = {};
+        one[label] = i;
+        made.push(one);
+      }
+      frame = {columns: [label], rows: made};
+    }
+
+    var skipOuter = a.skip_outer === true || a.skip_outer === 'True';
+    var order = C.wells(name, skipOuter);
+    var perPlate = order.length;
+    var by = (a.by === undefined || a.by === null || a.by === '') ? null : a.by;
+    if (by !== null && !C.has(frame, by))
+      throw new Error("No column '" + by + "' to break plates on. Columns: " +
+                      frame.columns.join(', '));
+
+    var startPlate = parseInt(a.start_plate === undefined ? 1 : a.start_plate, 10);
+    var placed = [], slot = 0, plate = startPlate, group = null, seen = false;
+    for (var j = 0; j < frame.rows.length; j++) {
+      var rec = frame.rows[j];
+      if (by !== null) {
+        if (seen && rec[by] !== group && slot) { plate += 1; slot = 0; }
+        group = rec[by];
+        seen = true;
+      }
+      for (var rep = 0; rep < perItem; rep++) {
+        if (slot >= perPlate) { plate += 1; slot = 0; }
+        var cell = C.merge({}, rec);
+        cell['Plate'] = plate;
+        cell['Well'] = order[slot];
+        if (perItem > 1) cell['Replicate'] = rep + 1;
+        placed.push(cell);
+        slot += 1;
+      }
+    }
+
+    var front = ['Plate', 'Well'];
+    if (perItem > 1) front.push('Replicate');
+    var cols = front.slice();
+    frame.columns.forEach(function (c) { if (cols.indexOf(c) === -1) cols.push(c); });
+
+    var used = placed.length;
+    var summary = {
+      'Format': name,
+      'Samples': frame.rows.length,
+      'Wells per sample': perItem,
+      'Wells used': used,
+      'Usable wells per plate': perPlate,
+      'Plates needed': used ? (plate - startPlate + 1) : 0,
+      'Spare wells on the last plate': used ? (perPlate - slot) : 0,
+      'Edge wells skipped': skipOuter
+    };
+    return {__tables__: {
+      'Plate map': {columns: cols, rows: placed},
+      'Plates': {columns: Object.keys(summary), rows: [summary]}
+    }};
+  };
+
+  // ----------------------------------------------------------------- //
   // plates:geometry
   // ----------------------------------------------------------------- //
   C['edms.work.plates:geometry'] = function (a) {

@@ -28,6 +28,8 @@ Usage:
 [Planning]
 - expansion(): the ladder of vessels from one format up to another
 - geometry(): one-row plan of the chosen format, for a protocol step
+- grid(): the row-by-column shape of a well plate
+- layout(): place samples into wells, across as many plates as it takes
 - PE3(): edms.bio.transfect:PE3 rescaled to a plate format
 - virus(): edms.bio.transfect:virus rescaled to a plate format
 - dilutions(): working dilutions for plan lines too small to pipette
@@ -121,6 +123,22 @@ MIN_PIPETTE_UL = 1.0
 # Dilutions people actually make, rather than 7.3-fold
 DILUTION_STEPS = (2, 5, 10, 20, 50, 100, 200, 500, 1000)
 
+# Rows by columns, for naming a well. _VESSELS knows how many wells a format
+# has; this is the shape they are in, which is what turns the 27th sample
+# into C3. The dishes are absent on purpose: a 10 cm dish has no grid, and
+# asking for one is a mistake worth an error rather than a silent guess.
+_GRID = {
+    '96-well': (8, 12),
+    '48-well': (6, 8),
+    '24-well': (4, 6),
+    '12-well': (3, 4),
+    '6-well': (2, 3),
+}
+
+# The outer wells of a plate evaporate fastest, and an overnight at 37 C is
+# long enough for it to show. Skipping them costs a third of a 96-well plate.
+_ROW_LETTERS = 'ABCDEFGHIJKLMNOP'
+
 def _round_cells(cells: float) -> int:
     '''
     _round_cells(): round a seeding number to something worth pipetting.
@@ -204,6 +222,143 @@ def table(file: str=None) -> pd.DataFrame:
     return df
 
 # Planning
+def grid(plate_format: str) -> tuple[int, int]:
+    '''
+    grid(): the row-by-column shape of a well plate.
+
+    Parameters:
+    plate_format (str): plate format name or alias
+
+    Dependencies: canonical()
+    '''
+    name = canonical(plate_format)
+    if name not in _GRID:
+        raise KeyError(
+            f"'{name}' has no well grid, so samples cannot be laid out in it. "
+            f"Griddable formats: {', '.join(sorted(_GRID, key=lambda n: _VESSELS[n]['wells']))}")
+    return _GRID[name]
+
+def wells(plate_format: str, skip_outer: bool=False) -> list[str]:
+    '''
+    wells(): the usable well names of one plate, in filling order.
+
+    Fills across a row before dropping to the next, which is the order a
+    multichannel moves and the order a plate reader reports.
+
+    Parameters:
+    plate_format (str): plate format name or alias
+    skip_outer (bool, optional): leave the edge wells empty (Default: False)
+
+    Dependencies: grid(),_ROW_LETTERS
+    '''
+    n_rows, n_cols = grid(plate_format)
+    rows = range(n_rows)
+    cols = range(n_cols)
+    if skip_outer:
+        if n_rows < 3 or n_cols < 3:
+            raise ValueError(
+                f'skip_outer leaves nothing of a {canonical(plate_format)}: '
+                f'it is {n_rows} by {n_cols} and every well is an edge well.')
+        rows = range(1, n_rows - 1)
+        cols = range(1, n_cols - 1)
+    return [f'{_ROW_LETTERS[r]}{c + 1}' for r in rows for c in cols]
+
+def layout(items, plate_format: str='96-well', per_item: int=1,
+           skip_outer: bool=False, by: str=None, label: str='Sample',
+           start_plate: int=1, file: str=None) -> dict[str, pd.DataFrame]:
+    '''
+    layout(): place samples into wells, across as many plates as it takes.
+
+    The arithmetic a plate-based protocol repeats at every step and gets wrong
+    once: how many plates, which well each sample is in, and how much of the
+    last plate is empty. Returns the map and a one-row summary.
+
+    Parameters:
+    items (DataFrame | int): one row per sample, or just how many there are
+    plate_format (str, optional): plate format name or alias (Default: 96-well)
+    per_item (int, optional): wells each sample takes, for picking several
+        colonies per reaction (Default: 1)
+    skip_outer (bool, optional): leave the edge wells empty (Default: False)
+    by (str, optional): column to break plates on, so a group never straddles
+        two plates (Default: None, meaning fill straight through)
+    label (str, optional): column name when items is a count (Default: Sample)
+    start_plate (int, optional): number of the first plate (Default: 1)
+    file (str, optional): output file path
+
+    Dependencies: pandas,canonical(),wells(),spec()
+    '''
+    name = canonical(plate_format)
+    per_item = int(per_item)
+    if per_item < 1:
+        raise ValueError(f'per_item must be at least 1, got {per_item}')
+
+    if isinstance(items, pd.DataFrame):
+        frame = items.reset_index(drop=True)
+    else:
+        n = int(items)
+        if n < 0:
+            raise ValueError(f'items must not be negative, got {n}')
+        frame = pd.DataFrame({label: range(1, n + 1)})
+
+    order = wells(name, skip_outer=skip_outer)
+    per_plate = len(order)
+
+    rows = []
+    slot = 0
+    plate = int(start_plate)
+    group = None
+    for i in range(len(frame)):
+        record = frame.iloc[i]
+        if by is not None:
+            if by not in frame.columns:
+                raise KeyError(
+                    f"No column '{by}' to break plates on. "
+                    f"Columns: {', '.join(str(c) for c in frame.columns)}")
+            # A new group starts a new plate, so a group is never split across
+            # two of them -- which is the point of asking for it
+            if group is not None and record[by] != group:
+                if slot:
+                    plate += 1
+                    slot = 0
+            group = record[by]
+        for rep in range(per_item):
+            if slot >= per_plate:
+                plate += 1
+                slot = 0
+            cell = dict(record)
+            cell['Plate'] = plate
+            cell['Well'] = order[slot]
+            if per_item > 1:
+                cell['Replicate'] = rep + 1
+            rows.append(cell)
+            slot += 1
+
+    # Plate and well first: it is what the map is read for. The columns are
+    # built rather than read off the rows so that a map of nothing still
+    # arrives with its headings, instead of as a blank rectangle.
+    front = ['Plate', 'Well'] + (['Replicate'] if per_item > 1 else [])
+    columns = front + [str(c) for c in frame.columns if str(c) not in front]
+    placed = pd.DataFrame(rows, columns=columns)
+
+    used = len(placed)
+    plates_needed = (plate - int(start_plate) + 1) if used else 0
+    summary = pd.DataFrame([{
+        'Format': name,
+        'Samples': len(frame),
+        'Wells per sample': per_item,
+        'Wells used': used,
+        'Usable wells per plate': per_plate,
+        'Plates needed': plates_needed,
+        'Spare wells on the last plate': (per_plate - slot) if used else 0,
+        'Edge wells skipped': bool(skip_outer),
+    }])
+
+    tables = {'Plate map': placed, 'Plates': summary}
+    if file is not None:
+        from ..gen import io
+        io.save(obj=tables, file=file, id=True)
+    return tables
+
 def geometry(plate_format: str, reps: int=1, conditions: int=None,
              seed_per_cm2: float=None, file: str=None) -> pd.DataFrame:
     '''

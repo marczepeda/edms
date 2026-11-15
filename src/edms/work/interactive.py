@@ -84,6 +84,9 @@ def constants() -> dict:
         'CONFLUENT_PER_ML': dict(culture.CONFLUENT_PER_ML),
         'vessels': {name: dict(v) for name, v in plates._VESSELS.items()},
         'aliases': dict(plates._ALIASES),
+        # The well grid, so calc.js can name a well without a table of its own
+        'grid': {name: list(shape) for name, shape in plates._GRID.items()},
+        'ROW_LETTERS': plates._ROW_LETTERS,
         'SEED_PER_CM2': plates.SEED_PER_CM2,
         'VIRUS_SEED_PER_CM2': plates.VIRUS_SEED_PER_CM2,
         'LAYOUT_NOTE': plates.LAYOUT_NOTE,
@@ -171,7 +174,14 @@ def payload(protocol, inputs: dict=None) -> dict:
                       'tables': [str(n) for n in s.tables],
                       'live': s.compute in live})
 
+    # The row cap the static render uses. Without it the page agrees with
+    # itself only until you touch something: a 352-row plate map arrives cut
+    # to MAX_ROWS with a note pointing at the .xlsx, and the first recompute
+    # would quietly replace it with all 352 and drop the note.
+    from .render import MAX_ROWS
+
     return {'run_id': protocol.run_id,
+            'max_rows': MAX_ROWS,
             'consts': constants(),
             'formats': plates.names(),
             'params': {k: _jsonable(v) for k, v in protocol.params.items()},

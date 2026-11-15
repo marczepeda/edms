@@ -312,3 +312,44 @@ def test_step_titles_take_parameters_too(virus_run):
         s for s in protocol.steps if s.id == "seed"][0].title
     assert "{" not in title
     assert "HEK293T" in title
+
+# --------------------------------------------------------------------------- #
+# '#name', the row count of an input
+# --------------------------------------------------------------------------- #
+def test_hash_resolves_to_the_row_count_of_an_input():
+    inputs = {"duplexes": pd.DataFrame({"Insert": ["a", "b", "c"]})}
+    assert plan_mod._resolve_arg("#duplexes", inputs, {}, "step", "samples") == 3
+
+
+def test_hash_and_at_read_the_same_table():
+    """An arrayed protocol sizes its master mix by '#' and its plate map by
+    '@'. If those could come from different places they could disagree."""
+    inputs = {"duplexes": pd.DataFrame({"Insert": ["a", "b"]})}
+    n = plan_mod._resolve_arg("#duplexes", inputs, {}, "step", "samples")
+    table = plan_mod._resolve_arg("@duplexes", inputs, {}, "step", "items")
+    assert n == len(table)
+
+
+def test_double_hash_is_an_escaped_literal():
+    assert plan_mod._resolve_arg("##nope", {}, {}, "step", "k") == "#nope"
+
+
+def test_hash_on_a_missing_input_says_which_are_there():
+    with pytest.raises(KeyError, match="row count of input"):
+        plan_mod._resolve_arg("#nope", {"duplexes": pd.DataFrame()}, {}, "s", "k")
+
+
+def test_input_refs_counts_a_hash_reference():
+    """A step that only wants the count still needs the input there, so an
+    absent optional input has to skip that step rather than crash it."""
+    assert plan_mod.input_refs({"samples": "#duplexes"}) == {"duplexes"}
+    assert plan_mod.input_refs({"a": "@d", "b": "#d"}) == {"d"}
+    assert plan_mod.input_refs({"a": "##d"}) == set()
+
+
+def test_app_js_resolves_the_hash_sigil_too():
+    """The page has to size the master mix the same way the package does."""
+    from edms.work import interactive
+
+    assert "'#'" in interactive.asset("app.js")
+

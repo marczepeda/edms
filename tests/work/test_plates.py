@@ -120,6 +120,107 @@ def test_table_does_not_write_a_file_without_a_path(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
+# grid(), wells() and layout()
+# --------------------------------------------------------------------------- #
+def test_grid_shapes_multiply_out_to_the_well_count():
+    for name, shape in plates._GRID.items():
+        assert shape[0] * shape[1] == plates.spec(name)["wells"]
+
+
+def test_grid_refuses_a_dish():
+    with pytest.raises(KeyError, match="no well grid"):
+        plates.grid("10-cm")
+
+
+def test_wells_fill_across_a_row_before_dropping_down():
+    w = plates.wells("96-well")
+    assert len(w) == 96
+    assert w[:3] == ["A1", "A2", "A3"]
+    assert w[11] == "A12"
+    assert w[12] == "B1"
+    assert w[-1] == "H12"
+
+
+def test_wells_can_leave_the_edge_wells_empty():
+    w = plates.wells("96-well", skip_outer=True)
+    assert len(w) == 60  # 6 rows of 10, the evaporating ring dropped
+    assert w[0] == "B2"
+    assert w[-1] == "G11"
+    assert not [x for x in w if x[0] in "AH" or x[1:] in ("1", "12")]
+
+
+def test_skip_outer_refuses_a_plate_that_is_all_edge():
+    with pytest.raises(ValueError, match="every well is an edge well"):
+        plates.wells("6-well", skip_outer=True)
+
+
+def test_layout_counts_whole_plates_and_the_spare_wells():
+    row = plates.layout(352, "96-well")["Plates"].iloc[0]
+    assert row["Plates needed"] == 4  # 352 is 3.67 plates, which is 4 plates
+    assert row["Wells used"] == 352
+    assert row["Spare wells on the last plate"] == 32
+
+
+def test_layout_places_the_last_sample_where_it_belongs():
+    m = plates.layout(352, "96-well")["Plate map"]
+    assert len(m) == 352
+    assert list(m.iloc[0][["Plate", "Well"]]) == [1, "A1"]
+    assert list(m.iloc[95][["Plate", "Well"]]) == [1, "H12"]
+    assert list(m.iloc[96][["Plate", "Well"]]) == [2, "A1"]
+    # 352 - 288 = 64 wells into plate 4, so the 64th well of the plate
+    assert list(m.iloc[-1][["Plate", "Well"]]) == [4, plates.wells("96-well")[63]]
+
+
+def test_layout_keeps_the_sample_columns():
+    items = pd.DataFrame({"Oligo": ["a", "b"], "Edit": ["x", "y"]})
+    m = plates.layout(items, "96-well")["Plate map"]
+    assert list(m.columns[:2]) == ["Plate", "Well"]
+    assert list(m["Oligo"]) == ["a", "b"]
+    assert list(m["Edit"]) == ["x", "y"]
+
+
+def test_layout_gives_each_replicate_its_own_well():
+    t = plates.layout(352, "48-well", per_item=2)
+    assert t["Plates"].iloc[0]["Wells used"] == 704
+    assert t["Plates"].iloc[0]["Plates needed"] == 15
+    m = t["Plate map"]
+    assert list(m.iloc[0][["Well", "Replicate"]]) == ["A1", 1]
+    assert list(m.iloc[1][["Well", "Replicate"]]) == ["A2", 2]
+
+
+def test_layout_can_keep_a_group_off_the_plate_boundary():
+    """A group that straddles two plates is the one thing `by` is for."""
+    items = pd.DataFrame({"Pool": ["p1"] * 5 + ["p2"] * 5})
+    m = plates.layout(items, "6-well", by="Pool")["Plate map"]
+    assert set(m[m["Pool"] == "p1"]["Plate"]) == {1}
+    assert set(m[m["Pool"] == "p2"]["Plate"]) == {2}
+
+
+def test_layout_without_a_break_column_runs_straight_through():
+    items = pd.DataFrame({"Pool": ["p1"] * 5 + ["p2"] * 5})
+    m = plates.layout(items, "6-well")["Plate map"]
+    # 6 wells a plate, so p1 and p2 share plate 1 and spill into plate 2
+    assert set(m["Plate"]) == {1, 2}
+    assert len(m[m["Plate"] == 1]) == 6
+
+
+def test_layout_of_nothing_needs_no_plates():
+    t = plates.layout(0, "96-well")
+    assert t["Plates"].iloc[0]["Plates needed"] == 0
+    assert len(t["Plate map"]) == 0
+
+
+def test_layout_rejects_a_break_column_that_is_not_there():
+    with pytest.raises(KeyError, match="No column"):
+        plates.layout(pd.DataFrame({"a": [1, 2]}), "96-well", by="Pool")
+
+
+def test_layout_rejects_a_nonsense_well_count():
+    with pytest.raises(ValueError, match="per_item"):
+        plates.layout(4, "96-well", per_item=0)
+
+
+# --------------------------------------------------------------------------- #
 # geometry()
 # --------------------------------------------------------------------------- #
 def test_geometry_without_conditions_reports_per_well_only():

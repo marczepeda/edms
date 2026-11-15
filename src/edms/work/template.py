@@ -446,11 +446,13 @@ def validate(tpl: Template) -> Template:
             raise ValueError(f"{where}: step '{s.id}' compute must look like "
                              f"'module.path:function', got '{s.compute}'")
         for key, value in s.args.items():
-            for ref, kind, known in ((value, '@', input_names), (value, '$', set(tpl.params))):
+            for ref, kind, known in ((value, '@', input_names),
+                                     (value, '#', input_names),
+                                     (value, '$', set(tpl.params))):
                 if isinstance(ref, str) and ref.startswith(kind) and not ref.startswith(kind * 2):
                     target = ref[1:]
                     if target not in known:
-                        label = 'input' if kind == '@' else 'param'
+                        label = 'param' if kind == '$' else 'input'
                         raise ValueError(
                             f"{where}: step '{s.id}' arg '{key}' references "
                             f"{label} '{target}', which the template does not declare")
