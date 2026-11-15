@@ -265,7 +265,8 @@ def wells(plate_format: str, skip_outer: bool=False) -> list[str]:
 
 def layout(items, plate_format: str='96-well', per_item: int=1,
            skip_outer: bool=False, by: str=None, label: str='Sample',
-           start_plate: int=1, file: str=None) -> dict[str, pd.DataFrame]:
+           label_col: str=None, start_plate: int=1,
+           file: str=None) -> dict[str, pd.DataFrame]:
     '''
     layout(): place samples into wells, across as many plates as it takes.
 
@@ -282,6 +283,9 @@ def layout(items, plate_format: str='96-well', per_item: int=1,
     by (str, optional): column to break plates on, so a group never straddles
         two plates (Default: None, meaning fill straight through)
     label (str, optional): column name when items is a count (Default: Sample)
+    label_col (str, optional): the column that names a sample, moved to the
+        front of the map and used to label the wells in a drawing of the
+        plate (Default: None, meaning the first column after Well)
     start_plate (int, optional): number of the first plate (Default: 1)
     file (str, optional): output file path
 
@@ -337,6 +341,12 @@ def layout(items, plate_format: str='96-well', per_item: int=1,
     # built rather than read off the rows so that a map of nothing still
     # arrives with its headings, instead of as a blank rectangle.
     front = ['Plate', 'Well'] + (['Replicate'] if per_item > 1 else [])
+    if label_col is not None:
+        if label_col not in [str(c) for c in frame.columns]:
+            raise KeyError(
+                f"No column '{label_col}' to label the wells with. "
+                f"Columns: {', '.join(str(c) for c in frame.columns)}")
+        front.append(str(label_col))
     columns = front + [str(c) for c in frame.columns if str(c) not in front]
     placed = pd.DataFrame(rows, columns=columns)
 
@@ -351,6 +361,12 @@ def layout(items, plate_format: str='96-well', per_item: int=1,
         'Plates needed': plates_needed,
         'Spare wells on the last plate': (per_plate - slot) if used else 0,
         'Edge wells skipped': bool(skip_outer),
+        # Which column names a well, for whatever draws the plate. Kept here
+        # rather than worked out by the drawing, so the page and the package
+        # cannot label the same well two different ways.
+        'Labelled by': (str(label_col) if label_col is not None
+                        else (columns[len(front)] if len(columns) > len(front)
+                              else '')),
     }])
 
     tables = {'Plate map': placed, 'Plates': summary}

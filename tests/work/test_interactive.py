@@ -168,6 +168,21 @@ def test_payload_carries_the_row_cap_the_static_render_uses(virus_run):
     assert "D.max_rows" in interactive.asset("app.js")
 
 
+def test_payload_carries_the_plate_drawing_cap(virus_run):
+    """Fifteen plates of 48-well is a wall of pictures, not a glance."""
+    assert interactive.payload(*virus_run)["max_plates"] == render.MAX_PLATES
+    assert "D.max_plates" in interactive.asset("app.js")
+
+
+def test_a_layout_step_gets_somewhere_to_draw_its_plates():
+    """render.py leaves the host empty and app.js fills it, so a step whose
+    plates are never drawn is a missing div rather than a visible error."""
+    import inspect
+
+    assert "drawLayout" in interactive.asset("app.js")
+    assert ":layout" in inspect.getsource(render.to_html)
+
+
 def test_payload_offers_every_format(virus_run):
     assert interactive.payload(*virus_run)["formats"] == plates.names()
 

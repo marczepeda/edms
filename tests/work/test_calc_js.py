@@ -657,6 +657,148 @@ def test_layout_fails_on_both_sides(driver, consts, args):
     assert json.loads(proc.stdout)["ok"] is False
 
 
+# --------------------------------------------------------------------------- #
+# clone:dilute
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("args", [
+    {"samples": 352, "sample_uL": 10, "fold": 10, "mm_x": 1.05},
+    {"samples": 352, "sample_uL": 20, "fold": 10, "mm_x": 1.05},
+    {"samples": 4, "sample_uL": 2.0, "fold": 10, "in_place": False},
+    {"samples": 1, "sample_uL": 7.5, "fold": 2.5, "mm_x": 1.0},
+    {"samples": 0, "sample_uL": 10, "fold": 10},
+    {"samples": 96, "sample_uL": 10, "fold": 1},
+])
+def test_dilute_matches_python(driver, consts, args):
+    from edms.bio import clone
+
+    js = run_js(driver, consts, "edms.bio.clone:dilute", args)
+    same(js, clone.dilute(**args), where=str(args))
+
+
+def test_dilute_fold_label_matches_python_g_format(driver, consts):
+    """Python writes the heading with format(fold, 'g'), so 2.5 keeps its
+    decimal and 10.0 loses it."""
+    from edms.bio import clone
+
+    for fold in (10, 10.0, 2.5, 1.25):
+        args = {"samples": 2, "sample_uL": 10, "fold": fold}
+        js = run_js(driver, consts, "edms.bio.clone:dilute", args)
+        same(js, clone.dilute(**args), where=f"fold={fold!r}")
+
+
+# --------------------------------------------------------------------------- #
+# plates:layout, label_col
+# --------------------------------------------------------------------------- #
+def test_layout_label_col_moves_the_column_and_is_reported(driver, consts):
+    """Whatever draws the plate labels wells from this, so the page and the
+    package have to agree on which column it is."""
+    items = pd.DataFrame({
+        "Insert": ["GCaa", "GCtt", "GCgg"],
+        "Oligo_ID": ["n1", "n2", "n3"],
+    })
+    args = {"plate_format": "6-well", "label_col": "Oligo_ID"}
+    js = run_js(driver, consts, "edms.work.plates:layout",
+                dict(args, items=interactive.table_data(items)))
+    want = plates.layout(items, **args)
+    same_tables(js, want, where="label_col")
+    assert list(want["Plate map"].columns)[:3] == ["Plate", "Well", "Oligo_ID"]
+    assert want["Plates"].iloc[0]["Labelled by"] == "Oligo_ID"
+
+
+def test_layout_without_label_col_falls_back_the_same_way(driver, consts):
+    items = pd.DataFrame({"Insert": ["a", "b"], "Oligo_ID": ["n1", "n2"]})
+    js = run_js(driver, consts, "edms.work.plates:layout",
+                {"items": interactive.table_data(items), "plate_format": "6-well"})
+    want = plates.layout(items, "6-well")
+    same_tables(js, want, where="no label_col")
+    assert want["Plates"].iloc[0]["Labelled by"] == "Insert"
+
+
+def test_layout_rejects_an_unknown_label_col_on_both_sides(driver, consts):
+    items = pd.DataFrame({"Insert": ["a"]})
+    with pytest.raises(KeyError, match="to label the wells with"):
+        plates.layout(items, "6-well", label_col="nope")
+    calc = str(interactive.STATIC / "calc.js")
+    sent = {"items": interactive.table_data(items), "plate_format": "6-well",
+            "label_col": "nope", "__floats__": []}
+    proc = subprocess.run(
+        [NODE, driver, calc, consts, "edms.work.plates:layout", json.dumps(sent)],
+        capture_output=True, text=True, timeout=60)
+    assert json.loads(proc.stdout)["ok"] is False
+
+
+# --------------------------------------------------------------------------- #
+# plate.js, drawing the wells a layout actually uses
+# --------------------------------------------------------------------------- #
+PLATE_DRIVER = """
+const vm = require('vm');
+const fs = require('fs');
+const ctx = {module: {exports: {}}, console};
+ctx.global = ctx;
+vm.createContext(ctx);
+vm.runInContext(fs.readFileSync(process.argv[2], 'utf8'), ctx);
+vm.runInContext(fs.readFileSync(process.argv[3], 'utf8'), ctx);
+ctx.EDMS.consts = JSON.parse(process.argv[4]);
+const opts = JSON.parse(process.argv[5]);
+const svg = ctx.EDMS.plate.svg(opts);
+const on = (svg.match(/pv-well pv-on/g) || []).length;
+const titles = (svg.match(/<title>([^<]*)<\\/title>/g) || [])
+  .map(t => t.replace(/<\\/?title>/g, ''));
+process.stdout.write(JSON.stringify({on, titles, caption: /pv-cap-left">([^<]*)</.exec(svg)[1]}));
+"""
+
+
+@pytest.fixture(scope="module")
+def plate_driver(tmp_path_factory):
+    p = tmp_path_factory.mktemp("js") / "plate_driver.js"
+    p.write_text(PLATE_DRIVER, encoding="utf-8")
+    return str(p)
+
+
+def run_plate(plate_driver, consts, opts):
+    proc = subprocess.run(
+        [NODE, plate_driver,
+         str(interactive.STATIC / "calc.js"), str(interactive.STATIC / "plate.js"),
+         consts, json.dumps(opts)],
+        capture_output=True, text=True, timeout=60)
+    assert proc.returncode == 0, proc.stderr
+    return json.loads(proc.stdout)
+
+
+def test_plate_fills_from_a1_when_given_only_a_count(plate_driver, consts):
+    out = run_plate(plate_driver, consts, {"format": "96-well", "used": 3})
+    assert out["on"] == 3
+    assert out["titles"][:3] == ["A1", "A2", "A3"]
+
+
+def test_plate_fills_the_named_wells_when_given_them(plate_driver, consts):
+    """A plan that skips the edge wells does not start at A1, and a drawing
+    that counted from A1 would put every sample in the wrong well."""
+    wells = plates.wells("96-well", skip_outer=True)
+    out = run_plate(plate_driver, consts,
+                    {"format": "96-well", "used": len(wells), "wells": wells})
+    assert out["on"] == 60
+    assert "A1" in out["titles"]          # drawn, but empty
+    assert "60 of 96 wells" in out["caption"]
+    filled = [t for t in out["titles"] if " - " in t]
+    assert not filled  # no labels given
+
+
+def test_plate_labels_follow_the_named_wells(plate_driver, consts):
+    out = run_plate(plate_driver, consts, {
+        "format": "96-well", "used": 2,
+        "wells": ["B2", "C3"], "labels": ["first", "second"]})
+    assert out["on"] == 2
+    assert "B2 - first" in out["titles"]
+    assert "C3 - second" in out["titles"]
+
+
+def test_plate_ignores_a_well_that_is_not_on_the_plate(plate_driver, consts):
+    out = run_plate(plate_driver, consts,
+                    {"format": "6-well", "used": 3, "wells": ["A1", "Z9", "B3"]})
+    assert out["on"] == 2
+
+
 def test_every_template_compute_target_is_live():
     """The point of the exercise: no bundled protocol has a table that falls
     back to static. A new template with a new calculator fails here until it

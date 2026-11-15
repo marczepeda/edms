@@ -46,10 +46,10 @@ top_uL            = 1.0
 bottom_uL         = 1.0
 pnk_uL            = 0.5
 anneal_format     = "96-well"
-# Dilution of the annealed duplexes before assembly
+# Dilution of the annealed duplexes, done in the anneal plates
 dilution_fold     = 10
-duplex_uL         = 2.0
-dilute_format     = "96-well"
+diluent           = "Nuclease-free water"
+dilution_mm_x     = 1.05
 # Assembly
 vector            = "pMUZ358.10"
 vector_stock      = 100
@@ -126,6 +126,7 @@ checks = [
 [steps.args]
 items        = "@duplexes"
 plate_format = "$anneal_format"
+label_col    = "Oligo_ID"
 
 [[steps]]
 id = "anneal"
@@ -173,11 +174,18 @@ title = "Dilute the duplexes 1:{dilution_fold}"
 day = 0
 depends_on = ["anneal"]
 duration = "45 min"
-compute = "edms.work.plates:layout"
-outputs = ["Plate map", "Plates"]
+compute = "edms.bio.clone:dilute"
+outputs = ["Dilution"]
 text = """
-{duplex_uL} uL of annealed duplex into {dilution_fold}x its volume, in the
-same arrangement as the anneal.
+In the anneal plates, not new ones. The diluent goes on top of the anneal
+reaction in the well it annealed in, so a {dilution_fold}x dilution of a
+{anneal_rxn_uL} uL reaction is the volume in the table below and the duplex
+never moves plates. The plate maps above are the maps for this step too.
+
+Diluting in place rather than into fresh plates is what keeps one map good
+for the whole protocol. It also means the dilution volume follows the anneal
+volume: change anneal_rxn_uL and this table changes with it, which it could
+not do if the number were written out in the prose.
 
 Annealed duplexes go into the assembly at a dilution rather than neat
 because the reaction wants them in molar excess over the backbone and
@@ -186,17 +194,26 @@ ligation and gives you empty backbone. The assembly table takes care of the
 ratio from insert_stock and insert_desired, but it assumes the dilution in
 this step has actually happened.
 
-Keep the undiluted plates. They are the cheapest thing to go back to when a
-well fails, and remaking the oligos is the most expensive.
+The total is what to have in a trough before you start, already carrying
+{dilution_mm_x}x for dead volume. Dilute a plate at a time with a
+multichannel; at this scale the pipetting is the whole cost of the step.
+
+Check the wells will hold it. The total below is per well, and a 96-well
+plate is not a deep-well block -- if it comes out above about 200 uL, either
+the anneal was set up too large or this wants a fresh plate after all.
 """
 checks = [
-  "Diluted into the same well positions as the anneal",
-  "Undiluted plates kept and labelled",
+  "Diluted in place, in the anneal plates",
+  "Final volume fits the well",
+  "Water added to the well the duplex annealed in, not a new one",
 ]
 
 [steps.args]
-items        = "@duplexes"
-plate_format = "$dilute_format"
+samples   = "#duplexes"
+sample_uL = "$anneal_rxn_uL"
+fold      = "$dilution_fold"
+diluent   = "$diluent"
+mm_x      = "$dilution_mm_x"
 
 [[steps]]
 id = "assembly_plan"
@@ -275,6 +292,7 @@ checks = [
 [steps.args]
 items        = "@duplexes"
 plate_format = "$assembly_format"
+label_col    = "Oligo_ID"
 
 [[steps]]
 id = "transform"
@@ -317,6 +335,7 @@ checks = [
 [steps.args]
 items        = "@duplexes"
 plate_format = "$transform_format"
+label_col    = "Oligo_ID"
 
 [[steps]]
 id = "inoculate"
@@ -360,6 +379,7 @@ checks = [
 items        = "@duplexes"
 plate_format = "$inoculate_format"
 per_item     = "$colonies_per_rxn"
+label_col    = "Oligo_ID"
 
 [[steps]]
 id = "miniprep"
@@ -392,6 +412,7 @@ checks = [
 [steps.args]
 items        = "@duplexes"
 plate_format = "$miniprep_format"
+label_col    = "Oligo_ID"
 
 [[steps]]
 id = "sequence"

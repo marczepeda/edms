@@ -942,3 +942,45 @@ def test_anneal_mm_program_ramps_down_slowly():
     program = clone.anneal_mm()["Anneal program"]
     assert list(program["Temperature"]) == ["37 C", "95 C", "4 C"]
     assert "0.2 C/sec" in program["Note"].iloc[2]
+
+# --------------------------------------------------------------------------- #
+# dilute()
+# --------------------------------------------------------------------------- #
+def test_dilute_in_place_adds_diluent_on_top_of_the_reaction():
+    """A 1:10 of a 10 uL anneal in its own well is 90 uL in, not 10 uL out."""
+    df = clone.dilute(samples=352, sample_uL=10, fold=10)
+    by = {r["Component"]: r for _, r in df.iterrows()}
+    assert by["Annealed duplex"]["uL"] == 10
+    assert by["Nuclease-free water"]["uL"] == 90
+    assert by["Total (10x dilution)"]["uL"] == 100
+    assert by["Nuclease-free water"]["uL, total"] == 90 * 352
+
+
+def test_dilute_into_a_fresh_well_carries_the_sample_over():
+    df = clone.dilute(samples=4, sample_uL=2, fold=10, in_place=False)
+    by = {r["Component"]: r for _, r in df.iterrows()}
+    assert by["Sample"]["uL"] == 2
+    assert by["Nuclease-free water"]["uL"] == 18
+    assert by["Total (10x dilution)"]["uL"] == 20
+
+
+def test_dilute_in_place_and_in_a_fresh_well_are_not_the_same_volumes():
+    """The whole reason the parameter exists."""
+    here = clone.dilute(samples=1, sample_uL=10, fold=10)
+    there = clone.dilute(samples=1, sample_uL=10, fold=10, in_place=False)
+    assert list(here["uL"]) == list(there["uL"])  # same per-well arithmetic
+    assert list(here["Note"]) != list(there["Note"])  # different instruction
+
+
+def test_dilute_carries_an_excess_on_the_diluent_only():
+    df = clone.dilute(samples=100, sample_uL=10, fold=10, mm_x=1.05)
+    by = {r["Component"]: r for _, r in df.iterrows()}
+    assert by["Nuclease-free water"]["uL, total"] == pytest.approx(90 * 100 * 1.05)
+    # The sample is already in the well; there is no excess to make of it
+    assert by["Annealed duplex"]["uL, total"] == 10 * 100
+
+
+def test_dilute_rejects_a_fold_below_one():
+    with pytest.raises(ValueError, match="fold must be at least 1"):
+        clone.dilute(fold=0.5)
+

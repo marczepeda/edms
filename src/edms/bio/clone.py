@@ -1780,6 +1780,65 @@ def anneal_mm(oligos: int=1, rxn_uL: float=10, mm_x: float=1.05,
         io.save(obj=tables, file=file, id=True)
     return tables
 
+def dilute(samples: int=1, sample_uL: float=10, fold: float=10,
+           diluent: str='Nuclease-free water', mm_x: float=1.0,
+           in_place: bool=True, file: str=None) -> pd.DataFrame:
+    '''
+    dilute(): dilute a set of reactions by a fixed fold.
+
+    Two ways to do it, and the volumes are not the same. In place, the
+    diluent goes on top of what is already in the well, so a fold of 10 on a
+    10 uL reaction is 90 uL of diluent into a 100 uL well and the reaction
+    never moves. Otherwise sample_uL is carried into a fresh well and made up
+    to fold times itself, which is 10 uL into 90 for the same fold.
+
+    The difference matters because the first keeps the plate map and the
+    second does not, and a protocol that says '1:10' without saying which is
+    a protocol you cannot follow.
+
+    Parameters:
+    samples (int, optional): wells to dilute (Default: 1)
+    sample_uL (float, optional): volume already in the well, or taken from it
+        (Default: 10)
+    fold (float, optional): dilution factor (Default: 10)
+    diluent (str, optional): what it is diluted into (Default: nuclease-free water)
+    mm_x (float, optional): excess on the diluent total, for dead volume in a
+        trough (Default: 1.0)
+    in_place (bool, optional): add diluent to the well the sample is already
+        in (Default: True)
+    file (str, optional): output file path
+
+    Dependencies: pandas,io
+    '''
+    samples = int(samples)
+    sample_uL = float(sample_uL)
+    fold = float(fold)
+    if fold < 1:
+        raise ValueError(f'fold must be at least 1, got {fold}')
+    if samples < 0:
+        raise ValueError(f'samples must not be negative, got {samples}')
+
+    final_uL = round(sample_uL * fold, 2)
+    diluent_uL = round(final_uL - sample_uL, 2)
+    rows = [
+        {'Component': 'Annealed duplex' if in_place else 'Sample',
+         'uL': sample_uL,
+         'uL, total': round(sample_uL * samples, 2),
+         'Note': 'already in the well' if in_place else 'carried over'},
+        {'Component': diluent,
+         'uL': diluent_uL,
+         'uL, total': round(diluent_uL * samples * mm_x, 2),
+         'Note': f'{mm_x}x for dead volume' if mm_x != 1 else ''},
+        {'Component': f'Total ({fold:g}x dilution)',
+         'uL': final_uL,
+         'uL, total': round(final_uL * samples, 2),
+         'Note': 'in place' if in_place else 'in a fresh well'},
+    ]
+    df = pd.DataFrame(rows)
+    if file is not None:
+        io.save(obj=df, file=file, id=True)
+    return df
+
 def golden_gate(inserts: int=3, samples: int=1, rxn_uL: float=10,
                 mm_x: float=1.1, insert_uL: float=None, insert_stock: float=10,
                 insert_desired: float=1, insert_unit: str='x',

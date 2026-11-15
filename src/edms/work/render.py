@@ -23,6 +23,10 @@ from pathlib import Path
 import pandas as pd
 
 MAX_ROWS = 60
+# Plates to draw before saying how many more there are. Twelve is four rows
+# of three on a laptop; past that the drawing stops being a glance and the
+# plate map is the better thing to read anyway.
+MAX_PLATES = 12
 
 MARKS = {'pending': '&#9744;', 'in_progress': '&#9744;', 'done': '&#9745;',
          'skipped': '&#9647;', 'failed': '&#9888;'}
@@ -118,6 +122,8 @@ td.edit:focus { outline: 2px solid var(--accent); background: var(--hi); }
 
 /* Plate maps */
 .pv-wrap { display: flex; flex-wrap: wrap; gap: 14px; margin: 10px 0 2px; }
+.pv-fig { margin: 0; display: flex; flex-direction: column; align-items: center; }
+.pv-fig figcaption { font-size: .72rem; color: var(--muted); margin-top: 2px; }
 .pv { max-width: 100%; height: auto; }
 .pv-body { fill: var(--card); stroke: var(--line); }
 .pv-well, .pv-dish { fill: var(--bg); stroke: var(--line); stroke-width: 1; }
@@ -276,7 +282,7 @@ def to_html(protocol, theme: str = None, interactive: bool = True) -> str:
             parts.append(f'<div class="scroll" data-step="{_esc(s.id)}" '
                          f'data-table="{_esc(name)}">'
                          f'{_table_html(table, wrap=False)}</div>')
-        if s.compute and s.compute.endswith(':geometry'):
+        if s.compute and s.compute.endswith((':geometry', ':layout')):
             parts.append(f'<div data-plate="{_esc(s.id)}"></div>')
         if s.compute_skipped:
             parts.append(f'<div class="note">Not calculated: {_esc(s.compute_skipped)}</div>')

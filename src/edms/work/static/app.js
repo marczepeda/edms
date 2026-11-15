@@ -151,6 +151,47 @@
       EDMS.plate.legend(groups);
   }
 
+  /* drawLayout(): the plates a layout step lays out, drawn.
+
+     One SVG per plate, wells filled where a sample sits. The well names come
+     from the map rather than being counted from A1, so a plan that leaves
+     the edge wells out draws the ring empty instead of drawing a full plate
+     and being wrong about which well is which.
+
+     Grouped by the column plates.layout() says it labelled the map with, so
+     the colours mean the same thing as the table above them. */
+  function drawLayout(host, tables, fmt) {
+    var map = tables['Plate map'], summary = tables['Plates'];
+    if (!map || !summary || !summary.rows.length) { host.innerHTML = ''; return; }
+    var by = summary.rows[0]['Labelled by'];
+    var cap = D.max_plates || 12;
+
+    var order = [], byPlate = {};
+    map.rows.forEach(function (r) {
+      var p = r['Plate'];
+      if (!byPlate[p]) { byPlate[p] = []; order.push(p); }
+      byPlate[p].push(r);
+    });
+
+    var svgs = order.slice(0, cap).map(function (p) {
+      var rows = byPlate[p];
+      var wells = rows.map(function (r) { return r['Well']; });
+      var labels = rows.map(function (r) {
+        var v = by ? r[by] : '';
+        return 'Plate ' + p + (v === undefined || v === '' ? '' : ' - ' + v);
+      });
+      return '<figure class="pv-fig">' + EDMS.plate.svg({
+        format: fmt, used: wells.length, wells: wells, labels: labels
+      }) + '<figcaption>Plate ' + EDMS.plate.esc(p) + '</figcaption></figure>';
+    });
+
+    var more = order.length > cap
+      ? '<div class="more">' + (order.length - cap) +
+        ' more plate(s), the same shape &mdash; the map above has every well</div>'
+      : '';
+    host.innerHTML = '<div class="pv-wrap">' + svgs.join('') + '</div>' + more;
+  }
+
   // ------------------------------------------------------------------ //
   // Recompute
   // ------------------------------------------------------------------ //
@@ -205,6 +246,10 @@
       if (s.compute === 'edms.work.plates:geometry') {
         var map = document.querySelector('[data-plate="' + s.id + '"]');
         if (map) drawPlate(map, result.rows[0], resolveArgs(s).plate_format);
+      }
+      if (s.compute === 'edms.work.plates:layout' && tables) {
+        var lay = document.querySelector('[data-plate="' + s.id + '"]');
+        if (lay) drawLayout(lay, tables, resolveArgs(s).plate_format || '96-well');
       }
     });
     if (errorsBox)

@@ -206,6 +206,14 @@ EDMS.calc = {};
 
     var front = ['Plate', 'Well'];
     if (perItem > 1) front.push('Replicate');
+    var labelCol = (a.label_col === undefined || a.label_col === null ||
+                    a.label_col === '') ? null : String(a.label_col);
+    if (labelCol !== null) {
+      if (!C.has(frame, labelCol))
+        throw new Error("No column '" + labelCol + "' to label the wells " +
+                        'with. Columns: ' + frame.columns.join(', '));
+      front.push(labelCol);
+    }
     var cols = front.slice();
     frame.columns.forEach(function (c) { if (cols.indexOf(c) === -1) cols.push(c); });
 
@@ -218,7 +226,12 @@ EDMS.calc = {};
       'Usable wells per plate': perPlate,
       'Plates needed': used ? (plate - startPlate + 1) : 0,
       'Spare wells on the last plate': used ? (perPlate - slot) : 0,
-      'Edge wells skipped': skipOuter
+      'Edge wells skipped': skipOuter,
+      /* Which column names a well, for whatever draws the plate. It comes
+         out of here rather than being worked out by the drawing, so the page
+         and the package cannot label the same well two different ways. */
+      'Labelled by': labelCol !== null ? labelCol
+        : (cols.length > front.length ? cols[front.length] : '')
     };
     return {__tables__: {
       'Plate map': {columns: cols, rows: placed},
@@ -687,6 +700,37 @@ EDMS.calc = {};
   // ----------------------------------------------------------------- //
   // clone:golden_gate
   // ----------------------------------------------------------------- //
+  C['edms.bio.clone:dilute'] = function (a) {
+    var samples = parseInt(a.samples === undefined ? 1 : a.samples, 10);
+    var sampleUL = parseFloat(a.sample_uL === undefined ? 10 : a.sample_uL);
+    var fold = parseFloat(a.fold === undefined ? 10 : a.fold);
+    var diluent = a.diluent === undefined || a.diluent === null || a.diluent === ''
+      ? 'Nuclease-free water' : String(a.diluent);
+    var mmX = parseFloat(a.mm_x === undefined ? 1 : a.mm_x);
+    var inPlace = !(a.in_place === false || a.in_place === 'False');
+    if (!(fold >= 1)) throw new Error('fold must be at least 1, got ' + a.fold);
+    if (!(samples >= 0))
+      throw new Error('samples must not be negative, got ' + a.samples);
+
+    var finalUL = C.pyRound(sampleUL * fold, 2);
+    var diluentUL = C.pyRound(finalUL - sampleUL, 2);
+    var rows = [
+      {'Component': inPlace ? 'Annealed duplex' : 'Sample',
+       'uL': sampleUL,
+       'uL, total': C.pyRound(sampleUL * samples, 2),
+       'Note': inPlace ? 'already in the well' : 'carried over'},
+      {'Component': diluent,
+       'uL': diluentUL,
+       'uL, total': C.pyRound(diluentUL * samples * mmX, 2),
+       'Note': mmX !== 1 ? (C.label(a, 'mm_x', 1) + 'x for dead volume') : ''},
+      {'Component': 'Total (' + C.pyG(fold) + 'x dilution)',
+       'uL': finalUL,
+       'uL, total': C.pyRound(finalUL * samples, 2),
+       'Note': inPlace ? 'in place' : 'in a fresh well'}
+    ];
+    return {columns: ['Component', 'uL', 'uL, total', 'Note'], rows: rows};
+  };
+
   C['edms.bio.clone:golden_gate'] = function (a) {
     var inserts = parseInt(a.inserts === undefined ? 3 : a.inserts, 10);
     var vectorStock = C.g(a, 'vector_stock', 100);
