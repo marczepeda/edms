@@ -13,6 +13,10 @@ Usage:
 - fcs_write(): write an event dataframe to an FCS 3.1 file
 - ncf_to_fcs(): convert every sample holding data in a NovoCyte .ncf file to FCS 3.1 files
 
+[Flow cytometry plots]
+- offset_summary(): draw a half-offset distribution of a flow channel beside its summary statistic
+                    and, optionally, that statistic as a % difference from reference sample(s)
+
 Notes:
 A NovoCyte .ncf file is a SQLite database. Event data lives in SampleDataData as
 float32 little-endian blobs stored column-major within each chunk, with the chunks
@@ -31,7 +35,11 @@ import os
 import re
 import sqlite3
 import sys
+import numpy as np
 import pandas as pd
+
+from ..gen import io
+from ..gen import plot as p
 
 # Detector renaming: BL1 -> B530 (488 nm, 530/30; FITC/GFP),
 #                    YL2 -> Y615 (561 nm, 615/20; PE-Texas Red/mCherry)
@@ -313,3 +321,130 @@ def _slug(text) -> str:
     Dependencies: re
     '''
     return re.sub(r'[^A-Za-z0-9._-]+', '_', str(text or '').strip()).strip('_') or 'sample'
+
+# Flow cytometry plots
+def offset_summary(df: pd.DataFrame | str, x: str, cols: str, cols_order: list=None,
+                   reps: str=None, ref: str | list=None,
+                   facetx: str=None, facety: str=None, facetx_order: list=None, facety_order: list=None,
+                   stat: str | bool='auto', stat_graph: str='swarm', stat_width: float=0.5,
+                   stat_errorbar: str='sd', stat_axis: str=None, ref_axis: str=None,
+                   x_axis: str=None, x_axis_scale: str='log', x_axis_dims: tuple | list=(0,0),
+                   floor: float=1, panel: tuple=(6.5,7),
+                   title: str='', title_size: int=12, file: str=None, show: bool=True,
+                   dpi: int=0, transparent: bool=True, fig=None, **dist_kwargs) -> tuple:
+    ''' 
+    offset_summary(): draw a half-offset distribution of a flow channel beside its summary statistic
+                      and, optionally, that statistic as a % difference from reference sample(s)
+
+    Parameters:
+    df (dataframe | str): tidy event dataframe (or file path); 1 row per event
+    x (str): channel column name (i.e., 'PE-A')
+    cols (str): sample column name; 1 baseline per value
+    cols_order (list, optional): sample order, top baseline first (Default: None; appearance order)
+    reps (str, optional): replicate column name; the statistic panel then holds 1 mark per replicate
+                          rather than 1 over the pooled events (Default: None)
+    ref (str | list, optional): cols value(s) the % difference panel reads every baseline against;
+                                several are combined into 1 reference per panel & replicate
+                                (Default: None; no % difference panel)
+    facetx (str, optional): column name for facet columns (Default: None)
+    facety (str, optional): column name for facet rows (Default: None)
+    facetx_order (list, optional): facet column order (Default: None)
+    facety_order (list, optional): facet row order (Default: None)
+    stat (str | bool, optional): summary statistic per baseline ('gmean', 'mean', or 'auto', which is
+                                 'gmean' on a log scale; Default: 'auto'). None drops the panel, which
+                                 ref overrides since a % difference is of a statistic
+    stat_graph (str, optional): cat() graph type the statistic is drawn as (Default: 'swarm', which
+                                draws every replicate; see plot.dist() for the rest)
+    stat_width (float, optional): width of each statistic panel relative to its distribution panel (Default: 0.5)
+    stat_errorbar (str, optional): 'sd', 'sem' or None (Default: 'sd')
+    stat_axis (str, optional): statistic panel axis name (Default: None; 'gMFI' for a geometric mean
+                               of a log scaled channel, otherwise the statistic's name)
+    ref_axis (str, optional): % difference panel axis name (Default: None; '% diff. vs <ref>')
+    x_axis (str, optional): distribution panel axis name (Default: None; the channel column name)
+    x_axis_scale (str, optional): 'log' or 'linear' (Default: 'log')
+    x_axis_dims (tuple, optional): distribution panel (start, end) in channel units (Default: (0,0), which autoscales)
+    floor (float, optional): clip values below this before a log scale, since a compensated channel
+                             holds non-positive values that log10 cannot take (Default: 1; None skips it)
+    panel (tuple, optional): (width, height) in inches of 1 distribution panel, which the statistic
+                             panels & facets are sized against (Default: (6.5,7)); ignored when fig is given
+    title (str, optional): figure title (Default: '')
+    title_size (int, optional): title font size (Default: 12)
+    file (str, optional): output file path (Default: None)
+    show (bool, optional): show plot (Default: True)
+    dpi (int, optional): figure dpi (Default: 0, which is plot.save_fig()'s default)
+    transparent (bool, optional): save with a transparent background (Default: True)
+    fig (Figure | SubFigure, optional): draw into this figure instead of making one, which ignores
+                                        panel & leaves the layout, saving & showing to the caller
+                                        (Default: None)
+    **dist_kwargs: passed through to plot.dist() (i.e., palette_or_cmap, offset_bw_adjust, subplot_titles)
+
+    Returns: (fig, axes) where axes holds the distribution panels; the statistic panels sit beside
+             them in fig.axes, 1 distribution panel then its statistic panel(s) per facet
+
+    Dependencies: numpy, io, plot
+
+    Note: the figure is sized so that each distribution panel keeps `panel` whatever the panel count
+    is, rather than every panel sharing a fixed figure, since a statistic panel added to a facet
+    would otherwise squeeze the distribution it belongs to.
+    '''
+    df = io.get(pt=df) if isinstance(df, str) else df.copy()
+
+    if cols not in df.columns:
+        raise ValueError(f"cols '{cols}' is not a column! {list(df.columns)}")
+    if ref is not None and not isinstance(ref, (list, tuple)):
+        ref = [ref]
+
+    # A compensated channel holds non-positive values that a log scale cannot take, & dropping
+    # those events would quietly thin the very baselines that sit lowest.
+    if x_axis_scale == 'log' and floor is not None:
+        below = int((df[x] < floor).sum())
+        if below:
+            print(f'Floored {below:,} of {len(df):,} {x} events to {floor}')
+        df[x] = df[x].clip(lower=floor)
+
+    # 1 statistic panel, plus 1 more for the % difference; ref turns the statistic on by itself
+    stat_panels = 0
+    if ref is not None or stat not in (None, False):
+        stat_panels += 1
+    if ref is not None:
+        stat_panels += 1
+    ratios = [1] + [stat_width] * stat_panels
+
+    # The gMFI of a log scaled channel is what a flow plot calls its geometric mean
+    if stat_axis is None:
+        resolved = 'gmean' if stat in (True, 'auto') and x_axis_scale == 'log' else stat
+        stat_axis = 'gMFI' if resolved == 'gmean' and x_axis_scale == 'log' else ''
+    if ref_axis is None and ref is not None:
+        ref_axis = f"% diff. vs {ref[0] if len(ref) == 1 else 'references'}"
+
+    # Each facet column holds a distribution panel plus its statistic panel(s), so the figure
+    # grows with the panel count & the facet grid instead of the panels shrinking inside it.
+    ncols = len(p._facet_values(df, facetx, order=facetx_order))
+    nrows = len(p._facet_values(df, facety, order=facety_order))
+    figsize = (panel[0] * sum(ratios) * ncols, panel[1] * nrows)
+
+    fig, owns_fig = p._resolve_fig(fig, figsize)
+
+    _, axes = p.dist(
+        graph='half_offset', df=df, x=x,
+        cols=cols, cols_order=cols_order,
+        facetx=facetx, facety=facety, facetx_order=facetx_order, facety_order=facety_order,
+        x_axis=x if x_axis is None else x_axis,
+        x_axis_scale=x_axis_scale, x_axis_dims=x_axis_dims,
+        offset_stat=stat, offset_stat_graph=stat_graph, offset_stat_width=stat_width,
+        offset_stat_reps=reps, offset_stat_errorbar=stat_errorbar, offset_stat_axis=stat_axis,
+        offset_stat_ref=ref, offset_stat_ref_axis='' if ref_axis is None else ref_axis,
+        title=title, title_size=title_size,
+        fig=fig, **dist_kwargs
+    )
+
+    if not owns_fig: # The caller owns the layout, saving & showing
+        return fig, axes
+
+    fig.tight_layout()
+    if getattr(fig, '_suptitle', None) is not None: # Clear of the top panel, whatever its height
+        top = max(ax.get_position().y1 for ax in np.ravel(axes) if ax.get_visible())
+        fig._suptitle.set_y(min(0.995, top + (2.2 * title_size / 72) / fig.get_figheight()))
+
+    p._final_save_show(fig, file=file, dpi=dpi, transparent=transparent, icon='histogram', show=show)
+    return fig, axes
