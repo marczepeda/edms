@@ -14,8 +14,9 @@ Usage:
 - ncf_to_fcs(): convert every sample holding data in a NovoCyte .ncf file to FCS 3.1 files
 
 [Flow cytometry plots]
-- offset_summary(): draw a half-offset distribution of a flow channel beside its summary statistic
-                    and, optionally, that statistic as a % difference from reference sample(s)
+- offset_summary(): draw a half-offset distribution of a flow channel beside its summary statistic,
+                    that statistic as a % difference from reference sample(s), and any further
+                    per-sample metric measured on the same samples
 
 Notes:
 A NovoCyte .ncf file is a SQLite database. Event data lives in SampleDataData as
@@ -35,6 +36,7 @@ import os
 import re
 import sqlite3
 import sys
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
@@ -323,18 +325,211 @@ def _slug(text) -> str:
     return re.sub(r'[^A-Za-z0-9._-]+', '_', str(text or '').strip()).strip('_') or 'sample'
 
 # Flow cytometry plots
+# 1 extra metric panel's settings; a spec overrides what it names & the rest fall back here
+_METRIC_DEFAULTS = {'x': None, 'df': None, 'axis': None, 'graph': 'bar_swarm', 'stat': 'mean',
+                    'reps': None, 'errorbar': 'sd', 'scale': 'linear', 'dims': (0, 0),
+                    'width': None, 'missing': 'n.d.'}
+
+def _metric_spec(spec, df: pd.DataFrame | str=None, reps: str=None, width: float=0.5) -> dict:
+    ''' 
+    _metric_spec(): fill 1 offset_summary() metric panel specification out to every setting
+
+    Parameters:
+    spec (str | tuple | dict): column name, (column, axis name), or a dictionary of _METRIC_DEFAULTS keys
+    df (dataframe | str, optional): dataframe the panel is summarized from when the spec names none (Default: None)
+    reps (str, optional): replicate column name when the spec names none (Default: None)
+    width (float, optional): panel width relative to the distribution panel when the spec names none (Default: 0.5)
+
+    Dependencies: pandas & io
+
+    Note: a spec's 'reps' of False pools the panel's values rather than inheriting the replicate column.
+    '''
+    if isinstance(spec, str):
+        spec = {'x': spec}
+    elif isinstance(spec, (list, tuple)):
+        if not 1 <= len(spec) <= 2:
+            raise ValueError(f'Invalid metric panel {spec}! (column,) or (column, axis name)')
+        spec = dict(zip(('x', 'axis'), spec))
+    elif isinstance(spec, dict):
+        spec = dict(spec)
+    else:
+        raise ValueError(f'Invalid metric panel {spec}! a column name, (column, axis name), or a dictionary')
+
+    unknown = [key for key in spec if key not in _METRIC_DEFAULTS]
+    if unknown:
+        raise ValueError(f'Invalid metric panel setting(s) {unknown}! {list(_METRIC_DEFAULTS)}')
+
+    spec = {**_METRIC_DEFAULTS, **spec}
+    if spec['x'] is None:
+        raise ValueError(f"A metric panel needs an 'x' column! {spec}")
+    if spec['df'] is None:
+        spec['df'] = df
+    if spec['df'] is None:
+        raise ValueError(f"Metric panel '{spec['x']}' has no dataframe! set metrics_df or the spec's 'df'")
+    spec['df'] = io.get(pt=spec['df']) if isinstance(spec['df'], str) else spec['df']
+    if spec['x'] not in spec['df'].columns:
+        raise ValueError(f"Metric panel x '{spec['x']}' is not a column! {list(spec['df'].columns)}")
+    if spec['axis'] is None:
+        spec['axis'] = spec['x']
+    if spec['reps'] is None:
+        spec['reps'] = reps
+    if spec['width'] is None:
+        spec['width'] = width
+    return spec
+
+def _metric_dims(stats: dict, scale: str='linear') -> tuple:
+    ''' 
+    _metric_dims(): 1 window wide enough for every facet of 1 metric panel
+
+    Parameters:
+    stats (dict): {(row, column): 1 panel of plot._offset_stats() output}
+    scale (str, optional): panel x-axis scale, 'linear' or 'log' (Default: 'linear')
+
+    Dependencies: numpy
+
+    Note: the window is anchored at 0 (or at whole decades on a log scale) & rounded out to a
+    readable tick, since these panels are drawn as bars by default & a bar has to start at the
+    axis to have a length to read.
+    '''
+    # The replicates belong in the window too, since a swarm or strip draws every one of them & a
+    # replicate can sit outside its own error bar.
+    values = [value for panel in stats.values() for summary in panel.values() if summary is not None
+              for value in ((summary['center'], summary['lower'], summary['upper'])
+                            + tuple(summary.get('reps', {}).values()))
+              if value is not None and np.isfinite(value)]
+    if scale == 'log':
+        values = [value for value in values if value > 0]
+        if not values:
+            return (1.0, 10.0)
+        return (float(10 ** np.floor(np.log10(min(values)))), float(10 ** np.ceil(np.log10(max(values)))))
+
+    if not values:
+        return (0.0, 1.0)
+    low, high = min(min(values), 0), max(max(values), 0)
+    span = high - low
+    if span <= 0:
+        return (0.0, 1.0)
+    step = 10 ** np.floor(np.log10(span)) / 2 # Round out to a half decade, which lands on a tick
+    return (float(np.floor(low / step) * step), float(np.ceil(high / step) * step))
+
+def _draw_metric_panel(ax, spec: dict, stats: dict, cats: list, dims: tuple, colors: dict,
+                       geometry: dict, style: dict, xlabel: bool=True, xticklabels: bool=True) -> None:
+    ''' 
+    _draw_metric_panel(): draw 1 cat() style mark per half-offset baseline on an extra metric panel
+
+    Parameters:
+    ax: the panel the marks are drawn on
+    spec (dict): 1 _metric_spec() specification
+    stats (dict): 1 panel of plot._offset_stats() output, keyed by baseline
+    cats (list): baseline values, top baseline first
+    dims (tuple): panel (start, end)
+    colors (dict): {baseline: color}
+    geometry (dict): 'spacing', 'shift', 'height', 'size', 'edgecol', 'lw', 'alpha', 'errwid' & 'errcap',
+                     which are plot.dist()'s half-offset geometry so the marks sit on their own ridges
+    style (dict): 'axis_size', 'axis_weight', 'axis_font', 'ticks_size' & 'ticks_font'
+    xlabel (bool, optional): name the axis, which only the bottom facet row does (Default: True)
+    xticklabels (bool, optional): label the ticks, following the distribution panel (Default: True)
+
+    Dependencies: numpy, matplotlib, & plot
+    '''
+    ax.set_xscale(spec['scale'])
+    ax.set_xlim(*dims)
+    # A log axis cannot start a bar at 0, & neither can an axis that opens above it
+    base = dims[0] if (spec['scale'] == 'log' or dims[0] > 0) else 0
+
+    n = len(cats)
+    for k, cat in enumerate(cats): # Same baselines as the distribution panel, so the rows line up
+        position = (n - 1 - k) * geometry['spacing'] + geometry['spacing'] * geometry['shift']
+        summary = stats.get(cat)
+        center = None if summary is None else summary.get('center')
+        if center is None or not np.isfinite(center) or (spec['scale'] == 'log' and center <= 0):
+            if spec['missing']: # Say it was not measured rather than leave a blank that reads as 0
+                ax.text(dims[0] + 0.02 * (dims[1] - dims[0]), position, str(spec['missing']),
+                        fontsize=style['ticks_size'] - 2, style='italic', color='0.45',
+                        family=style['ticks_font'], ha='left', va='center')
+            continue
+
+        p._offset_cat_marks(
+            ax, spec['graph'], position, summary,
+            scale=spec['scale'], dims=dims, base=base,
+            height=geometry['spacing'] * geometry['height'],
+            color=colors.get(cat, colors.get(str(cat), 'grey')),
+            edgecol=geometry['edgecol'], lw=geometry['lw'], alpha=geometry['alpha'],
+            size=geometry['size'], errwid=geometry['errwid'], errcap=geometry['errcap'], seed=k
+        )
+
+    ax.set_xlim(*dims) # A box or violin autoscales as it is drawn, so pin it again
+    if spec['scale'] == 'log':
+        p.log_ticks(ax, 'x')
+    ax.set_xlabel(spec['axis'] if xlabel else '', fontsize=style['axis_size'],
+                  fontweight=style['axis_weight'], fontfamily=style['axis_font'])
+    ax.set_ylabel('')
+    ax.tick_params(axis='y', left=False, labelleft=False) # The baselines are labeled on the distribution panel
+    ax.tick_params(axis='x', labelsize=style['ticks_size'], labelbottom=xticklabels)
+    plt.setp(ax.get_xticklabels(), fontfamily=style['ticks_font'])
+
+def _place_panels(fig, rows: list, ratios: list, margins: tuple, gaps: tuple) -> None:
+    ''' 
+    _place_panels(): put every facet row's panels on 1 shared grid
+
+    Parameters:
+    fig (Figure | SubFigure): the figure the panels live in
+    rows (list): 1 list of panels per facet row, left to right
+    ratios (list): 1 width per panel in a row, relative to a distribution panel
+    margins (tuple): (left, right, bottom, top) margins in inches
+    gaps (tuple): (between panels, between facet rows) gaps in inches
+
+    Note: tight_layout cannot see panels added outside the gridspec, so once a metric panel is
+    added every panel is positioned here instead. The margins & gaps are held in inches so that
+    adding a panel or a facet row grows the figure rather than eating into the labels.
+    '''
+    width, height = fig.bbox.width / fig.dpi, fig.bbox.height / fig.dpi
+    left, right = margins[0] / width, 1 - margins[1] / width
+    bottom, top = margins[2] / height, 1 - margins[3] / height
+    gap_x, gap_y = gaps[0] / width, gaps[1] / height
+
+    unit = ((right - left) - gap_x * (len(ratios) - 1)) / sum(ratios)
+    row_height = ((top - bottom) - gap_y * (len(rows) - 1)) / len(rows)
+    if unit <= 0 or row_height <= 0:
+        raise ValueError(f'Margins & gaps leave no room for the panels! margins={margins}, gaps={gaps}')
+
+    y = top - row_height
+    for panels in rows:
+        x = left
+        for ax, ratio in zip(panels, ratios):
+            ax.set_position([x, y, unit * ratio, row_height])
+            x += unit * ratio + gap_x
+        y -= row_height + gap_y
+
+def _shows_xticklabels(ax) -> bool:
+    ''' 
+    _shows_xticklabels(): True when a panel carries its own x tick labels
+
+    Parameters:
+    ax: the panel to check
+
+    Note: plot.dist() shares x down each facet column when it can, which leaves the tick labels to
+    the bottom row; a metric panel added beside it follows whatever the distribution panel does.
+    A shared panel turns its labels off through its tick parameters, which is what this reads, since
+    get_xticklabels() comes back empty there rather than invisible.
+    '''
+    return bool(ax.xaxis.get_tick_params(which='major').get('labelbottom', True))
+
 def offset_summary(df: pd.DataFrame | str, x: str, cols: str, cols_order: list=None,
                    reps: str=None, ref: str | list=None,
                    facetx: str=None, facety: str=None, facetx_order: list=None, facety_order: list=None,
                    stat: str | bool='auto', stat_graph: str='swarm', stat_width: float=0.5,
                    stat_errorbar: str='sd', stat_axis: str=None, ref_axis: str=None,
+                   metrics: list=None, metrics_df: pd.DataFrame | str=None,
+                   margins: tuple=(2.2,0.13,0.95,1.05), gaps: tuple=(0.29,0.75),
                    x_axis: str=None, x_axis_scale: str='log', x_axis_dims: tuple | list=(0,0),
                    floor: float=1, panel: tuple=(6.5,7),
                    title: str='', title_size: int=12, file: str=None, show: bool=True,
                    dpi: int=0, transparent: bool=True, fig=None, **dist_kwargs) -> tuple:
     ''' 
-    offset_summary(): draw a half-offset distribution of a flow channel beside its summary statistic
-                      and, optionally, that statistic as a % difference from reference sample(s)
+    offset_summary(): draw a half-offset distribution of a flow channel beside its summary statistic,
+                      that statistic as a % difference from reference sample(s), and any further
+                      per-sample metric measured on the same samples
 
     Parameters:
     df (dataframe | str): tidy event dataframe (or file path); 1 row per event
@@ -360,13 +555,28 @@ def offset_summary(df: pd.DataFrame | str, x: str, cols: str, cols_order: list=N
     stat_axis (str, optional): statistic panel axis name (Default: None; 'gMFI' for a geometric mean
                                of a log scaled channel, otherwise the statistic's name)
     ref_axis (str, optional): % difference panel axis name (Default: None; '% diff. vs <ref>')
+    metrics (list, optional): further panels hung off each facet, 1 per per-sample metric measured on
+                              the same samples (i.e., the NGS editing behind each flow sample), each
+                              given as a column name, a (column, axis name) pair, or a dictionary of
+                              {x, df, axis, graph, stat, reps, errorbar, scale, dims, width, missing}
+                              (Default: None; see Note). Every metric is summarized onto the same
+                              baselines as the distribution, so a row is read across the whole figure
+    metrics_df (dataframe | str, optional): tidy dataframe the metrics are summarized from, 1 row per
+                                            sample & replicate, carrying cols & the facet column(s)
+                                            (Default: None; each metric names its own 'df')
+    margins (tuple, optional): (left, right, bottom, top) margins in inches, which only apply once a
+                               metric panel is added & the panels are positioned here rather than by
+                               tight_layout (Default: (2.2,0.13,0.95,1.05); left holds the baseline
+                               names & top the figure title over the facet titles)
+    gaps (tuple, optional): (between panels, between facet rows) gaps in inches, as margins (Default: (0.29,0.75))
     x_axis (str, optional): distribution panel axis name (Default: None; the channel column name)
     x_axis_scale (str, optional): 'log' or 'linear' (Default: 'log')
     x_axis_dims (tuple, optional): distribution panel (start, end) in channel units (Default: (0,0), which autoscales)
     floor (float, optional): clip values below this before a log scale, since a compensated channel
                              holds non-positive values that log10 cannot take (Default: 1; None skips it)
     panel (tuple, optional): (width, height) in inches of 1 distribution panel, which the statistic
-                             panels & facets are sized against (Default: (6.5,7)); ignored when fig is given
+                             panels, metric panels & facets are sized against (Default: (6.5,7));
+                             ignored when fig is given
     title (str, optional): figure title (Default: '')
     title_size (int, optional): title font size (Default: 12)
     file (str, optional): output file path (Default: None)
@@ -374,18 +584,27 @@ def offset_summary(df: pd.DataFrame | str, x: str, cols: str, cols_order: list=N
     dpi (int, optional): figure dpi (Default: 0, which is plot.save_fig()'s default)
     transparent (bool, optional): save with a transparent background (Default: True)
     fig (Figure | SubFigure, optional): draw into this figure instead of making one, which ignores
-                                        panel & leaves the layout, saving & showing to the caller
-                                        (Default: None)
+                                        panel & leaves saving & showing to the caller (Default: None)
     **dist_kwargs: passed through to plot.dist() (i.e., palette_or_cmap, offset_bw_adjust, subplot_titles)
 
-    Returns: (fig, axes) where axes holds the distribution panels; the statistic panels sit beside
-             them in fig.axes, 1 distribution panel then its statistic panel(s) per facet
+    Returns: (fig, axes) where axes holds the distribution panels; the statistic & metric panels sit
+             beside them in fig.axes, 1 distribution panel then its statistic panel(s) per facet,
+             with the metric panels added after them
 
-    Dependencies: numpy, io, plot
+    Dependencies: numpy, matplotlib, io, & plot
 
     Note: the figure is sized so that each distribution panel keeps `panel` whatever the panel count
-    is, rather than every panel sharing a fixed figure, since a statistic panel added to a facet
-    would otherwise squeeze the distribution it belongs to.
+    is, rather than every panel sharing a fixed figure, since a statistic or metric panel added to a
+    facet would otherwise squeeze the distribution it belongs to.
+
+    A metric panel is drawn from a per-sample dataframe rather than from the events, so it holds a
+    quantity the flow channel cannot report: 1 cat() mark per baseline, a bar with its replicates by
+    default, on the same ridge geometry as the statistic panel. Each metric autoscales over its own
+    window across the facets, since 2 metrics on 1 scale hide whichever is smaller, & a baseline the
+    metric dataframe has nothing for is marked 'missing' rather than left blank, which would read
+    as 0. Adding one takes the layout out of tight_layout's hands, which cannot see panels added
+    outside the gridspec, so margins & gaps position every panel instead; a caller-supplied fig is
+    therefore positioned too, & should be a SubFigure so that a later save_fig() leaves it alone.
     '''
     df = io.get(pt=df) if isinstance(df, str) else df.copy()
 
@@ -393,6 +612,14 @@ def offset_summary(df: pd.DataFrame | str, x: str, cols: str, cols_order: list=N
         raise ValueError(f"cols '{cols}' is not a column! {list(df.columns)}")
     if ref is not None and not isinstance(ref, (list, tuple)):
         ref = [ref]
+
+    specs = [_metric_spec(spec, df=metrics_df, reps=reps, width=stat_width)
+             for spec in (metrics if metrics is not None else [])]
+    for spec in specs: # A metric is read onto the distribution's baselines & facets, so it needs them
+        missing = [col for col in (cols, facetx, facety) if col is not None and col not in spec['df'].columns]
+        if missing:
+            raise ValueError(f"Metric panel '{spec['x']}' is missing column(s) {missing}! "
+                             f"{list(spec['df'].columns)}")
 
     # A compensated channel holds non-positive values that a log scale cannot take, & dropping
     # those events would quietly thin the very baselines that sit lowest.
@@ -408,7 +635,7 @@ def offset_summary(df: pd.DataFrame | str, x: str, cols: str, cols_order: list=N
         stat_panels += 1
     if ref is not None:
         stat_panels += 1
-    ratios = [1] + [stat_width] * stat_panels
+    ratios = [1] + [stat_width] * stat_panels + [spec['width'] for spec in specs]
 
     # The gMFI of a log scaled channel is what a flow plot calls its geometric mean
     if stat_axis is None:
@@ -417,13 +644,18 @@ def offset_summary(df: pd.DataFrame | str, x: str, cols: str, cols_order: list=N
     if ref_axis is None and ref is not None:
         ref_axis = f"% diff. vs {ref[0] if len(ref) == 1 else 'references'}"
 
-    # Each facet column holds a distribution panel plus its statistic panel(s), so the figure
-    # grows with the panel count & the facet grid instead of the panels shrinking inside it.
-    ncols = len(p._facet_values(df, facetx, order=facetx_order))
-    nrows = len(p._facet_values(df, facety, order=facety_order))
+    # Each facet column holds a distribution panel plus its statistic & metric panel(s), so the
+    # figure grows with the panel count & the facet grid instead of the panels shrinking inside it.
+    col_vals = p._facet_values(df, facetx, order=facetx_order)
+    row_vals = p._facet_values(df, facety, order=facety_order)
+    ncols, nrows = len(col_vals), len(row_vals)
     figsize = (panel[0] * sum(ratios) * ncols, panel[1] * nrows)
 
     fig, owns_fig = p._resolve_fig(fig, figsize)
+    # save_fig() skips tight_layout on a figure holding subfigures, which would otherwise move the
+    # gridspec panels out from under the metric panels that add_axes() keeps outside it.
+    target = fig.subfigures(1, 1) if (specs and owns_fig) else fig
+    drawn = list(target.axes)
 
     _, axes = p.dist(
         graph='half_offset', df=df, x=x,
@@ -435,16 +667,80 @@ def offset_summary(df: pd.DataFrame | str, x: str, cols: str, cols_order: list=N
         offset_stat_reps=reps, offset_stat_errorbar=stat_errorbar, offset_stat_axis=stat_axis,
         offset_stat_ref=ref, offset_stat_ref_axis='' if ref_axis is None else ref_axis,
         title=title, title_size=title_size,
-        fig=fig, **dist_kwargs
+        fig=target, **dist_kwargs
     )
 
-    if not owns_fig: # The caller owns the layout, saving & showing
-        return fig, axes
+    if specs:
+        cats = p._facet_values(df, cols, order=cols_order) # The baselines, top one first
+        colors = p._category_color_map(df[cols], palette_or_cmap=dist_kwargs.get('palette_or_cmap', 'colorblind'),
+                                       order=cols_order, shift=dist_kwargs.get('palette_shift', 0))
+        # plot.dist()'s own half-offset geometry, so a metric mark sits on the ridge it belongs to
+        spacing = dist_kwargs.get('offset_spacing') or 0.5
+        geometry = {'spacing': spacing,
+                    'shift': dist_kwargs.get('offset_stat_shift', 0.25),
+                    'height': dist_kwargs.get('offset_stat_height', 0.5),
+                    'size': dist_kwargs.get('offset_stat_size', 5),
+                    'edgecol': dist_kwargs.get('edgecol', 'black'),
+                    'lw': dist_kwargs.get('lw', 1),
+                    'alpha': dist_kwargs.get('offset_alpha', 1),
+                    'errwid': dist_kwargs.get('offset_stat_errwid', 1),
+                    'errcap': dist_kwargs.get('offset_stat_errcap', 3)}
+        style = {'axis_size': dist_kwargs.get('x_axis_size', 12),
+                 'axis_weight': dist_kwargs.get('x_axis_weight', 'bold'),
+                 'axis_font': dist_kwargs.get('x_axis_font', 'Arial'),
+                 'ticks_size': dist_kwargs.get('x_ticks_size', 12),
+                 'ticks_font': dist_kwargs.get('x_ticks_font', 'Arial')}
 
-    fig.tight_layout()
-    if getattr(fig, '_suptitle', None) is not None: # Clear of the top panel, whatever its height
-        top = max(ax.get_position().y1 for ax in np.ravel(axes) if ax.get_visible())
-        fig._suptitle.set_y(min(0.995, top + (2.2 * title_size / 72) / fig.get_figheight()))
+        for spec in specs: # 1 summary per baseline per facet, & 1 window over all of them
+            spec['stats'] = {
+                (i, j): p._offset_stats(p._subset_for_facet(spec['df'], facetx=facetx, facety=facety,
+                                                            c=c, r=r),
+                                        x=spec['x'], cols=cols, cats=cats, stat=spec['stat'],
+                                        reps=None if spec['reps'] is False else spec['reps'],
+                                        errorbar=spec['errorbar'])
+                for i, r in enumerate(row_vals) for j, c in enumerate(col_vals)}
+            spec['dims'] = (_metric_dims(spec['stats'], spec['scale'])
+                            if tuple(spec['dims']) == (0, 0) else tuple(spec['dims']))
+
+        # dist() creates its panels row-major, 1 distribution panel then its statistic panel(s)
+        # per facet column, so each facet's panels sit together in the order they were created.
+        panels = [ax for ax in target.axes if ax not in drawn]
+        span = 1 + stat_panels
+        if len(panels) != nrows * ncols * span:
+            raise RuntimeError(f'Expected {nrows * ncols * span} panels from dist(), got {len(panels)}')
+
+        rows = []
+        for i in range(nrows):
+            row = []
+            for j in range(ncols):
+                group = panels[(i * ncols + j) * span:(i * ncols + j) * span + span]
+                dist_ax = group[0]
+                for spec in specs:
+                    ax = target.add_axes([0, 0, 0.1, 0.1]) # Positioned by _place_panels() below
+                    ax.set_ylim(*dist_ax.get_ylim())
+                    if not dist_ax.get_visible(): # An empty facet has nothing to hang a metric off
+                        ax.set_visible(False)
+                        group.append(ax)
+                        continue
+                    _draw_metric_panel(ax, spec, spec['stats'][(i, j)], cats, spec['dims'], colors,
+                                       geometry, style, xlabel=i == nrows - 1,
+                                       xticklabels=_shows_xticklabels(dist_ax))
+                    group.append(ax)
+                row += group
+            rows.append(row)
+
+        _place_panels(target, rows, ratios * ncols, margins, gaps)
+        if getattr(target, '_suptitle', None) is not None: # Over the facet titles, in the top margin
+            target._suptitle.set_y(1 - 0.3 / (target.bbox.height / target.dpi))
+
+    elif owns_fig:
+        fig.tight_layout()
+        if getattr(fig, '_suptitle', None) is not None: # Clear of the top panel, whatever its height
+            top = max(ax.get_position().y1 for ax in np.ravel(axes) if ax.get_visible())
+            fig._suptitle.set_y(min(0.995, top + (2.2 * title_size / 72) / fig.get_figheight()))
+
+    if not owns_fig: # The caller saves & shows
+        return fig, axes
 
     p._final_save_show(fig, file=file, dpi=dpi, transparent=transparent, icon='histogram', show=show)
     return fig, axes
