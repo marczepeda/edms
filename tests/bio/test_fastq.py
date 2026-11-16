@@ -754,6 +754,104 @@ def test_count_signatures_falls_back_to_spacer_search_without_nick_columns(tmp_p
     assert out["ID"].tolist() == ["p1 indels", "Not WT"]          # ngRNA search is off without ngRNA_spacer_col
 
 
+def _cs_two_pegRNA_library():
+    """p1 nicks at region 9, p2 nicks at region 45; each is assigned to its own fastq file."""
+    from edms.bio import pe
+    rows = [{"ID": "p1", "Edit": "E1", "fastq": "s1.fastq", "Reference_sequence": CS_REF,
+             "Edit_sequence": CS_REF[:30] + "C" + CS_REF[31:], "Spacer_sequence": CS_REF[0:20]},
+            {"ID": "p2", "Edit": "E2", "fastq": "s2.fastq", "Reference_sequence": CS_REF,
+             "Edit_sequence": CS_REF[:66] + "C" + CS_REF[67:],
+             "Spacer_sequence": str(Seq(CS_REF[50:70]).reverse_complement())}]
+    return pe.pegRNA_signature(pd.DataFrame(rows), flank5_sequence=CS_FLANK5, flank3_sequence=CS_FLANK3)
+
+
+CS_SNV_AT_PEG_NICK = CS_REGION[:9] + ("A" if CS_REGION[9] != "A" else "C") + CS_REGION[10:]
+CS_DEL_AT_PEG_NICK = CS_REGION[:7] + CS_REGION[11:]
+CS_DEL_AT_NG_NICK = CS_REGION[:43] + CS_REGION[47:]
+
+
+def test_count_signatures_searches_cut_sites_without_fastq_col(tmp_path):
+    lib = _cs_library()                                           # pegRNA + ngRNA spacers and stored nick indexes
+    reads = {"wt": CS_REGION, "del_peg_nick": CS_DEL_AT_PEG_NICK,
+             "snv_peg_nick": CS_SNV_AT_PEG_NICK, "del_ng_nick": CS_DEL_AT_NG_NICK}
+    out = _cs_run(tmp_path, lib, reads, sequence=CS_REGION)        # no fastq_col
+
+    assert out["ID"].tolist() == ["WT", "p1 indels", "p1 non-indels", "p1 ngRNA indels"]
+
+
+def test_count_signatures_without_fastq_col_uses_every_pegRNA(tmp_path):
+    lib = _cs_two_pegRNA_library()
+    reads = {"del_p1_nick": CS_DEL_AT_PEG_NICK, "del_p2_nick": CS_DEL_AT_NG_NICK}
+    out = _cs_run(tmp_path, lib, reads, sequence=CS_REGION)        # no fastq_col => both pegRNAs searched
+
+    assert out["ID"].tolist() == ["p1 indels", "p2 indels"]
+
+
+def test_count_signatures_with_fastq_col_only_uses_that_fastqs_pegRNAs(tmp_path):
+    lib = _cs_two_pegRNA_library()                                 # p2 belongs to s2.fastq, not s1.fastq
+    reads = {"del_p1_nick": CS_DEL_AT_PEG_NICK, "del_p2_nick": CS_DEL_AT_NG_NICK}
+    out = _cs_run(tmp_path, lib, reads, sequence=CS_REGION, fastq_col='fastq')
+
+    assert out["ID"].tolist() == ["p1 indels", "Not WT"]           # p2's cut site is not searched for s1.fastq
+
+
+def test_count_signatures_dir_counts_cut_site_outcomes_without_fastq_col(tmp_path):
+    lib = _cs_library()
+    reads = {"wt": CS_REGION, "del_peg_nick": CS_DEL_AT_PEG_NICK, "snv_peg_nick": CS_SNV_AT_PEG_NICK,
+             "del_ng_nick": CS_DEL_AT_NG_NICK}
+    _cs_run(tmp_path, lib, reads, sequence=CS_REGION)              # writes out/Signature/s1.csv
+
+    out_dir = tmp_path / "resumed"
+    fastq.count_signatures_dir(df_ref=lib, signature_col='Signature', id_col='ID', edit_col='Edit',
+                               signature_dir=str(tmp_path / "out" / "Signature"),
+                               out_dir=str(out_dir), out_file='c.csv', fastq_suf='.fastq')
+    resumed = pd.read_csv(out_dir / "c.csv")
+
+    counts = dict(zip(resumed["ID"], resumed["count"]))
+    assert counts["p1 indels"] == 1 and counts["p1 non-indels"] == 1 and counts["p1 ngRNA indels"] == 1
+    assert counts["WT"] == 1 and counts["Not WT"] == 0
+    assert resumed["count"].sum() == len(reads)                    # nothing dropped by the reference merge
+
+
+def _cs_other(i):
+    return "A" if CS_REGION[i] != "A" else "C"
+
+
+def test_count_signatures_assigns_one_cut_site_outcome_per_read(tmp_path):
+    """A read with unintended changes at several cut sites is labeled once, not once per change."""
+    lib = _cs_library()                                            # pegRNA nick at 9, ngRNA nick at 45
+    reads = {"del_peg_and_del_ng": CS_REGION[:7] + CS_REGION[11:43] + CS_REGION[47:],
+             "snv_peg_and_del_ng": CS_REGION[:9] + _cs_other(9) + CS_REGION[10:43] + CS_REGION[47:],
+             "snv_peg_and_snv_ng": CS_REGION[:9] + _cs_other(9) + CS_REGION[10:45] + _cs_other(45) + CS_REGION[46:],
+             "del_peg_and_snv_ng": CS_REGION[:7] + CS_REGION[11:45] + _cs_other(45) + CS_REGION[46:],
+             "wt": CS_REGION}
+    out = _cs_run(tmp_path, lib, reads, sequence=CS_REGION)
+    counts = pd.read_csv(tmp_path / "out" / "c.csv")
+
+    assert out["ID"].tolist() == ["p1 indels",          # indels outrank substitutions; pegRNA outranks ngRNA
+                                  "p1 ngRNA indels",    # the only indel wins over the pegRNA substitution
+                                  "p1 non-indels",      # substitutions only => the first cut site wins
+                                  "p1 indels",
+                                  "WT"]
+    assert len(out) == len(reads)                       # one row per read
+    assert counts["count"].sum() == len(reads)          # and each read counted exactly once
+    assert counts[counts["count"] > 0].set_index("ID")["count"].to_dict() == {
+        "WT": 1, "p1 indels": 2, "p1 non-indels": 1, "p1 ngRNA indels": 1}
+
+
+def test_count_signatures_assigns_one_outcome_across_pegRNAs(tmp_path):
+    """Changes at two different pegRNAs' cut sites still produce a single label."""
+    lib = _cs_two_pegRNA_library()                                 # p1 nicks at 9, p2 nicks at 45
+    reads = {"del_p1_and_del_p2": CS_REGION[:7] + CS_REGION[11:43] + CS_REGION[47:],
+             "snv_p1_and_snv_p2": CS_REGION[:9] + _cs_other(9) + CS_REGION[10:45] + _cs_other(45) + CS_REGION[46:]}
+    out = _cs_run(tmp_path, lib, reads, sequence=CS_REGION)
+    counts = pd.read_csv(tmp_path / "out" / "c.csv")
+
+    assert out["ID"].tolist() == ["p1 indels", "p1 non-indels"]    # cut_sites order: p1 before p2
+    assert counts["count"].sum() == len(reads)                     # p2's rows stay at 0
+    assert counts[counts["ID"].str.startswith("p2")]["count"].sum() == 0
+
+
 # =========================================================================== #
 # trim_motifs_summary(): cutadapt log parsing & read-fate summary
 # =========================================================================== #
