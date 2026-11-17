@@ -430,7 +430,7 @@ def pcrs(df: pd.DataFrame | dict[str,pd.DataFrame] | str, file:str=None, gDNA_id
     pcr2_total_uL (int, optional): total uL per reaction (Default: 20)
     mm_x (float, optional): master mix multiplier (Default: 1.1)
     ultra (bool, optional): use NEB Ultra II reagents (Default: False)
-    syber (bool, optional): include 10x SYBR Green DNA Stain in PCR1 master mix but not PCR2 (Default: False)
+    syber (bool, optional): include 10x SYBR Green DNA Stain in every PCR master mix (PCR1, PCR1.5, & PCR2; Default: False)
     inner1 (bool, optional): exclude outer wells of 96-well plate for PCR1 (Default: False)
     inner2 (bool, optional): exclude outer wells of 96-well plate for PCR2 (Default: False)
     max_well_uL (float, optional): max uL per well; larger reactions are split across consecutive wells (Default: 50)
@@ -613,7 +613,7 @@ def pcrs(df: pd.DataFrame | dict[str,pd.DataFrame] | str, file:str=None, gDNA_id
             pcr2_mms = pcr_mm_ultra(primers=pcr2_primers_vcs,template='PCR1 Product',template_uL=1,
                                     Q5_mm_x_stock=Q5_mm_x_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
                                     Q5_mm_x_desired=Q5_mm_x_desired,fwd_uM_desired=fwd_uM_desired,rev_uM_desired=rev_uM_desired,
-                                    total_uL=pcr2_total_uL,mm_x=mm_x) if pcr2 else dict()
+                                    total_uL=pcr2_total_uL,mm_x=mm_x,syber=syber) if pcr2 else dict()
         else:
             pcr1_mms = pcr_mm(primers=pcr1_primers_vcs,template='gDNA Extract',template_uL=5,
                             Q5_mm_x_stock=Q5_mm_x_stock,dNTP_mM_stock=dNTP_mM_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
@@ -622,7 +622,7 @@ def pcrs(df: pd.DataFrame | dict[str,pd.DataFrame] | str, file:str=None, gDNA_id
             pcr2_mms = pcr_mm(primers=pcr2_primers_vcs,template='PCR1 Product',template_uL=1,
                             Q5_mm_x_stock=Q5_mm_x_stock,dNTP_mM_stock=dNTP_mM_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
                             Q5_U_uL_stock=Q5_U_uL_stock,Q5_mm_x_desired=Q5_mm_x_desired,dNTP_mM_desired=dNTP_mM_desired,fwd_uM_desired=fwd_uM_desired,
-                            rev_uM_desired=rev_uM_desired,Q5_U_uL_desired=Q5_U_uL_desired,total_uL=pcr2_total_uL,mm_x=mm_x) if pcr2 else dict()
+                            rev_uM_desired=rev_uM_desired,Q5_U_uL_desired=Q5_U_uL_desired,total_uL=pcr2_total_uL,mm_x=mm_x,syber=syber) if pcr2 else dict()
 
         # Create thermocycler objects for PCR1 and PCR2
         pcr1_thermo = thermocycler(df=df, n='1', cycles=pcr1_cycles, pcr_fwd_col=pcr1_fwd_col, pcr_rev_col=pcr1_rev_col)
@@ -682,11 +682,11 @@ def pcrs(df: pd.DataFrame | dict[str,pd.DataFrame] | str, file:str=None, gDNA_id
             pcr1_5_mms = pcr_mm_ultra(primers=pcr1_5_primers_vcs,template='PCR1 Product',template_uL=1,
                                     Q5_mm_x_stock=Q5_mm_x_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
                                     Q5_mm_x_desired=Q5_mm_x_desired,fwd_uM_desired=fwd_uM_desired,rev_uM_desired=rev_uM_desired,
-                                    total_uL=pcr2_total_uL,mm_x=mm_x)
+                                    total_uL=pcr2_total_uL,mm_x=mm_x,syber=syber)
             pcr2_mms = pcr_mm_ultra(primers=pcr2_primers_vcs,template='PCR1.5 Product',template_uL=1,
                                     Q5_mm_x_stock=Q5_mm_x_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
                                     Q5_mm_x_desired=Q5_mm_x_desired,fwd_uM_desired=fwd_uM_desired,rev_uM_desired=rev_uM_desired,
-                                    total_uL=pcr2_total_uL,mm_x=mm_x) if pcr2 else dict()
+                                    total_uL=pcr2_total_uL,mm_x=mm_x,syber=syber) if pcr2 else dict()
         else:
             pcr1_mms = pcr_mm(primers=pcr1_primers_vcs,template='gDNA Extract',template_uL=5,
                             Q5_mm_x_stock=Q5_mm_x_stock,dNTP_mM_stock=dNTP_mM_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
@@ -695,11 +695,11 @@ def pcrs(df: pd.DataFrame | dict[str,pd.DataFrame] | str, file:str=None, gDNA_id
             pcr1_5_mms = pcr_mm(primers=pcr1_5_primers_vcs,template='PCR1 Product',template_uL=1,
                             Q5_mm_x_stock=Q5_mm_x_stock,dNTP_mM_stock=dNTP_mM_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
                             Q5_U_uL_stock=Q5_U_uL_stock,Q5_mm_x_desired=Q5_mm_x_desired,dNTP_mM_desired=dNTP_mM_desired,fwd_uM_desired=fwd_uM_desired,
-                            rev_uM_desired=rev_uM_desired,Q5_U_uL_desired=Q5_U_uL_desired,total_uL=pcr2_total_uL,mm_x=mm_x)
+                            rev_uM_desired=rev_uM_desired,Q5_U_uL_desired=Q5_U_uL_desired,total_uL=pcr2_total_uL,mm_x=mm_x,syber=syber)
             pcr2_mms = pcr_mm(primers=pcr2_primers_vcs,template='PCR1.5 Product',template_uL=1,
                             Q5_mm_x_stock=Q5_mm_x_stock,dNTP_mM_stock=dNTP_mM_stock,fwd_uM_stock=fwd_uM_stock,rev_uM_stock=rev_uM_stock,
                             Q5_U_uL_stock=Q5_U_uL_stock,Q5_mm_x_desired=Q5_mm_x_desired,dNTP_mM_desired=dNTP_mM_desired,fwd_uM_desired=fwd_uM_desired,
-                            rev_uM_desired=rev_uM_desired,Q5_U_uL_desired=Q5_U_uL_desired,total_uL=pcr2_total_uL,mm_x=mm_x) if pcr2 else dict()
+                            rev_uM_desired=rev_uM_desired,Q5_U_uL_desired=Q5_U_uL_desired,total_uL=pcr2_total_uL,mm_x=mm_x,syber=syber) if pcr2 else dict()
         
         # Create thermocycler objects for PCR1 and PCR2
         # UMI specific

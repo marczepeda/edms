@@ -213,13 +213,31 @@ def _pcrs_df(n=3):
 
 
 @pytest.mark.parametrize("ultra", [False, True])
-def test_pcrs_syber_only_in_pcr1(ultra):
+def test_pcrs_syber_in_pcr1_and_pcr2(ultra):
     out = ngs.pcrs(df=_pcrs_df(), syber=True, ultra=ultra)
     pcr1_mms, pcr2_mms = out[1], out[2]
-    assert all("10x SYBR Green DNA Stain" in list(mm["Component"]) for mm in pcr1_mms.values())
-    assert not any("10x SYBR Green DNA Stain" in list(mm["Component"]) for mm in pcr2_mms.values())
-    for mm in pcr1_mms.values():
+    assert pcr1_mms and pcr2_mms
+    for mm in list(pcr1_mms.values()) + list(pcr2_mms.values()):
+        assert "10x SYBR Green DNA Stain" in list(mm["Component"])
         assert (mm["uL"] >= 0).all()
+        assert mm.loc[mm["Component"] == "Total", "uL"].iloc[0] == pytest.approx(20.0)   # SYBR volume comes out of H2O
+
+
+@pytest.mark.parametrize("ultra", [False, True])
+def test_pcrs_without_syber_has_no_syber_in_any_mm(ultra):
+    out = ngs.pcrs(df=_pcrs_df(), ultra=ultra)
+    for mm in list(out[1].values()) + list(out[2].values()):
+        assert "10x SYBR Green DNA Stain" not in list(mm["Component"])
+
+
+@pytest.mark.parametrize("ultra", [False, True])
+def test_pcrs_syber_in_umi_pcr1_5(ultra, tmp_path):
+    df = _pcrs_df(n=2)
+    df["UMI"] = [True, False]
+    out_file = tmp_path / "plan.xlsx"
+    ngs.pcrs(df=df, syber=True, ultra=ultra, file=str(out_file))
+    pcr1_5_mm = pd.read_excel(out_file, "P5-FWD_P7-REV")   # PCR1.5 master mix sheet
+    assert "10x SYBR Green DNA Stain" in list(pcr1_5_mm["Component"])
 
 
 def _rows_cols(pivot):
