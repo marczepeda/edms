@@ -39,6 +39,7 @@ Usage:
 - _offset_swarm_offsets(): Spread overlapping swarm points off their baseline
 - _offset_cat_marks(): Draw 1 cat() style mark for 1 offset graph baseline
 - log_ticks(): put a log axis' major ticks on powers of 10 & its minor ticks on the decade in between
+- _minor_tick_size(): 1 log axis' default minor tick label size, a step under its major ticks
 - _Log10SubsLocator: minor tick positions for a linear axis that holds log10 values
 - log10_ticks(): put a log10 valued axis' major ticks on powers of 10 & its minor ticks on the decade in between
 - formatter(): formats, displays, and saves plots
@@ -1346,6 +1347,8 @@ def _offset_cat_marks(ax, graph: str, position: float, summary: dict, *, scale: 
         else:
             raise ValueError(f"Invalid offset_stat_graph layer! {kind}")
 
+_MINOR_TICK_SCALE = 0.75 # A labeled minor tick reads under its majors, so it is set a step smaller
+
 def log_ticks(ax, axis: str = 'both', subs=None, numticks: int = 100,
               label_minors: bool = None, minor_size: float = None) -> None:
     '''
@@ -1358,7 +1361,8 @@ def log_ticks(ax, axis: str = 'both', subs=None, numticks: int = 100,
     numticks (int, optional): maximum ticks the locators may place (Default: 100)
     label_minors (bool, optional): label the minor ticks too (Default: None, which labels them
                                    once the axis spans under a decade & leaves them bare otherwise)
-    minor_size (float, optional): minor tick label font size (Default: None; the major tick size)
+    minor_size (float, optional): minor tick label font size (Default: None, which is
+                                  _MINOR_TICK_SCALE of the axis' major tick label size)
 
     Note: an axis that is not on a log scale is left alone, so this is safe to call
           whenever the scale was requested rather than only once it is known to apply.
@@ -1391,8 +1395,31 @@ def log_ticks(ax, axis: str = 'both', subs=None, numticks: int = 100,
             label = min(low, high) > 0 and abs(np.log10(high) - np.log10(low)) < 1
         axis_obj.set_minor_formatter(LogFormatterSciNotation(base=10, labelOnlyBase=False)
                                      if label else NullFormatter())
-        if label and minor_size is not None:
-            ax.tick_params(axis=name, which='minor', labelsize=minor_size)
+        if label:
+            size = minor_size if minor_size is not None else _minor_tick_size(ax, name)
+            if size is not None:
+                ax.tick_params(axis=name, which='minor', labelsize=size)
+
+def _minor_tick_size(ax, name: str) -> float | None:
+    '''
+    _minor_tick_size(): 1 log axis' default minor tick label size, a step under its major ticks
+
+    Parameters:
+    ax: matplotlib axis
+    name (str): which axis ('x' or 'y')
+
+    Note: returns None when the major size cannot be read as a number (i.e., a named rcParam
+          size such as 'medium'), which leaves the minor labels at matplotlib's own size.
+
+    Dependencies: matplotlib
+    '''
+    major = getattr(ax, f'{name}axis').get_tick_params(which='major').get('labelsize')
+    if major is None:
+        major = plt.rcParams.get(f'{name}tick.labelsize')
+    try:
+        return _MINOR_TICK_SCALE * float(major)
+    except (TypeError, ValueError): # A named size ('medium', 'small', ...) is not ours to scale
+        return None
 
 class _Log10SubsLocator(Locator):
     '''
@@ -1453,7 +1480,8 @@ def formatter(graph: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file:
               y_axis: str, y_axis_size: int, y_axis_weight: str, y_axis_font: str, y_axis_scale: str, y_axis_dims: tuple, y_axis_pad: int, y_ticks_size: int, y_ticks_rot: int, y_ticks_font: str, y_ticks: list,
               legend_title: str, legend_title_size: int, legend_title_weight: str, legend_size: int, legend_bbox_to_anchor: tuple, legend_loc: str, legend_items: tuple, legend_ncol: int,
               legend_columnspacing: int=-4, legend_handletextpad: float=0.5, legend_labelspacing: float=0.5, legend_borderpad: float=0.5, legend_handlelength: float=0.5, 
-              dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True, PDB_pt: str = None, icon: str = 'python', cats_order: list = None) -> None:
+              dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True, PDB_pt: str = None, icon: str = 'python', cats_order: list = None,
+              x_minor_ticks_size: float = None, y_minor_ticks_size: float = None) -> None:
     ''' 
     formatter(): formats, displays, and saves plots
 
@@ -1509,6 +1537,8 @@ def formatter(graph: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file:
     PDB_pt (str, optional): Path to PDB file for mol* visualization; only intended for fastq plots (Default: None)
     icon (str, optional): html file icon (Default: python logo)
     cats_order (list, optional): order of categories for categorical plots
+    x_minor_ticks_size (float, optional): x-axis minor tick label font size on a log scale (Default: None; see log_ticks())
+    y_minor_ticks_size (float, optional): y-axis minor tick label font size on a log scale (Default: None; see log_ticks())
 
     Dependencies: os, matplotlib, seaborn, io, re_un_cap(), & round_up_pow_10()
     '''
@@ -1544,7 +1574,9 @@ def formatter(graph: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file:
                     if x_log_dims!=(0,0): plt.xlim(x_log_dims[0],x_log_dims[1]) # Nothing positive to scale over leaves the axis to matplotlib
                 elif x_axis_dims==(0,0): print('Default x axis dimensions.')
                 else: plt.xlim(x_axis_dims[0],x_axis_dims[1])
-                log_ticks(ax,'x') # 10^n majors with the decade in between as minors
+                # 10^n majors with the decade in between as minors, labeled a step under them
+                log_ticks(ax,'x',minor_size=x_minor_ticks_size if x_minor_ticks_size is not None
+                                                else _MINOR_TICK_SCALE*x_ticks_size)
             else:
                 if is_html: # put one tick per category, centered on each bar row
                     ls = df[x].unique().tolist() if cats_order is None else cats_order
@@ -1576,7 +1608,9 @@ def formatter(graph: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file:
                     if y_log_dims!=(0,0): plt.ylim(y_log_dims[0],y_log_dims[1]) # Nothing positive to scale over leaves the axis to matplotlib
                 elif y_axis_dims==(0,0): print('Default y axis dimensions.')
                 else: plt.ylim(y_axis_dims[0],y_axis_dims[1])
-                log_ticks(ax,'y') # 10^n majors with the decade in between as minors
+                # 10^n majors with the decade in between as minors, labeled a step under them
+                log_ticks(ax,'y',minor_size=y_minor_ticks_size if y_minor_ticks_size is not None
+                                                else _MINOR_TICK_SCALE*y_ticks_size)
             else:
                 if is_html: # put one tick per category, centered on each bar row
                     ls = df[y].unique().tolist() if cats_order is None else cats_order
@@ -2022,7 +2056,8 @@ def _apply_formatter_on_ax(*, ax, df_sub: pd.DataFrame, graph: str,
                            y_ticks_size: float, y_ticks_rot: float, y_ticks_font: str, y_ticks: list[str] | None,
                            legend_title: str | None, legend_title_size: float, legend_title_weight: str, legend_size: float, legend_bbox_to_anchor: tuple[float, float] | None, legend_loc: str | None, legend_items: list[str] | None, legend_ncol: int | None,
                            legend_columnspacing: float, legend_handletextpad: float, legend_labelspacing: float, legend_borderpad: float, legend_handlelength: float,
-                           dpi: int, transparent: bool, show: bool, space_capitalize: bool, PDB_pt: str | None, icon: str | None, cats_order: list[str] | None) -> None:
+                           dpi: int, transparent: bool, show: bool, space_capitalize: bool, PDB_pt: str | None, icon: str | None, cats_order: list[str] | None,
+                           x_minor_ticks_size: float = None, y_minor_ticks_size: float = None) -> None:
     """
     _apply_formatter_on_ax(): Apply the formatter to a specific axis with the appropriate subset of data and parameters for that panel.
 
@@ -2037,6 +2072,7 @@ def _apply_formatter_on_ax(*, ax, df_sub: pd.DataFrame, graph: str,
     y_axis (str | None), y_axis_size (float), y_axis_weight (str), y_axis_font (str), y_axis_scale (str), y_axis_dims (tuple[float, float]), y_axis_pad (float), y_ticks_size (float), y_ticks_rot (float), y_ticks_font (str), y_ticks (list[str] | None): The y-axis label and its formatting parameters.
     legend_title (str | None), legend_title_size (float), legend_title_weight (str), legend_size (float), legend_bbox_to_anchor (tuple[float, float] | None), legend_loc (str | None), legend_items (list[str] | None), legend_ncol (int | None), legend_columnspacing
     cats_order: Order of categories for categorical plots (if applicable).
+    x_minor_ticks_size (float), y_minor_ticks_size (float): minor tick label font size on a log scale.
     """
     plt.sca(ax)  # make this axis current for plt.title/xlabel/etc in formatter
     formatter(
@@ -2056,7 +2092,8 @@ def _apply_formatter_on_ax(*, ax, df_sub: pd.DataFrame, graph: str,
         legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad,
         legend_handlelength=legend_handlelength,
         dpi=dpi, transparent=transparent, show=False,  # <- don't show per facet
-        space_capitalize=space_capitalize, PDB_pt=PDB_pt, icon=icon, cats_order=cats_order
+        space_capitalize=space_capitalize, PDB_pt=PDB_pt, icon=icon, cats_order=cats_order,
+        x_minor_ticks_size=x_minor_ticks_size, y_minor_ticks_size=y_minor_ticks_size
     )
 
 # Graph methods
@@ -2068,10 +2105,10 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
         figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
         x_axis: str | list = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial',
         x_axis_scale: str = 'linear', x_axis_dims: tuple | list[tuple] = (0, 0), x_axis_pad: int = None,
-        x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
+        x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [], x_minor_ticks_size: float = None,
         y_axis: str | list = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial',
         y_axis_scale: str = 'linear', y_axis_dims: tuple | list[tuple] = (0, 0), y_axis_pad: int = None,
-        y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
+        y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [], y_minor_ticks_size: float = None,
         x_err: str = None, y_err: str = None, err_capsize: float = 0.2, err_alpha: float = 1.0, err_color: str = 'black',
         legend_title: str = '', legend_title_size: int = 12, legend_title_weight: str = 'bold', legend_size: int = 12,
         legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left',
@@ -2126,6 +2163,7 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
     x_axis_dims (tuple | list[tuple], optional): x-axis dimensions (start, end); a list sets 1 per facetx column or 1 per panel (row-major), where (0,0) autoscales
     x_axis_pad (int, optional): x-axis padding
     x_ticks_size (int, optional): x-axis tick font size
+    x_minor_ticks_size (float, optional): x-axis minor tick label font size on a log scale (Default: None; see log_ticks())
     x_ticks_rot (int, optional): x-axis ticks rotation
     x_ticks_font (str, optional): x-ticks font
     x_ticks (list, optional): x-axis tick values
@@ -2137,6 +2175,7 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
     y_axis_dims (tuple | list[tuple], optional): y-axis dimensions (start, end); a list sets 1 per facety row or 1 per panel (row-major), where (0,0) autoscales
     y_axis_pad (int, optional): y-axis padding
     y_ticks_size (int, optional): y-axis tick font size
+    y_minor_ticks_size (float, optional): y-axis minor tick label font size on a log scale (Default: None; see log_ticks())
     y_ticks_rot (int, optional): y-axis ticks rotation
     y_ticks_font (str, optional): y_ticks font
     y_ticks (list, optional): y-axis tick values
@@ -2469,7 +2508,8 @@ def scat(graph: str, df: pd.DataFrame | str, x: str, y: str,
                 legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad,
                 legend_handlelength=legend_handlelength,
                 dpi=dpi, transparent=transparent, show=False, space_capitalize=space_capitalize,
-                PDB_pt=None, icon='scatter', cats_order=None
+                PDB_pt=None, icon='scatter', cats_order=None,
+                x_minor_ticks_size=x_minor_ticks_size, y_minor_ticks_size=y_minor_ticks_size
             )
 
             panel_title = _subplot_title(
@@ -2536,10 +2576,10 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
         figsize: tuple=(6,6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
         x_axis: str | list = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial',
         x_axis_scale: str = 'linear', x_axis_dims: tuple | list[tuple] = (0, 0), x_axis_pad: int = None,
-        x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [],
+        x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial', x_ticks: list = [], x_minor_ticks_size: float = None,
         y_axis: str | list = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial',
         y_axis_scale: str = 'linear', y_axis_dims: tuple | list[tuple] = (0, 0), y_axis_pad: int = None,
-        y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [],
+        y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial', y_ticks: list = [], y_minor_ticks_size: float = None,
         legend_title: str = '', legend_title_size: int = 12, legend_title_weight: str = 'bold', legend_size: int = 12,
         legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left',
         legend_items: tuple = (0, 0), legend_ncol: int = 1, legend_mode: str = "figure",
@@ -2595,6 +2635,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
     x_axis_dims (tuple | list[tuple], optional): x-axis dimensions (start, end); a list sets 1 per facetx column or 1 per panel (row-major), where (0,0) autoscales
     x_axis_pad (int, optional): x-axis padding
     x_ticks_size (int, optional): x-axis ticks font size
+    x_minor_ticks_size (float, optional): x-axis minor tick label font size on a log scale (Default: None; see log_ticks())
     x_ticks_rot (int, optional): x-axis ticks rotation
     x_ticks_font (str, optional): x-ticks font
     x_ticks (list, optional): x-axis tick values
@@ -2606,6 +2647,7 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
     y_axis_dims (tuple | list[tuple], optional): y-axis dimensions (start, end); a list sets 1 per facety row or 1 per panel (row-major), where (0,0) autoscales
     y_axis_pad (int, optional): y-axis padding
     y_ticks_size (int, optional): y-axis ticks font size
+    y_minor_ticks_size (float, optional): y-axis minor tick label font size on a log scale (Default: None; see log_ticks())
     y_ticks_font (str, optional): y_ticks font
     y_ticks_rot (int, optional): y-axis ticks rotation
     y_ticks (list, optional): y-axis tick values
@@ -2938,7 +2980,8 @@ def cat(graph: str, df: pd.DataFrame | str, x: str = '', y: str = '',
                 legend_labelspacing=legend_labelspacing, legend_borderpad=legend_borderpad,
                 legend_handlelength=legend_handlelength,
                 dpi=dpi, transparent=transparent, show=False, space_capitalize=space_capitalize,
-                PDB_pt=None, icon='cat', cats_order=cats_order
+                PDB_pt=None, icon='cat', cats_order=cats_order,
+                x_minor_ticks_size=x_minor_ticks_size, y_minor_ticks_size=y_minor_ticks_size
             )
 
             panel_title = _subplot_title(
@@ -3570,7 +3613,8 @@ def dist(graph: str, df: pd.DataFrame | str, x: str, cols: str = None, cols_orde
         ax.set_xlim(dims[0], dims[1]) # A box or violin autoscales as it is drawn, so pin it again
         ax.set_ylim(*dist_ax.get_ylim())
         if scale == 'log':
-            log_ticks(ax, 'x') # 10^n majors with the decade in between as minors
+            # 10^n majors with the decade in between as minors, labeled a step under them
+            log_ticks(ax, 'x', minor_size=_MINOR_TICK_SCALE*x_ticks_size)
 
         if relative: # The reference itself, which every other baseline is read against
             ax.axvline(x=0, color='black', linestyle='--', linewidth=lw, zorder=0)

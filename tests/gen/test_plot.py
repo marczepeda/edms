@@ -1940,3 +1940,80 @@ def test_faceted_graphs_keep_a_blank_axis_name_blank(graph_fn, kwargs):
     _, axes = graph_fn(df=df, facetx='Line', x_axis=' ', show=False, **kwargs)
     assert {ax.get_xlabel() for ax in np.ravel(axes)} == {' '}
     plt.close('all')
+
+
+# --------------------------------------------------------------------------- #
+# the minor log tick label size
+# --------------------------------------------------------------------------- #
+def test_log_ticks_sizes_the_minor_labels_under_the_majors():
+    """A labeled minor reads under its majors, so it comes out a step smaller than them."""
+    fig, ax = plt.subplots()
+    ax.set_xscale('log')
+    ax.set_xlim(5e4, 3e5)           # under a decade, so the minors are labeled
+    ax.tick_params(axis='x', which='major', labelsize=12)
+    p.log_ticks(ax, 'x')
+    assert {t.get_fontsize() for t in ax.get_xminorticklabels()} == {12 * p._MINOR_TICK_SCALE}
+    plt.close(fig)
+
+
+def test_log_ticks_minor_size_falls_back_to_the_rc_tick_size():
+    fig, ax = plt.subplots()
+    ax.set_xscale('log')
+    ax.set_xlim(5e4, 3e5)
+    with matplotlib.rc_context({'xtick.labelsize': 16}):
+        p.log_ticks(ax, 'x')        # nothing set on the axis, so the rcParam is the major size
+        assert {t.get_fontsize() for t in ax.get_xminorticklabels()} == {16 * p._MINOR_TICK_SCALE}
+    plt.close(fig)
+
+
+def test_log_ticks_leaves_a_named_major_size_alone():
+    """'medium' is not a number to take three quarters of, so the minors keep their own size."""
+    fig, ax = plt.subplots()
+    ax.set_xscale('log')
+    ax.set_xlim(5e4, 3e5)
+    with matplotlib.rc_context({'xtick.labelsize': 'medium'}):
+        assert p._minor_tick_size(ax, 'x') is None
+        p.log_ticks(ax, 'x')
+        assert [t.get_text() for t in ax.get_xminorticklabels() if t.get_text()]
+    plt.close(fig)
+
+
+def test_scat_minor_log_tick_labels_follow_its_tick_size():
+    """The tick size the caller asked for is what the minors are read against, not the rcParam."""
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5.1e4, 9e4, 1.5e5, 2.4e5]})
+    fig, axes = p.scat(graph='scat', df=df, x='x', y='y', y_axis_scale='log',
+                       y_ticks_size=12, show=False)
+    ax = np.ravel(axes)[0]
+    assert {t.get_fontsize() for t in ax.get_yminorticklabels()} == {12 * p._MINOR_TICK_SCALE}
+    plt.close(fig)
+
+
+@pytest.mark.parametrize('graph_fn, kwargs', [
+    (p.scat, dict(graph='scat', x='x', y='y')),
+    (p.cat, dict(graph='swarm', x='cat', y='y')),
+])
+def test_minor_log_tick_label_size_can_be_set(graph_fn, kwargs):
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'cat': ['a', 'b', 'a', 'b'],
+                       'y': [5.1e4, 9e4, 1.5e5, 2.4e5]})
+    fig, axes = graph_fn(df=df, y_axis_scale='log', y_axis_dims=(5e4, 3e5),
+                         y_minor_ticks_size=7, show=False, **kwargs)
+    ax = np.ravel(axes)[0]
+    assert {t.get_fontsize() for t in ax.get_yminorticklabels()} == {7.0}
+    plt.close(fig)
+
+
+def test_dist_offset_stat_panel_sizes_its_minor_log_labels():
+    """The statistic panel's window often sits inside a decade, so its minors carry the axis."""
+    rng = np.random.default_rng(3)
+    df = pd.DataFrame([{'val': value, 'grp': grp, 'rep': rep}
+                       for grp, center in (('a', 5.5e4), ('b', 8.0e4))
+                       for rep in ('r1', 'r2', 'r3')
+                       for value in rng.lognormal(mean=math.log(center), sigma=0.05, size=40)])
+    fig, _ = p.dist(graph='half_offset', df=df, x='val', cols='grp',
+                    x_axis_scale='log', offset_stat='gmean', offset_stat_reps='rep',
+                    offset_stat_axis='gMFI', x_ticks_size=12, show=False)
+    stat_ax = [ax for ax in fig.axes if ax.get_xlabel() == 'gMFI'][0]
+    labeled = [t for t in stat_ax.get_xminorticklabels() if t.get_text()]
+    assert labeled, 'the panel spans under a decade, so its minor ticks should be labeled'
+    assert {t.get_fontsize() for t in labeled} == {12 * p._MINOR_TICK_SCALE}
+    plt.close(fig)
