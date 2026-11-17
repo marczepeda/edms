@@ -1866,13 +1866,25 @@ def _aggregate_edit_outcomes(fastq_df_ref_by: pd.DataFrame, id_col: str, edit_co
         totals[agg][1] += fraction
 
     fastq_df_ref_by_agg = fastq_df_ref_by[fastq_df_ref_by[id_col].isin(['WT','Not WT'])].reset_index(drop=True)
-    return pd.concat([fastq_df_ref_by_agg,
-                      pd.DataFrame({id_col: list(totals.keys()),
-                                    edit_col: list(totals.keys()),
-                                    'count': [cts for cts,_ in totals.values()],
-                                    'fraction': [fracs for _,fracs in totals.values()],
-                                    'percent': [fracs*100 for _,fracs in totals.values()],
-                                    **{col: val*len(totals) for col,val in edit_row.items()}})], ignore_index=True)
+    totals_df = pd.DataFrame({id_col: list(totals.keys()),
+                              edit_col: list(totals.keys()),
+                              'count': [cts for cts,_ in totals.values()],
+                              'fraction': [fracs for _,fracs in totals.values()],
+                              'percent': [fracs*100 for _,fracs in totals.values()],
+                              **{col: val*len(totals) for col,val in edit_row.items()}})
+
+    # Carry the columns that hold 1 value for the whole fastq file (reads_total, reads_processed,
+    # align_dims, fastq_file, signature_folder, & every meta column) onto the aggregate rows, which
+    # the WT & Not WT rows already have but edit_row only names a couple of. A column of the
+    # reference library (or a per genotype Phred statistic) holds more than 1 value & is left out,
+    # so an aggregate row stays empty where no single value describes it.
+    for col in fastq_df_ref_by.columns:
+        if col in totals_df.columns:
+            continue
+        if fastq_df_ref_by[col].astype(str).nunique(dropna=False)==1:
+            totals_df[col] = [fastq_df_ref_by[col].iloc[0]]*len(totals_df)
+
+    return pd.concat([fastq_df_ref_by_agg, totals_df], ignore_index=True)
 
 def count_signatures(df_ref: pd.DataFrame | str, signature_col: str, id_col: str, edit_col: str, fastq_dir: str, 
                     out_dir: str, out_file: str, config_key: str = None, in_file: pd.DataFrame | str=None, sequence: str=None, n_extra_nt: int=0,
