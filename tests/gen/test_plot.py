@@ -1744,3 +1744,161 @@ def test_scat_log_axis_closes_in_on_its_points():
     assert ax.get_ylim() == pytest.approx(p.log_limits(df['y']))
     assert [t.get_text() for t in ax.get_yminorticklabels() if t.get_text()]
     plt.close(fig)
+
+
+# --------------------------------------------------------------------------- #
+# stack_layers() & shade_color()
+# --------------------------------------------------------------------------- #
+@pytest.fixture
+def layered():
+    """2 facets x 3 categories x 2 replicates of 3 measures taken on the same rows."""
+    return pd.DataFrame([
+        {'Line': line, 'Mutant': mutant, 'Replicate': rep,
+         'Precise': base + rep, 'Indels': 2.0, 'Non-indels': 1.0}
+        for line in ('A', 'B')
+        for mutant, base in (('m1', 10), ('m2', 20), ('m3', 30))
+        for rep in (0, 1)
+    ])
+
+
+def test_shade_color_blends_toward_white():
+    assert p.shade_color((1, 0, 0), 1) == (1, 0, 0)
+    assert p.shade_color((1, 0, 0), 0.5) == (1, 0.5, 0.5)
+    assert p.shade_color('red', 0) == (1, 1, 1)
+
+
+def test_layer_spec_forms_agree():
+    for layer in ('Precise', ('Precise',), {'y': 'Precise'}):
+        assert p._layer_spec(layer)['y'] == 'Precise'
+    assert p._layer_spec(('Precise', 'Precise edit'))['label'] == 'Precise edit'
+    assert p._layer_spec('Precise')['label'] == 'Precise'  # the column names itself
+
+
+def test_layer_spec_spreads_the_shades_and_cycles_the_hatches():
+    specs = [p._layer_spec(name, i, 3) for i, name in enumerate(('a', 'b', 'c'))]
+    assert [spec['shade'] for spec in specs] == [1.0, 0.625, 0.25]
+    assert [spec['hatch'] for spec in specs] == p._LAYER_HATCHES[:3]
+    assert p._layer_spec('a', 0, 1)['shade'] == 1.0  # a lone layer keeps its whole color
+
+
+def test_layer_spec_keeps_a_hatch_that_was_asked_for():
+    assert p._layer_spec({'y': 'a', 'hatch': None}, 1, 3)['hatch'] is None
+    assert p._layer_spec({'y': 'a', 'hatch': 'xx'}, 0, 3)['hatch'] == 'xx'
+    assert p._layer_spec({'y': 'a', 'shade': 0.4}, 0, 3)['shade'] == 0.4
+
+
+@pytest.mark.parametrize('layer, match', [
+    ({'y': 'a', 'colour': 'red'}, r"Invalid layer setting\(s\) \['colour'\]"),
+    ({'label': 'a'}, "needs a 'y' column"),
+    (('a', 'b', 'c'), 'Invalid layer'),
+    (42, 'Invalid layer'),
+])
+def test_layer_spec_rejects_bad_input(layer, match):
+    with pytest.raises(ValueError, match=match):
+        p._layer_spec(layer)
+
+
+def test_stack_layers_draws_one_bar_per_layer_and_category(layered):
+    fig, axes = p.stack_layers(df=layered, x='Mutant', layers=['Precise', 'Indels', 'Non-indels'],
+                               facetx='Line', show=False)
+    ax = axes[0, 0]
+    assert len(ax.patches) == 3 * 3                       # 3 categories x 3 layers
+    heights = [patch.get_height() for patch in ax.patches]
+    assert heights[:3] == [10.5, 20.5, 30.5]              # layer 1: the mean over replicates
+    assert heights[3:6] == [2.0, 2.0, 2.0]
+    bottoms = [patch.get_y() for patch in ax.patches]
+    assert bottoms[3:6] == heights[:3]                    # layer 2 starts on top of layer 1
+    assert bottoms[6:9] == [12.5, 22.5, 32.5]
+    plt.close(fig)
+
+
+def test_stack_layers_keeps_every_layer_in_its_category_color(layered):
+    """A 2nd palette would cost the category the color it carries in every other plot."""
+    fig, axes = p.stack_layers(df=layered, x='Mutant', layers=['Precise', 'Indels'],
+                               palette_or_cmap={'m1': (1, 0, 0), 'm2': (0, 1, 0), 'm3': (0, 0, 1)},
+                               show=False)
+    patches = axes[0, 0].patches
+    assert patches[0].get_facecolor()[:3] == (1, 0, 0)                  # full color on the bottom
+    assert patches[2].get_facecolor()[:3] == pytest.approx((0, 0, 1))
+    assert patches[3].get_facecolor()[:3] == pytest.approx(p.shade_color((1, 0, 0), 0.25))
+    assert [patch.get_hatch() for patch in patches[:2]] == [None, None]
+    assert patches[3].get_hatch() == p._LAYER_HATCHES[1]
+    plt.close(fig)
+
+
+def test_stack_layers_points_mark_each_replicate_total(layered):
+    fig, axes = p.stack_layers(df=layered, x='Mutant', layers=['Precise', 'Indels', 'Non-indels'],
+                               facetx='Line', show=False)
+    totals = sorted(np.concatenate([c.get_offsets()[:, 1] for c in axes[0, 0].collections]))
+    assert totals == [13.0, 14.0, 23.0, 24.0, 33.0, 34.0]  # Precise + 2 + 1, per replicate
+    plt.close(fig)
+
+
+def test_stack_layers_total_column_can_be_named(layered):
+    layered['Edited'] = layered['Precise']
+    fig, axes = p.stack_layers(df=layered, x='Mutant', layers=['Precise', 'Indels'],
+                               total='Edited', facetx='Line', show=False)
+    totals = sorted(np.concatenate([c.get_offsets()[:, 1] for c in axes[0, 0].collections]))
+    assert totals == [10.0, 11.0, 20.0, 21.0, 30.0, 31.0]
+    assert axes[0, 0].get_ylabel() == 'Edited'
+    plt.close(fig)
+
+
+def test_stack_layers_marks_a_category_it_has_no_rows_for(layered):
+    """A blank bar reads as a measured 0, which is not what a missing sample is."""
+    thinned = layered[~((layered['Line'] == 'B') & (layered['Mutant'] == 'm3'))]
+    fig, axes = p.stack_layers(df=thinned, x='Mutant', layers=['Precise', 'Indels'],
+                               facetx='Line', show=False)
+    assert [text.get_text() for text in axes[0, 1].texts] == ['n.d.']
+    assert len(axes[0, 1].patches) == 3 * 2   # the bar is still there, at 0
+    assert axes[0, 1].patches[2].get_height() == 0
+    assert [text.get_text() for text in axes[0, 0].texts] == []
+    plt.close(fig)
+
+
+def test_stack_layers_legend_names_the_layers_in_grey(layered):
+    """The layers are told apart by shade & hatch, so their keys cannot carry a category color."""
+    fig, _ = p.stack_layers(df=layered, x='Mutant', layers=[('Precise', 'Precise edit'), 'Indels'],
+                            show=False)
+    assert len(fig.legends) == 1
+    assert [t.get_text() for t in fig.legends[0].get_texts()] == [
+        'Precise edit', 'Indels', 'Replicate (total)']
+    face = fig.legends[0].legend_handles[0].get_facecolor()[:3]
+    assert face[0] == face[1] == face[2]
+    plt.close(fig)
+
+
+def test_stack_layers_without_points_drops_their_legend_entry(layered):
+    fig, axes = p.stack_layers(df=layered, x='Mutant', layers=['Precise'], points=False, show=False)
+    assert [t.get_text() for t in fig.legends[0].get_texts()] == ['Precise']
+    assert len(axes[0, 0].collections) == 0
+    plt.close(fig)
+
+
+def test_stack_layers_writes_a_file(layered, tmp_path):
+    out = tmp_path / 'layers.png'
+    fig, _ = p.stack_layers(df=layered, x='Mutant', layers=['Precise'], file=str(out), show=False)
+    assert out.exists() and out.stat().st_size > 0
+    plt.close(fig)
+
+
+def test_stack_layers_leaves_a_supplied_figure_to_its_caller(layered, tmp_path):
+    out = tmp_path / 'not_written.png'
+    fig = plt.figure(figsize=(3, 2))
+    returned, _ = p.stack_layers(df=layered, x='Mutant', layers=['Precise'], fig=fig,
+                                 file=str(out), figsize=(9, 9), show=False)
+    assert returned is fig
+    assert tuple(fig.get_size_inches()) == (3.0, 2.0)
+    assert not out.exists()
+    plt.close(fig)
+
+
+@pytest.mark.parametrize('kwargs, match', [
+    (dict(x='Nope', layers=['Precise']), "x 'Nope' is not a column"),
+    (dict(x='Mutant', layers=['Nope']), r"Layer column\(s\) \['Nope'\] are not columns"),
+    (dict(x='Mutant', layers=[]), 'needs at least 1 layer'),
+    (dict(x='Mutant', layers=['Precise'], total='Nope'), "total 'Nope' is not a column"),
+])
+def test_stack_layers_checks_its_columns(layered, kwargs, match):
+    with pytest.raises(ValueError, match=match):
+        p.stack_layers(df=layered, show=False, **kwargs)

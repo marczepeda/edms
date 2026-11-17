@@ -64,6 +64,8 @@ Usage:
 - dist(): creates distribution graphs
 - heat(): creates heat plot related graphs
 - stack(): creates stacked bar plot
+- stack_layers(): creates a stacked bar plot whose layers are columns of 1 category's own color
+- shade_color(): blend a color toward white
 - vol(): creates volcano plot
 - caterpillar(): creates caterpillar plot (estimates ranked along x with error bars)
 - grid(): combines graph methods into 1 figure
@@ -4481,6 +4483,255 @@ def stack(df: pd.DataFrame | str, x: str, y: str, cols: str, cutoff_group: str =
         )
 
         plt.close()
+    return fig, axes
+
+# Layers of 1 category's own color, told apart by shade & hatch
+_LAYER_HATCHES = [None, '///', '...', 'xxx', '\\\\\\', 'ooo', '+++']
+
+def shade_color(color, fraction: float = 1) -> tuple:
+    '''
+    shade_color(): blend a color toward white
+
+    Parameters:
+    color: matplotlib color (name, hex, or rgb tuple)
+    fraction (float, optional): how much of the color to keep; 1 is all of it & 0 is white (Default: 1)
+
+    Note: this is how stack_layers() tells its layers apart without a 2nd palette, which would cost
+    the category its own color & with it the thread a reader follows between plots.
+
+    Dependencies: matplotlib.colors
+    '''
+    return tuple(channel * fraction + (1 - fraction) for channel in mcolors.to_rgb(color))
+
+def _layer_spec(layer, i: int = 0, n: int = 1) -> dict:
+    '''
+    _layer_spec(): fill 1 stack_layers() layer specification out to every setting
+
+    Parameters:
+    layer (str | tuple | dict): column name, (column, legend label), or a dictionary of
+                                {y, label, hatch, shade}
+    i (int, optional): the layer's position in the stack, bottom first (Default: 0)
+    n (int, optional): how many layers the stack holds (Default: 1)
+
+    Note: the defaults spread the shades evenly from the full color down to a quarter of it & cycle
+    the hatches, so a stack is readable without naming either; 'hatch' of None keeps a layer bare.
+
+    Dependencies: numpy
+    '''
+    if isinstance(layer, str):
+        layer = {'y': layer}
+    elif isinstance(layer, (list, tuple)):
+        if not 1 <= len(layer) <= 2:
+            raise ValueError(f'Invalid layer {layer}! (column,) or (column, legend label)')
+        layer = dict(zip(('y', 'label'), layer))
+    elif isinstance(layer, dict):
+        layer = dict(layer)
+    else:
+        raise ValueError(f'Invalid layer {layer}! a column name, (column, legend label), or a dictionary')
+
+    unknown = [key for key in layer if key not in ('y', 'label', 'hatch', 'shade')]
+    if unknown:
+        raise ValueError(f'Invalid layer setting(s) {unknown}! y, label, hatch, shade')
+    if layer.get('y') is None:
+        raise ValueError(f"A layer needs a 'y' column! {layer}")
+
+    if layer.get('label') is None:
+        layer['label'] = layer['y']
+    if 'hatch' not in layer: # Given explicitly, None leaves the layer bare
+        layer['hatch'] = _LAYER_HATCHES[i % len(_LAYER_HATCHES)]
+    if layer.get('shade') is None:
+        layer['shade'] = 1.0 if n < 2 else float(np.linspace(1, 0.25, n)[i])
+    return layer
+
+def stack_layers(df: pd.DataFrame | str, x: str, layers: list, x_order: list = None, total: str = None,
+        points: bool = True, size: float = 22, jitter: float = 0.13, seed: int = 0, missing: str = 'n.d.',
+        points_label: str = 'Replicate (total)', width: float = 0.75,
+        facetx: str = None, facety: str = None, facetx_order: list = None, facety_order: list = None, subplot_titles: str | list = 'facet_values',
+        file: str = None, palette_or_cmap: str | list | dict | mcolors.Colormap = 'colorblind', palette_shift: int = 0, edgecol: str = 'black', lw: int = 1,
+        figsize: tuple = (6, 6), title: str = '', title_size: int = 12, title_weight: str = 'bold', title_font: str = 'Arial',
+        x_axis: str = '', x_axis_size: int = 12, x_axis_weight: str = 'bold', x_axis_font: str = 'Arial', x_axis_pad: int = None, x_ticks_size: int = 12, x_ticks_rot: int = 0, x_ticks_font: str = 'Arial',
+        y_axis: str = '', y_axis_size: int = 12, y_axis_weight: str = 'bold', y_axis_font: str = 'Arial', y_axis_scale: str = 'linear', y_axis_dims: tuple = (0, 0), y_axis_pad: int = None, y_ticks_size: int = 12, y_ticks_rot: int = 0, y_ticks_font: str = 'Arial',
+        legend_title: str = '', legend_title_size: int = 12, legend_title_weight: str = 'bold', legend_size: int = 12, legend_bbox_to_anchor: tuple = (1, 1), legend_loc: str = 'upper left', legend_items: tuple = (0, 0), legend_ncol: int = 1, legend_mode: str = 'figure',
+        dpi: int = 0, transparent: bool = True, show: bool = True, space_capitalize: bool = True, fig=None, **kwargs):
+    '''
+    stack_layers(): creates a stacked bar plot whose layers are columns of 1 category's own color
+
+    Parameters:
+    df (dataframe | str): pandas dataframe (or file path); 1 row per replicate
+    x (str): x-axis column name; 1 bar per value, which is also what the bar is colored by
+    layers (list): stacked columns, bottom first, each a column name, a (column, legend label) pair,
+                   or a dictionary of {y, label, hatch, shade} (see Note)
+    x_order (list, optional): x-axis column values order (Default: None; appearance order)
+    total (str, optional): column the replicate points are drawn at (Default: None; the layers' sum
+                           per row, which is what the stack adds up to)
+    points (bool, optional): draw 1 point per replicate at its total (Default: True)
+    size (float, optional): replicate point size (Default: 22)
+    jitter (float, optional): replicate point spread either side of the bar, in bar widths (Default: 0.13)
+    seed (int, optional): jitter seed, so that the points redraw the same way (Default: 0)
+    missing (str, optional): mark an x value with no rows with this text rather than leaving the
+                             blank that reads as 0 (Default: 'n.d.'; None leaves it blank)
+    points_label (str, optional): legend label for the replicate points (Default: 'Replicate (total)')
+    width (float, optional): bar width (Default: 0.75)
+    facetx (str, optional): column name for facet columns (Default: None)
+    facety (str, optional): column name for facet rows (Default: None)
+    facetx_order (list, optional): order of facet columns
+    facety_order (list, optional): order of facet rows
+    subplot_titles (str | list, optional): 'facet_values', 'facet_labels', custom titles, or none
+    file (str, optional): output plot file path
+    palette_or_cmap (str | list | dict | Colormap, optional): seaborn palette name, matplotlib color
+                                                              map, list of colors, or {x value: color}
+    palette_shift (int, optional): shift palette_or_cmap colors by n (Default: 0)
+    edgecol (str, optional): bar edge & replicate point color
+    lw (int, optional): bar edge line width
+    figsize (tuple, optional): figure size
+    title (str, optional): plot title
+    title_size, title_weight, title_font: plot title font
+    x_axis (str, optional): x-axis name
+    x_axis_size, x_axis_weight, x_axis_font, x_axis_pad: x-axis name font & padding
+    x_ticks_size, x_ticks_rot, x_ticks_font: x-axis tick font & rotation
+    y_axis (str, optional): y-axis name (Default: ''; the total column's name)
+    y_axis_size, y_axis_weight, y_axis_font, y_axis_scale, y_axis_dims, y_axis_pad: y-axis settings
+    y_ticks_size, y_ticks_rot, y_ticks_font: y-axis tick font & rotation
+    legend_title, legend_title_size, legend_title_weight, legend_size, legend_bbox_to_anchor,
+    legend_loc, legend_items, legend_ncol, legend_mode: legend settings ('figure' or 'none')
+    dpi (int, optional): figure dpi (Default: 0, which is save_fig()'s default)
+    transparent (bool, optional): save with a transparent background (Default: True)
+    show (bool, optional): show plot (Default: True)
+    space_capitalize (bool, optional): format names for display (Default: True)
+    fig (Figure | SubFigure, optional): draw into this figure instead of making one, which leaves
+                                        the layout, saving & showing to the caller (Default: None)
+    **kwargs: passed through to ax.bar()
+
+    Returns: (fig, axes)
+
+    Dependencies: numpy, pandas, matplotlib, io, shade_color(), & _layer_spec()
+
+    Note: stack() stacks 1 color per cols value, which answers what a bar is made of. This stacks
+    columns measured on the same rows & keeps every layer in the bar's own color, blended toward
+    white & hatched, which answers how much of a category's total each measure accounts for while
+    the category keeps the color it carries in every other plot. The bars are means over the rows of
+    each x value; the points are the replicates themselves, so the spread behind a mean stays visible.
+    '''
+    # Get dataframe from file path if needed
+    df = io.get(pt=df) if isinstance(df, str) else df.copy()
+    if x not in df.columns.tolist():
+        raise ValueError(f"x '{x}' is not a column! {list(df.columns)}")
+    if not layers:
+        raise ValueError('stack_layers() needs at least 1 layer!')
+
+    specs = [_layer_spec(layer, i, len(layers)) for i, layer in enumerate(layers)]
+    missing_cols = [spec['y'] for spec in specs if spec['y'] not in df.columns.tolist()]
+    if missing_cols:
+        raise ValueError(f'Layer column(s) {missing_cols} are not columns! {list(df.columns)}')
+
+    if total is None: # The points mark what the layers add up to, so they read against the stack
+        total = 'Total'
+        while total in df.columns.tolist():
+            total += '_'
+        df[total] = df[[spec['y'] for spec in specs]].sum(axis=1)
+    elif total not in df.columns.tolist():
+        raise ValueError(f"total '{total}' is not a column! {list(df.columns)}")
+
+    cats = _facet_values(df, x, order=x_order)
+    colors = _category_color_map(df[x], palette_or_cmap=palette_or_cmap, order=x_order, shift=palette_shift)
+
+    col_vals = _facet_values(df, facetx, order=facetx_order)
+    row_vals = _facet_values(df, facety, order=facety_order)
+    ncols, nrows = len(col_vals), len(row_vals)
+    faceting = (facetx is not None) or (facety is not None)
+
+    fig, owns_fig = _resolve_fig(fig, figsize)
+    axes = np.array(fig.subplots(nrows=nrows, ncols=ncols, sharey=True)).reshape(nrows, ncols)
+
+    positions = np.arange(len(cats))
+    rng = np.random.default_rng(seed)
+
+    for i, r in enumerate(row_vals):
+        for j, c in enumerate(col_vals):
+            ax = axes[i, j]
+            df_sub = _subset_for_facet(df, facetx=facetx, facety=facety, c=c, r=r)
+            if len(df_sub) == 0:
+                ax.set_visible(False)
+                continue
+            plt.sca(ax)
+            groups = {cat: df_sub[df_sub[x] == cat] for cat in cats}
+
+            bottom = np.zeros(len(cats))
+            for spec in specs: # Every layer in its bar's own color, parted by shade & hatch
+                values = np.nan_to_num(np.array([groups[cat][spec['y']].mean() if len(groups[cat]) > 0
+                                                 else np.nan for cat in cats], dtype=float))
+                ax.bar(positions, values, bottom=bottom, width=width, hatch=spec['hatch'],
+                       color=[shade_color(colors.get(cat, colors.get(str(cat), 'grey')), spec['shade'])
+                              for cat in cats],
+                       edgecolor=edgecol, linewidth=lw, zorder=2, **kwargs)
+                bottom += values
+
+            for k, cat in enumerate(cats):
+                group = groups[cat]
+                if len(group) == 0: # Say it was not measured rather than leave a blank that reads as 0
+                    if missing:
+                        ax.text(k, 0, str(missing), rotation=90, fontsize=max(x_ticks_size - 3, 1),
+                                style='italic', color='0.45', family=x_ticks_font, ha='center', va='bottom')
+                    continue
+                if points:
+                    ax.scatter(k + rng.uniform(-jitter, jitter, len(group)), group[total],
+                               s=size, color=edgecol, zorder=3, linewidths=0)
+
+            ax.set_xticks(positions)
+            ax.set_xticklabels([_fmt_name(str(cat), space_capitalize) for cat in cats])
+            ax.set_xlim(-0.5 - width / 2, len(cats) - 0.5 + width / 2)
+
+            x_axis_panel, y_axis_panel = _facet_axis_labels(
+                x_axis, y_axis, x_default=x, y_default=total, facetx=facetx, facety=facety,
+                c=c, r=r, j=j, i=i, ncols=ncols, nrows=nrows, space_capitalize=space_capitalize
+            )
+            _apply_formatter_on_ax(
+                ax=ax, df_sub=df_sub, graph='bar', x=x, y=total, cols=None, file=file,
+                title='' if faceting else title, title_size=title_size, title_weight=title_weight, title_font=title_font,
+                x_axis=x_axis_panel, x_axis_size=x_axis_size, x_axis_weight=x_axis_weight, x_axis_font=x_axis_font,
+                x_axis_scale='linear', x_axis_dims=(0, 0), x_axis_pad=x_axis_pad,
+                x_ticks_size=x_ticks_size, x_ticks_rot=x_ticks_rot, x_ticks_font=x_ticks_font, x_ticks=[],
+                y_axis=y_axis_panel, y_axis_size=y_axis_size, y_axis_weight=y_axis_weight, y_axis_font=y_axis_font,
+                y_axis_scale=y_axis_scale, y_axis_dims=y_axis_dims, y_axis_pad=y_axis_pad,
+                y_ticks_size=y_ticks_size, y_ticks_rot=y_ticks_rot, y_ticks_font=y_ticks_font, y_ticks=[],
+                legend_title=legend_title, legend_title_size=legend_title_size, legend_title_weight=legend_title_weight,
+                legend_size=legend_size, legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc,
+                legend_items=legend_items, legend_ncol=legend_ncol, legend_columnspacing=0,
+                legend_handletextpad=0.5, legend_labelspacing=0.5, legend_borderpad=0.5, legend_handlelength=1,
+                dpi=dpi, transparent=transparent, show=False, space_capitalize=space_capitalize,
+                PDB_pt=None, icon='cat', cats_order=cats
+            )
+
+            panel_title = _subplot_title(idx=i * ncols + j, c=c, r=r, facetx=facetx, facety=facety,
+                                         subplot_titles=subplot_titles, title=title)
+            if panel_title != '':
+                ax.set_title(panel_title, fontsize=title_size, fontweight=title_weight, fontfamily=title_font)
+            _hide_inner_axis_labels(ax, i=i, j=j, nrows=nrows, ncols=ncols)
+
+    if title != '' and faceting:
+        fig.suptitle(title, fontsize=title_size, fontweight=title_weight, family=title_font)
+
+    if legend_mode == 'figure': # Grey proxies: the layers are told apart by shade & hatch, not color
+        # A label the layer was given is used as typed; one that is just the column is formatted
+        handles = [Patch(facecolor=shade_color('0.6', spec['shade']), edgecolor=edgecol, hatch=spec['hatch'],
+                         label=_fmt_name(str(spec['label']), space_capitalize)
+                         if spec['label'] == spec['y'] else str(spec['label']))
+                   for spec in specs]
+        if points and points_label:
+            handles.append(Line2D([], [], marker='o', color=edgecol, linestyle='none',
+                                  markersize=math.sqrt(size), label=points_label))
+        visible = [ax for ax in np.ravel(axes) if ax.get_visible()]
+        if len(visible) > 0 and len(handles) > 0:
+            visible[-1].legend(handles=handles)
+            _make_figure_legend(fig, axes, legend_title=legend_title, legend_title_size=legend_title_size,
+                                legend_title_weight=legend_title_weight, legend_size=legend_size,
+                                legend_bbox_to_anchor=legend_bbox_to_anchor, legend_loc=legend_loc,
+                                legend_items=legend_items, legend_ncol=legend_ncol)
+
+    if owns_fig: # The caller saves, shows & closes a provided figure
+        fig.tight_layout()
+        _final_save_show(fig, file=file, dpi=dpi, transparent=transparent, PDB_pt=None, icon='cat', show=show)
+
     return fig, axes
 
 def vol(df: pd.DataFrame | str, x: str, y: str, stys: str = None, size: str = None, size_dims: tuple = None, label: str = None, stys_order: list = [], mark_order: list = [],
