@@ -1902,3 +1902,41 @@ def test_stack_layers_leaves_a_supplied_figure_to_its_caller(layered, tmp_path):
 def test_stack_layers_checks_its_columns(layered, kwargs, match):
     with pytest.raises(ValueError, match=match):
         p.stack_layers(df=layered, show=False, **kwargs)
+
+
+# --------------------------------------------------------------------------- #
+# a deliberately blank axis name
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize('value, blank', [
+    (None, True), ('', True), ([], True), ([''], True),
+    (' ', False), ('  ', False), ([' '], False), ('Reads (%)', False),
+])
+def test_is_blank_label_counts_only_none_and_empty(value, blank):
+    """' ' is a name the caller asked for; only None & '' mean they set nothing."""
+    assert p._is_blank_label(value) is blank
+
+
+def test_stack_layers_keeps_a_blank_axis_name_blank(layered):
+    """The tick labels already name the categories, so ' ' drops the axis name under them."""
+    _, axes = p.stack_layers(df=layered, x='Mutant', layers=['Precise'], facetx='Line',
+                             x_axis=' ', show=False)
+    assert {ax.get_xlabel() for ax in np.ravel(axes)} == {' '}
+    plt.close('all')
+
+
+def test_stack_layers_unset_axis_name_still_falls_back_to_the_column(layered):
+    _, axes = p.stack_layers(df=layered, x='Mutant', layers=['Precise'], facetx='Line', show=False)
+    assert np.ravel(axes)[0].get_xlabel() == 'Mutant'
+    plt.close('all')
+
+
+@pytest.mark.parametrize('graph_fn, kwargs', [
+    (p.scat, dict(graph='scat', x='x', y='y')),
+    (p.cat, dict(graph='swarm', x='cat', y='y')),
+])
+def test_faceted_graphs_keep_a_blank_axis_name_blank(graph_fn, kwargs):
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'cat': ['a', 'b', 'a', 'b'],
+                       'y': [1.0, 2.0, 3.0, 4.0], 'Line': ['A', 'A', 'B', 'B']})
+    _, axes = graph_fn(df=df, facetx='Line', x_axis=' ', show=False, **kwargs)
+    assert {ax.get_xlabel() for ax in np.ravel(axes)} == {' '}
+    plt.close('all')

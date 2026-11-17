@@ -910,13 +910,17 @@ def _is_blank_label(v: str | list | tuple) -> bool:
     
     Parameters:
     v (str | list | tuple): value to check (can be None, str, or list/tuple of str)
+
+    Note: only None & the empty string mean unset. Whitespace is a name the caller asked for,
+          & is left alone, so that ' ' drops an axis name the tick labels already carry rather
+          than bringing back the column name.
     """
     if v is None:
         return True
     if isinstance(v, str):
-        return v.strip() == ''
+        return v == ''
     if isinstance(v, (list, tuple)):
-        return len(v) == 0 or all((isinstance(x, str) and x.strip() == '') for x in v)
+        return len(v) == 0 or all((isinstance(x, str) and x == '') for x in v)
     return False
 
 def autoscale_limits(values, buffer=0.1, min_range=1.0):
