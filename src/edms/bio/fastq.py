@@ -5166,8 +5166,8 @@ def cat(graph: str, df: pd.DataFrame | str, x: str='', y: str='', cats_order: li
             elif 'Not WT' == geno: positions.append(1000004) # Places Not WT near the end
             elif 'WT' == geno: positions.append(1000005) # Places WT at the end
             else:
-                if len(numbers)==0: positions.append(1000000) # If no numbers found, place near the end 
-                positions.append(sum([int(n) for n in numbers])/len(numbers))
+                if len(numbers)==0: positions.append(1000000) # If no numbers found, place near the end
+                else: positions.append(sum([float(n) for n in numbers])/len(numbers))
         assign = pd.DataFrame({'positions':positions,
                                'genotypes':genotypes})
         cols_order = list(assign.sort_values(by='positions')['genotypes'])
@@ -5291,8 +5291,8 @@ def stack(df: pd.DataFrame | str, x: str='fastq_file', y: str='fraction', cols: 
             elif 'Not WT' == geno: positions.append(1000004) # Places Not WT near the end
             elif 'WT' == geno: positions.append(1000005) # Places WT at the end
             else:
-                if len(numbers)==0: positions.append(1000000) # If no numbers found, place near the end 
-                positions.append(sum([int(n) for n in numbers])/len(numbers))
+                if len(numbers)==0: positions.append(1000000) # If no numbers found, place near the end
+                else: positions.append(sum([float(n) for n in numbers])/len(numbers))
         assign = pd.DataFrame({'positions':positions,
                                'genotypes':genotypes})
         cols_order = list(assign.sort_values(by='positions')['genotypes'])
