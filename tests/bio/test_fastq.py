@@ -1106,3 +1106,130 @@ def test_editing_per_library_returns_zeros_when_every_read_is_a_chimera(capsys):
     assert "p1.csv has 0 desired epeg-ngRNA counts" in capsys.readouterr().out
     assert out["library_count+1"].tolist() == [1, 1]  # pseudocount only; no ZeroDivisionError
     assert out["library_fraction+1"].tolist() == pytest.approx([0.5, 0.5])
+
+
+# --------------------------------------------------------------------------- #
+# signatures_per_sample()
+# --------------------------------------------------------------------------- #
+@pytest.fixture
+def sig_ref():
+    """3 library members, 2 of which install the same edit & so share a Signature."""
+    return pd.DataFrame({'ID': ['A1', 'A2', 'B1'],
+                         'Signature': ['sig(A)', 'sig(A)', 'sig(B)'],
+                         'Edit': ['A', 'A', 'B']})
+
+
+@pytest.fixture
+def sig_counts():
+    """1 row per sample per library member, as count_signatures_dir() writes it.
+
+    s1 was given A1, s2 A2 (which reads out of A1's class) & s3 no pegRNA at all.
+    """
+    percents = {
+        's1': {'A1': 40.0, 'A2': 0.0, 'B1': 0.5, 'A1 indels': 2.0, 'A1 non-indels': 1.0,
+               'B1 indels': 0.0, 'B1 non-indels': 0.0, 'WT': 50.0, 'Not WT': 6.5},
+        's2': {'A1': 30.0, 'A2': 0.0, 'B1': 0.25, 'A1 indels': 1.0, 'A1 non-indels': 0.5,
+               'B1 indels': 0.0, 'B1 non-indels': 0.0, 'WT': 60.0, 'Not WT': 8.25},
+        's3': {'A1': 0.1, 'A2': 0.0, 'B1': 0.2, 'A1 indels': 0.05, 'A1 non-indels': 0.0,
+               'B1 indels': 0.0, 'B1 non-indels': 0.0, 'WT': 90.0, 'Not WT': 9.65},
+    }
+    given = {'s1': 'e1', 's2': 'e2', 's3': None}
+    return pd.DataFrame([
+        {'fastq_file': sample, 'Tranduce ID': given[sample], 'Replicate': 1,
+         'reads_processed': 1000, 'ID': id, 'percent': percent, 'count': percent * 10}
+        for sample, row in percents.items() for id, percent in row.items()
+    ])
+
+
+def _per_sample(counts, ref, **kwargs):
+    kwargs.setdefault('intended', 'Tranduce ID')
+    kwargs.setdefault('intended_map', {'e1': 'A1', 'e2': 'A2'})
+    kwargs.setdefault('show', False)
+    return fastq.signatures_per_sample(df_counts=counts, df_ref=ref, **kwargs).set_index('fastq_file')
+
+
+def test_signatures_per_sample_reads_each_sample_off_its_own_pegRNA(sig_counts, sig_ref):
+    out = _per_sample(sig_counts, sig_ref)
+    assert list(out.index) == ['s1', 's2', 's3']
+    assert out.loc['s1', 'Precise edit %'] == 40.0
+    assert out.loc['s1', 'Cut site indels %'] == 2.0
+    assert out.loc['s1', 'Cut site non-indels %'] == 1.0
+    assert out.loc['s1', 'Cut site outcomes %'] == 3.0
+    assert out.loc['s1', 'Edited %'] == 43.0
+    assert out.loc['s1', 'WT %'] == 50.0 and out.loc['s1', 'Not WT %'] == 6.5
+
+
+def test_a_shared_signature_is_read_out_of_the_class_that_holds_it(sig_counts, sig_ref):
+    """A2's own rows are 0 because count_signatures() counts those reads under A1."""
+    out = _per_sample(sig_counts, sig_ref)
+    assert out.loc['s2', 'Intended ID'] == 'A2'
+    assert out.loc['s2', 'Signature class'] == 'A1'
+    assert out.loc['s2', 'Precise edit %'] == 30.0   # not the 0.0 on A2's own row
+    assert out.loc['s1', 'Signature class'] == 'A1'  # & a member that shares with nobody is itself
+
+
+def test_shared_signatures_are_reported(sig_counts, sig_ref, capsys):
+    _per_sample(sig_counts, sig_ref, show=True)
+    out = capsys.readouterr().out
+    assert "{'A2': 'A1'}" in out and '3 sample(s); 1 read as background' in out
+
+
+def test_a_sample_with_no_pegRNA_reads_the_background(sig_counts, sig_ref):
+    """There is no signature to read, so the row holds the floor under every sample instead."""
+    out = _per_sample(sig_counts, sig_ref)
+    assert pd.isna(out.loc['s3', 'Intended ID'])
+    assert out.loc['s3', 'Metric basis'] == 'background (any library edit)'
+    assert out.loc['s3', 'Any library edit %'] == pytest.approx(0.3)  # A1 + A2 + B1
+    assert out.loc['s3', 'Precise edit %'] == pytest.approx(0.3)
+    assert out.loc['s3', 'Cut site indels %'] == 0.0   # not A1's 0.05; it is not this sample's
+    assert out.loc['s3', 'Edited %'] == pytest.approx(0.3)
+    assert set(out.loc[['s1', 's2'], 'Metric basis']) == {'intended pegRNA signature'}
+
+
+def test_any_library_edit_counts_every_member(sig_counts, sig_ref):
+    out = _per_sample(sig_counts, sig_ref)
+    assert out.loc['s1', 'Any library edit %'] == pytest.approx(40.5)
+
+
+def test_keys_default_to_what_holds_one_value_for_the_sample(sig_counts, sig_ref):
+    out = _per_sample(sig_counts, sig_ref)
+    assert {'Tranduce ID', 'Replicate', 'reads_processed'} <= set(out.columns)
+    assert 'ID' not in out.columns and 'percent' not in out.columns and 'count' not in out.columns
+
+
+def test_keys_can_be_named(sig_counts, sig_ref):
+    out = _per_sample(sig_counts, sig_ref, keys=['fastq_file', 'Replicate'])
+    assert 'reads_processed' not in out.columns
+    assert out.loc['s1', 'Precise edit %'] == 40.0
+
+
+def test_an_intended_column_can_already_hold_library_ids(sig_counts, sig_ref):
+    sig_counts['Given'] = sig_counts['Tranduce ID'].map({'e1': 'A1', 'e2': 'A2'})
+    out = _per_sample(sig_counts, sig_ref, intended='Given', intended_map=None)
+    assert out.loc['s2', 'Signature class'] == 'A1'
+
+
+def test_a_member_counted_but_never_seen_reads_zero(sig_counts, sig_ref):
+    """A class with no row at all is 0 reads, not a missing measurement."""
+    out = _per_sample(sig_counts[sig_counts['ID'] != 'B1'], sig_ref,
+                      intended_map={'e1': 'A1', 'e2': 'B1'})
+    assert out.loc['s2', 'Precise edit %'] == 0.0
+
+
+@pytest.mark.parametrize('kwargs, match', [
+    (dict(intended='Nope'), 'Missing intended column'),
+    (dict(sample_col='Nope'), 'Missing sample_col column'),
+    (dict(keys=['Nope']), r'Missing keys column\(s\)'),
+    (dict(intended_map={'e1': 'ZZ', 'e2': 'A2'}), r"Intended ID\(s\) not in df_ref: \['ZZ'\]"),
+])
+def test_signatures_per_sample_checks_its_input(sig_counts, sig_ref, kwargs, match):
+    with pytest.raises(Exception, match=match):
+        _per_sample(sig_counts, sig_ref, **kwargs)
+
+
+def test_signatures_per_sample_reads_file_paths(sig_counts, sig_ref, tmp_path):
+    counts, ref = tmp_path / 'counts.csv', tmp_path / 'ref.csv'
+    sig_counts.to_csv(counts, index=False)
+    sig_ref.to_csv(ref, index=False)
+    out = _per_sample(str(counts), str(ref))
+    assert out.loc['s1', 'Precise edit %'] == 40.0

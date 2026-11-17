@@ -42,6 +42,7 @@ Usage:
     - _aggregate_edit_outcomes(): Return WT, Not WT, Edit, (Edit indels, Edit non-indels, Edit ngRNA indels, & Edit ngRNA non-indels) aggregate rows
     - count_signatures(): generate signatures from fastq read region alignments to WT sequence; count signatures, plot and return fastq signatures dataframe
     - count_signatures_dir(): count signatures from previously-generated signature dataframes; plot and return fastq signatures dataframe
+    - signatures_per_sample(): reduce a count_signatures() table to 1 row per sample, read out of the signature of the pegRNA that sample was given
 
 [Quantify edit outcomes]
 - trim_filter(): trim and filter fastq sequence based on quality scores
@@ -2949,6 +2950,138 @@ def count_signatures_dir(df_ref: pd.DataFrame | str, signature_col: str, id_col:
                 figsize=(15,10), title='Edit Outcomes', file=os.path.join(out_dir, f"{'.'.join(out_file.split('.')[:-1])}_wo_{n_extra_nt}_extra_nt_aggregate{plot_suf}"), show=show, **plot_kwargs)
 
     if return_df: return out_df
+
+def signatures_per_sample(df_counts: pd.DataFrame | str, df_ref: pd.DataFrame | str, intended: str,
+                    intended_map: dict=None, signature_col: str='Signature', id_col: str='ID',
+                    sample_col: str='fastq_file', percent_col: str='percent', keys: list=None,
+                    wt: str='WT', not_wt: str='Not WT', literal_eval: bool=False, show: bool=True) -> pd.DataFrame:
+    '''
+    signatures_per_sample(): reduce a count_signatures() table to 1 row per sample, read out of the signature of the pegRNA that sample was given
+
+    Parameters:
+    df_counts (dataframe | str): count_signatures() or count_signatures_dir() output (or file path),
+                                 which holds 1 row per sample per library member
+    df_ref (dataframe | str): annotated reference library dataframe (or file path)
+    intended (str): column in df_counts naming the library member each sample was given; a sample
+                    with nothing there is read as a control (see Note)
+    intended_map (dict, optional): mapping applied to the 'intended' column to reach a library id,
+                                   for a column that names the pegRNA in the experiment's own terms
+                                   (i.e., {'e1': 'FOXA1.377'}; Default: None => it already holds ids)
+    signature_col (str, optional): signature column name in the reference library (Default: 'Signature')
+    id_col (str, optional): id column name in the reference library (Default: 'ID')
+    sample_col (str, optional): sample column name in df_counts (Default: 'fastq_file')
+    percent_col (str, optional): read percentage column name in df_counts (Default: 'percent')
+    keys (list, optional): df_counts columns carried onto the sample row (Default: None => every
+                           column holding 1 value for the whole sample, which is the metadata & the
+                           read counts but not the per library member rows)
+    wt (str, optional): id of the unedited rows (Default: 'WT')
+    not_wt (str, optional): id of the edited-but-unassigned rows (Default: 'Not WT')
+    literal_eval (bool, optional): convert string representations when reading a file path (Default: False)
+    show (bool, optional): print the shared signatures & the sample count (Default: True)
+
+    Returns 1 row per sample, carrying `keys` plus:
+        'Intended {id_col}' & 'Signature class': the library member the sample was given, & the one
+            its reads are counted under, which differ when they share a Signature
+        'Precise edit %': reads carrying that class' signature
+        'Cut site indels %', 'Cut site non-indels %' & their sum 'Cut site outcomes %': the cut site
+            outcomes count_signatures() assigned to that class
+        'Edited %': 'Precise edit %' plus 'Cut site outcomes %'
+        '{wt} %', '{not_wt} %' & 'Any library edit %': the unedited, the edited but unassigned, & every
+            library member's reads together
+        'Metric basis': which of the two readings the row holds (see Note)
+
+    Dependencies: pandas & io
+
+    Note: 2 pegRNAs that install the same edit share a Signature, & count_signatures() counts those
+    reads once, under the first library member carrying it. Reading a sample's editing off its own id
+    would report 0 for the later one, so every sample is read off its 'Signature class' instead.
+
+    Note: a sample with no intended pegRNA has no signature to read, so its row holds the background
+    instead: 'Precise edit %' takes 'Any library edit %', which is the floor that index hopping &
+    contamination put under every sample, & its cut site outcomes are 0. 'Metric basis' says so, since
+    the 2 readings do not mean the same thing & should not be averaged together unlabeled.
+    '''
+    # Get dataframes from file paths if needed
+    df_counts = io.get(pt=df_counts, literal_eval=literal_eval) if isinstance(df_counts, str) else df_counts.copy()
+    df_ref = io.get(pt=df_ref, literal_eval=literal_eval) if isinstance(df_ref, str) else df_ref.copy()
+
+    for col, name in ((sample_col, 'sample_col'), (id_col, 'id_col'),
+                      (percent_col, 'percent_col'), (intended, 'intended')):
+        if col not in df_counts.columns.tolist():
+            raise Exception(f'Missing {name} column in df_counts: {col}')
+    for col, name in ((signature_col, 'signature_col'), (id_col, 'id_col')):
+        if col not in df_ref.columns.tolist():
+            raise Exception(f'Missing {name} column in df_ref: {col}')
+
+    # The library member a Signature's reads are counted under, which is the first one carrying it
+    first_of_signature = df_ref.groupby(signature_col, sort=False)[id_col].first().to_dict()
+    id_to_class = {id: first_of_signature[signature]
+                   for id, signature in zip(df_ref[id_col], df_ref[signature_col])}
+    shared = {id: cls for id, cls in id_to_class.items() if id != cls}
+    if show and len(shared) > 0:
+        print(f'{len(shared)} library member(s) share a Signature with an earlier one & are read out '
+              f'of its class: {shared}')
+
+    # 1 row per sample, carrying what holds a single value for the whole sample
+    samples = df_counts.drop_duplicates(sample_col).reset_index(drop=True)
+    intended_ids = samples[intended].map(intended_map) if intended_map is not None else samples[intended]
+    if keys is None:
+        single = df_counts.groupby(sample_col).agg(lambda values: values.astype(str).nunique(dropna=False) == 1)
+        keys = [col for col in single.columns if bool(single[col].all())]
+        keys = [sample_col] + [col for col in keys if col != sample_col]
+    else:
+        unknown_keys = [col for col in keys if col not in df_counts.columns.tolist()]
+        if unknown_keys:
+            raise Exception(f'Missing keys column(s) in df_counts: {unknown_keys}')
+    samples = samples[keys].copy()
+
+    samples[f'Intended {id_col}'] = intended_ids.values
+    unknown = sorted({id for id in samples[f'Intended {id_col}'].dropna().unique() if id not in id_to_class})
+    if unknown:
+        raise Exception(f'Intended {id_col}(s) not in df_ref: {unknown}')
+    samples['Signature class'] = samples[f'Intended {id_col}'].map(id_to_class)
+
+    percent = df_counts.set_index([sample_col, id_col])[percent_col]
+    duplicated = percent.index.duplicated()
+    if duplicated.any(): # i.e., 1 sample counted under 2 signature folders; they are not 1 sample
+        if show:
+            print(f'Warning: {int(duplicated.sum())} duplicate ({sample_col}, {id_col}) row(s); the first of each is used.')
+        percent = percent[~duplicated]
+    library = df_ref[id_col].tolist()
+
+    def _percent(sample, id) -> float:
+        '''Read % for 1 sample & library member, or 0 where it was not counted at all.'''
+        value = percent.get((sample, id))
+        return 0.0 if value is None else float(value)
+
+    def _class_percent(row, suffix: str='') -> float:
+        '''Read % for the class this sample's pegRNA is counted under (+ a cut site outcome suffix).'''
+        cls = row['Signature class']
+        if pd.isna(cls):
+            return float('nan')
+        return _percent(row[sample_col], f'{cls}{suffix}')
+
+    samples['Precise edit %'] = samples.apply(_class_percent, axis=1)
+    samples['Cut site indels %'] = samples.apply(_class_percent, suffix=' indels', axis=1)
+    samples['Cut site non-indels %'] = samples.apply(_class_percent, suffix=' non-indels', axis=1)
+    samples[f'{wt} %'] = [_percent(sample, wt) for sample in samples[sample_col]]
+    samples[f'{not_wt} %'] = [_percent(sample, not_wt) for sample in samples[sample_col]]
+    samples['Any library edit %'] = [sum(_percent(sample, id) for id in library)
+                                     for sample in samples[sample_col]]
+
+    # A sample with no pegRNA has no signature to read, so it reads the background instead
+    controls = samples[f'Intended {id_col}'].isna()
+    samples['Metric basis'] = 'intended pegRNA signature'
+    samples.loc[controls, 'Metric basis'] = 'background (any library edit)'
+    samples.loc[controls, 'Precise edit %'] = samples.loc[controls, 'Any library edit %']
+    samples.loc[controls, ['Cut site indels %', 'Cut site non-indels %']] = 0.0
+
+    samples['Cut site outcomes %'] = samples['Cut site indels %'] + samples['Cut site non-indels %']
+    samples['Edited %'] = samples['Precise edit %'] + samples['Cut site outcomes %']
+
+    if show:
+        print(f'{len(samples)} sample(s); {int(controls.sum())} read as background')
+    return samples
 
 # Quantify edit outcomes
 def trim_filter(record, qall:int, qavg:int, qtrim:int, qmask:int, alls:int,
