@@ -31,6 +31,7 @@ Usage:
 - _category_color_map: a dictionary mapping category names to colors for categorical plots
 - _is_blank_label(): True when user did not explicitly set the axis label
 - autoscale_limits(): Compute axis limits from data with proportional padding.
+- log_limits(): Compute log axis limits that close in on values spanning under a decade
 - autoscale_xy(): Compute x and y axis limits with proportional padding.
 - _offset_density(): Compute a kernel density estimate on a shared grid for offset graphs
 - _offset_stats(): Compute 1 summary statistic per offset graph baseline
@@ -952,6 +953,40 @@ def autoscale_limits(values, buffer=0.1, min_range=1.0):
 
     return vmin - pad, vmax + pad
 
+def log_limits(values, pad: float = 0.06, decades: float = 1.0) -> tuple:
+    """
+    log_limits(): Compute log axis limits, closing in on values that span under a decade
+
+    Parameters:
+    values: values for one axis; non-positive & non-finite ones are left out, since log10 of 0
+            or of a negative value is undefined
+    pad (float, optional): padding added to each side, in decades (Default: 0.06)
+    decades (float, optional): values spanning this many decades or more keep the whole decade
+                               ends that round_down_pow_10() & round_up_pow_10() give (Default: 1.0)
+
+    Returns (start, end), or (0, 0) when nothing is left to scale over, which leaves the axis
+    to matplotlib rather than inventing a window.
+
+    Note: round_down_pow_10() keeps a number's leading digit while round_up_pow_10() jumps to the
+    next power of 10, so a window taken from the pair is lopsided. Values from 8.7e3 to 1.8e4 open
+    an axis of 8e3 to 1e5 & leave every point in its bottom quarter. That is only visible once the
+    values sit inside a decade, which is what the padded window is for; wider data keeps the decade
+    ends, where the majors land on both ends of the axis.
+
+    Dependencies: numpy, round_down_pow_10(), & round_up_pow_10()
+    """
+    values = np.asarray(list(values), dtype=float)
+    values = values[np.isfinite(values) & (values > 0)]
+    if len(values) == 0:
+        return (0, 0)
+
+    low, high = np.log10(values.min()), np.log10(values.max())
+    if high - low >= decades:
+        return (round_down_pow_10(values.min()), round_up_pow_10(values.max()))
+    if high == low: # 1 value, or all of them equal, needs a window of its own to sit in
+        low, high = low - decades / 2, high + decades / 2
+    return (float(10 ** (low - pad)), float(10 ** (high + pad)))
+
 def autoscale_xy(df, x, y, x_axis_dims, y_axis_dims, x_axis_scale, y_axis_scale, buffer=0.1, min_range=1.0, graph=None):
     """
     autoscale_xy(): Compute x and y axis limits with proportional padding.
@@ -962,7 +997,7 @@ def autoscale_xy(df, x, y, x_axis_dims, y_axis_dims, x_axis_scale, y_axis_scale,
             x_ls = df[x].tolist()
             if graph in ['bar', 'bar_swarm', 'bar_strip'] and (all(v <= 0 for v in x_ls) or all(v >= 0 for v in x_ls)): 
                 x_ls.append(0)
-            if x_axis_scale=='log': x_axis_dims = (round_down_pow_10(min(x_ls)), round_up_pow_10(max(x_ls)))
+            if x_axis_scale=='log': x_axis_dims = log_limits(x_ls)
             else: x_axis_dims = autoscale_limits(x_ls, buffer=buffer, min_range=min_range)
 
     if y_axis_dims==(0,0) and y is not None:
@@ -971,7 +1006,7 @@ def autoscale_xy(df, x, y, x_axis_dims, y_axis_dims, x_axis_scale, y_axis_scale,
             y_ls = df[y].tolist()
             if graph in ['bar', 'bar_swarm', 'bar_strip'] and (all(v <= 0 for v in y_ls) or all(v >= 0 for v in y_ls)):
                 y_ls.append(0)
-            if y_axis_scale=='log': y_axis_dims = (round_down_pow_10(min(y_ls)), round_up_pow_10(max(y_ls)))
+            if y_axis_scale=='log': y_axis_dims = log_limits(y_ls)
             else: y_axis_dims = autoscale_limits(y_ls, buffer=buffer, min_range=min_range)
 
     return x_axis_dims, y_axis_dims
@@ -1305,7 +1340,8 @@ def _offset_cat_marks(ax, graph: str, position: float, summary: dict, *, scale: 
         else:
             raise ValueError(f"Invalid offset_stat_graph layer! {kind}")
 
-def log_ticks(ax, axis: str = 'both', subs=None, numticks: int = 100) -> None:
+def log_ticks(ax, axis: str = 'both', subs=None, numticks: int = 100,
+              label_minors: bool = None, minor_size: float = None) -> None:
     '''
     log_ticks(): put a log axis' major ticks on powers of 10 & its minor ticks on the decade in between
 
@@ -1314,12 +1350,19 @@ def log_ticks(ax, axis: str = 'both', subs=None, numticks: int = 100) -> None:
     axis (str, optional): which axis to tick ('x', 'y', or 'both'; Default: 'both')
     subs (optional): minor tick multiples of each power of 10 (Default: None; 0.1, 0.2, ... 0.9)
     numticks (int, optional): maximum ticks the locators may place (Default: 100)
+    label_minors (bool, optional): label the minor ticks too (Default: None, which labels them
+                                   once the axis spans under a decade & leaves them bare otherwise)
+    minor_size (float, optional): minor tick label font size (Default: None; the major tick size)
 
     Note: an axis that is not on a log scale is left alone, so this is safe to call
           whenever the scale was requested rather than only once it is known to apply.
 
     Note: matplotlib drops minor ticks once a log axis spans more decades than it thinks
-          it can label, hence the raised numticks; the minor ticks are left unlabeled.
+          it can label, hence the raised numticks.
+
+    Note: a window inside 1 decade holds at most 1 power of 10, so with the minor ticks bare
+          there can be nothing to read a point against; hence labeling them by default there.
+          Call this after the limits are set, since that is what the default reads.
 
     Dependencies: numpy & matplotlib.ticker
     '''
@@ -1335,7 +1378,15 @@ def log_ticks(ax, axis: str = 'both', subs=None, numticks: int = 100) -> None:
         axis_obj.set_major_locator(LogLocator(base=10, numticks=numticks))
         axis_obj.set_major_formatter(LogFormatterSciNotation(base=10))
         axis_obj.set_minor_locator(LogLocator(base=10, subs=subs, numticks=numticks))
-        axis_obj.set_minor_formatter(NullFormatter())
+
+        label = label_minors
+        if label is None: # 1 major tick at most, so the minors are the only thing left to read
+            low, high = getattr(ax, f'get_{name}lim')()
+            label = min(low, high) > 0 and abs(np.log10(high) - np.log10(low)) < 1
+        axis_obj.set_minor_formatter(LogFormatterSciNotation(base=10, labelOnlyBase=False)
+                                     if label else NullFormatter())
+        if label and minor_size is not None:
+            ax.tick_params(axis=name, which='minor', labelsize=minor_size)
 
 class _Log10SubsLocator(Locator):
     '''
@@ -1482,7 +1533,9 @@ def formatter(graph: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file:
         if x!='':
             if df[x].apply(lambda row: isinstance(row, (int, float))).all()==True: # Check that x column is numeric
                 plt.xscale(x_axis_scale)
-                if (x_axis_dims==(0,0))&(x_axis_scale=='log'): plt.xlim(round_down_pow_10(min(df[x])),round_up_pow_10(max(df[x])))
+                if (x_axis_dims==(0,0))&(x_axis_scale=='log'):
+                    x_log_dims = log_limits(df[x])
+                    if x_log_dims!=(0,0): plt.xlim(x_log_dims[0],x_log_dims[1]) # Nothing positive to scale over leaves the axis to matplotlib
                 elif x_axis_dims==(0,0): print('Default x axis dimensions.')
                 else: plt.xlim(x_axis_dims[0],x_axis_dims[1])
                 log_ticks(ax,'x') # 10^n majors with the decade in between as minors
@@ -1512,7 +1565,9 @@ def formatter(graph: str, ax, df: pd.DataFrame, x: str, y: str, cols: str, file:
         if y!='':
             if df[y].apply(lambda row: isinstance(row, (int, float))).all()==True: # Check that y column is numeric
                 plt.yscale(y_axis_scale)
-                if (y_axis_dims==(0,0))&(y_axis_scale=='log'): plt.ylim(round_down_pow_10(min(df[y])),round_up_pow_10(max(df[y])))
+                if (y_axis_dims==(0,0))&(y_axis_scale=='log'):
+                    y_log_dims = log_limits(df[y])
+                    if y_log_dims!=(0,0): plt.ylim(y_log_dims[0],y_log_dims[1]) # Nothing positive to scale over leaves the axis to matplotlib
                 elif y_axis_dims==(0,0): print('Default y axis dimensions.')
                 else: plt.ylim(y_axis_dims[0],y_axis_dims[1])
                 log_ticks(ax,'y') # 10^n majors with the decade in between as minors

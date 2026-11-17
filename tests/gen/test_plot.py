@@ -1646,3 +1646,101 @@ def test_dist_offset_stat_ref_panel_keeps_zero_in_view(offset_ref_df):
     lower, upper = fig.axes[2].get_xlim()
     assert lower <= 0 <= upper # The reference it is read against
     plt.close(fig)
+
+
+# --------------------------------------------------------------------------- #
+# log_limits() & the minor tick labels that go with it
+# --------------------------------------------------------------------------- #
+def _decades(dims):
+    """How many decades a window spans."""
+    return math.log10(dims[1]) - math.log10(dims[0])
+
+
+def test_log_limits_closes_in_on_values_inside_a_decade():
+    """The pair of rounding helpers opens a lopsided window; this is what that cost."""
+    values = [8730, 12000, 17614]
+    old = (p.round_down_pow_10(min(values)), p.round_up_pow_10(max(values)))
+    assert old == (8000, 100000)                      # 1.1 decades for 0.3 decades of data
+    dims = p.log_limits(values)
+    assert dims[0] < min(values) and dims[1] > max(values)
+    assert _decades(dims) == pytest.approx(0.30 + 2 * 0.06, abs=0.01)
+    assert 0.3 / _decades(dims) > 0.7                 # the data fills the axis it is drawn on
+
+
+def test_log_limits_keeps_the_decade_ends_for_wider_values():
+    """Past a decade the rounded ends land the majors on both ends of the axis."""
+    values = [120, 50000]
+    assert p.log_limits(values) == (p.round_down_pow_10(120), p.round_up_pow_10(50000))
+
+
+def test_log_limits_pad_and_decades_are_adjustable():
+    assert _decades(p.log_limits([100, 200], pad=0.5)) == pytest.approx(math.log10(2) + 1, abs=1e-9)
+    # A lower threshold hands the same values back to the decade ends
+    assert p.log_limits([100, 200], decades=0.2) == (100, 1000)
+
+
+def test_log_limits_leaves_out_what_a_log_axis_cannot_draw():
+    """log10 of 0 or of a negative value is undefined, so they cannot set a window."""
+    assert p.log_limits([-5, 0, 100, 300]) == p.log_limits([100, 300])
+    assert p.log_limits([float('nan'), 100, 300]) == p.log_limits([100, 300])
+
+
+def test_log_limits_with_nothing_positive_leaves_the_axis_alone():
+    assert p.log_limits([0, -1]) == (0, 0)
+    assert p.log_limits([]) == (0, 0)
+
+
+def test_log_limits_gives_one_value_a_window_of_its_own():
+    dims = p.log_limits([1000, 1000])
+    assert dims[0] < 1000 < dims[1]
+    assert _decades(dims) == pytest.approx(1 + 2 * 0.06, abs=1e-9)
+
+
+def test_autoscale_xy_takes_its_log_window_from_log_limits():
+    df = pd.DataFrame({'x': [1, 2, 3], 'y': [8730, 12000, 17614]})
+    _, y_dims = p.autoscale_xy(df, 'x', 'y', (0, 0), (0, 0), 'linear', 'log')
+    assert y_dims == p.log_limits(df['y'])
+
+
+@pytest.mark.parametrize('dims, labeled', [
+    ((5e4, 3e5), True),     # 1e5 is the only major in it, so the minors carry the axis
+    ((1e2, 1e5), False),    # 4 majors; labeled minors would only crowd them
+])
+def test_log_ticks_labels_the_minors_only_inside_a_decade(dims, labeled):
+    fig, ax = plt.subplots()
+    ax.set_xscale('log')
+    ax.set_xlim(*dims)
+    p.log_ticks(ax, 'x')
+    formatter = ax.xaxis.get_minor_formatter()
+    assert isinstance(formatter, matplotlib.ticker.LogFormatterSciNotation) == labeled
+    assert bool([t for t in ax.get_xminorticklabels() if t.get_text()]) == labeled
+    plt.close(fig)
+
+
+def test_log_ticks_minor_labels_can_be_asked_for_and_sized():
+    fig, ax = plt.subplots()
+    ax.set_xscale('log')
+    ax.set_xlim(1e2, 1e5)
+    p.log_ticks(ax, 'x', label_minors=True, minor_size=7)
+    assert [t.get_text() for t in ax.get_xminorticklabels() if t.get_text()]
+    assert {t.get_fontsize() for t in ax.get_xminorticklabels()} == {7.0}
+    plt.close(fig)
+
+
+def test_log_ticks_leaves_a_linear_axis_alone():
+    fig, ax = plt.subplots()
+    ax.set_xlim(0, 0.5)   # under a decade wide, but not a log axis
+    p.log_ticks(ax, 'x')
+    assert not isinstance(ax.xaxis.get_minor_formatter(),
+                          matplotlib.ticker.LogFormatterSciNotation)
+    plt.close(fig)
+
+
+def test_scat_log_axis_closes_in_on_its_points():
+    """What a gMFI scatter needs: every point inside 1 decade, & ticks to read them against."""
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5.1e4, 9e4, 1.5e5, 2.4e5]})
+    fig, axes = p.scat(graph='scat', df=df, x='x', y='y', y_axis_scale='log', show=False)
+    ax = np.ravel(axes)[0]
+    assert ax.get_ylim() == pytest.approx(p.log_limits(df['y']))
+    assert [t.get_text() for t in ax.get_yminorticklabels() if t.get_text()]
+    plt.close(fig)
