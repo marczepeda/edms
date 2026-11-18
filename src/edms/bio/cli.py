@@ -57,7 +57,7 @@ def add_subparser(subparsers, formatter_class=None):
     
     parser_ngs_pcrs.add_argument("-f","--file", help="Output file path (.xlsx)", type=str, default=f'./{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_NGS_plan.xlsx')
     parser_ngs_pcrs.add_argument("-u","--ultra", help="Using NEB Ultra II reagents", action="store_true")
-    parser_ngs_pcrs.add_argument("-sb","--syber", help="Include 10x SYBR Green DNA Stain in PCR1 master mix (not PCR2)", action="store_true")
+    parser_ngs_pcrs.add_argument("-sb","--syber", help="Include 10x SYBR Green DNA Stain in every PCR master mix (PCR1, PCR1.5, & PCR2)", action="store_true")
     parser_ngs_pcrs.add_argument("-i1","--inner1", help="Exclude outer wells of 96-well plate for PCR1", action="store_true")
     parser_ngs_pcrs.add_argument("-i2","--inner2", help="Exclude outer wells of 96-well plate for PCR2", action="store_true")
     parser_ngs_pcrs.add_argument("-mw","--max_well_uL", type=float, default=50, help="Max uL per well; larger reactions are split across consecutive wells")
